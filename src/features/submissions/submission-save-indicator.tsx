@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import {
   Check,
   CloudOff,
@@ -14,10 +15,10 @@ import { cn } from "@/lib/utils";
 
 import type { SubmissionCheckpointStatus } from "./use-submission-checkpoint";
 
-const formatSavedTime = (timestamp: number | null) => {
+const formatSavedTime = (timestamp: number | null, isEnglish: boolean) => {
   if (!timestamp) return null;
   try {
-    return new Intl.DateTimeFormat("ko-KR", {
+    return new Intl.DateTimeFormat(isEnglish ? "en-US" : "ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(timestamp));
@@ -49,6 +50,7 @@ export function SubmissionSaveIndicator({
   onRevertToSaved?: () => void;
   className?: string;
 }) {
+  const pathname = usePathname();
   const recoveryDialogRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (status !== "recovery" || !hasRecovery) return;
@@ -64,7 +66,7 @@ export function SubmissionSaveIndicator({
 
   if (status === "idle") return null;
 
-  const savedTime = formatSavedTime(lastSavedAt);
+  const savedTime = formatSavedTime(lastSavedAt, pathname === "/en" || pathname.startsWith("/en/"));
   const confirmDiscardRecovery = async () => {
     if (
       await showCenteredConfirm(

@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ManualEmailSupport } from "@/features/auth/manual-email-support";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 export function TrackLookupForm({
   onSuccess,
@@ -14,6 +15,7 @@ export function TrackLookupForm({
   const pathname = usePathname();
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
+  const t = (ko: string, en: string) => localePrefix ? en : ko;
   const [token, setToken] = React.useState("");
   const [error, setError] = React.useState("");
   const [validating, setValidating] = React.useState(false);
@@ -36,25 +38,31 @@ export function TrackLookupForm({
     event.preventDefault();
     const value = token.trim();
     if (!value) {
-      setError("조회 코드를 입력해주세요.");
+      setError(t("조회 코드를 입력해주세요.", "Enter your lookup code."));
       return;
     }
     setValidating(true);
     try {
-      const res = await fetch("/api/track/validate", {
+      const res = await fetchWithTimeout("/api/track/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: value }),
       });
       const payload = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!res.ok) {
+        setError(res.status === 429
+          ? t("조회 요청이 많습니다. 잠시 후 다시 시도해주세요.", "Too many lookup requests. Please try again shortly.")
+          : t("코드를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.", "We could not check the code. Please try again shortly."));
+        return;
+      }
       if (!payload.ok) {
-        setError("코드가 올바르지 않습니다. 다시 입력해주세요.");
+        setError(t("코드가 올바르지 않습니다. 다시 입력해주세요.", "This code is not valid. Check it and try again."));
         return;
       }
       setError("");
       openTrack(value);
     } catch {
-      setError("코드를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.");
+      setError(t("코드를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.", "We could not check the code. Please try again shortly."));
     } finally {
       setValidating(false);
     }
@@ -75,7 +83,7 @@ export function TrackLookupForm({
     setLookupError("");
     setLookupMessage("");
     try {
-      const response = await fetch("/api/track/lookup-code", {
+      const response = await fetchWithTimeout("/api/track/lookup-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email }),
@@ -120,6 +128,9 @@ export function TrackLookupForm({
         </label>
         <input
           id="guest-track-token"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={token}
           onChange={(event) => setToken(event.target.value)}
           placeholder="비회원 조회 코드 입력"
@@ -130,7 +141,7 @@ export function TrackLookupForm({
           } px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]`}
         />
         {error ? (
-          <p id="guest-track-token-error" className="text-xs text-black">
+          <p id="guest-track-token-error" role="alert" className="text-xs text-red-700 dark:text-red-300">
             {error}
           </p>
         ) : null}

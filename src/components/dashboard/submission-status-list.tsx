@@ -99,6 +99,7 @@ export function SubmissionStatusList({
             submission.status !== "PRE_REVIEW"
               ? "WAITING_PAYMENT"
               : submission.status;
+          const paymentAwaitingConfirmation = ["PAYMENT_PENDING", "WAITING_PAYMENT"].includes(submission.payment_status);
           const hasPaymentAction = submission.payment_status !== "PAID" && submission.payment_status !== "REFUNDED";
           const typeLabel =
             typeLabels[submission.type] ?? submission.type ?? "심의";
@@ -149,10 +150,10 @@ export function SubmissionStatusList({
                     {typeLabel}
                   </p>
                   <h2 className="mt-2 truncate text-xl font-semibold text-foreground">
-                    {submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
+                    {submission.title ? <span data-no-translate>{submission.title}</span> : (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                   </h2>
                   <p className="mt-2 truncate text-sm text-muted-foreground">
-                    {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
+                    {submission.artist_name ? <span data-no-translate>{submission.artist_name}</span> : (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
                     접수일 {formatDateTime(submission.created_at)} · Updated{" "}
@@ -172,12 +173,12 @@ export function SubmissionStatusList({
                       type="button"
                       onClick={() =>
                         router.push(
-                          `${localePrefix}/mypage/cart?focus=${submission.id}`,
+                          `${localePrefix}/mypage/${paymentAwaitingConfirmation ? "orders" : "cart"}?focus=${submission.id}`,
                         )
                       }
                       className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
                     >
-                      결제하기
+                      {paymentAwaitingConfirmation ? "주문내역 확인" : "결제하기"}
                     </button>
                   )}
                   <button
@@ -399,12 +400,12 @@ export function SubmissionStatusList({
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
                         {track.track_no ? `${track.track_no}. ` : ""}
-                        {trackLabel}
+                        {track.title ? <span data-no-translate>{track.title}</span> : trackLabel}
                       </p>
                       {track.status === "REJECTED" &&
                       trackResultModal.resultNote ? (
                         <p className="mt-1 break-words text-xs text-[#1556a4]/90 dark:text-[#b9d8ff]">
-                          사유: {trackResultModal.resultNote}
+                          사유: <span data-no-translate>{trackResultModal.resultNote}</span>
                         </p>
                       ) : null}
                     </div>

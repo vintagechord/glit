@@ -849,7 +849,7 @@ export function SubmissionCartCheckout({
                     ) : null}
                   </span>
                   <span className="mt-2 block text-sm font-black leading-6 [overflow-wrap:anywhere] text-foreground">
-                    {getDisplayTitle(item)}
+                    {item.title?.trim() ? <span data-no-translate>{item.title}</span> : getDisplayTitle(item)}
                   </span>
                   <span
                     className="mt-1 block text-xs font-semibold leading-5 [overflow-wrap:anywhere] text-muted-foreground"

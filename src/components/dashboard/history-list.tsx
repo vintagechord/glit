@@ -288,11 +288,11 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="min-w-0 truncate text-sm font-semibold text-foreground">
-                    {submission.title || (submission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
+                    {submission.title ? <span data-no-translate>{submission.title}</span> : (submission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                   </p>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {submission.artistName} · {submission.typeLabel} ·{" "}
+                  <span data-no-translate>{submission.artistName}</span> · {submission.typeLabel} ·{" "}
                   {packageLabel}
                   {trackCount > 0 ? ` · 트랙 ${trackCount}곡` : ""} ·{" "}
                   {amountLabel ? `${amountLabel} · ` : ""}
@@ -340,10 +340,10 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                   방송국별 현황
                 </p>
                 <h3 className="mt-2 break-words text-xl font-semibold text-foreground sm:text-2xl">
-                  {activeSubmission.title || (activeSubmission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
+                  {activeSubmission.title ? <span data-no-translate>{activeSubmission.title}</span> : (activeSubmission.isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {activeSubmission.artistName || (activeSubmission.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
+                  {activeSubmission.artistName ? <span data-no-translate>{activeSubmission.artistName}</span> : (activeSubmission.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
                 </p>
               </div>
               <button
@@ -442,7 +442,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
                           {track.trackNo.toString().padStart(2, "0")}
                         </span>
                         <span className="flex-1 px-3 text-sm font-semibold text-foreground">
-                          {track.title || "제목 미입력"}
+                          {track.title ? <span data-no-translate>{track.title}</span> : "제목 미입력"}
                         </span>
                       </div>
                     ))}

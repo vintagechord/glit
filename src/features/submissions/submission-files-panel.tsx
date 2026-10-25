@@ -46,23 +46,49 @@ export function SubmissionFilesPanel({
 }) {
   const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [readyFile, setReadyFile] = React.useState<{ id: string; url: string } | null>(null);
 
   const handleDownload = async (fileId: string) => {
-    if (!canDownload) return;
+    if (!canDownload || downloadingId) return;
     setErrorMessage(null);
+    setReadyFile(null);
     setDownloadingId(fileId);
-    const result = await getSubmissionFileUrlAction({
-      submissionId,
-      fileId,
-      guestToken: guestToken || undefined,
-    });
-    setDownloadingId(null);
-    if (result.error) {
-      setErrorMessage(result.error);
-      return;
-    }
-    if (result.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
+    // Open during the click, before awaiting the server. Mobile browsers may
+    // block a window opened after an async request. A direct link remains usable.
+    let pendingWindow: Window | null = null;
+    try {
+      pendingWindow = window.open("about:blank", "_blank");
+      if (pendingWindow) pendingWindow.opener = null;
+    } catch { /* A restrictive browser can still use the prepared link below. */ }
+    let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        getSubmissionFileUrlAction({ submissionId, fileId, guestToken: guestToken || undefined }),
+        new Promise<never>((_, reject) => {
+          requestTimeout = setTimeout(() => reject(new Error("FILE_LOOKUP_TIMEOUT")), 20_000);
+        }),
+      ]);
+      if (result.error) {
+        pendingWindow?.close();
+        setErrorMessage(result.error);
+        return;
+      }
+      const url = result.url ? new URL(result.url) : null;
+      if (!url || !["http:", "https:"].includes(url.protocol)) {
+        pendingWindow?.close();
+        setErrorMessage("파일 주소를 확인할 수 없습니다.");
+        return;
+      }
+      setReadyFile({ id: fileId, url: url.href });
+      if (pendingWindow && !pendingWindow.closed) pendingWindow.location.replace(url.href);
+    } catch (error) {
+      pendingWindow?.close();
+      setErrorMessage(error instanceof Error && error.message === "FILE_LOOKUP_TIMEOUT"
+        ? "파일 조회 응답이 지연되고 있습니다. 다시 시도해주세요."
+        : "파일을 불러오지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      clearTimeout(requestTimeout);
+      setDownloadingId(null);
     }
   };
 
@@ -83,7 +109,7 @@ export function SubmissionFilesPanel({
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold text-foreground">
+              <p data-no-translate className="break-all font-semibold text-foreground">
                 {file.original_name || file.file_path}
               </p>
               <p className="mt-1 text-muted-foreground">
@@ -94,7 +120,7 @@ export function SubmissionFilesPanel({
               <button
                 type="button"
                 onClick={() => handleDownload(file.id)}
-                disabled={downloadingId === file.id}
+                disabled={downloadingId !== null}
                 className="rounded-full border border-border/70 bg-foreground/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground hover:bg-foreground/10 dark:bg-transparent dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {downloadingId === file.id ? "다운로드 중" : "다운로드"}
@@ -105,10 +131,16 @@ export function SubmissionFilesPanel({
               </span>
             )}
           </div>
+          {readyFile?.id === file.id ? (
+            <div className="mt-3 text-xs">
+              <p role="status" className="text-muted-foreground">파일 링크가 준비되었습니다. 아래 버튼으로 열어주세요.</p>
+              <a href={readyFile.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center rounded-full border border-border px-4 py-2 font-semibold underline underline-offset-4">파일 열기</a>
+            </div>
+          ) : null}
         </div>
       ))}
       {errorMessage && (
-        <p className="text-xs text-red-500">{errorMessage}</p>
+        <p role="alert" className="text-xs text-red-500">{errorMessage}</p>
       )}
     </div>
   );

@@ -42,6 +42,7 @@ import { APP_CONFIG } from "@/lib/config";
 import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { loadSubmissionDetailRelations, preservePendingStationReviews } from "@/lib/submissions/detail-relations";
+import { customerPaymentFeedback } from "@/lib/customer-payment-feedback";
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submission-checkout";
@@ -228,22 +229,19 @@ const aiUsageLabel = (value?: boolean | null) => {
   return "미입력";
 };
 
-type DetailPrimaryAction = "payment-info" | "retry-payment" | "station-review" | null;
+type DetailPrimaryAction = "payment-info" | "retry-payment" | "order-status" | "station-review" | null;
 
 const normalizePaymentStatusLabel = (
   paymentStatus?: string | null,
   isPaymentDone?: boolean,
   isPaymentPending?: boolean,
+  paymentMethod?: string | null,
 ) => {
   if (isPaymentDone || paymentStatus === "PAID") return "결제 완료";
   if (paymentStatus === "REFUNDED") return "환불";
-  if (
-    isPaymentPending ||
-    paymentStatus === "PAYMENT_PENDING" ||
-    paymentStatus === "UNPAID" ||
-    paymentStatus === "WAITING_PAYMENT"
-  ) {
-    return "입금 확인 대기";
+  if (paymentStatus === "UNPAID") return "미결제";
+  if (isPaymentPending || paymentStatus === "PAYMENT_PENDING" || paymentStatus === "WAITING_PAYMENT") {
+    return paymentMethod === "BANK" ? "입금 확인 대기" : "결제 확인 대기";
   }
   return paymentStatus
     ? paymentStatusLabelMap[paymentStatus as keyof typeof paymentStatusLabelMap] ??
@@ -283,6 +281,7 @@ const buildSubmissionDisplayStatus = ({
     paymentStatus,
     isPaymentDone,
     isPaymentPending,
+    paymentMethod,
   );
   const broadcastLabel = isPaymentDone
     ? safeStationTotal > 0
@@ -319,6 +318,16 @@ const buildSubmissionDisplayStatus = ({
       secondaryMessage: "환불된 신청의 내역을 확인할 수 있습니다.",
       primaryAction: null as DetailPrimaryAction,
       primaryActionLabel: null,
+    };
+  }
+
+  if (!isPaymentDone && paymentMethod && paymentMethod !== "BANK" && ["PAYMENT_PENDING", "WAITING_PAYMENT"].includes(paymentStatus ?? "")) {
+    return {
+      currentLabel: "결제 확인 대기", submissionLabel, paymentLabel, broadcastLabel, resultLabel,
+      primaryMessage: "결제 승인 상태를 확인 중입니다.",
+      secondaryMessage: "이미 결제를 진행했다면 주문내역에서 승인 상태를 확인해주세요.",
+      primaryAction: "order-status" as DetailPrimaryAction,
+      primaryActionLabel: "주문내역 확인",
     };
   }
 
@@ -645,6 +654,7 @@ export function SubmissionDetailClient({
       submission.payment_status,
       isPaymentDone,
       isPaymentPending,
+      submission.payment_method,
     );
   const canRetryCardPayment =
     submission.payment_method !== "BANK" && !["PAID", "REFUNDED"].includes(submission.payment_status);
@@ -697,26 +707,21 @@ export function SubmissionDetailClient({
     submission.mv_song_title_kr ||
     submission.mv_song_title_en ||
     "-";
-  const paymentFeedback =
-    paymentState === "success"
-      ? {
-        title: "결제가 완료되었습니다.",
-        tone:
-          "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100",
-      }
-      : paymentState === "cancel"
-        ? {
-          title: "결제가 취소되었습니다.",
-          tone:
-            "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
-        }
-        : paymentState === "fail" || paymentState === "error"
-          ? {
-            title: "결제가 완료되지 않았습니다.",
-            tone:
-              "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100",
-          }
-          : null;
+  const paymentFeedbackState = customerPaymentFeedback(paymentState, submission.payment_status);
+  const paymentFeedback = paymentFeedbackState ? {
+    title: {
+      paid: "결제가 완료되었습니다.",
+      refunded: "환불이 완료되었습니다.",
+      checking: "결제 승인 상태를 확인 중입니다. 잠시 후 진행상황을 다시 확인해주세요.",
+      cancelled: "결제가 취소되었습니다.",
+      failed: "결제가 완료되지 않았습니다.",
+    }[paymentFeedbackState],
+    tone: paymentFeedbackState === "paid"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100"
+      : paymentFeedbackState === "failed"
+        ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100"
+        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
+  } : null;
   const stationSummary = renderStationReviews.reduce(
     (acc, review) => {
       const summary = buildTrackSummary(review);
@@ -773,6 +778,11 @@ export function SubmissionDetailClient({
     resultDelivered: displayResultDelivered,
   });
   const handlePrimaryStatusAction = () => {
+    if (displayStatus.primaryAction === "order-status") {
+      if (guestToken) rememberGuestSubmissionOrderEntries([{ submissionId: submission.id, guestToken }]);
+      router.push(`${localePrefix}/mypage/orders?focus=${encodeURIComponent(submission.id)}`);
+      return;
+    }
     if (submission.current_order_id && ["payment-info", "retry-payment"].includes(displayStatus.primaryAction ?? "")) {
       void openCartForPayment();
       return;
@@ -841,7 +851,7 @@ export function SubmissionDetailClient({
     },
     {
       label: isMvSubmission ? "결제 완료" : "결제 확인",
-      value: isPaymentDone ? "결제 완료" : "입금 확인 대기",
+      value: paymentStatusLabel,
       state: isPaymentDone
         ? "done"
         : submission.status === "DRAFT"
@@ -963,7 +973,7 @@ export function SubmissionDetailClient({
           <p className="text-sm font-semibold">
             {resultStatusLabelMap[submission.result_status as ResultStatus] ?? "심의 결과 안내"}
           </p>
-          {submission.result_memo ? <p className="mt-2 whitespace-pre-wrap text-sm">{submission.result_memo}</p> : null}
+          {submission.result_memo ? <p className="mt-2 whitespace-pre-wrap text-sm"><span data-no-translate>{submission.result_memo}</span></p> : null}
         </div>
       ) : null}
       {!isMvSubmission ? (
@@ -1248,8 +1258,8 @@ export function SubmissionDetailClient({
       {resultsOnly ? (
         <div className="space-y-5">
           <div>
-            <h1 className="text-xl font-black">{submission.title || "심의 결과"}</h1>
-            {submission.artist_name ? <p className="mt-1 text-sm text-muted-foreground">{submission.artist_name}</p> : null}
+            <h1 className="text-xl font-black">{submission.title ? <span data-no-translate>{submission.title}</span> : "심의 결과"}</h1>
+            {submission.artist_name ? <p data-no-translate className="mt-1 text-sm text-muted-foreground">{submission.artist_name}</p> : null}
             <p className="mt-3 text-sm font-semibold">{currentStatusLabel}</p>
           </div>
           {renderStationReviewSection()}
@@ -1377,10 +1387,10 @@ export function SubmissionDetailClient({
               Submission Detail
             </p>
             <h1 className="font-display mt-4 text-3xl font-black leading-tight text-foreground sm:text-4xl">
-              {submission.title || (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
+              {submission.title ? <span data-no-translate>{submission.title}</span> : (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
             </h1>
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
-              {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
+              {submission.artist_name ? <span data-no-translate>{submission.artist_name}</span> : (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
             </p>
             <div className="mt-6 w-full rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1556,14 +1566,14 @@ export function SubmissionDetailClient({
                   <p className="text-sm text-muted-foreground">
                     {submission.type === "ALBUM" ? "앨범 제목" : "영상 제목"}
                   </p>
-                  <p className="mt-1 font-semibold">{submission.title || "-"}</p>
+                  <p className="mt-1 font-semibold"><span data-no-translate>{submission.title || "-"}</span></p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">아티스트명</p>
                   <p className="mt-1 font-semibold">
-                    {submission.artist_name || "-"}
-                    {submission.artist_name_kr ? ` / ${submission.artist_name_kr}` : ""}
-                    {submission.artist_name_en ? ` / ${submission.artist_name_en}` : ""}
+                    <span data-no-translate>{submission.artist_name || "-"}</span>
+                    {submission.artist_name_kr ? <span data-no-translate>{` / ${submission.artist_name_kr}`}</span> : null}
+                    {submission.artist_name_en ? <span data-no-translate>{` / ${submission.artist_name_en}`}</span> : null}
                   </p>
                 </div>
                 <div>
@@ -1577,19 +1587,19 @@ export function SubmissionDetailClient({
                     <div>
                       <p className="text-sm text-muted-foreground">신청자</p>
                       <p className="mt-1 font-semibold">
-                        {submission.applicant_name || "-"}
+                        <span data-no-translate>{submission.applicant_name || "-"}</span>
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">신청자 연락처</p>
                       <p className="mt-1 font-semibold">
-                        {submission.applicant_phone || "-"}
+                        <span data-no-translate>{submission.applicant_phone || "-"}</span>
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">신청자 이메일</p>
                       <p className="mt-1 font-semibold">
-                        {submission.applicant_email || "-"}
+                        <span data-no-translate>{submission.applicant_email || "-"}</span>
                       </p>
                     </div>
                   </>
@@ -1597,13 +1607,13 @@ export function SubmissionDetailClient({
                 <div>
                   <p className="text-sm text-muted-foreground">유통사</p>
                   <p className="mt-1 font-semibold">
-                    {submission.distributor || "-"}
+                    <span data-no-translate>{submission.distributor || "-"}</span>
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">제작사</p>
                   <p className="mt-1 font-semibold">
-                    {submission.production_company || "-"}
+                    <span data-no-translate>{submission.production_company || "-"}</span>
                   </p>
                 </div>
                 <div>
@@ -1615,13 +1625,13 @@ export function SubmissionDetailClient({
                 <div>
                   <p className="text-sm text-muted-foreground">장르</p>
                   <p className="mt-1 font-semibold">
-                    {submission.genre || "-"}
+                    <span data-no-translate>{submission.genre || "-"}</span>
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">이전 발매</p>
                   <p className="mt-1 font-semibold">
-                    {submission.previous_release || "-"}
+                    <span data-no-translate>{submission.previous_release || "-"}</span>
                   </p>
                 </div>
                 <div>
@@ -1635,7 +1645,7 @@ export function SubmissionDetailClient({
                 <div>
                   <p className="text-sm text-muted-foreground">멤버</p>
                   <p className="mt-1 font-semibold">
-                    {submission.artist_members || "-"}
+                    <span data-no-translate>{submission.artist_members || "-"}</span>
                   </p>
                 </div>
                 <div>
@@ -1648,35 +1658,35 @@ export function SubmissionDetailClient({
                   <>
                     <div>
                       <p className="text-xs text-muted-foreground">러닝타임</p>
-                      <p className="mt-1 font-semibold">{submission.mv_runtime || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_runtime || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">포맷</p>
-                      <p className="mt-1 font-semibold">{submission.mv_format || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_format || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">감독</p>
-                      <p className="mt-1 font-semibold">{submission.mv_director || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_director || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">주연</p>
-                      <p className="mt-1 font-semibold">{submission.mv_lead_actor || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_lead_actor || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">스토리라인</p>
-                      <p className="mt-1 font-semibold">{submission.mv_storyline || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_storyline || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">제작사</p>
-                      <p className="mt-1 font-semibold">{submission.mv_production_company || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_production_company || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">에이전시</p>
-                      <p className="mt-1 font-semibold">{submission.mv_agency || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_agency || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">앨범 제목</p>
-                      <p className="mt-1 font-semibold">{submission.mv_album_title || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_album_title || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">제작일</p>
@@ -1686,15 +1696,15 @@ export function SubmissionDetailClient({
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">배급사</p>
-                      <p className="mt-1 font-semibold">{submission.mv_distribution_company || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_distribution_company || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">사업자등록번호</p>
-                      <p className="mt-1 font-semibold">{submission.mv_business_reg_no || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_business_reg_no || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">용도</p>
-                      <p className="mt-1 font-semibold">{submission.mv_usage || "-"}</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_usage || "-"}</span></p>
                     </div>
                     {isMvDistribution ? (
                       <div>
@@ -1704,26 +1714,26 @@ export function SubmissionDetailClient({
                     ) : null}
                     <div>
                       <p className="text-xs text-muted-foreground">곡 제목</p>
-                      <p className="mt-1 font-semibold">{mvSongTitleDisplay}</p>
+                      <p data-no-translate className="mt-1 font-semibold">{mvSongTitleDisplay}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">작곡/작사/편곡</p>
                       <p className="mt-1 font-semibold">
-                        {submission.mv_composer || "-"} / {submission.mv_lyricist || "-"} /{" "}
-                        {submission.mv_arranger || "-"}
+                        <span data-no-translate>{submission.mv_composer || "-"}</span> / <span data-no-translate>{submission.mv_lyricist || "-"}</span> /{" "}
+                        <span data-no-translate>{submission.mv_arranger || "-"}</span>
                       </p>
                     </div>
                     <div className="md:col-span-2">
                       <p className="text-xs text-muted-foreground">메모</p>
                       <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
-                        {submission.mv_memo || "-"}
+                        <span data-no-translate>{submission.mv_memo || "-"}</span>
                       </p>
                     </div>
                     {submission.mv_lyrics ? (
                       <div className="md:col-span-2">
                         <p className="text-xs text-muted-foreground">가사</p>
                         <div className={`${detailSubPanelClass} mt-2 whitespace-pre-wrap p-3 text-sm text-foreground`}>
-                          {submission.mv_lyrics}
+                          <span data-no-translate>{submission.mv_lyrics}</span>
                         </div>
                       </div>
                     ) : null}
@@ -1737,7 +1747,7 @@ export function SubmissionDetailClient({
                     <div>
                       <p className="text-xs text-muted-foreground">이전 발매</p>
                       <p className="mt-1 font-semibold">
-                        {submission.previous_release || "-"}
+                        <span data-no-translate>{submission.previous_release || "-"}</span>
                       </p>
                     </div>
                   </>
@@ -1754,21 +1764,21 @@ export function SubmissionDetailClient({
                         <div key={`${track.track_no ?? index}-${track.track_title ?? index}`} className="py-2">
                           <p className="font-semibold text-foreground">
                             {track.track_no ?? index + 1}.{" "}
-                            {track.track_title || track.track_title_kr || track.track_title_en || "제목 미입력"}
+                            {track.track_title || track.track_title_kr || track.track_title_en ? <span data-no-translate>{track.track_title || track.track_title_kr || track.track_title_en}</span> : "제목 미입력"}
                             {track.is_title ? " · 타이틀" : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            가수 {track.performer || submission.artist_name || "-"}
+                            가수 <span data-no-translate>{track.performer || submission.artist_name || "-"}</span>
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            작곡 {track.composer || "-"} / 작사 {track.lyricist || "-"} / 편곡{" "}
-                            {track.arranger || "-"}
+                            작곡 <span data-no-translate>{track.composer || "-"}</span> / 작사 <span data-no-translate>{track.lyricist || "-"}</span> / 편곡{" "}
+                            <span data-no-translate>{track.arranger || "-"}</span>
                           </p>
                           {track.lyrics ? (
                             <details className="mt-1 text-xs text-muted-foreground">
                               <summary className="cursor-pointer">가사 보기</summary>
                               <div className="mt-1 whitespace-pre-wrap text-foreground">
-                                {track.lyrics}
+                                <span data-no-translate>{track.lyrics}</span>
                               </div>
                             </details>
                           ) : null}
@@ -1861,8 +1871,7 @@ export function SubmissionDetailClient({
                         (track.track_id && base.id === track.track_id) ||
                         (typeof track.track_no === "number" &&
                           base.track_no === track.track_no),
-                    )?.track_title ||
-                    "트랙";
+                    )?.track_title || null;
                   return (
                     <div
                       key={`${track.track_id ?? index}-${track.track_no ?? index}`}
@@ -1871,7 +1880,7 @@ export function SubmissionDetailClient({
                       <div className="min-w-0">
                         <p className="font-semibold leading-relaxed text-foreground">
                           {track.track_no ? `${track.track_no}. ` : ""}
-                          {trackLabel}
+                          {trackLabel ? <span data-no-translate>{trackLabel}</span> : "트랙"}
                         </p>
                       </div>
                       <span
@@ -1890,7 +1899,7 @@ export function SubmissionDetailClient({
                   심의 결과 메모
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
-                  {trackResultModal.resultNote}
+                  <span data-no-translate>{trackResultModal.resultNote}</span>
                 </p>
               </div>
             ) : null}
@@ -1923,7 +1932,9 @@ export function SubmissionDetailClient({
                     <span>필증</span>
                     <span className="max-w-full truncate text-[11px] font-semibold opacity-70">
                       {trackResultModal.mvReviewAssets.hasCertificate
-                        ? trackResultModal.mvReviewAssets.certificateName ?? "등록 완료"
+                        ? trackResultModal.mvReviewAssets.certificateName
+                          ? <span data-no-translate>{trackResultModal.mvReviewAssets.certificateName}</span>
+                          : "등록 완료"
                         : "업로드 대기"}
                     </span>
                   </button>

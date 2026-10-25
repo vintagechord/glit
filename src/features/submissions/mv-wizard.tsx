@@ -69,6 +69,7 @@ import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
+import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields } from "@/lib/mv-submission-specs";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
@@ -204,7 +205,7 @@ const steps = [
   "신청서 작성",
   "파일 업로드",
   "최종 점검",
-  "접수 완료",
+  "장바구니",
 ];
 
 function MvCreditConsistencyNotice() {
@@ -235,7 +236,6 @@ function MvCreditConsistencyNotice() {
   );
 }
 
-const deferredPaymentNotice = "신청서를 장바구니에 담았습니다.";
 const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
   `결제에 실패했습니다. ${paymentFailureStorageNotice}`;
@@ -522,6 +522,7 @@ export function MvWizard({
     lines: string[];
   } | null>(null);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
+  const [cartRecoveryEntries, setCartRecoveryEntries] = React.useState<Array<{submissionId: string; guestToken: string}>>([]);
   const [completionGuestToken, setCompletionGuestToken] = React.useState<
     string | null
   >(null);
@@ -2953,7 +2954,7 @@ export function MvWizard({
   };
 
   const handleSubmit = async (
-    options?: { deferPayment?: boolean; redirectToCart?: boolean },
+    options?: { deferPayment?: boolean },
   ) => {
     const deferPayment = options?.deferPayment === true;
     if (isSaving || submitInFlightRef.current) return;
@@ -3092,8 +3093,6 @@ export function MvWizard({
           uploadedFiles: uploaded.map((file) => ({ ...file })),
         });
         if (deferPayment) {
-          mvCheckpointControllerRef.current?.clear();
-          clearDraftStorageForSubmission(result.submissionId);
           if (isGuest) {
             const savedGuestToken = result.guestToken ?? guestToken;
             if (!savedGuestToken) {
@@ -3102,28 +3101,19 @@ export function MvWizard({
               });
               return;
             }
-            addGuestSubmissionCartEntries([
-              { submissionId: result.submissionId, guestToken: savedGuestToken },
-            ]);
+            const entries = [{ submissionId: result.submissionId, guestToken: savedGuestToken }];
+            if (!addGuestSubmissionCartEntries(entries)) {
+              setCartRecoveryEntries(entries);
+              setNotice({ error: "신청서는 저장했지만 이 브라우저에 장바구니 정보를 보관하지 못했습니다. 조회 코드를 보관하고 브라우저 저장을 허용한 뒤 다시 시도해주세요." });
+              return;
+            }
           }
-          if (options?.redirectToCart) {
-            router.push(
-              `${localePrefix}/mypage/cart?added=${encodeURIComponent(result.submissionId)}`,
-            );
-            return;
-          }
-          setNotice({
-            emailNotice: result.emailNotice
-              ? `${deferredPaymentNotice} ${result.emailNotice}`
-              : deferredPaymentNotice,
-          });
-          setCompletionId(result.submissionId);
-          if (result.guestToken) {
-            setCompletionGuestToken(result.guestToken);
-          } else if (isGuest) {
-            setCompletionGuestToken(guestToken);
-          }
-          setStep(6);
+          setCartRecoveryEntries([]);
+          mvCheckpointControllerRef.current?.clear();
+          clearDraftStorageForSubmission(result.submissionId);
+          router.push(
+            `${localePrefix}/mypage/cart?added=${encodeURIComponent(result.submissionId)}`,
+          );
           return;
         }
         if (paymentMethod === "CARD") {
@@ -3448,7 +3438,7 @@ export function MvWizard({
     <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving}
-        label={step <= 4 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
+        label={step <= 4 ? "신청서 저장 중..." : "장바구니에 저장 중..."}
       />
 
       {isDraggingOver && (
@@ -3606,6 +3596,7 @@ export function MvWizard({
                 <button
                   key={item.value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     const nextMvType = item.value as
                       | "MV_DISTRIBUTION"
@@ -3663,6 +3654,7 @@ export function MvWizard({
                     <button
                       key={code}
                       type="button"
+                      aria-pressed={active}
                       onClick={() => toggleTvStation(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
@@ -3702,6 +3694,7 @@ export function MvWizard({
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <button
                   type="button"
+                  aria-pressed={onlineBaseSelected}
                   onClick={() => setOnlineBaseSelected((prev) => !prev)}
                   className={`text-left rounded-2xl border p-4 transition ${onlineBaseSelected
                     ? mvOptionToneClasses[0]
@@ -3743,6 +3736,7 @@ export function MvWizard({
                     <button
                       key={code}
                       type="button"
+                      aria-pressed={active}
                       onClick={() => toggleOnlineOption(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
@@ -4387,6 +4381,7 @@ export function MvWizard({
                 >
                   {showProfanityOverlay && (
                     <div
+                      data-no-translate
                       ref={lyricsOverlayRef}
                       aria-hidden="true"
                       className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
@@ -4428,6 +4423,7 @@ export function MvWizard({
                         profanityWords.map((word) => (
                           <div
                             key={word}
+                            data-no-translate
                             className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
                           >
                             {word}
@@ -4649,7 +4645,7 @@ export function MvWizard({
             {emailSubmitConfirmed ? (
               <EmailMaterialsNotice
                 submissionId={submissionIdRef.current}
-                subject={`[MV심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "곡명"} / ${mvType === "MV_BROADCAST" ? "방송사용" : "온라인용"}`}
+                subject={localePrefix ? `[MV review files] ${artistName.trim() || "Artist"} / ${title.trim() || "Title"} / ${mvType === "MV_BROADCAST" ? "Broadcast" : "Online"}` : `[MV심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "곡명"} / ${mvType === "MV_BROADCAST" ? "방송사용" : "온라인용"}`}
                 materials={isDownloadedApplicationFlow ? "작성한 신청서와 영상 파일" : "영상 파일"}
               />
             ) : (
@@ -4738,7 +4734,7 @@ export function MvWizard({
                         className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
+                          <span data-no-translate className="min-w-0 flex-1 break-all font-semibold text-foreground">
                             {upload.name}
                           </span>
                           <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
@@ -5211,6 +5207,10 @@ export function MvWizard({
             </div>
           )}
 
+          <GuestCartRecoveryNotice entries={cartRecoveryEntries} localePrefix={localePrefix} />
+          <p className="text-sm leading-6 text-muted-foreground" data-testid="cart-handoff-guidance">
+            신청서를 저장한 뒤 장바구니에서 결제 수단을 선택합니다. 결제가 확인되면 심의가 접수예정으로 표시됩니다.
+          </p>
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
@@ -5223,22 +5223,9 @@ export function MvWizard({
               type="button"
               onClick={() => handleSubmit({ deferPayment: true })}
               disabled={isSaving || !mvPreflight.canSubmit}
-              className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              장바구니에 담기
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                handleSubmit({
-                  deferPayment: true,
-                  redirectToCart: true,
-                })
-              }
-              disabled={isSaving || !mvPreflight.canSubmit}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              담고 결제하기
+              장바구니에 담기
             </button>
           </div>
         </div>
@@ -5254,7 +5241,7 @@ export function MvWizard({
           <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 text-2xl ${brandStatusTones.success}`}>
             ✓
           </div>
-          <h2 className="font-display mt-4 text-3xl text-foreground">접수 완료</h2>
+          <h2 className="font-display mt-4 text-3xl text-foreground">입금 확인 대기</h2>
           {notice.emailNotice ? (
             <div className={`mt-6 rounded-2xl border-2 px-4 py-3 text-sm ${brandStatusTones.progress}`}>
               {notice.emailNotice}

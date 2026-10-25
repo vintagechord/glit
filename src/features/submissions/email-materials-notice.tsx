@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 
@@ -14,7 +15,11 @@ export function EmailMaterialsNotice({
   materials: string;
 }) {
   const [copyStatus, setCopyStatus] = React.useState("");
-  const emailSubject = `${subject} / 접수번호 ${submissionId || "발급 대기"}`;
+  const pathname = usePathname();
+  const isEnglish = pathname === "/en" || pathname.startsWith("/en/");
+  const emailSubject = isEnglish
+    ? `${subject} / Application ID ${submissionId || "pending"}`
+    : `${subject} / 접수번호 ${submissionId || "발급 대기"}`;
 
   return (
     <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-5 text-sm">
@@ -24,7 +29,7 @@ export function EmailMaterialsNotice({
         {APP_CONFIG.supportEmail}
       </a>
       <p className="mt-3 text-xs font-semibold">메일 제목</p>
-      <p className="mt-1 break-all text-sm">{emailSubject}</p>
+      <p data-no-translate className="mt-1 break-all text-sm">{emailSubject}</p>
       <button type="button" disabled={!submissionId} className="mt-3 min-h-11 rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50" onClick={async () => {
         try {
           await navigator.clipboard.writeText(emailSubject);

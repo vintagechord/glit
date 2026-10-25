@@ -386,7 +386,11 @@ export function DraftSubmissionList({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
-                      {buildDisplayTitle(item)}
+                      {item.type === "ALBUM" && item.isOneclick && !item.title?.trim() && !item.artistName?.trim() ? "발매된 음반 · URL 접수" : <>
+                        {item.artistName?.trim() ? <span data-no-translate>{item.artistName.trim()}</span> : "아티스트 미입력"}
+                        {" · "}
+                        {item.title?.trim() ? <span data-no-translate>{item.title.trim()}</span> : "앨범명 미입력"}
+                      </>}
                     </p>
                     <span className={`${chipClass} border-[var(--bauhaus-ink)] bg-[var(--background)] text-[var(--foreground)]`}>
                       {getTypeLabel(draftGroup)}

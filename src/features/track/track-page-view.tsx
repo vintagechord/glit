@@ -21,15 +21,14 @@ export async function TrackPageView({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) {
-    redirect(dashboardPath);
-  }
-
   const resolvedSearchParams = (await searchParams) ?? {};
   const modeRaw = Array.isArray(resolvedSearchParams.mode)
     ? resolvedSearchParams.mode[0]
     : resolvedSearchParams.mode;
   const isGuestMode = modeRaw === "guest";
+  // A signed-in customer may still have an earlier guest application. Respect
+  // an explicit code-lookup request instead of redirecting away from it.
+  if (user && !isGuestMode) redirect(dashboardPath);
 
   return (
     <div className="page-centered mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">

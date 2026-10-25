@@ -20,13 +20,15 @@ test("submission wizards use concise cart actions and outcome notices", () => {
   for (const source of [albumWizard, mvWizard]) {
     assert.match(source, />\s*장바구니에 담기\s*</);
     if (source === albumWizard) {
-      assert.match(source, />\s*결제하기\s*</);
+      assert.doesNotMatch(source, />\s*결제하기\s*</);
       const handoff = source.slice(source.indexOf("if (deferPayment) {", source.indexOf('if (status === "SUBMITTED" && submissionIds.length > 0) {')), source.indexOf('if (paymentMethod === "CARD") {', source.indexOf('if (status === "SUBMITTED" && submissionIds.length > 0) {')));
       assert.match(handoff, /router\.push\(/);
       assert.doesNotMatch(handoff, /setStep\(7\)/, "cart handoff must not claim the application is complete before payment");
     } else {
-      assert.match(source, />\s*담고 결제하기\s*</);
-      assert.match(source, /신청서를 장바구니에 담았습니다\./);
+      assert.doesNotMatch(source, />\s*담고 결제하기\s*</);
+      const handoff = source.slice(source.indexOf("if (deferPayment) {", source.indexOf("if (result.submissionId) {")), source.indexOf('if (paymentMethod === "CARD") {', source.indexOf("if (result.submissionId) {")));
+      assert.match(handoff, /router\.push\(/);
+      assert.doesNotMatch(handoff, /setStep\(6\)/, "unpaid cart submission must not claim intake completion");
     }
     assert.match(source, /결제에 실패했습니다\. \$\{paymentFailureStorageNotice\}/);
     assert.match(source, /\? `\$\{(?:payload\.message|error)\} \$\{paymentFailureStorageNotice\}`/);

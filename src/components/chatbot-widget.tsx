@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 
+import { APP_CONFIG } from "@/lib/config";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-history";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
@@ -133,22 +134,22 @@ const writeStoredConversationTokens = (
   }
 };
 
-const formatMessageTime = (value?: string | null) => {
+const formatMessageTime = (value?: string | null, english = false) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return new Intl.DateTimeFormat(english ? "en-US" : "ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(date);
 };
 
-const formatConversationDate = (value?: string | null) => {
+const formatConversationDate = (value?: string | null, english = false) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", {
+  return new Intl.DateTimeFormat(english ? "en-US" : "ko-KR", {
     month: "2-digit",
     day: "2-digit",
     timeZone: "Asia/Seoul",
@@ -197,6 +198,7 @@ const getConversationPreview = (conversation: SupportChatConversation) =>
 
 export function ChatbotWidget() {
   const pathname = usePathname();
+  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const supabase = React.useMemo(() => createClient(), []);
   const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState<ChatView>("home");
@@ -918,7 +920,7 @@ export function ChatbotWidget() {
         {showHours ? (
           <div className="mb-3 flex items-center gap-2 rounded-[8px] border border-border bg-background px-3 py-2 text-xs font-bold text-muted-foreground">
             <Clock3 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            평일 오전 10:00-오후 8:00 운영해요.
+            {APP_CONFIG.supportHours} (KST)
           </div>
         ) : null}
 
@@ -952,7 +954,7 @@ export function ChatbotWidget() {
 
         <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-muted-foreground">
           <Clock3 className="h-4 w-4" aria-hidden="true" />
-          오전 10:00부터 운영해요
+          {APP_CONFIG.supportHours} (KST)
         </div>
 
         {latestConversation ? (
@@ -966,10 +968,10 @@ export function ChatbotWidget() {
                 최근 대화
               </span>
               <span className="text-[11px] font-bold text-muted-foreground">
-                {formatConversationDate(latestConversation.lastMessageAt)}
+                {formatConversationDate(latestConversation.lastMessageAt, isEnglishRoute)}
               </span>
             </span>
-            <span className="mt-2 block truncate text-sm font-bold text-foreground">
+            <span data-no-translate={latestConversation.lastMessagePreview ? true : undefined} className="mt-2 block truncate text-sm font-bold text-foreground">
               {getConversationPreview(latestConversation)}
             </span>
           </button>
@@ -1026,10 +1028,10 @@ export function ChatbotWidget() {
                       온사이드
                     </span>
                     <span className="truncate text-xs font-bold text-muted-foreground">
-                      {formatConversationDate(item.lastMessageAt)}
+                      {formatConversationDate(item.lastMessageAt, isEnglishRoute)}
                     </span>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-muted-foreground">
+                  <p data-no-translate={item.lastMessagePreview ? true : undefined} className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-muted-foreground">
                     {getConversationPreview(item)}
                   </p>
                 </div>
@@ -1141,7 +1143,7 @@ export function ChatbotWidget() {
           {statusLabel}
         </span>
         <span className="text-[11px] font-semibold text-muted-foreground">
-          평일 10:00-20:00
+          {APP_CONFIG.supportHours} (KST)
         </span>
       </div>
 
@@ -1186,7 +1188,7 @@ export function ChatbotWidget() {
                       : "border-border bg-card text-foreground"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words font-semibold leading-5">
+                  <p data-no-translate className="whitespace-pre-wrap break-words font-semibold leading-5">
                     {message.body}
                   </p>
                   <p
@@ -1194,7 +1196,7 @@ export function ChatbotWidget() {
                       mine ? "text-[#111111]/62" : "text-muted-foreground"
                     }`}
                   >
-                    {formatMessageTime(message.createdAt)}
+                    {formatMessageTime(message.createdAt, isEnglishRoute)}
                   </p>
                 </div>
               </div>
@@ -1218,7 +1220,7 @@ export function ChatbotWidget() {
             value={draft}
             onChange={(event) => setDrafts(current => ({ ...current, [activeToken ?? "new"]: event.target.value }))}
             rows={2}
-            placeholder="메시지를 입력하세요."
+            placeholder={isEnglishRoute ? "Type your message." : "메시지를 입력하세요."}
             className="max-h-28 min-h-12 min-w-0 flex-1 resize-none rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-[#1556a4]"
           />
           <button
@@ -1244,7 +1246,7 @@ export function ChatbotWidget() {
         <div
           className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-3 z-50 flex h-[min(720px,calc(100dvh-var(--site-header-height,76px)-3rem-env(safe-area-inset-bottom)))] w-[min(430px,calc(100vw-24px))] flex-col overflow-hidden rounded-[22px] border-2 border-[#111111] bg-card shadow-[7px_7px_0_#111111] dark:border-[#f2cf27] dark:shadow-[7px_7px_0_#f2cf27] sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6"
           role="dialog"
-          aria-label="온사이드 실시간 채팅"
+          aria-label={isEnglishRoute ? "Onside live chat" : "온사이드 실시간 채팅"}
         >
           {view === "thread" ? (
             renderThread()
@@ -1264,7 +1266,7 @@ export function ChatbotWidget() {
           type="button"
           onClick={toggleOpen}
           className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#111111] bg-[#111111] p-0 text-sm font-black text-white shadow-[5px_5px_0_rgba(17,17,17,0.28)] transition hover:-translate-y-0.5 hover:bg-white hover:text-[#111111] dark:border-white dark:bg-white dark:text-[#111111] dark:shadow-[5px_5px_0_rgba(255,255,255,0.22)] dark:hover:bg-[#111111] dark:hover:text-white sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6 sm:w-auto sm:gap-2 sm:rounded-[12px] sm:px-4 sm:py-3"
-          aria-label="실시간 채팅 열기"
+          aria-label={isEnglishRoute ? "Open live chat" : "실시간 채팅 열기"}
         >
           {totalUnread > 0 ? (
             <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#111111] bg-[#d9362c] px-1 text-[10px] font-black text-white">

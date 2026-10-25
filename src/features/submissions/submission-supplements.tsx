@@ -167,7 +167,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
         const verified = latest?.status === "DRAFT" && latest.files.some(file => ["VERIFIED", "UPLOADED"].includes(file.status)) && !latest.files.some(file => file.status === "PENDING");
         return <article key={request.id} className="space-y-3 border-t border-border pt-4">
           <h3 className="font-bold">{statusLabel(request.status)}</h3>
-          <p className="whitespace-pre-wrap break-words text-sm">{request.note}</p>
+          <p className="whitespace-pre-wrap break-words text-sm"><span data-no-translate>{request.note}</span></p>
           {admin && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
             const result = await api<{ notification: Notice["outcome"] & { alreadyAccepted?: boolean }; warning?: string }>({ action: "notify", requestId: request.id });
             setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true, result.notification)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
@@ -175,8 +175,8 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
           })}>{t("보완 안내 보내기·실패 재시도", "Send Supplement Notice / Retry Failures")}</button>}
           {request.revisions.map(revision => <div key={revision.id} className="rounded-lg border border-border p-3 text-sm">
             <p className="font-bold">{t("버전", "Version")} {revision.revision_no} · {statusLabel(revision.status)}</p>
-            {revision.note && <p className="mt-2 whitespace-pre-wrap break-words">{revision.note}</p>}
-            {revision.review_note && <p className="mt-2 whitespace-pre-wrap break-words">{revision.review_note}</p>}
+            {revision.note && <p className="mt-2 whitespace-pre-wrap break-words"><span data-no-translate>{revision.note}</span></p>}
+            {revision.review_note && <p className="mt-2 whitespace-pre-wrap break-words"><span data-no-translate>{revision.review_note}</span></p>}
             {admin && !!revision.notifications?.length && <details className="mt-3 rounded border border-border p-3">
               <summary className="cursor-pointer font-semibold">{t("보완 안내 발송 이력", "Supplement Notification History")}</summary>
               <p className="mt-2">{t("업체 접수와 실제 수신은 다릅니다. 응답이 불확실하거나 오래된 실패는 공급자 기록을 대조한 후 재시도해주세요.", "Provider acceptance does not confirm delivery. Reconcile uncertain responses or old failures with provider records before retrying.")}</p>
@@ -189,7 +189,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
               </li>)}</ul>
             </details>}
             <ul className="mt-2 space-y-2">{revision.files.map(file => <li key={file.id} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="break-all">{file.original_name} · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {statusLabel(file.status)}</span>
+              <span className="break-all"><span data-no-translate>{file.original_name}</span> · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {statusLabel(file.status)}</span>
               {["VERIFIED", "UPLOADED"].includes(file.status) && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
                 const result = await api<{ url: string }>({ action: "download", fileId: file.id });
                 const link = document.createElement("a"); link.href = result.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.click();

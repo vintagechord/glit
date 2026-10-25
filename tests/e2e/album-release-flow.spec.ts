@@ -155,7 +155,7 @@ const openFinalReview = async (page: Page, url: string) => {
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "접수할 앨범 URL 확인" })).toContainText(url);
   await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toHaveCount(0);
 };
 
 test("asks release status before showing packages and uses the same prices for both choices", async ({ page }) => {
@@ -315,7 +315,7 @@ test("released albums can continue while an upload is stalled and ignore its lat
   await expect(emailDialog).toContainText("이메일로 음원 파일을 보내주세요.");
   await emailDialog.getByRole("button", { name: "확인", exact: true }).click();
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toHaveCount(0);
   expect(uploads.completed).toHaveLength(0);
   expect(uploads.saved.some(body => body.includes('"filesSubmittedByEmail":true'))).toBe(true);
   uploads.holdPut = false; uploads.releasePut?.();

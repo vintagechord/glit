@@ -175,8 +175,8 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
                 const detailHref = getDetailHref(item);
                 return <li key={item.id} className="grid gap-2 p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm [overflow-wrap:anywhere] font-black">{displayItemTitle(item)}</p>
-                    <p className="mt-1 text-xs [overflow-wrap:anywhere] leading-5 text-muted-foreground">{item.artistName || (item.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {item.packageName || "패키지 미지정"}</p>
+                    <p className="text-sm [overflow-wrap:anywhere] font-black">{item.title?.trim() ? <span data-no-translate>{item.title}</span> : displayItemTitle(item)}</p>
+                    <p className="mt-1 text-xs [overflow-wrap:anywhere] leading-5 text-muted-foreground">{item.artistName ? <span data-no-translate>{item.artistName}</span> : (item.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {item.packageName || "패키지 미지정"}</p>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
                     <span className="min-w-0 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>

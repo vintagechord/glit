@@ -19,7 +19,7 @@ test("editing and re-adding an album keeps the original submission as the cart i
   assert.match(draftsApi, /const loadableDraftStatuses = \[[\s\S]*"SUBMITTED"[\s\S]*"WAITING_PAYMENT"/);
   assert.match(draftsApi, /submissionQuery\.in\("id", requestedIds\)/);
   assert.match(wizard, /submissionId: draft\.submissionId/);
-  assert.match(wizard, /addGuestSubmissionCartEntries\([\s\S]*submissionId,[\s\S]*guestToken/);
+  assert.match(wizard, /addGuestSubmissionCartEntries\(entries\)/);
   assert.match(actions, /const submissionPayload = \{[\s\S]*id: parsed\.data\.submissionId/);
   assert.match(actions, /package_id: parsed\.data\.packageId \?\? null/);
   assert.match(actions, /amount_krw: amountKrw/);

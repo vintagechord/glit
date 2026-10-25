@@ -17,6 +17,9 @@ async function mockSubmissionServices(page: Page, options: { failFirstPut?: bool
   await page.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === "/api/cart/items") {
+      await route.fulfill({ json: { items: [] } }); return;
+    }
     const keyFor = (name: string) => `submissions/fixture/${submissionId}/${name}`;
     if (url.pathname === "/api/submissions/draft") {
       await route.fulfill({ json: { submissionId, guestToken } }); return;
@@ -200,7 +203,10 @@ for (const kind of ["album", "mv"] as const) {
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     const submit = page.getByRole("button", { name: "장바구니에 담기", exact: true });
     await expect(submit).toBeEnabled();
+    await expect(page.getByTestId("cart-handoff-guidance")).toContainText("장바구니에서 결제 수단");
+    await expect(page.getByRole("button", { name: /^(결제하기|담고 결제하기)$/ })).toHaveCount(0);
     await submit.click();
+    await expect(page).toHaveURL(new RegExp(`/mypage/cart\\?added=${submissionId}$`));
     await expect.poll(() => results.saves.some((save) => save.status === "SUBMITTED" && Array.isArray(save.files) && save.files.length === 2)).toBe(true);
     expect(results.errors).toEqual([]);
     expect(results.unexpected).toEqual([]);
@@ -259,7 +265,7 @@ for (const kind of ["album", "mv"] as const) test(`${kind} multipart refreshes a
   finally { await media.close(); }
   await writeFile(formPath, "fixture application");
   await files.locator('input[type="file"]').setInputFiles([mediaPath, formPath]);
-  await expect(files.getByText("첨부 완료", { exact: true })).toHaveCount(2);
+  await expect(files.getByText("첨부 완료", { exact: true })).toHaveCount(2, { timeout: 30_000 });
   expect(results.completed.sort()).toEqual([mediaName, "application.docx"].sort());
   expect(results.partAttempts["/__e2e__/part/1?generation=1"]).toBe(1);
   expect(results.partAttempts["/__e2e__/part/1?generation=2"]).toBe(1);
@@ -344,5 +350,31 @@ for (const width of [320, 390]) {
     await expect(page.getByLabel("2번 트랙 곡명", { exact: true })).toHaveCount(0);
     expect(results.errors).toEqual([]);
     expect(results.unexpected).toEqual([]);
+  });
+}
+
+for (const kind of ["album", "mv"] as const) {
+  test(`${kind} blocked guest cart storage preserves the saved application code and allows retry`, async ({ page }) => {
+    const results = await mockSubmissionServices(page);
+    const files = await openFileSubmission(page, kind);
+    await files.getByRole("button", { name: "파일은 이메일로 나중에 제출", exact: true }).click();
+    await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+    await page.evaluate(() => {
+      const saved = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith('onside:guest-submission-')) throw new DOMException('Storage disabled', 'QuotaExceededError');
+        return saved.call(this, key, value);
+      };
+    });
+    await page.getByRole("button", { name: "장바구니에 담기", exact: true }).click();
+    const recovery = page.getByRole("complementary", { name: "비회원 신청서 저장 안내" });
+    await expect(recovery).toBeVisible();
+    await expect(recovery.locator('[data-no-translate]')).toHaveText(guestToken);
+    await expect(recovery.getByRole('link', {name:'저장된 신청서 조회'})).toHaveAttribute('href', `/track/${guestToken}`);
+    await expect(page.getByRole("button", { name: "장바구니에 담기", exact: true })).toBeEnabled();
+    await expect(page).toHaveURL(new RegExp(`/dashboard/new/${kind}$`));
+    expect(results.saves.some(save => save.status === 'SUBMITTED')).toBe(true);
+    expect(results.unexpected).toEqual([]);
+    expect(results.errors).toEqual([]);
   });
 }

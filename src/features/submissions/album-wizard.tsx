@@ -85,6 +85,7 @@ import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
+import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
@@ -184,9 +185,9 @@ const initialTrack: TrackInput = {
 
 const noExtraProfanityTerms: ProfanityTerm[] = [];
 
-const standardSteps = ["온라인 신청서 작성", "음원 첨부", "결제", "신청 완료"];
-const oneClickSteps = ["URL 입력", "음원 첨부", "결제", "신청 완료"];
-const uploadFormSteps = ["신청서 작성", "음원 첨부", "결제", "신청 완료"];
+const standardSteps = ["온라인 신청서 작성", "음원 첨부", "최종 점검", "장바구니"];
+const oneClickSteps = ["URL 입력", "음원 첨부", "최종 점검", "장바구니"];
+const uploadFormSteps = ["신청서 작성", "음원 첨부", "최종 점검", "장바구니"];
 
 const paymentFailureStorageNotice = "신청서는 장바구니에 보관됩니다.";
 const paymentFailureDraftNotice =
@@ -528,6 +529,7 @@ export function AlbumWizard({
 
   const [isAddingAlbum, setIsAddingAlbum] = React.useState(false);
   const [completionId, setCompletionId] = React.useState<string | null>(null);
+  const [cartRecoveryEntries, setCartRecoveryEntries] = React.useState<Array<{submissionId: string; guestToken: string}>>([]);
   const [completionTokens, setCompletionTokens] = React.useState<
     Array<{ token: string; title: string }>
   >([]);
@@ -3934,18 +3936,22 @@ export function AlbumWizard({
           uploadDraftIndex: 0,
         });
         if (deferPayment) {
+          if (isGuest) {
+            const entries = Object.entries(guestTokensBySubmissionId).map(([submissionId, guestToken]) => ({ submissionId, guestToken }));
+            if (entries.length !== submissionIds.length) {
+              setNotice({ error: "비회원 장바구니 조회 코드를 확인하지 못했습니다." });
+              setCartRecoveryEntries(entries);
+              return;
+            }
+            if (!addGuestSubmissionCartEntries(entries)) {
+              setCartRecoveryEntries(entries);
+              setNotice({ error: "신청서는 저장했지만 이 브라우저에 장바구니 정보를 보관하지 못했습니다. 조회 코드를 보관하고 브라우저 저장을 허용한 뒤 다시 시도해주세요." });
+              return;
+            }
+          }
+          setCartRecoveryEntries([]);
           albumCheckpointControllerRef.current?.clear();
           clearDraftStorageForSubmissions(submissionIds);
-          if (isGuest) {
-            addGuestSubmissionCartEntries(
-              Object.entries(guestTokensBySubmissionId).map(
-                ([submissionId, guestToken]) => ({
-                  submissionId,
-                  guestToken,
-                }),
-              ),
-            );
-          }
           router.push(
             `${localePrefix}/mypage/cart?added=${encodeURIComponent(submissionIds[0])}`,
           );
@@ -4247,7 +4253,7 @@ export function AlbumWizard({
     <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       <PendingOverlay
         show={isSaving || isAddingAlbum}
-        label={step <= 5 ? "신청서 저장 중..." : "심의 저장/결제 처리 중..."}
+        label={step <= 5 ? "신청서 저장 중..." : "장바구니에 저장 중..."}
       />
       {resumePrompt && !isFromDraftsTab ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6">
@@ -5094,6 +5100,7 @@ export function AlbumWizard({
                           <div className="relative isolate overflow-hidden rounded-2xl border border-border/70 bg-background transition focus-within:border-foreground">
                             {showProfanityOverlay && (
                               <div
+                                data-no-translate
                                 ref={lyricsOverlayRef}
                                 aria-hidden="true"
                                 className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
@@ -5196,7 +5203,7 @@ export function AlbumWizard({
                                 ]).flatMap(({ label, text, analysis }) => analysis.matches.slice(0, 30).map((match) => (
                                   <div key={`${label}-${match.start}-${match.end}-${match.ruleId}`} className="space-y-1 rounded-xl border border-border p-3">
                                     <p className="text-xs font-bold"><span>{label}</span> · <span>{match.category === "confident" ? "명확한 욕설" : "확인 필요"}</span></p>
-                                    <p className="whitespace-pre-wrap break-words">{text.slice(Math.max(0, match.start - 24), match.start)}<mark className={match.category === "confident" ? "rounded bg-[var(--bauhaus-red)] text-white dark:text-[#06111f]" : "rounded bg-[var(--bauhaus-yellow)] text-[#111111]"}>{text.slice(match.start, match.end)}</mark>{text.slice(match.end, match.end + 24)}</p>
+                                    <p data-no-translate className="whitespace-pre-wrap break-words">{text.slice(Math.max(0, match.start - 24), match.start)}<mark className={match.category === "confident" ? "rounded bg-[var(--bauhaus-red)] text-white dark:text-[#06111f]" : "rounded bg-[var(--bauhaus-yellow)] text-[#111111]"}>{text.slice(match.start, match.end)}</mark>{text.slice(match.end, match.end + 24)}</p>
                                     <p className="text-xs leading-5 text-muted-foreground">{match.reason}</p>
                                   </div>
                                 )))}
@@ -5276,11 +5283,9 @@ export function AlbumWizard({
                               : "text-muted-foreground"
                               }`}
                           >
-                            {(draft.title.trim() ||
-                              (isOneClick ? "발매된 음반" : "제목 미입력")) +
-                              " · " +
-                              (draft.artistName.trim() ||
-                                (isOneClick ? "발매된 음반" : "아티스트 미입력"))}
+                            {draft.title.trim() ? <span data-no-translate>{draft.title}</span> : isOneClick ? "발매된 음반" : "제목 미입력"}
+                            {" · "}
+                            {draft.artistName.trim() ? <span data-no-translate>{draft.artistName}</span> : isOneClick ? "발매된 음반" : "아티스트 미입력"}
                           </p>
                           </span>
                           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em]">
@@ -5366,9 +5371,9 @@ export function AlbumWizard({
             <div className="pointer-events-none fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]" />
           )}
           {initialArchiveEntry ? <section aria-label="심의 신청 대상" className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-xl font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{initialArchiveEntry.artistName}{initialArchiveEntry.context.trackId ? ` · ${initialArchiveEntry.title}` : ` · ${initialArchiveEntry.tracks.length}곡`}</p>
-            {initialArchiveEntry.context.trackId ? <p className="mt-3 text-sm font-semibold">선택한 곡만 심의합니다.</p> : <details className="mt-3 text-sm"><summary className="cursor-pointer">신청 음원 보기</summary><ol className="mt-2 space-y-1">{initialArchiveEntry.tracks.map(track => <li key={track.id}>{track.trackNumber}. {track.title}</li>)}</ol></details>}
+            <h2 data-no-translate className="text-xl font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground"><span data-no-translate>{initialArchiveEntry.artistName}</span>{initialArchiveEntry.context.trackId ? <span data-no-translate> · {initialArchiveEntry.title}</span> : ` · ${initialArchiveEntry.tracks.length}곡`}</p>
+            {initialArchiveEntry.context.trackId ? <p className="mt-3 text-sm font-semibold">선택한 곡만 심의합니다.</p> : <details className="mt-3 text-sm"><summary className="cursor-pointer">신청 음원 보기</summary><ol className="mt-2 space-y-1">{initialArchiveEntry.tracks.map(track => <li key={track.id}>{track.trackNumber}. <span data-no-translate>{track.title}</span></li>)}</ol></details>}
             <div className="mt-5"><label className="text-sm font-bold" htmlFor="archive-review-package">심의 방송국</label><select id="archive-review-package" data-preflight-field="package" value={selectedPackage?.id ?? ""} onChange={event => setSelectedPackage(packages.find(pkg => pkg.id === event.target.value) ?? null)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-background px-3">{packages.map(pkg => <option key={pkg.id} value={pkg.id}>{getPackageDisplayName(pkg)} · {formatCurrency(getAlbumReviewPriceKrw(pkg.priceKrw))}원</option>)}</select></div>
             <div className="mt-5" data-preflight-field="aiUsed"><AiUsageSelector value={aiUsed} onChange={setAiUsed} context="album" /></div>
             <details open={!initialApplicant?.name || !initialApplicant?.email || !initialApplicant?.phone} className="mt-5"><summary className="cursor-pointer text-sm font-bold">접수자 정보</summary><div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -5440,11 +5445,9 @@ export function AlbumWizard({
                           : "text-muted-foreground"
                           }`}
                       >
-                        {(draft.title.trim() ||
-                          (isOneClick ? "발매된 음반" : "제목 미입력")) +
-                          " · " +
-                          (draft.artistName.trim() ||
-                            (isOneClick ? "발매된 음반" : "아티스트 미입력"))}
+                        {draft.title.trim() ? <span data-no-translate>{draft.title}</span> : isOneClick ? "발매된 음반" : "제목 미입력"}
+                        {" · "}
+                        {draft.artistName.trim() ? <span data-no-translate>{draft.artistName}</span> : isOneClick ? "발매된 음반" : "아티스트 미입력"}
                       </p>
                     </div>
                     <span
@@ -5515,7 +5518,7 @@ export function AlbumWizard({
             {emailSubmitConfirmed ? (
               <EmailMaterialsNotice
                 submissionId={currentSubmissionId}
-                subject={`[음반심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "앨범명"}`}
+                subject={localePrefix ? `[Album review files] ${artistName.trim() || "Artist"} / ${title.trim() || "Album title"}` : `[음반심의 파일] ${artistName.trim() || "아티스트명"} / ${title.trim() || "앨범명"}`}
                 materials={isDownloadedApplicationFlow ? "작성한 신청서와 전체 음원 파일" : "전체 음원 파일"}
               />
             ) : (
@@ -5616,7 +5619,7 @@ export function AlbumWizard({
                       className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="min-w-0 flex-1 break-all font-semibold text-foreground">
+                        <span data-no-translate className="min-w-0 flex-1 break-all font-semibold text-foreground">
                           {upload.name}
                         </span>
                         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
@@ -5848,7 +5851,7 @@ export function AlbumWizard({
             </section>
           )}
 
-          {initialArchiveEntry ? <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2><p className="mt-1 text-sm text-muted-foreground">{initialArchiveEntry.artistName} · {initialArchiveEntry.tracks.length}곡</p></section> : null}
+          {initialArchiveEntry ? <section className="rounded-xl border border-border bg-card p-5"><h2 data-no-translate className="font-black">{initialArchiveEntry.context.trackId ? initialArchiveEntry.tracks[0]?.title : initialArchiveEntry.title}</h2><p className="mt-1 text-sm text-muted-foreground"><span data-no-translate>{initialArchiveEntry.artistName}</span> · {initialArchiveEntry.tracks.length}곡</p></section> : null}
           <div className="space-y-4">
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -6202,6 +6205,10 @@ export function AlbumWizard({
             </div>
           )}
 
+          <GuestCartRecoveryNotice entries={cartRecoveryEntries} localePrefix={localePrefix} />
+          <p className="text-sm leading-6 text-muted-foreground" data-testid="cart-handoff-guidance">
+            신청서를 저장한 뒤 장바구니에서 결제 수단을 선택합니다. 결제가 확인되면 심의가 접수예정으로 표시됩니다.
+          </p>
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
@@ -6214,21 +6221,9 @@ export function AlbumWizard({
               type="button"
               onClick={() => handleSave("SUBMITTED", { deferPayment: true })}
               disabled={isSaving || isAddingAlbum || !albumPaymentReady}
-              className="rounded-full border border-border/70 bg-background px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:-translate-y-0.5 hover:border-foreground hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              장바구니에 담기
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                handleSave("SUBMITTED", {
-                  deferPayment: true,
-                })
-              }
-              disabled={isSaving || isAddingAlbum || !albumPaymentReady}
               className="rounded-full border-2 border-[#111111] bg-[var(--bauhaus-red)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-white shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#b92d25] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:text-[#06111f] dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-[#ff7a72]"
             >
-              결제하기
+              장바구니에 담기
             </button>
           </div>
         </div>
@@ -6239,7 +6234,7 @@ export function AlbumWizard({
           <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 text-2xl ${brandStatusTones.success}`}>
             ✓
           </div>
-          <h2 className="font-display mt-4 text-3xl text-foreground">신청 완료</h2>
+          <h2 className="font-display mt-4 text-3xl text-foreground">입금 확인 대기</h2>
           {notice.emailNotice ? (
             <div className={`mt-6 rounded-2xl border-2 px-4 py-3 text-sm ${brandStatusTones.progress}`}>
               {notice.emailNotice}
@@ -6266,7 +6261,7 @@ export function AlbumWizard({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs"
                   >
                     <span className="font-semibold text-foreground">
-                      {item.title || `앨범 ${index + 1}`}
+                      {item.title ? <span data-no-translate>{item.title}</span> : `앨범 ${index + 1}`}
                     </span>
                     <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
                       <span className="max-w-full break-all font-mono text-foreground">

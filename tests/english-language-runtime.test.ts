@@ -5,6 +5,8 @@ import vm from "node:vm";
 import { chromium } from "@playwright/test";
 import ts from "typescript";
 
+const chromiumOverride = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+
 // Run the actual client-only dictionary and DOM observer without a Next server,
 // authentication, or network requests. Only the React effect boundary is stubbed.
 const source = readFileSync(
@@ -39,13 +41,21 @@ test("English translation keeps exact labels, whitespace and changing counters w
   for (const value of ["Already English", "2026-09-07", "https://example.test/album/123", "  123  ", ""]) {
     assert.equal(harness.translateValue(value), value);
   }
+  assert.equal(harness.translateValue("  파일 전송이 완료되었습니다.\n 아래 보완 제출 버튼을 눌러 관리자에게 제출해주세요.  "), "  File transfer is complete. Select Submit materials below to send it to our team.  ");
+  assert.equal(harness.translateValue("방송국 6곳 중 1곳 결과 완료 · 17%"), "1 of 6 broadcaster results complete · 17%");
+  assert.equal(harness.translateValue("1곳"), "1 broadcaster");
+  assert.equal(harness.translateValue("2026. 10. 25. 오전 9:00"), "2026-10-25 9:00 AM");
+  assert.equal(harness.translateValue("2026. 10. 1. 오후 9:00"), "2026-10-1 9:00 PM");
+  assert.equal(harness.translateValue("영상물등급위원회 · 적격"), "Korea Media Rating Board · Approved");
+  assert.equal(harness.translateValue("앨범 가사 선택"), "Select 앨범 가사", "user-authored title is preserved inside a recognized UI label");
+  assert.equal(harness.translateValue("모르는 문장에 앨범과 음원이 있습니다"), "모르는 문장에 앨범과 음원이 있습니다", "unknown sentences must not become mixed gibberish");
 });
 
 test("English DOM updates avoid whole subtrees while preserving editable text, excluded links and locale cleanup", {
-  skip: !existsSync(chromium.executablePath()) && "Install Playwright Chromium to run DOM translation regression coverage.",
+  skip: !existsSync(chromiumOverride ?? chromium.executablePath()) && "Install Playwright Chromium or set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH to run DOM translation regression coverage.",
   timeout: 45_000,
 }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(chromiumOverride ? { executablePath: chromiumOverride } : {}) });
   try {
     const page = await browser.newPage();
     page.setDefaultTimeout(7_000);
@@ -56,6 +66,9 @@ test("English DOM updates avoid whole subtrees while preserving editable text, e
       body: `<html lang="ko"><head><title>로그인</title></head><body>
         <section id="large"><span id="counter">10초 후 다시 보내기</span>${"<p>로그인</p>".repeat(300)}</section>
         <section data-no-translate><p id="excluded">로그인</p></section>
+        <p id="native-excluded" translate="no">앨범 가사</p>
+        <p id="editable" contenteditable="true">앨범 가사</p>
+        <button id="payload" name="action" value="앨범" title="앨범 가사" data-no-translate-attributes="title">파일 열기</button>
         <textarea id="lyrics" placeholder="이메일">가사 원문</textarea>
         <a id="normal" href="/guide?q=1#prepare">심의 안내</a>
         <a id="original" href="/guide" data-no-localize>심의 안내</a>
@@ -79,6 +92,11 @@ test("English DOM updates avoid whole subtrees while preserving editable text, e
       throw new Error(`${error.message}; runtime errors: ${runtimeErrors.join("; ")}`);
     });
     assert.equal(await page.locator("#excluded").textContent(), "로그인");
+    assert.equal(await page.locator("#native-excluded").textContent(), "앨범 가사");
+    assert.equal(await page.locator("#editable").textContent(), "앨범 가사");
+    assert.equal(await page.locator("#payload").textContent(), "Open File");
+    assert.equal(await page.locator("#payload").getAttribute("value"), "앨범");
+    assert.equal(await page.locator("#payload").getAttribute("title"), "앨범 가사");
     assert.equal(await page.locator("#lyrics").inputValue(), "가사 원문");
     assert.equal(await page.locator("#lyrics").getAttribute("placeholder"), "Email");
     assert.equal(await page.locator("#normal").getAttribute("href"), "/en/guide?q=1#prepare");

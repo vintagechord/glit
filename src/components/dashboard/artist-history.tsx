@@ -90,7 +90,7 @@ function Thumbnail({ name, src }: { name: string; src: string | null }) {
   }
   return (
     <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] shadow-[3px_3px_0_var(--bauhaus-shadow)]">
-      <Image src={src} alt={name} fill sizes="56px" unoptimized className="object-cover" />
+      <Image data-no-translate-attributes="alt" src={src} alt={name} fill sizes="56px" unoptimized className="object-cover" />
     </div>
   );
 }
@@ -117,6 +117,7 @@ function SubmissionManagementRow({
     <div
       role="group"
       aria-label={item.title || "제목 미입력"}
+      data-no-translate-attributes={item.title ? "aria-label" : undefined}
       className={`grid grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 ${
         selected
           ? "rounded-[8px] bg-[var(--bauhaus-yellow)] text-[#111111] shadow-[2px_2px_0_var(--bauhaus-shadow)]"
@@ -176,7 +177,7 @@ function SubmissionManagementRow({
         className="col-span-2 flex min-h-11 min-w-0 flex-col justify-center gap-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
       >
         <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
-          {item.title || "제목 미입력"}
+          {item.title ? <span data-no-translate>{item.title}</span> : "제목 미입력"}
         </p>
         <p className={`text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
           {formatDate(item.created_at)}
@@ -221,7 +222,7 @@ function ArtistCard({
           <Thumbnail name={group.artistName} src={group.thumbnail} />
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <p className="text-base font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
-              {group.artistName}
+              <span data-no-translate>{group.artistName}</span>
             </p>
             <span className="shrink-0 rounded-full border border-[#111111] bg-[var(--bauhaus-yellow)] px-2 py-0.5 text-[11px] font-black text-[#111111]">
               {group.submissions.length}

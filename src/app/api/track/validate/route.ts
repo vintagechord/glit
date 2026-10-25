@@ -44,12 +44,14 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const baseSelect = "id";
 
-  const { data: guestMatch } = await admin
+  const { data: guestMatch, error } = await admin
     .from("submissions")
     .select(baseSelect)
     .is("user_id", null)
     .eq("guest_token", token)
     .maybeSingle();
+
+  if (error) return NextResponse.json({ ok: false }, { status: 503 });
 
   if (guestMatch) {
     return NextResponse.json({ ok: true });

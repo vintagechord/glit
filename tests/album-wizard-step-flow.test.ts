@@ -11,8 +11,8 @@ test("normal album submissions save basic information before track entry", () =>
   const trackStart = source.indexOf("const handleTrackTemporarySave", basicStart);
   const basicHandler = source.slice(basicStart, trackStart);
 
-  assert.match(source, /const standardSteps = \["온라인 신청서 작성", "음원 첨부", "결제", "신청 완료"\]/);
-  assert.match(source, /const oneClickSteps = \["URL 입력", "음원 첨부", "결제", "신청 완료"\]/);
+  assert.match(source, /const standardSteps = \["온라인 신청서 작성", "음원 첨부", "최종 점검", "장바구니"\]/);
+  assert.match(source, /const oneClickSteps = \["URL 입력", "음원 첨부", "최종 점검", "장바구니"\]/);
   assert.match(
     source,
     /const hasTrackStep =\s*!isOneClick && applicationFormMode === "online"/,
