@@ -1,5 +1,6 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
+import type { EmailAttachmentRef } from "@/lib/email-attachments";
 
 type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
 
@@ -58,6 +59,7 @@ type SubmissionUpdateEmailPayload = EmailDeliveryOptions & {
   submissionId?: string;
   guestToken?: string;
   markResultNotified?: boolean;
+  attachmentRefs?: EmailAttachmentRef[];
 };
 
 type GuestSubmissionLookupEmailPayload = EmailDeliveryOptions & {
@@ -341,7 +343,7 @@ export async function sendSubmissionUpdateEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`, html, operation: "submission update", includeMessageId: true, submissionId: payload.submissionId, markResultNotified: payload.markResultNotified });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: payload.subject ?? `[onside] 심의 업데이트 안내 — ${kindLabel} 심의`, html, operation: "submission update", includeMessageId: true, submissionId: payload.submissionId, markResultNotified: payload.markResultNotified, ...(payload.attachmentRefs ? { attachmentRefs: payload.attachmentRefs } : {}) });
 }
 
 export async function sendGuestSubmissionLookupEmail(

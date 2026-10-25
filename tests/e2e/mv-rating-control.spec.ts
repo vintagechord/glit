@@ -21,7 +21,7 @@ test.beforeAll(async () => {
             window.addEventListener('fixture-rating', update);
             return () => window.removeEventListener('fixture-rating', update);
           }, []);
-          return <MvRatingControl submissionId="fixture-mv" initialRating={value} isResultNotified={notified}/>;
+          return <MvRatingControl submissionId="fixture-mv" initialRating={value} expectedUpdatedAt="2026-10-25T00:00:00Z" isResultNotified={notified}/>;
         }
         createRoot(document.getElementById('root')).render(<App/>);
       `,
@@ -54,7 +54,7 @@ async function mount(page: Page, rating: string, notified = false, warning?: str
     } else if (route.request().url().endsWith("/api/admin/submissions/fixture-mv/mv-rating")) {
       const body = route.request().postDataJSON() as { rating: string };
       requests.push(body);
-      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rating: body.rating, warning }) });
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, rating: body.rating, warning, deliveredCount: warning ? 0 : 1 }) });
     } else {
       await route.fulfill({ status: 404 });
     }
@@ -72,8 +72,8 @@ test("an applicant's desired rating stays separate until an administrator explic
 
   await page.getByRole("combobox", { name: "결과 등급", exact: true }).selectOption("15");
   await page.getByRole("button", { name: "등급 저장", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("결과 등급이 사용자 화면에 통보되었습니다.");
-  expect(requests).toEqual([{ rating: "15" }]);
+  await expect(page.getByRole("status")).toContainText("결과 등급을 저장했습니다.");
+  expect(requests).toEqual([{ rating: "15", expectedUpdatedAt: "2026-10-25T00:00:00Z" }]);
   await page.getByRole("button", { name: "확인", exact: true }).click();
   await expect(page.getByRole("button", { name: "등급 저장", exact: true })).toBeDisabled();
 
@@ -112,6 +112,9 @@ test("saved MV ratings display delivery warnings without claiming that the save 
   await page.getByRole("combobox", { name: "결과 등급", exact: true }).selectOption("15");
   await page.getByRole("button", { name: "등급 저장", exact: true }).click();
   await expect(page.getByRole("status")).toContainText(warning);
-  await expect(page.getByRole("status")).toContainText("사용자 화면에 통보되었습니다");
-  expect(requests).toEqual([{ rating: "15" }]);
+  await expect(page.getByRole("status")).toContainText("결과 등급을 저장했습니다");
+  expect(requests).toEqual([{ rating: "15", expectedUpdatedAt: "2026-10-25T00:00:00Z" }]);
+  await page.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(page.getByRole("button", { name: "등급 저장", exact: true })).toBeEnabled();
+  await expect(page.getByText("이메일 안내 확인 필요")).toBeVisible();
 });

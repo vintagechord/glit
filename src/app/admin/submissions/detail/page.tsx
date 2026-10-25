@@ -5,7 +5,6 @@ import {
   normalizeStationReviewStatus,
   paymentStatusLabelMap,
   resultStatusLabelMap,
-  resultStatusOptions,
   stationReviewStatusOptions,
   type PaymentStatus,
   type ReviewStatus,
@@ -14,7 +13,6 @@ import {
   createTrackForSubmissionAction,
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
-  updateSubmissionResultFormAction,
   notifySubmissionResultFormAction,
   notifySubmissionProgressFormAction,
 } from "@/features/admin/actions";
@@ -84,6 +82,7 @@ type SubmissionRow = {
   mv_usage?: string | null;
   is_oneclick?: boolean | null;
   mv_desired_rating?: string | null;
+  mv_selected_station_codes?: string[] | null;
   certificate_b2_path?: string | null;
   certificate_original_name?: string | null;
   certificate_mime?: string | null;
@@ -501,25 +500,25 @@ export default async function AdminSubmissionDetailPage({
       ? paymentStatusLabelMap[submission.payment_status]
       : submission.payment_status ?? "미결제";
   const stationSelectWithTracks =
-    "id, status, result_note, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
+    "id, status, result_note, age_rating, track_results:track_results_json, updated_at, station_id, station:stations ( id, name, code )";
   const stationSelectLegacyTracks =
-    "id, status, result_note, track_results, updated_at, station_id, station:stations ( id, name, code )";
+    "id, status, result_note, age_rating, track_results, updated_at, station_id, station:stations ( id, name, code )";
   const stationSelectNoTracks =
-    "id, status, result_note, updated_at, station_id, station:stations ( id, name, code )";
+    "id, status, result_note, age_rating, updated_at, station_id, station:stations ( id, name, code )";
 
   const expectedCodes = submission.type === "ALBUM"
     ? getPackageStationCodes(packageInfo?.station_count, packageInfo?.name)
-    : [];
+    : submission.type === "MV_BROADCAST" ? (submission.mv_selected_station_codes ?? []).filter(code => !["MV_BROADCAST", "MV_ONLINE"].includes(code)) : [];
   // These sections depend only on the authorized submission, not on one another.
   const [member, paymentDocumentResult, stationResult, expectedStationResult, eventResult, fileResult] = await Promise.all([
     (async () => {
       if (!submission.user_id || submission.guest_name) return { profile: null, email: null };
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, company, phone, email")
+        .select("name, company, phone")
         .eq("user_id", submission.user_id)
         .maybeSingle();
-      let email: string | null = profile?.email ?? null;
+      let email: string | null = null;
       if (!email) {
         const { data } = await supabase.auth.admin.getUserById(submission.user_id);
         email = data.user?.email ?? null;
@@ -586,6 +585,7 @@ export default async function AdminSubmissionDetailPage({
           id: string;
           status: string;
           result_note: string | null;
+          age_rating?: string | null;
           track_results?: unknown;
           updated_at: string;
           station_id: string | null;
@@ -616,7 +616,14 @@ export default async function AdminSubmissionDetailPage({
     }
   }
 
-  if (submission.type === "ALBUM") {
+  if (submission.type === "MV_BROADCAST") {
+    stationReviews = (stationReviews ?? []).filter(review => {
+      const station = Array.isArray(review.station) ? review.station[0] : review.station;
+      return !["MV_BROADCAST", "MV_ONLINE"].includes(station?.code ?? "");
+    });
+  }
+
+  if (submission.type === "ALBUM" || submission.type === "MV_BROADCAST") {
     // Missing rows are displayed as unsent and created by the explicit save action.
     // Merely viewing an admin page must not create or reset review records.
     if (expectedCodes.length > 0) {
@@ -632,7 +639,7 @@ export default async function AdminSubmissionDetailPage({
     }
   }
 
-  if ((!stationReviews || stationReviews.length === 0) && submission.type?.startsWith("MV_")) {
+  if ((!stationReviews || stationReviews.length === 0) && submission.type === "MV_DISTRIBUTION") {
     const fallbackStationName =
       submission.type === "MV_DISTRIBUTION"
         ? "영상물등급위원회"
@@ -1197,7 +1204,7 @@ export default async function AdminSubmissionDetailPage({
             </form>
           )}
 
-          {isMvSubmission ? (
+          {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1235,7 +1242,6 @@ export default async function AdminSubmissionDetailPage({
                 </div>
               </div>
 
-              {isMvDistribution ? (
                 <div className="mt-5 space-y-5">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -1245,7 +1251,8 @@ export default async function AdminSubmissionDetailPage({
                       <MvRatingControl
                         submissionId={submission.id}
                         initialRating={submission.mv_desired_rating ?? ""}
-                        isResultNotified={hasResultNotified}
+                        expectedUpdatedAt={submission.updated_at}
+                        isResultNotified={Boolean(submission.result_notified_at)}
                       />
                     </div>
                   </div>
@@ -1262,52 +1269,11 @@ export default async function AdminSubmissionDetailPage({
                         currentObjectKey={submission.certificate_b2_path}
                         currentName={submission.certificate_original_name}
                         currentUploadedAt={submission.certificate_uploaded_at}
+                        expectedUpdatedAt={submission.updated_at}
                       />
                     </div>
                   </div>
                 </div>
-              ) : (
-                <form
-                  action={updateSubmissionResultFormAction}
-                  method="post"
-                  className="mt-5 grid gap-4 rounded-2xl border border-border/60 bg-background/70 p-4 md:grid-cols-[220px_1fr_auto]"
-                >
-                  <input type="hidden" name="submissionId" value={submission.id} />
-                  <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
-                  <label className="space-y-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결과
-                    </span>
-                    <select
-                      name="resultStatus"
-                      defaultValue={submission.result_status ?? "APPROVED"}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
-                    >
-                      {resultStatusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      결과 메모
-                    </span>
-                    <input
-                      name="resultMemo"
-                      defaultValue={submission.result_memo ?? ""}
-                      className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
-                      placeholder="사용자에게 전달할 메모"
-                    />
-                  </label>
-                  <div className="flex items-end justify-end">
-                    <ConfirmSubmitButton className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background">
-                      결과 통보 저장
-                    </ConfirmSubmitButton>
-                  </div>
-                </form>
-              )}
             </div>
           ) : (
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
@@ -1383,11 +1349,14 @@ export default async function AdminSubmissionDetailPage({
                       stationId={review.station_id ?? null}
                       stationCode={stationInfo?.code ?? undefined}
                       stationName={stationInfo?.name ?? undefined}
-                      initialStatus={normalizeStationReviewStatus(review.status)}
+                      initialStatus={review.status === "RECEIVED" || review.status === "NOT_SENT" ? review.status : normalizeStationReviewStatus(review.status)}
                       initialMemo={review.result_note ?? ""}
-                      trackResults={trackResults}
+                      expectedUpdatedAt={typeof review.id === "string" && uuidPattern.test(review.id) ? review.updated_at : null}
+                      showAgeRating={submission.type === "MV_BROADCAST"}
+                      initialAgeRating={review.age_rating ?? null}
+                      trackResults={submission.type === "ALBUM" ? trackResults : []}
                       maxDecidedTracks={isWbsReview(stationInfo) && stationTracks.length > 3 ? 3 : undefined}
-                      statusOptions={stationReviewStatusOptions}
+                      statusOptions={[{ value: "NOT_SENT", label: "접수 대기" }, ...stationReviewStatusOptions, { value: "RECEIVED", label: "방송사 확인 완료" }]}
                       action={updateStationReviewFormAction}
                       returnTo={adminSubmissionListHref}
                     />

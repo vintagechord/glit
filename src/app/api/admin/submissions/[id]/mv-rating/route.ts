@@ -3,16 +3,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { isRatingCode } from "@/lib/mv-assets";
-import { sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
-import { completeMvReviewFlow } from "@/lib/admin/mv-review-flow";
+import { sendOnlineMvResultNotificationById } from "@/lib/admin/submission-notifications";
+import { saveManagedOnlineReview } from "@/lib/admin/review-management";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   rating: z.string().refine(isRatingCode, "유효하지 않은 등급 코드입니다."),
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
 });
 
 export async function PATCH(
@@ -36,7 +38,7 @@ export async function PATCH(
   const body = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "rating 값을 확인해주세요." }, { status: 400 });
+    return NextResponse.json({ error: "등급과 최신 변경 시각을 확인해주세요." }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -56,32 +58,13 @@ export async function PATCH(
     );
   }
 
-  const expectedResult = parsed.data.rating === "REJECT" ? "REJECTED" : "APPROVED";
-  const completion = await completeMvReviewFlow(admin, submissionId, {
-    actorUserId: user.id, rating: parsed.data.rating, resultStatus: expectedResult,
+  const rating = parsed.data.rating === "18" ? "19" : parsed.data.rating;
+  const completion = await saveManagedOnlineReview(admin, {
+    actorUserId: user.id, submissionId, rating, expectedUpdatedAt: parsed.data.expectedUpdatedAt,
   });
-
-  console.info("[admin][mv-rating] update", {
-    submissionId,
-    rating: parsed.data.rating,
-    completed: completion.completed,
-    stationCount: completion.stationCount,
-    error: completion.error,
-  });
-
-  if (completion.error) {
-    const status = completion.error.includes("찾을 수 없습니다") ? 404 : 500;
+  if (!completion.ok) {
+    const status = completion.errorCode === "CONFLICT" ? 409 : completion.errorCode === "FORBIDDEN" ? 403 : completion.errorCode === "INVALID" ? 400 : 500;
     return NextResponse.json({ error: completion.error }, { status });
-  }
-  if (!completion.completed) {
-    return NextResponse.json(
-      { error: "뮤직비디오 접수를 찾을 수 없습니다." },
-      { status: 404 },
-    );
-  }
-
-  if (!completion.changed) {
-    return NextResponse.json({ ok: true, rating: parsed.data.rating, resultStatus: expectedResult, unchanged: true });
   }
 
   revalidatePath("/admin/submissions");
@@ -91,14 +74,10 @@ export async function PATCH(
   revalidatePath("/mypage");
   revalidatePath("/track");
 
-  const notification = await sendSubmissionUpdateNotificationById({
-    submissionId, changeKey: completion.changeKey, markResultNotified: true, headline: "뮤직비디오 심의 등급이 업데이트되었습니다.",
-    summary: "신청 내역에서 확정된 심의 등급을 확인해주세요.", subject: "[onside] 뮤직비디오 심의 등급 안내",
-  });
+  const notification = await sendOnlineMvResultNotificationById({ submissionId });
   return NextResponse.json({
-    ok: true, warning: notification.warning,
-    rating: parsed.data.rating,
-    resultStatus: completion.resultStatus,
-    stationCount: completion.stationCount,
+    ok: true, warning: notification.warning, pendingAssets: notification.pendingAssets,
+    deliveredCount: notification.deliveredCount, queuedCount: notification.queuedCount ?? 0,
+    rating, resultStatus: completion.resultStatus, unchanged: !completion.changed,
   });
 }

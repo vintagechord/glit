@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -19,23 +18,14 @@ import {
   stationReviewStatusEnum,
   stationReviewStatusOptions,
 } from "@/constants/review-status";
-import {
-  resolveStationTrackResults,
-  areTrackResultsEquivalent,
-  getStationReviewTracks,
-  isWbsReview,
-} from "@/lib/track-results";
-import { saveStationReview } from "@/lib/admin/station-review-save";
+import { saveManagedStationReview } from "@/lib/admin/review-management";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
-import { sendSubmissionResultNotificationById, sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
+import { sendOnlineMvResultNotificationById, sendSubmissionResultNotificationById, sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAllowedImageSource } from "@/lib/image-source";
 import { isRatingCode } from "@/lib/mv-assets";
-import {
-  completeMvReviewFlow,
-  resolveMvFallbackStationId,
-} from "@/lib/admin/mv-review-flow";
+import { completeMvReviewFlow } from "@/lib/admin/mv-review-flow";
 import {
   ALBUM_REVIEW_DISCOUNT_SETTING_KEY,
   normalizeAlbumDiscountPercent,
@@ -141,7 +131,6 @@ const trackResultSchema = z.object({
   title: z.string().optional(),
   status: trackResultStatusEnum,
 });
-type StationReviewStatusValue = z.infer<typeof stationReviewStatusEnum>;
 
 const stationReviewPayloadSchema = z.object({
   reviewId: z.string().uuid().optional(),
@@ -150,6 +139,8 @@ const stationReviewPayloadSchema = z.object({
   status: stationReviewStatusEnum,
   resultNote: z.string().optional(),
   trackResults: z.array(trackResultSchema).optional(),
+  expectedUpdatedAt: z.string().datetime({ offset: true }).nullable(),
+  ageRating: z.enum(["ALL", "12", "15", "19"]).nullable().optional(),
 });
 
 const STATION_REVIEW_TRACK_RESULTS_COLUMN = "track_results_json";
@@ -157,98 +148,11 @@ const STATION_REVIEW_TRACK_RESULTS_SELECT = `track_results:${STATION_REVIEW_TRAC
 const LEGACY_TRACK_RESULTS_COLUMN = "track_results";
 const LEGACY_TRACK_RESULTS_SELECT = "track_results";
 
-const formatSupabaseError = (error?: { code?: string; message?: string | null } | null) => {
-  if (!error) return "unknown error";
-  const code = error.code ? `(${error.code})` : "";
-  const message = error.message ?? "unknown error";
-  return `${code} ${message}`.trim();
-};
 
 const uuidValueSchema = z.string().uuid();
 const normalizeUuid = (value?: string | null) => {
   if (!value) return "";
   return uuidValueSchema.safeParse(value).success ? value : "";
-};
-
-const stationStatusToSubmissionStatus = (
-  status: StationReviewStatusValue,
-): ReviewStatus | null => {
-  switch (status) {
-    case "SENT":
-    case "RECEIVED":
-      return "IN_PROGRESS";
-    case "APPROVED":
-    case "REJECTED":
-    case "NEEDS_FIX":
-      return "RESULT_READY";
-    default:
-      return null;
-  }
-};
-
-const submissionStatusRank: Record<ReviewStatus, number> = {
-  DRAFT: 0,
-  SUBMITTED: 1,
-  PRE_REVIEW: 1,
-  WAITING_PAYMENT: 1,
-  IN_PROGRESS: 2,
-  RESULT_READY: 3,
-  COMPLETED: 4,
-};
-
-const syncSubmissionStatusFromStationStatus = async (
-  client: SupabaseClient,
-  submissionId: string,
-  stationStatus: StationReviewStatusValue,
-  context: Record<string, unknown>,
-) => {
-  const nextStatus = stationStatusToSubmissionStatus(stationStatus);
-  if (!nextStatus) return null;
-
-  const { data: current, error: currentError } = await client
-    .from("submissions")
-    .select("status")
-    .eq("id", submissionId)
-    .maybeSingle();
-
-  if (currentError) {
-    console.warn("[station_review][save][submission_status][load_error]", {
-      ...context,
-      errorCode: currentError.code,
-      errorMessage: currentError.message,
-    });
-    return `SUBMISSION_STATUS_SYNC_FAILED: ${formatSupabaseError(currentError)}`;
-  }
-
-  const currentStatus = current?.status as ReviewStatus | undefined;
-  if (
-    currentStatus &&
-    currentStatus !== "COMPLETED" &&
-    submissionStatusRank[currentStatus] >= submissionStatusRank[nextStatus]
-  ) {
-    return null;
-  }
-
-  if (currentStatus === "COMPLETED") {
-    return null;
-  }
-
-  const { error: updateError } = await client
-    .from("submissions")
-    .update({ status: nextStatus, updated_at: new Date().toISOString() })
-    .eq("id", submissionId);
-
-  if (updateError) {
-    console.warn("[station_review][save][submission_status][update_error]", {
-      ...context,
-      nextStatus,
-      errorCode: updateError.code,
-      errorMessage: updateError.message,
-    });
-    return `SUBMISSION_STATUS_SYNC_FAILED: ${formatSupabaseError(updateError)}`;
-  }
-
-  return null;
 };
 
 const revalidateUserDashboards = (submissionId?: string) => {
@@ -852,88 +756,32 @@ export async function updatePaymentStatusFormAction(
 export async function updateStationReviewAction(
   payload: z.infer<typeof stationReviewPayloadSchema>,
 ): Promise<AdminActionState> {
-  await requireAdminAction();
+  const actor = await requireAdminAction();
   const parsed = stationReviewPayloadSchema.safeParse(payload);
-  if (!parsed.success) {
-    return { error: "입력값을 확인해주세요." };
-  }
-
+  if (!parsed.success) return { error: "입력값과 최신 변경 시각을 확인해주세요. 화면을 새로고침한 뒤 다시 시도해주세요." };
   const supabase = createAdminClient();
   const input = parsed.data;
   if (input.reviewId) {
     const { data: existing, error } = await supabase.from("station_reviews")
       .select("id, submission_id, station_id").eq("id", input.reviewId).maybeSingle();
     if (error || !existing || existing.submission_id !== input.submissionId ||
-        (input.stationId && existing.station_id !== input.stationId)) {
-      return { error: "신청 내역과 방송국 정보를 다시 확인해주세요." };
-    }
+        (input.stationId && existing.station_id !== input.stationId)) return { error: "신청 내역과 방송국 정보를 다시 확인해주세요." };
     input.stationId = existing.station_id;
   }
-  if (!input.stationId) return { error: "방송국 ID를 확인할 수 없습니다." };
-
-  let trackResults = input.trackResults;
-  if (trackResults?.length || ["APPROVED", "REJECTED"].includes(input.status)) {
-    const { data: albumTracks, error } = await supabase.from("album_tracks")
-      .select("id, track_no, track_title, track_title_kr, track_title_en, broadcast_selected")
-      .eq("submission_id", input.submissionId);
-    if (error) return { error: "접수된 트랙을 확인하지 못했습니다. 다시 시도해주세요." };
-    const { data: station, error: stationError } = await supabase.from("stations")
-      .select("code, name").eq("id", input.stationId).maybeSingle();
-    if (stationError || !station) return { error: "방송국 정보를 확인하지 못했습니다. 다시 시도해주세요." };
-    const knownTracks = getStationReviewTracks(albumTracks ?? [], station);
-    if (isWbsReview(station) && knownTracks.length > 3 && !trackResults?.length) {
-      return { error: "원음방송 심의 대상이 확인되지 않았습니다. 실제 심의한 3곡의 결과를 입력해주세요." };
-    }
-    const seen = new Set<string>();
-    for (const track of trackResults ?? []) {
-      const matched = knownTracks.find((row) => track.trackId
-        ? row.id === track.trackId
-        : track.trackNo !== undefined && row.track_no === track.trackNo);
-      if (!matched || seen.has(matched.id)) {
-        return { error: "트랙 결과가 신청서의 곡 목록과 일치하지 않습니다. 화면을 새로고침해주세요." };
-      }
-      seen.add(matched.id);
-    }
-    if (isWbsReview(station) && (trackResults ?? []).filter((track) => track.status !== "PENDING").length > 3) {
-      return { error: "원음방송은 최대 3곡만 심의할 수 있습니다. 실제 심의 대상 곡의 결과만 입력해주세요." };
-    }
-    // Preserve missing decisions as pending, and support old station-only results.
-    const resolved = resolveStationTrackResults(trackResults, knownTracks, input.status, station);
-    trackResults = resolved.length ? resolved.map((track) => ({
-      trackId: track.track_id ?? undefined,
-      trackNo: track.track_no ?? undefined,
-      title: track.title ?? undefined,
-      status: track.status as "PENDING" | "APPROVED" | "REJECTED",
-    })) : undefined;
-  }
-  const { data: previousReview, error: previousReviewError } = await supabase.from("station_reviews")
-    .select("*").eq("submission_id", input.submissionId).eq("station_id", input.stationId).maybeSingle();
-  if (previousReviewError) return { error: "기존 심의 결과를 확인하지 못했습니다." };
-  const result = await saveStationReview(supabase, {
-    reviewId: input.reviewId,
-    submissionId: input.submissionId,
-    stationId: input.stationId,
-    status: input.status,
-    resultNote: input.resultNote,
-    trackResults,
-  });
-  if (result.error || !result.row) return result;
-  const warning = await syncSubmissionStatusFromStationStatus(
-    supabase,
-    input.submissionId,
-    result.row.status as StationReviewStatusValue,
-    { submissionId: input.submissionId, stationId: input.stationId },
-  );
-  const changed = !previousReview || previousReview.status !== result.row.status ||
-    (previousReview.result_note ?? "") !== (result.row.result_note ?? "") ||
-    (trackResults !== undefined && !areTrackResultsEquivalent(previousReview.track_results_json ?? previousReview.track_results, result.row.track_results));
-  const notification = changed ? await sendSubmissionUpdateNotificationById({
+  if (!input.stationId) return { error: "신청 방송국을 선택해주세요." };
+  const result = await saveManagedStationReview(supabase, { ...input, stationId: input.stationId, actorUserId: actor.id });
+  if (!result.ok || !result.row) return { error: result.error ?? "심의 결과를 저장하지 못했습니다." };
+  if (!result.changed) return { message: "변경된 내용이 없습니다.", row: result.row };
+  const notification = await sendSubmissionUpdateNotificationById({
     submissionId: input.submissionId, headline: "방송국 심의 정보가 업데이트되었습니다.",
-    summary: `방송국 진행 상태: ${getStationReviewDisplayStatus(result.row).label}\n신청 내역에서 방송국·트랙별 심의 결과를 확인해주세요.`,
-    subject: "[onside] 방송국 심의 업데이트 안내", changeKey: result.row.updated_at,
-  }) : null;
-  const eventWarning = changed ? await insertEvent(input.submissionId, `방송국 상태 변경: ${result.row.status}`, "STATION_UPDATE").then(() => undefined, () => auditWarning) : undefined;
-  return { message: "심의 결과가 저장되었습니다.", row: result.row, warning: [result.warning, warning, notification?.warning, eventWarning].filter(Boolean).join(" / ") || undefined };
+    summary: `${result.stationName ?? "신청 방송국"}: ${getStationReviewDisplayStatus(result.row).label}\n신청 내역에서 방송국·트랙별 심의 결과를 확인해주세요.`,
+    subject: "[onside] 방송국 심의 업데이트 안내", changeKey: result.changeKey,
+    markResultNotified: result.submissionStatus === "RESULT_READY",
+  });
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/detail?id=${input.submissionId}`);
+  revalidateUserDashboards(input.submissionId);
+  return { message: "심의 결과가 저장되었습니다.", row: result.row, warning: notification.warning };
 }
 
 export async function updateStationReviewFormAction(
@@ -952,10 +800,13 @@ export async function updateStationReviewFormAction(
   };
 
   const submissionId = String(getFormValue("submission_id") ?? "").trim();
-  let stationId = normalizeUuid(String(getFormValue("station_id") ?? "").trim());
+  const stationId = normalizeUuid(String(getFormValue("station_id") ?? "").trim());
   const reviewId = normalizeUuid(String(getFormValue("review_id") ?? "").trim());
   const statusRaw = String(getFormValue("station_status") ?? "").trim().toUpperCase();
   const resultNote = String(getFormValue("station_memo") ?? "").trim();
+  const expectedUpdatedAt = String(getFormValue("expected_updated_at") ?? "").trim() || null;
+  const ageRatingRaw = String(getFormValue("age_rating") ?? "").trim();
+  const ageRating = ageRatingRaw || null;
   const trackResultsJson = String(getFormValue("track_results_json") ?? "").trim();
   const hasTrackResultsInput = trackResultsJson.length > 0;
 
@@ -984,26 +835,13 @@ export async function updateStationReviewFormAction(
   }
 
   if (!stationId && !reviewId) {
-    const fallback = await resolveMvFallbackStationId(createAdminClient(), submissionId);
-    if (fallback.error || !fallback.stationId) {
-      console.error("[station_review][form][parse][fallback_station_error]", {
-        submissionId,
-        statusRaw,
-        error: fallback.error,
-      });
-      redirect(
-        buildSubmissionFormRedirect(formData, submissionId, {
-          saved: "station_error",
-          savedError: fallback.error ?? "방송국 ID를 확인할 수 없습니다.",
-        }),
-      );
-    }
-    stationId = fallback.stationId;
+    redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "station_error", savedError: "신청 방송국을 확인하지 못했습니다. 화면을 새로고침해주세요." }));
   }
 
   const selectableStationStatusValues = stationReviewStatusOptions.map(
     (option) => option.value,
   );
+  selectableStationStatusValues.push("NOT_SENT", "RECEIVED");
   const status = selectableStationStatusValues.includes(
     statusRaw as (typeof selectableStationStatusValues)[number],
   )
@@ -1096,8 +934,10 @@ export async function updateStationReviewFormAction(
     submissionId,
     stationId,
     status,
-    resultNote: resultNote || undefined,
+    resultNote,
     trackResults,
+    expectedUpdatedAt,
+    ageRating: ageRating as "ALL" | "12" | "15" | "19" | null,
   });
   if (result.error) {
     console.error("[station_review][form][save][error]", {
@@ -1365,14 +1205,19 @@ export async function updateSubmissionResultAction(
   const actor = await requireAdminAction();
   const parsed = submissionResultSchema.safeParse(payload);
   if (!parsed.success) return { error: "입력값을 확인해주세요." };
-  const completion = await completeMvReviewFlow(createAdminClient(), parsed.data.submissionId, {
+  const admin = createAdminClient();
+  const { data: submission, error: loadError } = await admin.from("submissions").select("type").eq("id", parsed.data.submissionId).maybeSingle();
+  if (loadError || !submission) return { error: "접수 정보를 확인하지 못했습니다." };
+  const completion = await completeMvReviewFlow(admin, parsed.data.submissionId, {
     actorUserId: actor.id, includeNonMv: true,
     resultStatus: parsed.data.resultStatus, resultMemo: parsed.data.resultMemo ?? null,
   });
   if (completion.error || !completion.completed) return { error: completion.error ?? "결과 정보를 저장하지 못했습니다." };
-  if (!completion.changed) return { message: "변경된 내용이 없습니다." };
+  if (!completion.changed && submission.type !== "MV_DISTRIBUTION") return { message: "변경된 내용이 없습니다." };
   revalidatePath(`/admin/submissions/${parsed.data.submissionId}`);
-  const notification = await sendSubmissionResultNotificationById({
+  const notification = submission.type === "MV_DISTRIBUTION"
+    ? await sendOnlineMvResultNotificationById({ submissionId: parsed.data.submissionId })
+    : await sendSubmissionResultNotificationById({
     submissionId: parsed.data.submissionId, resultStatus: completion.resultStatus!, changeKey: completion.changeKey,
   });
   return { message: "결과 정보가 저장되었습니다.", warning: notification.warning };
@@ -1434,7 +1279,7 @@ export async function notifySubmissionResultAction(submissionId: string): Promis
     return { error: "공개된 심의 결과가 있는 접수만 결과 안내를 다시 보낼 수 있습니다." };
   }
   if (!resultStatus.success) {
-    if (data.type !== "ALBUM") return { error: "공개된 심의 결과가 없습니다." };
+    if (!["ALBUM", "MV_BROADCAST"].includes(data.type)) return { error: "공개된 심의 결과가 없습니다." };
     const published = await createAdminClient().from("station_reviews").select("id")
       .eq("submission_id", submissionId).in("status", ["APPROVED", "REJECTED", "NEEDS_FIX"]).limit(1).maybeSingle();
     if (published.error || !published.data) return { error: "공개된 방송국 심의 결과가 없습니다." };
@@ -1442,7 +1287,9 @@ export async function notifySubmissionResultAction(submissionId: string): Promis
   const eventWarning = await insertEvent(submissionId, "관리자가 결과 안내 이메일 재발송을 요청했습니다.", "RESULT_NOTIFICATION_RETRY")
     .then(() => undefined, () => "안내 재발송 요청 기록을 저장하지 못했습니다. 이메일 발송 내역을 확인해주세요.");
   const changeKey = `manual-${randomUUID()}`;
-  const notification = resultStatus.success ? await sendSubmissionResultNotificationById({
+  const notification = data.type === "MV_DISTRIBUTION"
+    ? await sendOnlineMvResultNotificationById({ submissionId, forceResendKey: changeKey })
+    : resultStatus.success ? await sendSubmissionResultNotificationById({
     submissionId, resultStatus: resultStatus.data, changeKey,
   }) : await sendSubmissionUpdateNotificationById({
     submissionId, changeKey, markResultNotified: true, headline: "방송국 심의 결과를 안내드립니다.",

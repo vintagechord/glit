@@ -160,6 +160,28 @@ test("relay rejects non-POST and unsupported content types without CORS or SMTP"
   assert.equal(api.calls.options.length, 0);
 });
 
+test("relay accepts exactly three bounded inline result attachments and rejects paths, MIME spoofing and extra fields", async () => {
+  const png = Buffer.from([137,80,78,71,13,10,26,10,1]);
+  const attachments = [
+    { filename: "등급.png", contentType: "image/png", contentBase64: png.toString("base64") },
+    { filename: "사용예시.pdf", contentType: "application/pdf", contentBase64: Buffer.from("%PDF-guide").toString("base64") },
+    { filename: "필증.pdf", contentType: "application/pdf", contentBase64: Buffer.from("%PDF-certificate").toString("base64") },
+  ];
+  const api = fixture();
+  assert.equal((await api.handler(request({ ...body, attachments }, { "x-onside-attachment-count": "3" }))).status, 200);
+  assert.equal(api.calls.mail[0].attachments?.length, 3);
+  assert.deepEqual(api.calls.mail[0].attachments?.[0].content, png);
+  for (const invalid of [
+    attachments.slice(0,2), [...attachments,attachments[0]],
+    [{ ...attachments[0], path: "/etc/passwd" }, ...attachments.slice(1)],
+    [{ ...attachments[0], filename: "../grade.png" }, ...attachments.slice(1)],
+    [{ ...attachments[0], contentType: "application/pdf" }, ...attachments.slice(1)],
+    [{ ...attachments[0], contentBase64: "not base64" }, ...attachments.slice(1)],
+  ]) {
+    const bad = fixture(); assert.equal((await bad.handler(request({ ...body, attachments: invalid }))).status, 400); assert.equal(bad.calls.mail.length, 0);
+  }
+});
+
 test("relay bounds both declared and streamed body sizes in bytes and cancels oversized streams", async () => {
   const api = fixture();
   assert.equal((await api.handler(request(body, { "content-length": String(MAX_EMAIL_BODY_BYTES + 1) }))).status, 413);

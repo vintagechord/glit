@@ -16,7 +16,11 @@ export function resolveStationStatusForSave(status: StationReviewStatus, tracks:
   if (status === "NEEDS_FIX") return status;
   const summary = summarizeTrackResults(tracks);
   if (!summary.counts.total) return status;
-  if (summary.counts.pending > 0) return "SENT";
+  if (summary.counts.pending > 0) {
+    // A progress-only save must keep the administrator's actual workflow step.
+    if (!summary.counts.approved && !summary.counts.rejected && !["APPROVED", "REJECTED"].includes(status)) return status;
+    return "SENT";
+  }
   if (summary.outcome === "APPROVED" || summary.outcome === "REJECTED") return summary.outcome;
   if (summary.outcome === "PARTIAL") return "APPROVED";
   if (summary.counts.approved || summary.counts.rejected) return "SENT";

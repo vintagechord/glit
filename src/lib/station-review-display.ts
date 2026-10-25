@@ -1,8 +1,10 @@
 import { normalizeStationReviewStatus } from "@/constants/review-status";
+import { broadcastRatingLabels } from "@/lib/broadcast-rating";
 import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults, type AlbumTrackMeta } from "@/lib/track-results";
 
 type StationDisplayInput = {
   status?: string | null;
+  age_rating?: string | null;
   track_results?: unknown;
   station?: { code?: string | null; name?: string | null } | null;
 };
@@ -144,6 +146,9 @@ export function getStationReviewDisplayStatus(
 
   return {
     ...base,
+    ...(base.key === "APPROVED" && review.age_rating && broadcastRatingLabels[review.age_rating]
+      ? { label: broadcastRatingLabels[review.age_rating] }
+      : {}),
     summary,
     summaryText,
   };

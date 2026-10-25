@@ -30,6 +30,7 @@ export const SUBMISSION_USER_DETAIL_SELECT = [
   "created_at",
   "updated_at",
   "mv_desired_rating",
+  "mv_selected_station_codes",
   // Render the submitted form with the first response instead of fetching a
   // second, administrator-sized submission payload after hydration.
   "release_date",
@@ -81,6 +82,7 @@ export const SUBMISSION_ADMIN_DETAIL_SELECT = [
   "package_id",
   "mv_base_selected",
   "mv_desired_rating",
+  "mv_selected_station_codes",
   "ai_used",
   "certificate_b2_path",
   "certificate_original_name",

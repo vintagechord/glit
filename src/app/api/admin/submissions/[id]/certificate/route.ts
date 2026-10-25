@@ -1,13 +1,12 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { B2ConfigError, getB2Config, sanitizeFileName } from "@/lib/b2";
+import { B2ConfigError } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
-import { getStorageLogId } from "@/lib/guest-storage-owner";
+import { sendOnlineMvResultNotificationById } from "@/lib/admin/submission-notifications";
+import { MAX_CERTIFICATE_BYTES, saveManagedCertificate } from "@/lib/admin/certificate-save";
+import { revalidatePath } from "next/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,23 +17,7 @@ const ALLOWED_TYPES = new Set([
   "image/png",
   "image/jpeg",
 ]);
-const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
-
-const detectCertificateMimeType = (body: Buffer) => {
-  if (body.subarray(0, 5).toString("ascii") === "%PDF-") return "application/pdf";
-  if (
-    body.length >= 8 &&
-    body.subarray(0, 8).equals(
-      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    )
-  ) {
-    return "image/png";
-  }
-  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) {
-    return "image/jpeg";
-  }
-  return null;
-};
+const MAX_SIZE_BYTES = MAX_CERTIFICATE_BYTES;
 
 const normalizeUploadedFilename = (value: string) => {
   const trimmed = value.trim();
@@ -164,66 +147,26 @@ export async function POST(
   const filenameRaw = normalizeUploadedFilename(
     readFormString(formData, "filename") || fileValue.name || "certificate",
   );
-  const safeName = sanitizeFileName(filenameRaw) || "certificate";
-  const uploadedAt = new Date().toISOString();
+  const expectedUpdatedAt = readFormString(formData, "expectedUpdatedAt");
+  const requestId = readFormString(formData, "requestId");
+  if (!z.string().datetime({ offset: true }).safeParse(expectedUpdatedAt).success || !z.string().uuid().safeParse(requestId).success) {
+    return NextResponse.json({ error: "최신 변경 시각과 업로드 요청 정보를 확인해주세요." }, { status: 400 });
+  }
 
   try {
-    const { client, bucket, prefix } = getB2Config();
-    const uploadedObjectKey = `${prefix}${submissionId}/certificate/${randomUUID()}_${safeName}`;
-    const body = Buffer.from(await fileValue.arrayBuffer());
-    const detectedMimeType = detectCertificateMimeType(body);
-    if (!detectedMimeType || detectedMimeType !== mimeType) {
-      return NextResponse.json(
-        { error: "파일 내용과 형식이 일치하지 않습니다." },
-        { status: 400 },
-      );
-    }
-
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: uploadedObjectKey,
-        Body: body,
-        ContentType: mimeType,
-        ContentLength: sizeBytes,
-      }),
-    );
-
-    // The row lock, current pointer and previous/new file audit commit together.
-    // A later replacement retains both objects; downloads still use the current pointer.
-    const { error: updateError } = await admin.rpc("record_submission_certificate", {
-      p_submission_id: submissionId,
-      p_actor_user_id: user.id,
-      p_object_key: uploadedObjectKey,
-      p_original_name: filenameRaw,
-      p_mime_type: mimeType,
-      p_size_bytes: sizeBytes,
-      p_uploaded_at: uploadedAt,
+    const saved = await saveManagedCertificate(admin, {
+      actorUserId: user.id, submissionId, expectedUpdatedAt, requestId,
+      body: Buffer.from(await fileValue.arrayBuffer()), filename: filenameRaw, declaredMime: mimeType,
     });
-
-    if (updateError) {
-      // A response can be lost after the transaction commits. Never delete an
-      // object that may already be the current certificate or an audited result.
-      console.warn("[certificate][upload] persistence unconfirmed; object retained", {
-        submissionId,
-        objectKeyHash: getStorageLogId(uploadedObjectKey),
-        code: updateError.code,
-      });
-      return NextResponse.json({ error: "필증 정보를 저장하지 못했습니다." }, { status: 500 });
-    }
-
-    const notification = await sendSubmissionUpdateNotificationById({
-      submissionId, headline: "뮤직비디오 필증 정보가 업데이트되었습니다.",
-      summary: "필증 정보가 업데이트되었습니다. 공개된 심의 결과는 신청 내역에서 확인할 수 있습니다.",
-      subject: "[onside] 뮤직비디오 필증 등록 안내", changeKey: uploadedAt,
-    });
+    if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
+    for (const path of ["/admin/submissions", "/admin/submissions/detail", "/dashboard", "/mypage", "/track", `/dashboard/submissions/${submissionId}`]) revalidatePath(path);
+    // Repeated upload requests use the same bundle key. A successful file save
+    // can be retried after mail preparation fails without duplicating accepted mail.
+    const notification = await sendOnlineMvResultNotificationById({ submissionId });
     return NextResponse.json({
-      ok: true, warning: notification.warning,
-      certificate: {
-        objectKey: uploadedObjectKey,
-        originalName: filenameRaw,
-        uploadedAt,
-      },
+      ok: true, unchanged: !saved.changed, certificate: saved.certificate,
+      warning: notification.warning, pendingAssets: notification.pendingAssets,
+      deliveredCount: notification.deliveredCount, queuedCount: notification.queuedCount ?? 0,
     });
   } catch (error) {
     const message =

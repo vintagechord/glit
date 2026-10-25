@@ -13,13 +13,14 @@ export type DetailStationReview = {
   station_id: string | null;
   status: string;
   result_note: string | null;
+  age_rating?: string | null;
   track_results?: unknown;
   updated_at: string;
   station: DetailStation | null;
 };
 
 const stationReviewFields =
-  "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
+  "id, submission_id, station_id, status, result_note, age_rating, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
 
 async function loadStationReviews(client: SupabaseClient, submissionId: string) {
   let result: { data: unknown; error: PostgrestError | null } = {

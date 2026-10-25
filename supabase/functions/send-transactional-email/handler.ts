@@ -1,7 +1,11 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { Buffer } from "node:buffer";
 
 export const MAX_EMAIL_BODY_BYTES = 128 * 1024;
+export const MAX_EMAIL_ATTACHMENT_BYTES = 18 * 1024 * 1024;
+export const MAX_ATTACHMENT_REQUEST_BYTES = 26 * 1024 * 1024;
 export const EMAIL_RELAY_DEADLINE_MS = 14_000;
+export const ATTACHMENT_RELAY_DEADLINE_MS = 55_000;
 
 type Reason = "configuration" | "rate_limit" | "delivery";
 type ParsedAddress = { address?: string; group?: unknown };
@@ -14,6 +18,7 @@ export type RelayMail = {
   html: string;
   messageId: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
   disableFileAccess: true;
   disableUrlAccess: true;
 };
@@ -45,7 +50,7 @@ type Dependencies = {
   env: Env;
   parseAddress: (value: string) => ParsedAddress[];
   createTransport: (options: RelaySmtpOptions) => RelayTransport;
-  /** Test seam only; deployment uses the fixed 14 second maximum. */
+  /** Test seam only; deployment uses the fixed bounded maximum. */
   deadlineMs?: number;
 };
 
@@ -115,7 +120,8 @@ async function readPayload(request: Request, signal: AbortSignal): Promise<unkno
   const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "application/json") throw new RelayFailure(415, "configuration");
   const length = request.headers.get("content-length");
-  if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_EMAIL_BODY_BYTES)) {
+  const maximum = request.headers.get("x-onside-attachment-count") === "3" ? MAX_ATTACHMENT_REQUEST_BYTES : MAX_EMAIL_BODY_BYTES;
+  if (length !== null && (!/^\d+$/.test(length) || Number(length) > maximum)) {
     throw new RelayFailure(413, "configuration");
   }
   const reader = request.body?.getReader();
@@ -131,7 +137,7 @@ async function readPayload(request: Request, signal: AbortSignal): Promise<unkno
       signal.throwIfAborted();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_EMAIL_BODY_BYTES) {
+      if (size > maximum) {
         cancel();
         throw new RelayFailure(413, "configuration");
       }
@@ -151,26 +157,44 @@ async function readPayload(request: Request, signal: AbortSignal): Promise<unkno
 function validatedMessage(payload: unknown, from: string, messageId: string, parse: Dependencies["parseAddress"]): RelayMail {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new RelayFailure(400, "configuration");
   const input = payload as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !["to", "subject", "html", "replyTo", "requestId"].includes(key))) throw new RelayFailure(400, "configuration");
+  if (Object.keys(input).some((key) => !["to", "subject", "html", "replyTo", "requestId", "attachments"].includes(key))) throw new RelayFailure(400, "configuration");
   if (input.requestId !== undefined && (typeof input.requestId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(input.requestId))) throw new RelayFailure(400, "configuration");
   const to = mailbox(input.to, parse);
   const replyTo = input.replyTo === undefined ? undefined : mailbox(input.replyTo, parse);
   if (!to || replyTo === null || typeof input.subject !== "string" || !input.subject.trim() ||
-      input.subject.length > 998 || controls.test(input.subject) || typeof input.html !== "string" || !input.html.trim()) {
+      input.subject.length > 998 || controls.test(input.subject) || typeof input.html !== "string" || !input.html.trim() || Buffer.byteLength(input.html) > MAX_EMAIL_BODY_BYTES) {
     throw new RelayFailure(400, "configuration");
   }
+  let attachments: RelayMail["attachments"];
+  if (input.attachments !== undefined) {
+    if (!Array.isArray(input.attachments) || input.attachments.length !== 3) throw new RelayFailure(400, "configuration");
+    let total = 0;
+    attachments = input.attachments.map(value => {
+      if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !["filename", "contentType", "contentBase64"].includes(key))) throw new RelayFailure(400, "configuration");
+      const item = value as Record<string, unknown>;
+      if (typeof item.filename !== "string" || !item.filename || item.filename.length > 180 || /[\x00-\x1f\x7f/\\]/.test(item.filename) ||
+        typeof item.contentType !== "string" || !["application/pdf", "image/png", "image/jpeg"].includes(item.contentType) ||
+        typeof item.contentBase64 !== "string" || !item.contentBase64 || item.contentBase64.length % 4 !== 0 || item.contentBase64.length > MAX_EMAIL_ATTACHMENT_BYTES * 4 / 3 + 4 || /[^A-Za-z0-9+/=]/.test(item.contentBase64)) throw new RelayFailure(400, "configuration");
+      const content = Buffer.from(item.contentBase64, "base64"); total += content.length;
+      if (!content.length || total > MAX_EMAIL_ATTACHMENT_BYTES || content.toString("base64") !== item.contentBase64) throw new RelayFailure(413, "configuration");
+      const detected = content.subarray(0, 5).toString("ascii") === "%PDF-" ? "application/pdf" : content.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? "image/png" : content.length >= 3 && content[0] === 255 && content[1] === 216 && content[2] === 255 ? "image/jpeg" : null;
+      if (detected !== item.contentType) throw new RelayFailure(400, "configuration");
+      return { filename: item.filename, contentType: item.contentType, content };
+    });
+  }
   return { from, to, subject: input.subject, html: input.html, messageId,
-    ...(replyTo ? { replyTo } : {}), disableFileAccess: true, disableUrlAccess: true };
+    ...(replyTo ? { replyTo } : {}), ...(attachments ? { attachments } : {}), disableFileAccess: true, disableUrlAccess: true };
 }
 
 export function createEmailRelayHandler(dependencies: Dependencies) {
-  const deadlineMs = Math.min(Math.max(dependencies.deadlineMs ?? EMAIL_RELAY_DEADLINE_MS, 1), EMAIL_RELAY_DEADLINE_MS);
   return async (request: Request): Promise<Response> => {
     let secret: string | undefined;
     try { secret = dependencies.env("EMAIL_RELAY_SECRET"); } catch { return failure(503, "configuration"); }
     if (!secret || !secretPattern.test(secret)) return failure(503, "configuration");
     if (!authorized(request, secret)) return failure(401, "configuration");
     if (request.method !== "POST") return failure(405, "configuration");
+    const maximumDeadline = request.headers.get("x-onside-attachment-count") === "3" ? ATTACHMENT_RELAY_DEADLINE_MS : EMAIL_RELAY_DEADLINE_MS;
+    const deadlineMs = Math.min(Math.max(dependencies.deadlineMs ?? maximumDeadline, 1), maximumDeadline);
 
     const controller = new AbortController();
     let transport: RelayTransport | undefined;

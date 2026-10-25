@@ -85,6 +85,23 @@ test("definite temporary failures retry later with one stable provider key", asy
   });
 });
 
+test("attachment references persist before sending and survive worker retries without base64 payloads", async () => {
+  await withEnv(async () => {
+    const refs = ["rating-image", "usage-guide", "certificate"].map((kind, index) => ({
+      kind, objectKey: `submissions/email-attachments/fixture/${index}`, filename: `fixture-${index}.pdf`, contentType: "application/pdf", bytes: 10,
+      sha256: String(index).repeat(64), submissionId: "11111111-1111-4111-8111-111111111111", rating: "12", certificateKey: "submissions/fixture/certificate.pdf",
+    })) as NonNullable<EmailMessage["attachmentRefs"]>;
+    const delivered: EmailMessage[] = [];
+    const f = fixture(async request => { delivered.push(request); return delivered.length === 1 ? { ok: false, outcome: "retry", reason: "delivery", errorCode: "attachment_unavailable" } : accepted; });
+    const result = await f.service.enqueueAndSend({ ...message, submissionId: refs[0].submissionId, attachmentRefs: refs }, "supabase-smtp");
+    assert.deepEqual(f.rows.get(result.outboxId!)?.attachment_refs, refs);
+    f.advance(30_000); await f.service.drain();
+    assert.equal(delivered.length, 2); assert.deepEqual(delivered[0].attachmentRefs, refs); assert.deepEqual(delivered[1].attachmentRefs, refs);
+    assert.equal(delivered[0].idempotencyKey, delivered[1].idempotencyKey); assert.equal(delivered[1].submissionId, refs[0].submissionId);
+    assert.doesNotMatch(JSON.stringify([...f.rows.values()]), /contentBase64/);
+  });
+});
+
 test("uncertain acceptance and failed receipt persistence never auto resend", async () => {
   await withEnv(async () => {
     for (const persistFailure of [false, true]) {

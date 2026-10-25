@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
-import { getPackageStations } from "@/lib/station-reviews";
+import { getPackageStations, stationNameByCode } from "@/lib/station-reviews";
 import { loadSubmissionDetailRelations, type DetailStationReview } from "@/lib/submissions/detail-relations";
 import { normalizeTrackResults } from "@/lib/track-results";
 import {
@@ -77,6 +77,7 @@ type SubmissionRow = {
   mv_business_reg_no?: string | null;
   mv_usage?: string | null;
   mv_desired_rating?: string | null;
+  mv_selected_station_codes?: string[] | null;
   mv_memo?: string | null;
   mv_song_title?: string | null;
   mv_song_title_kr?: string | null;
@@ -370,7 +371,13 @@ export default async function SubmissionDetailPage({
   }
   let packageStations = related.packageStations.data;
 
-  if (!packageStations.length) {
+  if (resolvedSubmission.type === "MV_BROADCAST") {
+    for (const code of resolvedSubmission.mv_selected_station_codes ?? []) {
+      if (!["MV_BROADCAST", "MV_ONLINE"].includes(code) && !packageStations.some(station => station.code === code)) packageStations.push({ id: "", code, name: stationNameByCode[code] ?? code });
+    }
+  }
+
+  if (!packageStations.length && resolvedSubmission.type === "ALBUM") {
     const pkg = Array.isArray(resolvedSubmission.package)
       ? resolvedSubmission.package[0]
       : resolvedSubmission.package;
@@ -389,6 +396,7 @@ export default async function SubmissionDetailPage({
   const reviewByCode = new Map<string, DetailStationReview>();
   (resolvedStationReviews ?? []).forEach((review: DetailStationReview) => {
     const station = Array.isArray(review.station) ? review.station[0] : review.station;
+    if (resolvedSubmission.type === "MV_BROADCAST" && ["MV_BROADCAST", "MV_ONLINE"].includes(station?.code ?? "")) return;
     const stationId =
       review.station_id ||
       station?.id;
@@ -415,6 +423,7 @@ export default async function SubmissionDetailPage({
       id: review?.id ?? `placeholder-${submissionId}-${station.code ?? station.id}`,
       status: review?.status ?? "NOT_SENT",
       result_note: review?.result_note ?? null,
+      age_rating: review?.age_rating ?? null,
       track_results: trackResults,
       updated_at: review?.updated_at ?? resolvedSubmission.updated_at,
       station: {

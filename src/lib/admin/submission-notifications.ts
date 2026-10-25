@@ -6,6 +6,8 @@ import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import { EmailAttachmentError, inspectOnlineMvBundleReadiness, prepareOnlineMvAttachmentRefs } from "@/lib/email-attachments";
+import { RATING_LABELS, isRatingCode } from "@/lib/mv-assets";
 
 export type SubmissionNotificationOutcome = {
   deliveredCount: number;
@@ -14,6 +16,7 @@ export type SubmissionNotificationOutcome = {
   recipientCount: number;
   queuedCount?: number;
   warning?: string;
+  pendingAssets?: boolean;
 };
 
 const emptyOutcome = (): SubmissionNotificationOutcome => ({
@@ -23,7 +26,7 @@ const emptyOutcome = (): SubmissionNotificationOutcome => ({
 async function loadContext(submissionId: string) {
   const db = createAdminClient();
   const { data: submission, error } = await db.from("submissions")
-    .select("id, title, artist_name, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at")
+    .select("id, title, artist_name, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at, status, result_status, result_notified_at, mv_desired_rating, mv_rating, certificate_b2_path, certificate_original_name")
     .eq("id", submissionId).maybeSingle();
   if (error || !submission) return null;
 
@@ -105,4 +108,33 @@ export function sendSubmissionResultNotificationById(input: {
       input.submissionId, input.changeKey ?? context.submission.updated_at, input.resultStatus, email,
     ])).digest("hex")}`,
   }), () => ({ title: "심의 결과가 업데이트되었습니다.", message: "신청 내역에서 변경된 심의 결과를 확인해주세요." }));
+}
+
+/** Grade-save and certificate-save call the same bundle operation. The key is
+ * based on the exact immutable assets, so the two UI paths cannot double-send. */
+export async function sendOnlineMvResultNotificationById(input: { submissionId: string; forceResendKey?: string }): Promise<SubmissionNotificationOutcome> {
+  const context = await loadContext(input.submissionId).catch(() => null);
+  if (!context) return { ...emptyOutcome(), warning: "결과는 저장되었지만 신청 정보를 확인하지 못해 안내하지 못했습니다." };
+  const readiness = inspectOnlineMvBundleReadiness(context.submission);
+  if (!readiness.ready) return { ...emptyOutcome(), pendingAssets: true, warning: `결과는 저장되었습니다. ${readiness.missing.join(" ")} 등급과 필증이 준비되면 3개 첨부파일을 함께 안내합니다.` };
+  if (readiness.rejected) return sendSubmissionResultNotificationById({ submissionId: input.submissionId, resultStatus: "REJECTED", changeKey: input.forceResendKey || `${context.submission.updated_at}:REJECT` });
+  if (!context.recipient || getEmailDeliveryMode() === "manual") {
+    return { ...emptyOutcome(), recipientCount: context.recipient ? 1 : 0, skippedCount: context.recipient ? 1 : 0, warning: context.recipient ? "결과는 저장되었습니다. 자동 이메일 발송이 보류 중입니다." : "결과는 저장되었습니다. 수신 이메일을 확인하지 못했습니다." };
+  }
+  try {
+    const refs = await prepareOnlineMvAttachmentRefs(context.submission, context.db);
+    const ratingLabel = isRatingCode(readiness.rating) ? RATING_LABELS[readiness.rating] : readiness.rating;
+    return deliver(input.submissionId, (latest, email) => sendSubmissionUpdateEmail({
+      email, title: latest.submission.title ?? "제목 미입력", artist: latest.submission.artist_name, kind: "MV",
+      headline: `영등위 심의 결과: ${ratingLabel}`,
+      summary: `확정 등급은 ${ratingLabel}입니다. 등급 이미지, 등급 표시 사용 예시 PDF, 영등위 심의필증을 첨부했습니다. 개인 결과 페이지에서도 같은 세 파일을 다운로드할 수 있습니다. 사용 예시에 따라 등급을 표시해주세요.`,
+      subject: `[onside] 영등위 심의 결과 및 첨부파일 — ${ratingLabel}`,
+      link: latest.link, submissionId: input.submissionId, markResultNotified: true,
+      idempotencyKey: `online-mv-bundle-${createHash("sha256").update(JSON.stringify([
+        input.submissionId, readiness.rating, refs.map(r => [r.kind, r.objectKey, r.sha256]), email, input.forceResendKey || null,
+      ])).digest("hex")}`, attachmentRefs: refs,
+    }), () => ({ title: "영등위 심의 결과가 준비되었습니다.", message: "이메일과 신청 내역에서 확정 등급과 첨부파일을 확인해주세요." }));
+  } catch (error) {
+    return { ...emptyOutcome(), recipientCount: 1, failedCount: 1, warning: `결과는 저장되었습니다. ${error instanceof EmailAttachmentError ? error.message : "첨부파일 안내를 완료하지 못했습니다. 이메일 발송 내역을 확인하고 다시 안내해주세요."}` };
+  }
 }

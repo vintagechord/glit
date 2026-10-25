@@ -102,3 +102,11 @@ test("WBS unknown selection stays unresolved until three current track IDs have 
   assert.equal(missing.label, "심의곡 확인 필요");
   assert.equal(getStationReviewDisplayStatus({ ...review, track_results: [1, 2, 4].map(no => ({ track_id: `track-${no}`, status: "APPROVED" })) }, { albumTracks: tracks }).isComplete, true);
 });
+
+test("broadcast ratings are station-specific final labels without changing album results", () => {
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "12" }).label, "12세 이상 시청가");
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "ALL" }).label, "전체 시청가");
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: null }).label, "적격");
+  assert.equal(getStationReviewDisplayStatus({ status: "NEEDS_FIX", age_rating: "19" }).label, "보완요청");
+  assert.equal(getStationReviewDisplayStatus({ status: "REJECTED", age_rating: "19" }).label, "부적격");
+});

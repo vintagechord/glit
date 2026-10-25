@@ -21,6 +21,9 @@ type StationReviewFormProps = {
   stationName?: string | null;
   initialStatus: string;
   initialMemo: string;
+  expectedUpdatedAt: string | null;
+  showAgeRating?: boolean;
+  initialAgeRating?: string | null;
   trackResults: TrackResultInput[];
   statusOptions: Array<{ value: string; label: string }>;
   action: (formData: FormData) => Promise<void>;
@@ -36,6 +39,9 @@ export function StationReviewForm({
   stationName,
   initialStatus,
   initialMemo,
+  expectedUpdatedAt,
+  showAgeRating,
+  initialAgeRating,
   trackResults,
   statusOptions,
   action,
@@ -82,6 +88,7 @@ export function StationReviewForm({
       <input type="hidden" name="station_id" value={stationId ?? ""} />
       <input type="hidden" name="review_id" value={reviewId ?? ""} />
       <input type="hidden" name="track_results_json" value={trackResultsJson} />
+      <input type="hidden" name="expected_updated_at" value={expectedUpdatedAt ?? ""} />
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
 
       <div className="min-w-0 self-center">
@@ -101,10 +108,10 @@ export function StationReviewForm({
           onChange={(e) => {
             const status = e.target.value;
             setStationStatus(status);
-            if (status === "APPROVED" || status === "REJECTED" || status === "SENT") {
+            if (["APPROVED", "REJECTED", "SENT", "NOT_SENT", "RECEIVED"].includes(status)) {
               setTrackStates((prev) => prev.map((track) => ({
                 ...track,
-                status: status === "SENT" ? "PENDING" : status,
+                status: ["APPROVED", "REJECTED"].includes(status) ? status : "PENDING",
               })));
             }
           }}
@@ -131,6 +138,16 @@ export function StationReviewForm({
         />
       </div>
 
+      {showAgeRating ? (
+        <label className="min-w-0 space-y-1.5 md:col-span-3">
+          <span className="block text-xs font-semibold text-muted-foreground">이 방송사의 연령 등급</span>
+          <select name="age_rating" defaultValue={initialAgeRating ?? ""} aria-label={`${stationName ?? stationCode ?? "방송국"} 연령 등급`} required={stationStatus === "APPROVED"} className="min-h-11 w-full rounded-xl border border-border/70 bg-background px-3 py-2 text-base md:text-sm">
+            <option value="">등급 선택</option>
+            <option value="ALL">전체 시청가</option><option value="12">12세 이상 시청가</option><option value="15">15세 이상 시청가</option><option value="19">19세 이상 시청가</option>
+          </select>
+          <span className="block text-xs text-muted-foreground">선택한 방송사의 결과만 변경됩니다. 저장 시 의뢰자에게 이메일로 알립니다.</span>
+        </label>
+      ) : null}
       {trackStates.length > 0 ? (
         <div className="min-w-0 md:col-span-3">
           {maxDecidedTracks ? <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">원음방송 심의 대상이 확인되지 않았습니다. 실제 심의한 3곡의 결과를 입력해주세요. 나머지 곡은 대기로 두세요.</p> : null}

@@ -83,6 +83,9 @@ export async function completeMvReviewFlow(
     p_allow_album: options.includeNonMv === true,
   });
   if (error || !data?.completed) {
+    if (error?.message?.includes("REVIEW_BROADCAST_PER_STATION_REQUIRED")) {
+      return { completed: false, error: "방송용 MV는 신청 방송사별로 등급과 결과를 입력해주세요." };
+    }
     return { completed: false, error: "심의 결과 저장을 확인하지 못했습니다. 현재 결과를 확인한 뒤 다시 시도해주세요." };
   }
   return {

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import type { EmailProvider } from "@/lib/email-config";
 import type { EmailAttemptResult, EmailMessage, EmailSendResult } from "@/lib/email-transport";
+import type { EmailAttachmentRef } from "@/lib/email-attachments";
 
 export type EmailOutboxStatus = "pending" | "sending" | "retry" | "accepted" | "uncertain" | "failed" | "expired";
 export type EmailOutboxRow = {
@@ -13,6 +14,7 @@ export type EmailOutboxRow = {
   provider_message_id: string | null; last_error_reason: EmailSendResult["reason"] | null;
   last_error_code: string | null; expires_at: string; created_at: string; updated_at: string;
   submission_id?: string | null; mark_result_notified?: boolean;
+  attachment_refs?: EmailAttachmentRef[];
 };
 type EnqueueInput = Omit<EmailOutboxRow, "id" | "status" | "attempt_count" | "max_attempts" | "lease_token" | "lease_expires_at" | "next_attempt_at" | "provider_message_id" | "last_error_reason" | "last_error_code" | "created_at" | "updated_at">;
 export type EmailOutboxStats = Record<EmailOutboxStatus, number> & { oldestPendingAt: string | null };
@@ -35,11 +37,13 @@ function createDatabaseStore(): EmailOutboxStore {
   };
   return {
     async enqueue(input) {
-      const data = await rpc("enqueue_email_outbox", {
+      const hasAttachments = Boolean(input.attachment_refs?.length);
+      const data = await rpc(hasAttachments ? "enqueue_email_outbox_with_attachments" : "enqueue_email_outbox", {
         p_idempotency_key: input.idempotency_key, p_provider: input.provider,
         p_recipient_email: input.recipient_email, p_subject: input.subject, p_html: input.html,
         p_reply_to: input.reply_to, p_operation: input.operation, p_expires_at: input.expires_at,
         p_submission_id: input.submission_id ?? null, p_mark_result_notified: input.mark_result_notified ?? false,
+        ...(hasAttachments ? { p_attachment_refs: input.attachment_refs } : {}),
       });
       const row = arrayResult<EmailOutboxRow>(data)[0];
       if (!row?.id) throw dbFailure();
@@ -92,6 +96,8 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
           // Stable across retries. Resend supports provider idempotency; SMTP
           // uncertainty is still held for explicit operator review.
           idempotencyKey: `outbox-${row.id}`, includeMessageId: true, requestId: row.id,
+          submissionId: row.submission_id ?? undefined,
+          ...(row.attachment_refs?.length ? { attachmentRefs: row.attachment_refs } : {}),
         }, row.provider, row.reply_to);
       }
     } catch {
@@ -120,6 +126,7 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
           html: message.html, reply_to: replyTo ?? null, operation: message.operation,
           expires_at: new Date(expiry).toISOString(), submission_id: message.submissionId ?? null,
           mark_result_notified: Boolean(message.markResultNotified && message.submissionId && ["review result", "submission update"].includes(message.operation)),
+          ...(message.attachmentRefs?.length ? { attachment_refs: message.attachmentRefs } : {}),
         });
       } catch {
         console.error("[Email outbox] enqueue unavailable");

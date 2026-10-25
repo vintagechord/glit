@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { normalizeTrackResults } from "@/lib/track-results";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ensureAlbumStationReviews } from "@/lib/station-reviews";
+import { getPackageStations, stationNameByCode } from "@/lib/station-reviews";
+import { loadSubmissionDetailRelations } from "@/lib/submissions/detail-relations";
 import { decodeTrackToken } from "@/lib/track-token";
 
 export const metadata = {
@@ -35,10 +36,10 @@ export default async function TrackDetailPage({
 
   const admin = createAdminClient();
   const baseSelect =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, current_order_id, amount_krw, type, created_at, updated_at, applicant_email, applicant_name, applicant_phone, guest_name, guest_email, guest_phone, guest_company, result_status, result_memo, result_notified_at, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, performer, composer, lyricist, arranger, lyrics, is_title, broadcast_selected ), certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, mv_desired_rating, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_distribution_company, mv_production_company, mv_usage, mv_song_title, mv_composer, mv_lyricist, mv_arranger, mv_album_title";
+    "id, user_id, guest_token, title, artist_name, status, payment_status, payment_method, current_order_id, amount_krw, type, created_at, updated_at, applicant_email, applicant_name, applicant_phone, guest_name, guest_email, guest_phone, guest_company, result_status, result_memo, result_notified_at, package_id, mv_selected_station_codes, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title, track_title_kr, track_title_en, performer, composer, lyricist, arranger, lyrics, is_title, broadcast_selected ), certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, mv_desired_rating, mv_runtime, mv_format, mv_director, mv_lead_actor, mv_distribution_company, mv_production_company, mv_usage, mv_song_title, mv_composer, mv_lyricist, mv_arranger, mv_album_title";
 
   const fallbackSelect =
-    "id, guest_token, title, artist_name, status, type, payment_status, payment_method, current_order_id, amount_krw, result_status, result_memo, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title )";
+    "id, guest_token, title, artist_name, status, type, payment_status, payment_method, current_order_id, amount_krw, result_status, result_memo, package_id, mv_selected_station_codes, package:packages ( name, station_count, price_krw ), album_tracks ( id, track_no, track_title )";
 
   type TrackSubmission = {
     id: string;
@@ -52,6 +53,8 @@ export default async function TrackDetailPage({
     amount_krw: number | null;
     result_status?: string | null;
     result_memo?: string | null;
+    package_id?: string | null;
+    mv_selected_station_codes?: string[] | null;
     result_notified_at?: string | null;
     updated_at: string | null;
     created_at: string | null;
@@ -108,96 +111,34 @@ export default async function TrackDetailPage({
       }
     : null;
 
-  if (submission.type === "ALBUM") {
-    await ensureAlbumStationReviews(
-      admin,
-      submission.id,
-      packageInfo?.station_count ?? null,
-      packageInfo?.name ?? null,
-    );
+  const related = await loadSubmissionDetailRelations(admin, submission.id, submission.package_id);
+  for (const [name, result] of Object.entries(related)) {
+    if (result.error) console.error(`[TrackDetail] ${name} load failed`, result.error);
   }
-
-  const stationSelectWithTracks =
-    "id, status, result_note, track_results:track_results_json, updated_at, station:stations ( id, name, code )";
-  const stationSelectLegacyTracks =
-    "id, status, result_note, track_results, updated_at, station:stations ( id, name, code )";
-  const stationSelectNoTracks =
-    "id, status, result_note, updated_at, station:stations ( id, name, code )";
-
-  const stationResult = await admin
-    .from("station_reviews")
-    .select(stationSelectWithTracks)
-    .eq("submission_id", submission.id)
-    .order("updated_at", { ascending: false });
-
-  let stationReviews =
-    (stationResult.data as
-      | Array<{
-          id: string;
-          status: string;
-          result_note: string | null;
-          track_results?: unknown;
-          updated_at: string;
-          station: Array<{ id: string; name: string | null; code: string | null }>;
-        }>
-      | null) ?? null;
-  if (
-    stationResult.error &&
-    (stationResult.error.code === "42703" ||
-      stationResult.error.message?.toLowerCase().includes("track_results_json") ||
-      stationResult.error.message?.toLowerCase().includes("track_results"))
-  ) {
-    const legacy = await admin
-      .from("station_reviews")
-      .select(stationSelectLegacyTracks)
-      .eq("submission_id", submission.id)
-      .order("updated_at", { ascending: false });
-    if (legacy.error) {
-      const fallback = await admin
-        .from("station_reviews")
-        .select(stationSelectNoTracks)
-        .eq("submission_id", submission.id)
-        .order("updated_at", { ascending: false });
-      stationReviews = (fallback.data as typeof stationReviews) ?? stationReviews;
-    } else {
-      stationReviews = (legacy.data as typeof stationReviews) ?? stationReviews;
+  const normalizedStationReviews = (related.reviews.data ?? [])
+    .filter(review => submission.type !== "MV_BROADCAST" || !["MV_BROADCAST", "MV_ONLINE"].includes(review.station?.code ?? ""))
+    .map(review => ({ ...review, track_results: normalizeTrackResults(review.track_results, submission.album_tracks) }));
+  const expected = related.packageStations.data.length
+    ? related.packageStations.data
+    : submission.type === "ALBUM"
+      ? getPackageStations(packageInfo?.station_count, packageInfo?.name).map(station => ({ ...station, id: "" }))
+      : [];
+  if (submission.type === "MV_BROADCAST") {
+    for (const code of submission.mv_selected_station_codes ?? []) {
+      if (!["MV_BROADCAST", "MV_ONLINE"].includes(code) && !expected.some(station => station.code === code)) expected.push({ id: "", code, name: stationNameByCode[code] ?? code });
     }
   }
-  if (stationResult.error && !stationReviews) {
-    console.error("[TrackDetail] station_reviews query error", stationResult.error);
-    stationReviews = [];
+  for (const station of expected) {
+    if (normalizedStationReviews.some(review => (station.id && review.station_id === station.id) || (station.code && review.station?.code === station.code))) continue;
+    normalizedStationReviews.push({
+      id: `placeholder-${submission.id}-${station.code ?? station.id}`,
+      submission_id: submission.id, station_id: station.id || null,
+      status: "NOT_SENT", result_note: null, track_results: [],
+      updated_at: submission.updated_at ?? submission.created_at ?? "",
+      station,
+    });
   }
-  let normalizedStationReviews =
-    stationReviews?.map((review) => {
-      const station = Array.isArray(review.station) ? review.station[0] : review.station;
-      return {
-        ...review,
-        track_results: normalizeTrackResults(review.track_results, submission.album_tracks),
-        station,
-      };
-    }) ?? [];
-
-  if (!normalizedStationReviews.length) {
-    const fallbackUpdatedAt =
-      submission.updated_at ?? submission.created_at ?? new Date().toISOString();
-    const fallbackName = normalizedPackage?.name ?? "신청 방송국";
-    normalizedStationReviews = [
-      {
-        id: `placeholder-${submission.id}`,
-        status: "NOT_SENT",
-        result_note: null,
-        track_results: [],
-        updated_at: fallbackUpdatedAt,
-        station: { id: fallbackName, name: fallbackName, code: null },
-      },
-    ];
-  }
-
-  const { data: submissionFiles } = await admin
-    .from("submission_files")
-    .select("id, kind, file_path, original_name, mime, size, created_at")
-    .eq("submission_id", submission.id)
-    .order("created_at", { ascending: false });
+  const submissionFiles = related.files.data;
 
   const normalizedSubmission: SubmissionDetailClientProps["initialSubmission"] = {
     ...submission,

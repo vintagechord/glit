@@ -131,6 +131,7 @@ type StationReview = {
   id: string;
   status: string;
   result_note: string | null;
+  age_rating?: string | null;
   track_results?: TrackReviewResult[] | null;
   updated_at: string;
   station?: {
@@ -525,7 +526,7 @@ export function SubmissionDetailClient({
   const hasMvDistributionResult = isMvDistribution && hasResultSignal;
   const isReviewComplete =
     hasMvDistributionResult ||
-    (isMvBroadcast && hasResultSignal);
+    (isMvBroadcast && isResultReady);
   const canDownloadMvReviewAssets = hasMvRatingResult;
   const mvFallbackStationStatus =
     canDownloadMvReviewAssets && submission.mv_desired_rating
@@ -741,7 +742,7 @@ export function SubmissionDetailClient({
   const hasSubmissionLevelResultSignal =
     isResultReady || Boolean(submission.result_status || submission.result_notified_at);
   const displayResultDelivered = isMvSubmission
-    ? isMvResultDelivered || hasSubmissionLevelResultSignal
+    ? isMvResultDelivered || (isMvDistribution && hasSubmissionLevelResultSignal)
     : hasAllExpectedStationResults;
   const displayStatus = buildSubmissionDisplayStatus({
     submissionStatus: submission.status,
@@ -968,6 +969,7 @@ export function SubmissionDetailClient({
               const note = review.result_note?.trim() || null;
               const hasApprovedTrack = trackInfo.counts.approved > 0;
               const canOpenRadioLinks =
+                !isMvSubmission &&
                 !["REJECTED", "NEEDS_FIX"].includes(review.status) &&
                 (hasApprovedTrack || review.status === "APPROVED");
               const stationCode =
@@ -1127,11 +1129,13 @@ export function SubmissionDetailClient({
     }
 
     if (related.reviews.data) {
-      const reviews = related.reviews.data as StationReview[];
+      const reviews = (related.reviews.data as StationReview[]).filter(review =>
+        (submissionData?.type ?? initialSubmission.type) !== "MV_BROADCAST" ||
+        !["MV_BROADCAST", "MV_ONLINE"].includes(review.station?.code ?? ""));
       setStationReviews((previous) => preservePendingStationReviews(previous, reviews));
     }
     if (related.files.data) setFiles(related.files.data);
-  }, [submissionId, supabase]);
+  }, [submissionId, supabase, initialSubmission.type]);
 
   React.useEffect(() => {
     // The server already supplies the form, review results, and file metadata.

@@ -29,10 +29,12 @@ const getInitialResultRating = (value?: string | null) =>
 export function MvRatingControl({
   submissionId,
   initialRating,
+  expectedUpdatedAt,
   isResultNotified = false,
 }: {
   submissionId: string;
   initialRating?: string | null;
+  expectedUpdatedAt: string;
   isResultNotified?: boolean;
 }) {
   const router = useRouter();
@@ -70,20 +72,24 @@ export function MvRatingControl({
       const res = await fetchWithTimeout(`/api/admin/submissions/${submissionId}/mv-rating`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating }),
-      });
+        body: JSON.stringify({ rating, expectedUpdatedAt }),
+      }, 300_000);
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean;
         rating?: string;
         error?: string;
         warning?: string;
+        deliveredCount?: number;
+        queuedCount?: number;
+        pendingAssets?: boolean;
       } | null;
       if (!res.ok || json?.error) {
         throw new Error(json?.error || `저장 실패 (status ${res.status})`);
       }
       setSavedRating(json?.rating ?? rating);
-      setResultNotified(true);
-      const successMessage = ["결과 등급이 사용자 화면에 통보되었습니다.", json?.warning].filter(Boolean).join(" ");
+      setRating(json?.rating ?? rating);
+      setResultNotified(Boolean(json?.deliveredCount));
+      const successMessage = ["결과 등급을 저장했습니다.", json?.deliveredCount ? "결과 이메일이 발송 업체에 접수되었습니다." : null, json?.warning].filter(Boolean).join(" ");
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setError(null);
@@ -127,7 +133,7 @@ export function MvRatingControl({
           </span>
         ) : !resultNotified && savedRating ? (
           <span className="ml-2 font-semibold text-[#1556a4]">
-            통보 전
+            이메일 안내 확인 필요
           </span>
         ) : null}
       </div>
@@ -149,7 +155,7 @@ export function MvRatingControl({
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        저장 즉시 결과 통보와 다운로드 파일에 반영됩니다.
+        저장한 등급은 사용자 결과 페이지에 반영됩니다. 등급과 필증이 준비되면 세 파일을 첨부한 결과 이메일을 보냅니다.
       </p>
       <div className="flex gap-2">
         <button

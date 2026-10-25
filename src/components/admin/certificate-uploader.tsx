@@ -12,11 +12,14 @@ type Props = {
   currentObjectKey?: string | null;
   currentName?: string | null;
   currentUploadedAt?: string | null;
+  expectedUpdatedAt: string;
 };
 
 type CertificateUploadResponse = {
   error?: string;
   warning?: string;
+  pendingAssets?: boolean;
+  deliveredCount?: number;
   certificate?: {
     objectKey: string;
     originalName: string;
@@ -68,6 +71,7 @@ export function CertificateUploader({
   currentObjectKey,
   currentName,
   currentUploadedAt,
+  expectedUpdatedAt,
 }: Props) {
   const [file, setFile] = React.useState<File | null>(null);
   const [currentFile, setCurrentFile] = React.useState({
@@ -82,6 +86,7 @@ export function CertificateUploader({
     message: string;
   } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const uploadRequestId = React.useRef<string | null>(null);
   const router = useRouter();
 
   React.useEffect(() => {
@@ -114,6 +119,9 @@ export function CertificateUploader({
       form.append("mimeType", inferCertificateMimeType(file));
       form.append("sizeBytes", String(file.size));
       form.append("file", file);
+      form.append("expectedUpdatedAt", expectedUpdatedAt);
+      uploadRequestId.current ??= crypto.randomUUID();
+      form.append("requestId", uploadRequestId.current);
 
       const res = await fetchWithTimeout(`/api/admin/submissions/${submissionId}/certificate`, {
         method: "POST",
@@ -130,10 +138,11 @@ export function CertificateUploader({
           uploadedAt: json.certificate.uploadedAt,
         });
       }
-      const successMessage = ["필증을 업로드했습니다.", json?.warning].filter(Boolean).join(" ");
+      const successMessage = ["필증을 업로드했습니다.", json?.deliveredCount ? "세 파일을 첨부한 결과 이메일이 발송 업체에 접수되었습니다." : null, json?.warning].filter(Boolean).join(" ");
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setFile(null);
+      uploadRequestId.current = null;
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -152,6 +161,7 @@ export function CertificateUploader({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
     setFile(selected);
+    uploadRequestId.current = null;
     setNotice(null);
   };
 
@@ -204,6 +214,7 @@ export function CertificateUploader({
           {isUploading ? "업로드 중..." : "필증 업로드"}
         </button>
       </div>
+      <p className="text-xs text-muted-foreground">결과 이메일은 등급 이미지·사용 예시 PDF·필증의 합계가 18MB 이하일 때 첨부할 수 있습니다.</p>
       {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
     </div>
   );

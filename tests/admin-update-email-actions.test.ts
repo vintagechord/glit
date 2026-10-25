@@ -19,7 +19,7 @@ async function fixture() {
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>db;`,
           "@/lib/admin/action-auth": `${shared} export const requireAdminAction=async()=>{if(!state.isAdmin)throw Error('forbidden');return {id:'admin'}};`,
-          "@/lib/admin/submission-notifications": `${shared} export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async input=>{calls.push({name:'result',input});return {warning:state.warning}};`,
+          "@/lib/admin/submission-notifications": `${shared} export const sendOnlineMvResultNotificationById=async input=>{calls.push({name:'bundle',input});return {warning:state.warning}}; export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async input=>{calls.push({name:'result',input});return {warning:state.warning}};`,
           "@/lib/admin/mv-review-flow": `${shared} export const completeMvReviewFlow=async(_db,id,input)=>{if(state.failUpdate)return {completed:false,error:'atomic write failed'};const changed=state.submission.status!=='RESULT_READY'||state.submission.result_status!==input.resultStatus||(state.submission.result_memo??'')!==(input.resultMemo??'');if(changed){Object.assign(state.submission,{status:'RESULT_READY',result_status:input.resultStatus,result_memo:input.resultMemo});calls.push({name:'atomic',input})}return {completed:true,changed,resultStatus:input.resultStatus,changeKey:'fixture-revision'}};export const resolveMvFallbackStationId=async()=>({stationId:'fixture'});`,
           "next/server": "export const after=()=>{};",
           "next/cache": "export const revalidatePath=()=>{};export const updateTag=()=>{};",
@@ -143,4 +143,20 @@ test("manual progress resend validates current state, reports audit and enqueue 
   assert.match(String(notices[1].input.summary), /결과 준비/);
   assert.doesNotMatch(JSON.stringify(notices), /private staff|private result/);
   assert.equal(api.calls.filter(call => call.name === "write").length, 0);
+});
+
+test("online result saves and explicit resends always use the three-file bundle path", async () => {
+  const api = await fixture();
+  api.state.submission.type = "MV_DISTRIBUTION";
+  const form = new FormData();
+  form.set("submissionId", submissionId); form.set("resultStatus", "APPROVED");
+  await assert.rejects(api.updateSubmissionResultFormAction(form), /redirect:/);
+  await assert.rejects(api.updateSubmissionResultFormAction(form), /redirect:/);
+  assert.equal(api.calls.filter(call => call.name === "bundle").length, 2, "unchanged saves may retry preparation with the same durable bundle key");
+  assert.equal(api.calls.filter(call => call.name === "result").length, 0);
+  await api.notifySubmissionResultAction(submissionId);
+  await api.notifySubmissionResultAction(submissionId);
+  const retries = api.calls.filter(call => call.name === "bundle" && call.input.forceResendKey);
+  assert.equal(retries.length, 2);
+  assert.notEqual(retries[0].input.forceResendKey, retries[1].input.forceResendKey);
 });
