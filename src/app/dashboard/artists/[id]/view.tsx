@@ -28,9 +28,9 @@ const typeLabels: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   DRAFT: "임시 저장",
-  SUBMITTED: "접수 완료",
-  PRE_REVIEW: "사전 검토",
-  WAITING_PAYMENT: "접수 완료",
+  SUBMITTED: "접수예정",
+  PRE_REVIEW: "접수예정",
+  WAITING_PAYMENT: "접수예정",
   IN_PROGRESS: "심의 진행",
   RESULT_READY: "결과 전달",
   COMPLETED: "완료",

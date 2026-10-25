@@ -32,6 +32,7 @@ async function fixture(): Promise<Fixture> {
               const result=()=>{
                 if(table==='submission_payments')return {data:{submission_id:'${submissionId}',status:state.paymentStatus,raw_response:null},error:null};
                 if(table==='profiles')return {data:{phone:null},error:null};
+                if(table==='paid_submission_notification_events')return {data:[],error:null};
                 let rows=(table==='submission_orders'?state.orders:table==='submission_order_items'?state.orderItems:state.rows).filter(row=>filters.every(({method,args:[key,value]})=>method==='eq'||method==='is'?row[key]===value:method==='in'?value.includes(row[key]):method==='or'&&key==='payment_status.is.null,payment_status.eq.UNPAID'?row.payment_status===null||row.payment_status==='UNPAID':true));
                 return {data:structuredClone(rows),error:null};
               };
@@ -42,7 +43,7 @@ async function fixture(): Promise<Fixture> {
             export const client={from:query,auth:{admin:{getUserById:async id=>{calls.push({method:'auth-user',input:{id}});return {data:{user:state.memberEmail?{id,email:state.memberEmail}:null},error:state.userError}}}},rpc:async(name,args)=>{
               calls.push({method:'rpc',input:{name,...args}});
               if(name==='approve_submission_payment_order'){
-                const already=state.paymentStatus==='APPROVED';state.paymentStatus='APPROVED';
+                const already=state.paymentStatus==='APPROVED';state.paymentStatus='APPROVED';for(const row of state.rows){row.payment_status='PAID';if(!already)row.status='PRE_REVIEW';}
                 return {data:[{primary_submission_id:'${submissionId}',submission_ids:state.rows.map(row=>row.id),already_approved:already}],error:null};
               }
               if(name==='begin_submission_bank_payment'){
@@ -54,7 +55,7 @@ async function fixture(): Promise<Fixture> {
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>client;`,
           "@/lib/supabase/server": "export const createServerSupabase=async()=>({});",
           "@/lib/supabase/server-user": `${shared} export const getServerSessionUser=async()=>state.user;`,
-          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});return Promise.resolve({ok:state.mailOk,queued:!state.mailOk,status:state.mailOk?'accepted':'retry'});};export const sendSubmissionUpdateEmail=input=>send('payment-email',input);export const sendSubmissionBankRequestEmail=input=>send('bank-email',input);`,
+          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});return Promise.resolve({ok:state.mailOk,queued:!state.mailOk,status:state.mailOk?'accepted':'retry'});};export const sendSubmissionUpdateEmail=input=>send('payment-email',input);export const sendSubmissionBankRequestEmail=input=>send('bank-email',input);export const sendAdminSubmissionReceiptEmail=input=>send('admin-receipt-email',input);`,
           "@/lib/kakao": `${shared} export const sendKakaoOfficialNotification=async input=>{calls.push({method:'kakao',input});return {ok:true}};`,
           "@/lib/dashboard-status": "export const clearDashboardStatusCache=()=>{};",
           "@/lib/request-rate-limit": "export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';",
@@ -99,6 +100,12 @@ test("payment approval retries email registration with the same key and never re
   assert.equal(emails[0].input?.guestToken, undefined);
   assert.doesNotMatch(String(emails[0].input?.link), /track|legacy-private/);
   assert.equal(h.calls.filter(call => call.method === "kakao").length, 1);
+  const adminNotices = h.calls.filter(call => call.method === "admin-receipt-email");
+  assert.equal(adminNotices.length, 2);
+  assert.equal(adminNotices[0].input?.idempotencyKey, `admin-submission-received:${submissionId}`);
+  assert.equal(adminNotices[0].input?.idempotencyKey, adminNotices[1].input?.idempotencyKey);
+  assert.equal(h.state.rows[0].payment_status, "PAID");
+  assert.equal(h.state.rows[0].status, "PRE_REVIEW");
 });
 
 test("guest payment email uses the recorded guest mailbox and code while missing member auth email never falls back to an applicant mailbox", async () => {
@@ -114,6 +121,7 @@ test("guest payment email uses the recorded guest mailbox and code while missing
   member.state.memberEmail = null;
   assert.equal((await member.markPaymentSuccess("fixture-order", {})).ok, true);
   assert.equal(member.calls.some(call => call.method === "payment-email"), false);
+  assert.equal(member.calls.filter(call => call.method === "admin-receipt-email").length, 1, "administrator intake notice is independent of customer mailbox lookup");
 });
 
 test("bank instructions use one owner mailbox, stable keys, and owner-appropriate links", async () => {

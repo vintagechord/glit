@@ -31,6 +31,7 @@ import {
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
 import { confirmLinkedOrderPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
+import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import {
   PUBLIC_CATALOG_CACHE_TAG,
   PUBLIC_ALBUM_DISCOUNT_CACHE_TAG,
@@ -662,9 +663,8 @@ export async function updatePaymentStatusAction(
   if (orderPayment.confirmedIds) {
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
-    const outcomes = await Promise.all(orderPayment.confirmedIds.map((submissionId) => sendSubmissionUpdateNotificationById({
-      submissionId, headline: "입금이 확인되었습니다.",
-      summary: "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다.", subject: "[onside] 입금 확인 안내",
+    const outcomes = await Promise.all(orderPayment.confirmedIds.map((submissionId) => sendPaidSubmissionNotificationsById({
+      submissionId, paymentKey: `bank:${submission.current_order_id ?? submissionId}`,
     })));
     return { message: "주문 전체의 입금이 확인되었습니다.", warning: outcomes.find((item) => item.warning)?.warning };
   }
@@ -702,7 +702,10 @@ export async function updatePaymentStatusAction(
     "PAYMENT_UPDATE",
   ).then(() => undefined, () => auditWarning);
 
-  const notification = submission.payment_status !== parsed.data.paymentStatus || submission.status !== nextStatus
+  const notification = submission.payment_status !== "PAID" && parsed.data.paymentStatus === "PAID"
+    ? await sendPaidSubmissionNotificationsById({
+      submissionId: parsed.data.submissionId, paymentKey: `bank:${submission.current_order_id ?? parsed.data.submissionId}`,
+    }) : submission.payment_status !== parsed.data.paymentStatus || submission.status !== nextStatus
     ? await sendSubmissionUpdateNotificationById({
       submissionId: parsed.data.submissionId, headline: "결제 상태가 업데이트되었습니다.",
       summary: `결제 상태: ${paymentStatusLabelMap[parsed.data.paymentStatus] ?? parsed.data.paymentStatus}`,
@@ -2169,7 +2172,10 @@ export async function saveSubmissionAdminFormAction(
     }
 
     try {
-      const notification = (currentStatus !== nextStatus && (["RESULT_READY", "COMPLETED"].includes(currentStatus) || ["RESULT_READY", "COMPLETED"].includes(nextStatus)))
+      const notification = currentPaymentStatus !== "PAID" && nextPaymentStatus === "PAID"
+        ? await sendPaidSubmissionNotificationsById({
+          submissionId, paymentKey: `bank:${currentSubmissionRow.current_order_id ?? submissionId}`,
+        }) : (currentStatus !== nextStatus && (["RESULT_READY", "COMPLETED"].includes(currentStatus) || ["RESULT_READY", "COMPLETED"].includes(nextStatus)))
         ? null : await sendSubmissionUpdateNotificationById({
         submissionId,
         headline: "접수 정보가 업데이트되었습니다.",
@@ -2188,9 +2194,8 @@ export async function saveSubmissionAdminFormAction(
 
   for (const siblingId of orderPayment.confirmedIds ?? []) {
     if (siblingId === submissionId) continue;
-    const notification = await sendSubmissionUpdateNotificationById({
-      submissionId: siblingId, headline: "입금이 확인되었습니다.",
-      summary: "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다.", subject: "[onside] 입금 확인 안내",
+    const notification = await sendPaidSubmissionNotificationsById({
+      submissionId: siblingId, paymentKey: `bank:${currentSubmissionRow.current_order_id ?? siblingId}`,
     });
     savedWarning = [savedWarning, notification.warning].filter(Boolean).join(" / ");
   }

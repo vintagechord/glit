@@ -47,11 +47,11 @@ const submissionStatusMap: Record<string, { label: string; tone: string }> = {
     tone: "bauhaus-status-chip--neutral",
   },
   SUBMITTED: {
-    label: "접수 완료",
+    label: "접수예정",
     tone: "bauhaus-status-chip--info",
   },
   PRE_REVIEW: {
-    label: "자료 확인 중",
+    label: "접수예정",
     tone: "bauhaus-status-chip--waiting",
   },
   WAITING_PAYMENT: {
@@ -97,6 +97,7 @@ const paymentMethodLabels: Record<string, string> = {
 };
 
 const getSubmissionStatus = (status: string, paymentStatus?: string | null) => {
+  if (paymentStatus === "REFUNDED") return paymentStatusMap.REFUNDED;
   if (
     paymentStatus !== "PAID" &&
     status !== "DRAFT" &&
@@ -258,7 +259,7 @@ export function HistoryList({ initialItems }: { initialItems: HistoryItem[] }) {
         const paymentMethodLabel = getPaymentMethodLabel(
           submission.paymentMethod,
         );
-        const hasPaymentAction = submission.paymentStatus !== "PAID";
+        const hasPaymentAction = submission.paymentStatus !== "PAID" && submission.paymentStatus !== "REFUNDED";
         const packageLabel = getAlbumPackageLabel(submission.packageInfo?.name, submission.packageInfo?.station_count, "패키지 미지정");
         const trackCount = submission.tracks.length;
         const amountLabel =

@@ -1532,6 +1532,7 @@ const exactTranslations: Record<string, string> = {
   "적격/부적격": "Eligible/Ineligible",
   "대기": "Pending",
   "접수대기": "Waiting",
+  "접수예정": "Pending Submission",
   "접수완료": "Submitted",
   "심의진행중": "Submitted",
   "최종 통보": "Final Notice",

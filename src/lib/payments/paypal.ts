@@ -1,6 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
@@ -682,6 +683,7 @@ export const capturePayPalOrder = async ({
   }
 
   if (claim.already_approved) {
+    await sendPaidSubmissionNotificationsById({ submissionId, paymentKey: `paypal:${orderId}` });
     return { ok: true, captureId: claim.capture_id };
   }
   if (claim.already_processing) {
@@ -805,6 +807,7 @@ export const capturePayPalOrder = async ({
     return { error: "PayPal captured the payment, but the submission could not be updated." };
   }
 
+  await sendPaidSubmissionNotificationsById({ submissionId, paymentKey: `paypal:${orderId}` });
   return {
     ok: true,
     captureId: approved.capture_id,

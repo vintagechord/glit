@@ -4,6 +4,18 @@ import type { EmailAttachmentRef } from "@/lib/email-attachments";
 
 type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
 
+/** Review receipt notices have one explicitly designated operations mailbox. */
+export const REVIEW_ADMIN_EMAIL = "iamonside@daum.net";
+
+type AdminSubmissionReceiptPayload = EmailDeliveryOptions & {
+  submissionId: string;
+  title: string;
+  artist?: string | null;
+  submissionType: string;
+  amountKrw?: number | null;
+  link: string;
+};
+
 type WelcomeEmailPayload = EmailDeliveryOptions & {
   email: string;
   name?: string;
@@ -107,6 +119,42 @@ const normalizeAbsoluteUrl = (value?: string) => {
     return "";
   }
 };
+
+export async function sendAdminSubmissionReceiptEmail(
+  payload: AdminSubmissionReceiptPayload,
+): Promise<EmailSendResult> {
+  const link = normalizeAbsoluteUrl(payload.link);
+  if (!link) return { ok: false, reason: "configuration" };
+  const kind = payload.submissionType === "MV_BROADCAST" ? "방송용 뮤직비디오"
+    : payload.submissionType === "MV_DISTRIBUTION" || payload.submissionType === "MV" ? "온라인 뮤직비디오" : "음반";
+  const details = [
+    ["접수 구분", `${kind} 심의`],
+    ["작품명", payload.title.trim() || "제목 미입력"],
+    ["아티스트", payload.artist?.trim() || "-"],
+    ["접수 번호", payload.submissionId],
+    ["결제 상태", "결제 완료"],
+    ["접수 시작 단계", "접수예정"],
+    ...(typeof payload.amountKrw === "number" && Number.isFinite(payload.amountKrw)
+      ? [["신청 금액", `${payload.amountKrw.toLocaleString("ko-KR")}원`]] : []),
+  ];
+  const html = `<div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:Arial,sans-serif;color:#0f172a;">
+    <div style="max-width:580px;margin:0 auto;border:1px solid #d5dbe5;border-radius:20px;overflow:hidden;background:#fff;">
+      <div style="padding:24px;background:#0f172a;color:#f8fafc;"><p style="margin:0;font-size:12px;color:#cbd5e1;">ONSIDE · 관리자 접수 알림</p>
+        <h2 style="margin:10px 0 0;font-size:24px;">새 심의 신청이 접수되었습니다.</h2></div>
+      <div style="padding:24px;"><p style="margin:0 0 18px;line-height:1.7;">결제가 확인된 신청입니다. 제출 자료를 확인하고 방송사·기관 접수를 진행해주세요.</p>
+        <table style="width:100%;border-collapse:collapse;">${details.map(([label, value]) => `<tr><th style="padding:10px;text-align:left;border-bottom:1px solid #e2e8f0;color:#475569;font-size:13px;">${escapeHtml(label)}</th><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:14px;word-break:break-word;">${escapeHtml(value)}</td></tr>`).join("")}</table>
+        <a href="${escapeHtml(link)}" style="display:inline-block;margin-top:22px;padding:12px 18px;border-radius:999px;background:#0071e3;color:#fff;text-decoration:none;font-weight:700;">관리자 페이지에서 접수 확인</a>
+        <p style="margin-top:16px;font-size:12px;color:#64748b;line-height:1.6;">관리자 로그인이 필요합니다. 현재 진행상황과 자료는 연결된 관리자 페이지에서 확인할 수 있습니다.</p>
+        <p style="font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(link)}</p>
+      </div></div></div>`;
+  return sendTransactionalEmail({
+    to: REVIEW_ADMIN_EMAIL,
+    subject: `[onside 관리자] ${kind} 심의 접수 알림`,
+    html, operation: "admin submission receipt", submissionId: payload.submissionId,
+    idempotencyKey: payload.idempotencyKey ?? `admin-submission-received:${payload.submissionId}`,
+    expiresAt: payload.expiresAt,
+  });
+}
 
 export async function sendPasswordResetEmail(
   payload: PasswordResetEmailPayload,

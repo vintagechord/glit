@@ -21,6 +21,7 @@ const handlerBundle = build({
       "@/lib/inicis/config": `export const getStdPayConfig=()=>({mid:'fixture-mid',signKey:'fixture-sign-key',env:'stg',stdJsUrl:'https://fixture.invalid/sdk.js'});`,
       "@/lib/inicis/crypto": `export const getInicisTimestamp=()=> 'fixture-time';export const makeAuthSecureSignature=()=> 'valid-signature';export const sha256=()=> 'fixture-hash';`,
       "@/lib/payments/submission": `import {state,calls} from 'approval-fixture';export const getPaymentByOrderId=async()=>({payment:structuredClone(state.payment),error:null});export const markPaymentFailure=async(...args)=>{calls.push({method:'preApprovalFailure',args});return {ok:true};};export const markPaymentSuccess=async(...args)=>{calls.push({method:'paid',args});return {ok:state.persistOk,error:state.persistOk?null:'database response lost',submissionId:'${ID}'};};`,
+      "@/lib/payments/notifications": `import {calls} from 'approval-fixture';export const sendPaidSubmissionNotificationsById=async input=>{calls.push({method:'notifications',args:input});return {ok:true};};`,
       "@/lib/payments/karaoke": `export const getKaraokePaymentByOrderId=async()=>({payment:null});export const markKaraokePaymentFailure=async()=>({ok:true});export const markKaraokePaymentSuccess=async()=>({ok:true});`,
       "@/lib/supabase/admin": `import {state,calls} from 'approval-fixture';export const createAdminClient=()=>({rpc:async(method,args)=>{calls.push({method,args});if(method==='claim_inicis_submission_approval'){if(state.claim==='invalid')return {data:null,error:{code:'42501'}};const previous=state.claim;state.claim='processing';return {data:[{already_approved:previous==='approved',already_processing:previous==='processing'}],error:null};}return {data:[{final_status:args.p_outcome==='FAILED'?'FAILED':'REVIEW_REQUIRED'}],error:null};}});`,
       "@/lib/payment-result-grant": `import {calls} from 'approval-fixture';export const createPaymentResultGrant=()=>'fixture-grant';export const setPaymentResultGrantCookie=(response)=>{calls.push({method:'grant'});response.cookies.set('payment_result','fixture-grant');};`,
@@ -152,5 +153,21 @@ test("missing or mismatched IDC cannot dispatch approval", async (t) => {
     const h = await harness();
     await h.handleInicisReturn(callback(STATE, { idc_name }));
     assert.equal(h.calls.filter(call => call.method === "gateway").length, 0);
+  }
+});
+
+
+test("verified approved callbacks repair notification registration without gateway or payment state writes", async (t) => {
+  silence(t);
+  for (const scenario of ["already-approved", "claim-approved", "unverified-replay"] as const) {
+    const h = await harness();
+    if (scenario === "claim-approved") h.state.claim = "approved";
+    else h.state.payment.status = "APPROVED";
+    const response = await h.handleInicisReturn(callback(scenario === "unverified-replay" ? "invalid-state" : STATE));
+    assert.match(response.headers.get("location") ?? "", /status=SUCCESS/);
+    assert.equal(h.calls.filter(call => call.method === "gateway" || call.method === "paid").length, 0);
+    const notices = h.calls.filter(call => call.method === "notifications");
+    assert.equal(notices.length, scenario === "unverified-replay" ? 0 : 1);
+    if (notices.length) assert.deepEqual(notices[0].args, { submissionId: ID, paymentKey: ORDER });
   }
 });

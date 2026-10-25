@@ -7,10 +7,10 @@ const submissionId = "11111111-1111-4111-8111-111111111111";
 
 async function fixture() {
   const bundle = await build({
-    stdin: { contents: `export {updateSubmissionMvRatingAction,updateSubmissionStatusAction,updateSubmissionBasicInfoAction,updateSubmissionResultFormAction,saveSubmissionAdminFormAction,notifySubmissionResultAction,notifySubmissionProgressAction} from './src/features/admin/actions';export {state,calls} from 'actions-fixture';`, resolveDir: process.cwd(), loader: "ts" },
+    stdin: { contents: `export {updatePaymentStatusAction,updateSubmissionMvRatingAction,updateSubmissionStatusAction,updateSubmissionBasicInfoAction,updateSubmissionResultFormAction,saveSubmissionAdminFormAction,notifySubmissionResultAction,notifySubmissionProgressAction} from './src/features/admin/actions';export {state,calls} from 'actions-fixture';`, resolveDir: process.cwd(), loader: "ts" },
     bundle: true, write: false, platform: "node", format: "cjs", packages: "external",
     plugins: [{ name: "actions-fixture", setup(plugin) {
-      plugin.onResolve({ filter: /^(actions-fixture|@\/lib\/(?:supabase\/(?:server|admin)|admin\/(?:action-auth|submission-notifications|mv-review-flow))|next\/(?:server|cache|navigation))$/ }, args => ({ path: args.path, namespace: "fixture" }));
+      plugin.onResolve({ filter: /^(actions-fixture|@\/lib\/(?:supabase\/(?:server|admin)|payments\/notifications|admin\/(?:action-auth|submission-notifications|mv-review-flow))|next\/(?:server|cache|navigation))$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'actions-fixture';";
         const files: Record<string, string> = {
@@ -18,6 +18,7 @@ async function fixture() {
             export const db={auth:{getUser:async()=>({data:{user:{id:'admin'}}})},from(table){let payload=null;const chain={select(){return chain},eq(){return chain},update(value){payload=value;return chain},async maybeSingle(){if(payload){calls.push({name:'write',input:payload});if(state.failUpdate)return {data:null,error:{message:'write failed'}};Object.assign(state.submission,payload)}return {data:{...state.submission},error:null}},async insert(value){calls.push({name:'event',input:value});return {error:state.failEvent?{message:'event rejected'}:null}},then(resolve){chain.maybeSingle().then(resolve)}};return chain}};`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>db;`,
+          "@/lib/payments/notifications": `${shared} export const sendPaidSubmissionNotificationsById=async input=>{if(state.submission.payment_status!=='PAID')throw Error('payment not committed');calls.push({name:'paid-notice',input});return {recorded:true,warning:state.warning}};`,
           "@/lib/admin/action-auth": `${shared} export const requireAdminAction=async()=>{if(!state.isAdmin)throw Error('forbidden');return {id:'admin'}};`,
           "@/lib/admin/submission-notifications": `${shared} export const sendReviewSummaryNotificationById=async input=>{calls.push({name:"summary",input});return {warning:state.warning}}; export const sendOnlineMvResultNotificationById=async input=>{calls.push({name:'bundle',input});return {warning:state.warning}}; export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async input=>{calls.push({name:'result',input});return {warning:state.warning}};`,
           "@/lib/admin/mv-review-flow": `${shared} export const completeMvReviewFlow=async(_db,id,input)=>{if(state.failUpdate)return {completed:false,error:'atomic write failed'};const changed=state.submission.status!=='RESULT_READY'||state.submission.result_status!==input.resultStatus||(state.submission.result_memo??'')!==(input.resultMemo??'');if(changed){Object.assign(state.submission,{status:'RESULT_READY',result_status:input.resultStatus,result_memo:input.resultMemo});calls.push({name:'atomic',input})}return {completed:true,changed,resultStatus:input.resultStatus,changeKey:'fixture-revision'}};export const resolveMvFallbackStationId=async()=>({stationId:'fixture'});`,
@@ -30,7 +31,7 @@ async function fixture() {
     } }],
   });
   type Actions = typeof import("../src/features/admin/actions");
-  const output = { exports: {} as Pick<Actions, "updateSubmissionMvRatingAction" | "updateSubmissionStatusAction" | "updateSubmissionBasicInfoAction" | "updateSubmissionResultFormAction" | "saveSubmissionAdminFormAction" | "notifySubmissionResultAction" | "notifySubmissionProgressAction"> & {
+  const output = { exports: {} as Pick<Actions, "updatePaymentStatusAction" | "updateSubmissionMvRatingAction" | "updateSubmissionStatusAction" | "updateSubmissionBasicInfoAction" | "updateSubmissionResultFormAction" | "saveSubmissionAdminFormAction" | "notifySubmissionResultAction" | "notifySubmissionProgressAction"> & {
     state: { isAdmin: boolean; failUpdate: boolean; failEvent: boolean; warning?: string; submission: Record<string, unknown> };
     calls: Array<{ name: string; input: Record<string, unknown> }>;
   } };
@@ -165,4 +166,34 @@ test("saving overall final workflow status does not send result mail", async () 
   for (const [key, value] of Object.entries({ submissionId, status: "COMPLETED", paymentStatus: "PAID", title: "Original", artistName: "Artist" })) form.set(key, value);
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
+});
+
+test("manual bank confirmation sends the shared customer/admin receipt only after PAID is stored", async () => {
+  const api = await fixture();
+  api.state.submission.payment_status = "PAYMENT_PENDING";
+  api.state.submission.status = "WAITING_PAYMENT";
+  const result = await api.updatePaymentStatusAction({ submissionId, paymentStatus: "PAID" });
+  assert.equal(result.error, undefined);
+  assert.equal(api.state.submission.payment_status, "PAID");
+  assert.equal(api.state.submission.status, "PRE_REVIEW");
+  const notices = api.calls.filter(call => call.name === "paid-notice");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].input.paymentKey, `bank:${submissionId}`);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
+  await api.updatePaymentStatusAction({ submissionId, paymentStatus: "PAID" });
+  assert.equal(api.calls.filter(call => call.name === "paid-notice").length, 1);
+});
+
+test("main form paid transition uses one receipt flow and failed saves send none", async () => {
+  for (const failUpdate of [false, true]) {
+    const api = await fixture();
+    api.state.submission.payment_status = "PAYMENT_PENDING";
+    api.state.submission.status = "WAITING_PAYMENT";
+    api.state.failUpdate = failUpdate;
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ submissionId, status: "WAITING_PAYMENT", paymentStatus: "PAID", title: "Original", artistName: "Artist" })) form.set(key, value);
+    await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+    assert.equal(api.calls.filter(call => call.name === "paid-notice").length, failUpdate ? 0 : 1);
+    assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
+  }
 });

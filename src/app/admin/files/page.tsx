@@ -46,8 +46,8 @@ type CertificateUploadResponse = {
 };
 
 const statusLabelMap: Record<string, string> = {
-  SUBMITTED: "접수 완료",
-  PRE_REVIEW: "사전 검토",
+  SUBMITTED: "접수예정",
+  PRE_REVIEW: "접수예정",
   WAITING_PAYMENT: "결제 대기",
   IN_PROGRESS: "진행 중",
   RESULT_READY: "결과 준비",

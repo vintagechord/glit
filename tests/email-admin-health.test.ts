@@ -12,8 +12,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'mail-admin-fixture';";
         const modules: Record<string, string> = {
-          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
-          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});const chain={select(fields){calls.push({name:'select',fields});return chain},eq(){return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve({data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
+          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,receipts:{oldestPendingAt:null},worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:name==='paid_submission_notification_stats'?state.receipts:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});const chain={select(fields){calls.push({name:'select',fields});return chain},eq(){return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve({data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
           "@/lib/admin/api-auth": `${shared} export const requireAdminForApi=async()=>state.admin?{ok:true,user:{id:'fixture-admin'}}:{ok:false,error:'forbidden'};`,
           "@/lib/admin/page-auth": `${shared} export const requireAdminPage=async()=>{if(!state.admin)throw Error('forbidden');return {id:'fixture-admin'}};`,
           "@/lib/email-delivery-mode": `${shared} export const getEmailDeliveryMode=()=>state.mode;`,
@@ -29,7 +29,7 @@ async function fixture() {
     retryEmailAction: typeof import("../src/app/admin/emails/actions").retryEmailAction;
     EmailAdminPage: typeof import("../src/app/admin/emails/page").default;
     checkEmailOutboxHealth: typeof import("../src/lib/email-health").checkEmailOutboxHealth;
-    state: { admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
+    state: { receipts: {oldestPendingAt:string|null}; admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
     calls: Array<{name:string;args?:Record<string,unknown>;fields?:string}>;
   } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
@@ -93,6 +93,8 @@ test("mail readiness requires an actual recent worker completion and never selec
   assert.equal((await api.checkEmailOutboxHealth()).find(check=>check.name==='email retry worker')?.ok, true);
   api.state.stats.oldestPendingAt = new Date(Date.now()-16*60_000).toISOString();
   assert.equal((await api.checkEmailOutboxHealth()).find(check=>check.name==='email queue processing')?.ok, false);
+  api.state.receipts.oldestPendingAt = new Date(Date.now()-16*60_000).toISOString();
+  assert.equal((await api.checkEmailOutboxHealth()).find(check=>check.name==='payment receipt notifications')?.ok, false);
   api.state.stats.uncertain = 1;
   assert.equal((await api.checkEmailOutboxHealth()).find(check=>check.name==='email delivery exceptions')?.ok, false);
   api.state.rpcError = true;

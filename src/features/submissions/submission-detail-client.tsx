@@ -45,6 +45,7 @@ import { loadSubmissionDetailRelations, preservePendingStationReviews } from "@/
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submission-checkout";
+import { getPaidReviewProgress } from "@/lib/paid-review-progress";
 
 type Submission = {
   id: string;
@@ -307,6 +308,20 @@ const buildSubmissionDisplayStatus = ({
     };
   }
 
+  if (paymentStatus === "REFUNDED") {
+    return {
+      currentLabel: "환불",
+      submissionLabel,
+      paymentLabel,
+      broadcastLabel,
+      resultLabel,
+      primaryMessage: "결제가 환불되었습니다.",
+      secondaryMessage: "환불된 신청의 내역을 확인할 수 있습니다.",
+      primaryAction: null as DetailPrimaryAction,
+      primaryActionLabel: null,
+    };
+  }
+
   if (!isPaymentDone) {
     return {
       currentLabel: paymentLabel,
@@ -343,7 +358,7 @@ const buildSubmissionDisplayStatus = ({
 
   if (stationDelivered > 0) {
     return {
-      currentLabel: isMvSubmission ? "결과 반영 중" : "접수완료",
+      currentLabel: "결과 반영 중",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
@@ -360,13 +375,15 @@ const buildSubmissionDisplayStatus = ({
   }
 
   if (isPaymentDone) {
+    const progress = getPaidReviewProgress({
+      status: submissionStatus,
+      stationTotal: safeStationTotal,
+      stationSubmitted,
+      stationCompleted: stationDelivered,
+      resultDelivered,
+    });
     return {
-      currentLabel:
-        !isMvSubmission && safeStationTotal > 0
-          ? "접수완료"
-          : stationSubmitted > 0
-            ? "심의 진행 중"
-            : "결제 확인 완료",
+      currentLabel: progress === "WAITING_SUBMISSION" ? "접수예정" : "심의 진행 중",
       submissionLabel,
       paymentLabel,
       broadcastLabel,
@@ -485,8 +502,7 @@ export function SubmissionDetailClient({
   const hasResultSignal = Boolean(
     isResultReady || submission.result_status || submission.result_notified_at,
   );
-  const isPaymentDone =
-    submission.payment_status === "PAID" || submission.status === "COMPLETED";
+  const isPaymentDone = submission.payment_status === "PAID";
   const isPaymentPending =
     submission.payment_status === "WAITING_PAYMENT" ||
     submission.payment_status === "PAYMENT_PENDING" ||
@@ -533,7 +549,7 @@ export function SubmissionDetailClient({
       ? submission.mv_desired_rating === "REJECT"
         ? "REJECTED"
         : "APPROVED"
-      : isPaymentDone
+      : isPaymentDone && ["IN_PROGRESS", "RESULT_READY", "COMPLETED"].includes(submission.status)
         ? "SENT"
         : "NOT_SENT";
 
@@ -631,9 +647,9 @@ export function SubmissionDetailClient({
       isPaymentPending,
     );
   const canRetryCardPayment =
-    submission.payment_method !== "BANK" && submission.payment_status !== "PAID";
+    submission.payment_method !== "BANK" && !["PAID", "REFUNDED"].includes(submission.payment_status);
   const openCartForPayment = async () => {
-    if (checkoutPendingRef.current) return;
+    if (checkoutPendingRef.current || submission.payment_status === "REFUNDED") return;
     setCheckoutError(null);
     if (submission.payment_method === "BANK") {
       // Deposit instructions remain distinct from cancelling an unpaid bank
@@ -841,12 +857,14 @@ export function SubmissionDetailClient({
             ? "접수 진행 완료"
             : mvReceptionStarted
               ? "접수 진행 중"
-              : "담당자 접수 준비"
+              : "접수예정"
         : !isPaymentDone
           ? "결제 확인 후 접수 시작"
           : stepThreeState === "done"
             ? "방송사 접수 완료"
-            : "방송사별 접수 진행 중",
+            : stationSummary.submitted > 0
+              ? "방송사별 접수 진행 중"
+              : "접수예정",
       state: stepThreeState,
     },
     {

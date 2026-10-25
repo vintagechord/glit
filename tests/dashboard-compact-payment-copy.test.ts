@@ -53,6 +53,6 @@ test("paid-only history views describe review progress, not payment progress", (
 
   assert.doesNotMatch(history, /결제 대기|결제 확인/);
   assert.match(history, /IN_PROGRESS: "심의 진행"/);
-  assert.match(history, /WAITING_PAYMENT: "접수 완료"/);
-  assert.match(artistDetail, /WAITING_PAYMENT: "접수 완료"/);
+  assert.match(history, /WAITING_PAYMENT: "접수예정"/);
+  assert.match(artistDetail, /WAITING_PAYMENT: "접수예정"/);
 });

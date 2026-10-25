@@ -43,7 +43,7 @@ type DeletePayload = {
 
 const stageTone: Record<string, string> = {
   "임시 저장": brandStatusTones.neutral,
-  "접수 완료": brandStatusTones.warning,
+  "접수예정": brandStatusTones.warning,
   "자료 확인 중": brandStatusTones.warning,
   "심의 진행": brandStatusTones.progress,
   "결과 준비": brandStatusTones.success,
@@ -61,10 +61,10 @@ const smallDangerControlClass =
 
 const getStageLabel = (item: SubmissionItem) => {
   return ({
-    DRAFT: "임시 저장", SUBMITTED: "접수 완료", PRE_REVIEW: "자료 확인 중",
-    WAITING_PAYMENT: "접수 완료", IN_PROGRESS: "심의 진행",
+    DRAFT: "임시 저장", SUBMITTED: "접수예정", PRE_REVIEW: "접수예정",
+    WAITING_PAYMENT: "접수예정", IN_PROGRESS: "심의 진행",
     RESULT_READY: "결과 준비", COMPLETED: "심의 완료",
-  } as Record<string, string>)[item.status] ?? "접수 완료";
+  } as Record<string, string>)[item.status] ?? "접수예정";
 };
 
 function StatusChip({ label, href }: { label: string; href: string }) {

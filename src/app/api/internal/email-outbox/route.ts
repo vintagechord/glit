@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { drainEmailOutbox } from "@/lib/email-outbox";
+import { drainPaidSubmissionNotifications } from "@/lib/payments/notification-events";
 import { consumeRateLimit, getRequestIdentifier } from "@/lib/request-rate-limit";
 
 export const runtime = "nodejs";
@@ -19,9 +20,12 @@ export async function POST(request: Request) {
     if (auth.data !== true) return NextResponse.json({ ok: false }, { status: 401 });
     const started = await db.from("email_worker_config").update({ last_started_at: new Date().toISOString() }).eq("singleton", true);
     if (started.error) return NextResponse.json({ ok: false }, { status: 503 });
-    const result = await drainEmailOutbox({ limit: 3 });
+    const [result, receipts] = await Promise.all([
+      drainEmailOutbox({ limit: 3 }),
+      drainPaidSubmissionNotifications({ limit: 2 }),
+    ]);
     const finished = await db.from("email_worker_config").update({ last_finished_at: new Date().toISOString(), last_error: false }).eq("singleton", true);
-    return NextResponse.json({ ok: !finished.error, ...result }, { status: finished.error ? 503 : 200, headers: { "cache-control": "no-store" } });
+    return NextResponse.json({ ok: !finished.error, ...result, receipts }, { status: finished.error ? 503 : 200, headers: { "cache-control": "no-store" } });
   } catch {
     // Log only the category: neither the scheduler token nor mail payload.
     console.error("[email-worker] drain failed");

@@ -10,6 +10,7 @@ import {
   getStationReviewDisplayStatus,
 } from "@/lib/station-review-display";
 import { summarizeTrackResults } from "@/lib/track-results";
+import { getPaidReviewProgress } from "@/lib/paid-review-progress";
 
 type StationReview = {
   id: string;
@@ -36,8 +37,9 @@ type SubmissionItem = {
 
 const statusLabels: Record<string, { label: string; tone: string }> = {
   DRAFT: { label: "임시저장", tone: "bauhaus-status-chip--neutral" },
-  SUBMITTED: { label: "접수", tone: "bauhaus-status-chip--info" },
-  PRE_REVIEW: { label: "사전검토", tone: "bauhaus-status-chip--waiting" },
+  SUBMITTED: { label: "접수예정", tone: "bauhaus-status-chip--waiting" },
+  PRE_REVIEW: { label: "접수예정", tone: "bauhaus-status-chip--waiting" },
+  WAITING_SUBMISSION: { label: "접수예정", tone: "bauhaus-status-chip--waiting" },
   WAITING_PAYMENT: {
     label: "접수",
     tone: "bauhaus-status-chip--info",
@@ -45,6 +47,7 @@ const statusLabels: Record<string, { label: string; tone: string }> = {
   IN_PROGRESS: { label: "진행중", tone: "bauhaus-status-chip--progress" },
   RESULT_READY: { label: "결과", tone: "bauhaus-status-chip--success" },
   COMPLETED: { label: "완료", tone: "bauhaus-status-chip--success" },
+  REFUNDED: { label: "환불", tone: "bauhaus-status-chip--neutral" },
 };
 
 const typeLabels: Record<string, string> = {
@@ -90,12 +93,13 @@ export function SubmissionStatusList({
       <div className="space-y-4">
         {submissions.map((submission) => {
           const rawDisplayStatus =
+            submission.payment_status === "REFUNDED" ? "REFUNDED" :
             submission.payment_status !== "PAID" &&
             submission.status !== "DRAFT" &&
             submission.status !== "PRE_REVIEW"
               ? "WAITING_PAYMENT"
               : submission.status;
-          const hasPaymentAction = submission.payment_status !== "PAID";
+          const hasPaymentAction = submission.payment_status !== "PAID" && submission.payment_status !== "REFUNDED";
           const typeLabel =
             typeLabels[submission.type] ?? submission.type ?? "심의";
           const stationReviews = [...(submission.station_reviews ?? [])].sort(
@@ -113,49 +117,26 @@ export function SubmissionStatusList({
           const hasAttentionStatus = stationDisplayStatuses.some(
             (status) => status.needsAttention,
           );
-          const isAlbumSubmission = submission.type === "ALBUM";
-          const hasAllStationResults =
-            totalStations > 0 && completedStations >= totalStations;
           const displayStatus =
-            isAlbumSubmission &&
-            totalStations > 0 &&
             submission.payment_status === "PAID"
-              ? hasAllStationResults
-                ? "COMPLETED"
-                : "SUBMITTED"
+              ? getPaidReviewProgress({
+                  status: submission.status,
+                  stationTotal: totalStations,
+                  stationSubmitted: stationDisplayStatuses.filter(
+                    (status) => status.key !== "WAITING_SUBMISSION",
+                  ).length,
+                  stationCompleted: completedStations,
+                  resultDelivered: totalStations === 0 &&
+                    ["RESULT_READY", "COMPLETED"].includes(submission.status),
+                })
               : rawDisplayStatus;
           const statusInfo =
-            isAlbumSubmission &&
-            totalStations > 0 &&
-            submission.payment_status === "PAID" &&
-            !hasAllStationResults
-              ? { ...statusLabels.SUBMITTED, label: "접수완료" }
-              : statusLabels[displayStatus] ?? statusLabels.DRAFT;
+            statusLabels[displayStatus] ?? statusLabels.DRAFT;
           const progressPercent =
             totalStations > 0
               ? Math.round((completedStations / totalStations) * 100)
               : 0;
-          const stageLabel = (() => {
-            if (isAlbumSubmission && totalStations > 0) {
-              return hasAllStationResults ? "완료" : "접수완료";
-            }
-            if (
-              submission.status === "COMPLETED" ||
-              submission.status === "RESULT_READY"
-            ) {
-              return hasAttentionStatus ? "확인 필요" : "완료";
-            }
-            if (submission.status === "IN_PROGRESS") {
-              return hasAttentionStatus ? "확인 필요" : "진행중";
-            }
-            if (
-              submission.status === "SUBMITTED" ||
-              submission.status === "PRE_REVIEW"
-            ) {
-              return "접수완료";
-            }
-            return hasAttentionStatus ? "확인 필요" : "진행중";
-          })();
+          const stageLabel = hasAttentionStatus ? "확인 필요" : statusInfo.label;
 
           return (
             <div

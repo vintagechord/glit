@@ -18,8 +18,8 @@ export const reviewStatusEnum = z.enum(reviewStatusValues);
 export const reviewStatusOptions: Array<{ value: ReviewStatus; label: string }> =
   [
     { value: "DRAFT", label: "임시 저장" },
-    { value: "SUBMITTED", label: "접수 완료" },
-    { value: "PRE_REVIEW", label: "사전 검토" },
+    { value: "SUBMITTED", label: "신청 완료" },
+    { value: "PRE_REVIEW", label: "접수예정" },
     { value: "WAITING_PAYMENT", label: "결제 대기" },
     { value: "IN_PROGRESS", label: "심의 진행" },
     { value: "RESULT_READY", label: "결과 준비" },

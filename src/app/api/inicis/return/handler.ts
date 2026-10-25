@@ -5,6 +5,7 @@ import {
   requestStdPayNetCancel,
 } from "@/lib/inicis/api";
 import { claimInicisSubmissionApproval, settleInicisSubmissionApproval } from "@/lib/payments/inicis-approval";
+import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { isTrustedStdPayUrl, validateStdPayCardReceipt } from "@/lib/inicis/protocol";
 import {
@@ -306,6 +307,13 @@ export async function handleInicisReturn(req: NextRequest) {
       submissionPayment?.status === "APPROVED" ||
       karaokePayment?.status === "APPROVED";
     if (alreadyApproved && (!resultCode || isInicisSuccessCode(resultCode))) {
+      // An authenticated replay can repair a failed notification registration,
+      // without reapproving the charge or changing its current review stage.
+      if (submissionId && orderId && callbackStateVerified) {
+        for (const paidId of paidSubmissionIds) {
+          await sendPaidSubmissionNotificationsById({ submissionId: paidId, paymentKey: orderId });
+        }
+      }
       return buildBridgeRedirect(baseUrl, {
         status: "SUCCESS",
         orderId,
@@ -523,6 +531,11 @@ export async function handleInicisReturn(req: NextRequest) {
         ? await claimInicisSubmissionApproval(orderId, receivedCallbackState)
         : null;
       if (!claim || claim.alreadyProcessing || claim.alreadyApproved) {
+        if (claim?.alreadyApproved) {
+          for (const paidId of paidSubmissionIds) {
+            await sendPaidSubmissionNotificationsById({ submissionId: paidId, paymentKey: orderId });
+          }
+        }
         return buildBridgeRedirect(baseUrl, {
           status: claim?.alreadyApproved ? "SUCCESS" : "ERROR",
           orderId, submissionId,

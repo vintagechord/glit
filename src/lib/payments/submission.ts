@@ -7,9 +7,7 @@ import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
-import { sendSubmissionUpdateEmail } from "@/lib/email";
-import { sendKakaoOfficialNotification } from "@/lib/kakao";
-import { buildUrl, getBaseUrl } from "@/lib/url";
+import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 
 export type StdPayInitResult = {
   orderId: string;
@@ -71,22 +69,6 @@ const submissionSelectWithResult =
   "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
 const submissionSelectFallback =
   "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, mv_desired_rating, package:packages ( name )";
-
-const normalizeEmailValue = (value?: string | null) =>
-  value?.trim().toLowerCase() ?? "";
-
-const collectNotificationEmails = (
-  ...values: Array<string | null | undefined>
-) => {
-  const recipients = new Set<string>();
-  for (const value of values) {
-    const normalized = normalizeEmailValue(value);
-    if (normalized) {
-      recipients.add(normalized);
-    }
-  }
-  return Array.from(recipients);
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -662,83 +644,14 @@ export const markPaymentSuccess = async (
     approved.primary_submission_id,
     approved.submission_ids,
   );
-  // Repeated payment callbacks may repair an earlier enqueue failure. The
-  // stable outbox key below prevents sending an already accepted email again.
-
+  // Approval is already committed. Notification failures must never make a
+  // settled charge look failed; the durable notification helper owns retries.
   for (const targetSubmissionId of submissionIds) {
-    const { submission: notificationSubmission } = await findSubmissionById(
-      targetSubmissionId,
-    );
-    if (notificationSubmission) {
-      let memberEmail: string | null = null;
-      let memberPhone: string | null = null;
-      if (notificationSubmission.user_id) {
-        const { data: userData, error: userError } =
-          await admin.auth.admin.getUserById(notificationSubmission.user_id);
-        if (userError) {
-          console.warn("[Email][payment] member lookup failed", {
-            submissionId: notificationSubmission.id,
-            category: "member_lookup_failed",
-          });
-        } else {
-          memberEmail = userData?.user?.email ?? null;
-        }
-
-        const { data: profile, error: profileError } = await admin
-          .from("profiles")
-          .select("phone")
-          .eq("user_id", notificationSubmission.user_id)
-          .maybeSingle();
-        if (!profileError) {
-          memberPhone = profile?.phone ?? null;
-        }
-      }
-
-      const kind = notificationSubmission.type?.startsWith("MV") ? "MV" : "ALBUM";
-      const baseUrl = getBaseUrl();
-      const link =
-        !notificationSubmission.user_id && notificationSubmission.guest_token &&
-        notificationSubmission.guest_token.length >= 8
-          ? buildUrl(
-              `/track/${encodeURIComponent(notificationSubmission.guest_token)}`,
-              baseUrl,
-            )
-          : buildUrl(
-              `/dashboard/submissions/${notificationSubmission.id}`,
-              baseUrl,
-            );
-      const recipientEmails = collectNotificationEmails(
-        notificationSubmission.user_id ? memberEmail :
-          notificationSubmission.guest_email || notificationSubmission.applicant_email,
-      );
-
-      for (const recipientEmail of recipientEmails) {
-        const emailResult = await sendSubmissionUpdateEmail({
-          email: recipientEmail,
-          title: notificationSubmission.title ?? "제목 미입력",
-          artist: notificationSubmission.artist_name ?? null,
-          kind,
-          headline: "결제가 완료되었습니다.",
-          summary: "결제를 확인했습니다. 제출 자료를 확인한 뒤 방송사·기관 접수를 진행합니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.",
-          link,
-          subject: "[onside] 결제 완료 안내",
-          idempotencyKey: `payment-approved:${orderId}:${targetSubmissionId}:${recipientEmail}`,
-          submissionId: notificationSubmission.id,
-          guestToken: notificationSubmission.user_id ? undefined : notificationSubmission.guest_token ?? undefined,
-        });
-        if (!emailResult.ok) console.warn("[Email][payment] notification pending", { submissionId: targetSubmissionId, queued: emailResult.queued === true, status: emailResult.status ?? "failed" });
-      }
-
-      if (!approved.already_approved) await sendKakaoOfficialNotification({
-        phone:
-          notificationSubmission.applicant_phone ??
-          notificationSubmission.guest_phone ??
-          memberPhone,
-        title: "결제가 완료되었습니다.",
-        message: `${notificationSubmission.title ?? "제목 미입력"} 결제를 확인했습니다. 자료 확인 후 방송사·기관 접수를 진행합니다.`,
-        link,
-      });
-    }
+    await sendPaidSubmissionNotificationsById({
+      submissionId: targetSubmissionId,
+      paymentKey: orderId,
+      notifyKakao: !approved.already_approved,
+    });
   }
 
   return {
