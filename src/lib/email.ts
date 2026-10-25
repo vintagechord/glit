@@ -405,3 +405,110 @@ export async function sendAccountIdEmail(payload: EmailDeliveryOptions & { email
     html: `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
   });
 }
+
+export type ReviewSummaryEmailRow = {
+  name: string;
+  status: string;
+  tone: "waiting" | "progress" | "approved" | "attention" | "rejected";
+  detail?: string | null;
+};
+export type ReviewSummaryEmailContent = {
+  title: string;
+  artist?: string | null;
+  kind: "ALBUM" | "MV_BROADCAST" | "MV_DISTRIBUTION";
+  updatedAt: string;
+  link: string;
+  rows: ReviewSummaryEmailRow[];
+  completedCount: number;
+  attachmentCount: 0 | 3;
+};
+
+/** One renderer for the administrator preview and the actual queued message.
+ * Only structured values enter the template; caller HTML is never interpolated.
+ */
+export function renderReviewSummaryEmail(content: ReviewSummaryEmailContent) {
+  const link = normalizeAbsoluteUrl(content.link);
+  if (!link) throw new Error("A valid review-status link is required");
+  const kind = content.kind === "ALBUM" ? "음반 심의" : content.kind === "MV_BROADCAST" ? "방송용 뮤직비디오 심의" : "온라인 뮤직비디오 심의";
+  const title = content.title?.trim() || "제목 미입력";
+  const subject = `[onside] 심의 현황 안내 — ${title.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").slice(0, 160)}`;
+  const updated = new Date(content.updatedAt);
+  const dateLabel = Number.isNaN(updated.getTime()) ? "최신 저장 내용 기준" : new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(updated);
+  const colors: Record<ReviewSummaryEmailRow["tone"], { background: string; color: string }> = {
+    waiting: { background: "#ebe7de", color: "#5c5951" },
+    progress: { background: "#e6edf7", color: "#1556a4" },
+    approved: { background: "#dceee5", color: "#1f7a5a" },
+    attention: { background: "#fff0d3", color: "#8c580a" },
+    rejected: { background: "#fae2df", color: "#a72820" },
+  };
+  const rows = content.rows.map((row, index) => {
+    const color = colors[row.tone] ?? colors.waiting;
+    return `<tr>
+      <td style="padding:17px 18px;border-top:${index ? "1px solid #ded9cd" : "0"};vertical-align:top;font-size:15px;font-weight:700;color:#111111;">
+        ${escapeHtml(row.name)}${row.detail ? `<div style="margin-top:6px;font-size:12px;font-weight:400;line-height:1.6;color:#625e54;">${escapeHtml(row.detail)}</div>` : ""}
+      </td>
+      <td style="padding:17px 18px;border-top:${index ? "1px solid #ded9cd" : "0"};vertical-align:top;text-align:right;white-space:nowrap;">
+        <span style="display:inline-block;padding:5px 10px;border-radius:4px;background:${color.background};color:${color.color};font-size:12px;font-weight:700;line-height:1.5;">${escapeHtml(row.status)}</span>
+      </td>
+    </tr>`;
+  }).join("");
+  const online = content.kind === "MV_DISTRIBUTION";
+  const summary = online
+    ? "영상물등급위원회 심의 결과를 확인해주세요."
+    : "신청하신 방송사별 심의 현황을 한 번에 정리했습니다. 진행 중인 항목도 함께 확인하실 수 있습니다.";
+  const attachments = content.attachmentCount === 3 ? `<tr><td style="padding:0 28px 24px;">
+    <table role="presentation" style="width:100%;border-collapse:collapse;border:1px solid #c6dacd;background:#eef6f0;"><tr><td style="padding:17px 18px;">
+      <p style="margin:0 0 9px;font-size:13px;font-weight:700;color:#1f7a5a;">함께 보내드리는 파일 · 3개</p>
+      <p style="margin:0;font-size:13px;line-height:1.9;color:#283c30;">등급 이미지<br>등급 표시 사용 예시 PDF<br>영등위 발급 심의필증</p>
+      <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#536358;">세 파일은 메일에 첨부되어 있으며, 아래 결과 페이지에서도 다운로드하실 수 있습니다.</p>
+    </td></tr></table>
+  </td></tr>` : "";
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f7f5ef;color:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(title)} · ${escapeHtml(kind)} 현황을 확인해주세요.</div>
+<table role="presentation" style="width:100%;border-collapse:collapse;background:#f7f5ef;"><tr><td style="padding:30px 12px;">
+<table role="presentation" align="center" style="width:100%;max-width:620px;margin:0 auto;border-collapse:collapse;background:#fffdf8;border:2px solid #111111;">
+  <tr><td style="padding:20px 28px;border-bottom:2px solid #111111;background:#f2cf27;">
+    <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="font-size:26px;font-weight:900;letter-spacing:-1px;color:#111111;">onside<span style="color:#1f7a5a;">.</span></td><td style="text-align:right;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#353126;">REVIEW STATUS</td></tr></table>
+  </td></tr>
+  <tr><td style="padding:30px 28px 22px;">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:1.2px;color:#1f7a5a;">${escapeHtml(kind)}</p>
+    <h1 style="margin:0;font-size:28px;line-height:1.4;letter-spacing:-1px;font-weight:800;">심의 현황을 안내드립니다.</h1>
+    <p style="margin:12px 0 0;font-size:14px;line-height:1.8;color:#625e54;">${summary}</p>
+  </td></tr>
+  <tr><td style="padding:0 28px 25px;">
+    <table role="presentation" style="width:100%;border-collapse:collapse;background:#f7f5ef;border-left:4px solid #111111;"><tr><td style="padding:17px 18px;">
+      <p style="margin:0;font-size:20px;line-height:1.5;font-weight:800;color:#111111;">${escapeHtml(title)}</p>
+      <p style="margin:5px 0 0;font-size:13px;line-height:1.6;color:#625e54;">${escapeHtml(content.artist?.trim() || "아티스트 미입력")}</p>
+    </td></tr></table>
+  </td></tr>
+  <tr><td style="padding:0 28px 12px;">
+    <table role="presentation" style="width:100%;border-collapse:collapse;"><tr><td style="font-size:15px;font-weight:800;">${online ? "영등위 심의 결과" : "방송사별 심의 현황"}</td><td style="text-align:right;font-size:12px;color:#625e54;">${Math.max(0, Math.min(content.rows.length, content.completedCount))} / ${content.rows.length} 완료</td></tr></table>
+  </td></tr>
+  <tr><td style="padding:0 28px 12px;"><table role="presentation" style="width:100%;border-collapse:collapse;border:1px solid #ded9cd;">${rows || '<tr><td style="padding:18px;font-size:13px;color:#625e54;">등록된 심의 항목이 없습니다.</td></tr>'}</table></td></tr>
+  <tr><td style="padding:0 28px 25px;"><p style="margin:0;font-size:11px;line-height:1.7;color:#777166;">기준: ${escapeHtml(dateLabel)} (한국 시간)<br>이메일은 발송 시 저장된 현황입니다. 이후 변경사항과 자세한 곡별 결과는 아래 페이지에서 확인해주세요.</p></td></tr>
+  ${attachments}
+  <tr><td style="padding:0 28px 28px;text-align:center;">
+    <a href="${escapeHtml(link)}" style="display:block;padding:15px 18px;border:2px solid #111111;background:#f2cf27;color:#111111;text-decoration:none;font-size:14px;line-height:1.5;font-weight:800;text-align:center;">전체 심의 현황 확인&nbsp; →</a>
+    <p style="margin:12px 0 0;font-size:11px;line-height:1.7;color:#777166;">기존 온사이드 결과 페이지로 연결됩니다.<br>회원은 로그인 후, 비회원은 전용 조회 링크로 확인하실 수 있습니다.</p>
+  </td></tr>
+  <tr><td style="padding:20px 28px;border-top:1px solid #ded9cd;background:#f7f5ef;"><p style="margin:0;font-size:11px;line-height:1.8;color:#777166;">온사이드 · 음반과 뮤직비디오의 심의 진행을 함께합니다.<br>버튼이 열리지 않으면 아래 주소를 브라우저에서 열어주세요.</p><p style="margin:7px 0 0;font-size:10px;line-height:1.6;word-break:break-all;color:#625e54;">${escapeHtml(link)}</p></td></tr>
+</table></td></tr></table></body></html>`;
+  return { subject, html };
+}
+
+export async function sendReviewSummaryEmail(payload: EmailDeliveryOptions & {
+  email: string;
+  submissionId: string;
+  content: ReviewSummaryEmailContent;
+  markResultNotified?: boolean;
+  attachmentRefs?: EmailAttachmentRef[];
+}): Promise<EmailSendResult> {
+  const rendered = renderReviewSummaryEmail(payload.content);
+  return sendTransactionalEmail({
+    to: payload.email, ...rendered, operation: "review result", includeMessageId: true,
+    submissionId: payload.submissionId, idempotencyKey: payload.idempotencyKey,
+    expiresAt: payload.expiresAt, markResultNotified: payload.markResultNotified,
+    ...(payload.attachmentRefs ? { attachmentRefs: payload.attachmentRefs } : {}),
+  });
+}

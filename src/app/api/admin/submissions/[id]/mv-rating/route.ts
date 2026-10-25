@@ -3,7 +3,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { isRatingCode } from "@/lib/mv-assets";
-import { sendOnlineMvResultNotificationById } from "@/lib/admin/submission-notifications";
 import { saveManagedOnlineReview } from "@/lib/admin/review-management";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -74,10 +73,8 @@ export async function PATCH(
   revalidatePath("/mypage");
   revalidatePath("/track");
 
-  const notification = await sendOnlineMvResultNotificationById({ submissionId });
   return NextResponse.json({
-    ok: true, warning: notification.warning, pendingAssets: notification.pendingAssets,
-    deliveredCount: notification.deliveredCount, queuedCount: notification.queuedCount ?? 0,
+    ok: true, notification: null, message: "등급을 저장했습니다. 이메일은 결과 안내에서 따로 발송해주세요.",
     rating, resultStatus: completion.resultStatus, unchanged: !completion.changed,
   });
 }

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { B2ConfigError } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendOnlineMvResultNotificationById } from "@/lib/admin/submission-notifications";
 import { MAX_CERTIFICATE_BYTES, saveManagedCertificate } from "@/lib/admin/certificate-save";
 import { revalidatePath } from "next/cache";
 
@@ -160,13 +159,9 @@ export async function POST(
     });
     if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status });
     for (const path of ["/admin/submissions", "/admin/submissions/detail", "/dashboard", "/mypage", "/track", `/dashboard/submissions/${submissionId}`]) revalidatePath(path);
-    // Repeated upload requests use the same bundle key. A successful file save
-    // can be retried after mail preparation fails without duplicating accepted mail.
-    const notification = await sendOnlineMvResultNotificationById({ submissionId });
     return NextResponse.json({
       ok: true, unchanged: !saved.changed, certificate: saved.certificate,
-      warning: notification.warning, pendingAssets: notification.pendingAssets,
-      deliveredCount: notification.deliveredCount, queuedCount: notification.queuedCount ?? 0,
+      notification: null, message: "필증을 저장했습니다. 이메일은 결과 안내에서 따로 발송해주세요.",
     });
   } catch (error) {
     const message =

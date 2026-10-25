@@ -106,15 +106,13 @@ test("legacy free-text wishes and new Korean labels cannot be sent as official r
 });
 
 
-test("saved MV ratings display delivery warnings without claiming that the save failed", async ({ page }) => {
-  const warning = "변경사항은 저장되었지만 이메일 발송에 실패했습니다. 고객에게 별도로 안내해주세요.";
-  const requests = await mount(page, "", false, warning);
+test("saved MV ratings confirm storage and direct the administrator to the separate email control", async ({ page }) => {
+  const requests = await mount(page, "", false);
   await page.getByRole("combobox", { name: "결과 등급", exact: true }).selectOption("15");
   await page.getByRole("button", { name: "등급 저장", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText(warning);
-  await expect(page.getByRole("status")).toContainText("결과 등급을 저장했습니다");
+  await expect(page.getByRole("status")).toContainText("이메일은 결과 안내에서 따로 발송해주세요.");
   expect(requests).toEqual([{ rating: "15", expectedUpdatedAt: "2026-10-25T00:00:00Z" }]);
   await page.getByRole("button", { name: "확인", exact: true }).click();
-  await expect(page.getByRole("button", { name: "등급 저장", exact: true })).toBeEnabled();
-  await expect(page.getByText("이메일 안내 확인 필요")).toBeVisible();
+  await expect(page.getByRole("button", { name: "등급 저장", exact: true })).toBeDisabled();
+  await expect(page.getByText("저장됨 · 이메일 별도 발송")).toBeVisible();
 });

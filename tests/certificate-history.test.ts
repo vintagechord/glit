@@ -55,8 +55,7 @@ test("certificate replacement respects configured prefix, uses unique keys and c
   const calls = api.calls.filter(call => call.kind === "rpc");
   assert.equal(calls.length, 2);
   const notices = api.calls.filter(call => call.kind === "notice");
-  assert.equal(notices.length, 2);
-  assert.ok(api.calls.findIndex(call => call.kind === "rpc") < api.calls.findIndex(call => call.kind === "notice"));
+  assert.equal(notices.length, 0);
   assert.doesNotMatch(JSON.stringify(notices), /objectKey|custom\/prefix|필증\.pdf/);
   assert.equal(calls[1].name, "record_managed_submission_certificate");
   assert.equal(calls[1].args?.p_actor_user_id, actorId);
@@ -97,14 +96,15 @@ test("certificate permission, result type and actual content guards run before w
 });
 
 
-test("certificate upload keeps a committed file successful while reporting email failure", async () => {
+test("certificate upload saves its file without invoking result email", async () => {
   const api = await fixture();
   api.state.notificationWarning = "이메일 발송에 실패했습니다.";
   const response = await api.POST(request(), context);
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.ok(body.certificate.objectKey);
-  assert.equal(body.warning, api.state.notificationWarning);
+  assert.equal(body.notification, null);
+  assert.equal(api.calls.filter(call => call.kind === "notice").length, 0);
 });
 
 test("certificate retries preserve the original upload key and missing assets remain pending", async () => {
@@ -114,14 +114,14 @@ test("certificate retries preserve the original upload key and missing assets re
   api.state.notificationWarning = "영등위 등급과 필증이 준비되면 안내합니다.";
   const first = await api.POST(request("%PDF-1.7 fixture", "필증.pdf", requestId), context);
   assert.equal(first.status, 200);
-  assert.equal((await first.json()).pendingAssets, true);
+  assert.equal((await first.json()).notification, null);
   api.state.submission.updated_at = "2026-10-25T01:00:00Z";
   const retry = await api.POST(request("%PDF-1.7 fixture", "필증.pdf", requestId), context);
   assert.equal(retry.status, 200);
   assert.equal((await retry.json()).unchanged, true);
   assert.equal(api.calls.filter(call => call.kind === "put").length, 1);
   assert.equal(api.calls.filter(call => call.kind === "rpc").length, 1);
-  assert.equal(api.calls.filter(call => call.kind === "notice").length, 2, "shared durable key allows safe mail preparation retry");
+  assert.equal(api.calls.filter(call => call.kind === "notice").length, 0, "upload and idempotent retry only save the file");
 });
 
 test("stale certificate revisions and malformed request IDs cannot upload or send", async () => {

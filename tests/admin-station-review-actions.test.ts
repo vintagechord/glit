@@ -20,7 +20,7 @@ async function fixture() {
           "@/lib/supabase/server": `export const createServerSupabase=async()=>({});`,
           "@/lib/admin/action-auth": `${shared} export const requireAdminAction=async()=>{if(!state.admin)throw Error('forbidden');return {id:'22222222-2222-4222-8222-222222222222'}};`,
           "@/lib/admin/review-management": `${shared} export const saveManagedStationReview=async(_db,input)=>{calls.push({name:'save',input});return state.error?{ok:false,error:state.error}:{ok:true,changed:state.changed,row:{id:'review',status:'APPROVED',age_rating:'12'},stationName:'KBS',submissionStatus:'RESULT_READY',changeKey:'fixture-revision'}};`,
-          "@/lib/admin/submission-notifications": `${shared} export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async()=>({});export const sendOnlineMvResultNotificationById=async()=>{throw Error("Online bundle is unexpected in this station/track fixture")};`,
+          "@/lib/admin/submission-notifications": `${shared} export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendReviewSummaryNotificationById=async()=>{throw Error("Summary send is forbidden during save")};export const sendSubmissionResultNotificationById=async()=>({});export const sendOnlineMvResultNotificationById=async()=>{throw Error("Online bundle is unexpected in this station/track fixture")};`,
           "next/server": "export const after=()=>{};",
           "next/cache": "export const revalidatePath=()=>{};export const updateTag=()=>{};",
           "next/navigation": "export const redirect=url=>{throw Error('redirect:'+url)};",
@@ -38,7 +38,7 @@ async function fixture() {
   return output.exports;
 }
 
-test("administrator station saves pass the exact revision and send the station grade once only after a changed commit", async () => {
+test("administrator station saves pass the exact revision and never notify while saving a station result", async () => {
   const f = await fixture();
   const input = { submissionId: sid, stationId, expectedUpdatedAt: revision, status: "APPROVED" as const, ageRating: "12" as const };
   f.state.admin = false;
@@ -51,14 +51,10 @@ test("administrator station saves pass the exact revision and send the station g
   f.state.changed = true;
   f.state.warning = "자동 재시도 예정";
   const saved = await f.updateStationReviewAction(input);
-  assert.equal(saved.warning, f.state.warning);
+  assert.equal(saved.warning, undefined);
   assert.equal(f.calls.find(c => c.name === "save")?.input.expectedUpdatedAt, revision);
-  const notice = f.calls.find(c => c.name === "notice")!.input;
-  assert.match(String(notice.summary), /KBS: 12세 이상 시청가/);
-  assert.equal(String(notice.summary).match(/12세 이상 시청가/g)?.length, 1);
-  assert.equal(notice.changeKey, "fixture-revision");
-  assert.equal(notice.markResultNotified, true);
+  assert.equal(f.calls.filter(c => c.name === "notice").length, 0);
   f.state.error = "다른 화면에서 변경되었습니다.";
   assert.ok((await f.updateStationReviewAction(input)).error);
-  assert.equal(f.calls.filter(c => c.name === "notice").length, 1);
+  assert.equal(f.calls.filter(c => c.name === "notice").length, 0);
 });

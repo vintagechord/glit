@@ -2,11 +2,10 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DESK_PROTOCOL_VERSION, readBoundedDeskBody, verifyDeskRequest } from "./review-desk-auth";
 import { stationManagementSchema, type ManagedReviewResult } from "./review-management";
-import { getStationReviewDisplayStatus } from "../station-review-display";
 import type { loadDeskResults, downloadDeskResultAsset } from "./review-desk";
 import type { saveManagedStationReview, saveManagedOnlineReview } from "./review-management";
 import type { saveManagedCertificate } from "./certificate-save";
-import type { sendSubmissionUpdateNotificationById, sendOnlineMvResultNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
+import type { getReviewSummaryEmailPreviewById, sendReviewSummaryNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
 
 const uuid = z.string().uuid();
 const revision = z.string().datetime({ offset: true });
@@ -14,8 +13,8 @@ const stationBody = stationManagementSchema.omit({ actorUserId: true, submission
   operation: z.literal("station"), reviewId: uuid.nullish(), requestId: uuid.optional(),
 });
 const onlineBody = z.object({ operation: z.literal("online"), expectedUpdatedAt: revision, rating: z.enum(["ALL", "12", "15", "18", "19", "REJECT"]), resultMemo: z.string().max(4000).optional(), requestId: uuid.optional() });
-const resendBody = z.object({ operation: z.literal("resend"), expectedUpdatedAt: revision, requestId: uuid.optional() });
-const bodySchema = z.discriminatedUnion("operation", [stationBody, onlineBody, resendBody]);
+const sendBody = z.object({ operation: z.enum(["send", "resend"]), expectedUpdatedAt: revision, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestId: uuid });
+const bodySchema = z.discriminatedUnion("operation", [stationBody, onlineBody, sendBody]);
 const assetSchema = z.enum(["ratingImage", "usageGuide", "certificate"]);
 const jsonResponse = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 const failure = (status: number, error: string, errorCode?: string) => jsonResponse({ ok: false, error, ...(errorCode ? { errorCode } : {}) }, status);
@@ -34,8 +33,8 @@ type Dependencies = {
   saveStation: typeof saveManagedStationReview;
   saveOnline: typeof saveManagedOnlineReview;
   saveCertificate: typeof saveManagedCertificate;
-  notifyUpdate: typeof sendSubmissionUpdateNotificationById;
-  notifyOnline: typeof sendOnlineMvResultNotificationById;
+  previewEmail: typeof getReviewSummaryEmailPreviewById;
+  sendSummary: typeof sendReviewSummaryNotificationById;
   revalidate: (submissionId: string) => void;
 };
 type Context = { params: Promise<{ id: string }> };
@@ -43,10 +42,6 @@ type Context = { params: Promise<{ id: string }> };
 /** The route and its synthetic tests share these handlers. No DB or mail
  * operation is reachable until the signed bytes and live administrator role pass. */
 export function createReviewDeskHandlers(deps: Dependencies) {
-  async function notifySafely(send: () => Promise<SubmissionNotificationOutcome>): Promise<SubmissionNotificationOutcome> {
-    try { return await send(); }
-    catch { return { deliveredCount: 0, skippedCount: 0, failedCount: 1, recipientCount: 0, warning: "저장된 결과는 유지됩니다. 이메일 안내 상태를 확인하지 못했습니다. 발송 내역을 확인해주세요." }; }
-  }
   async function authenticate(request: Request, body: Buffer) {
     const identity = verifyDeskRequest(request, body, deps.secret());
     if (!identity) return { error: failure(401, "Mac 연동 인증을 확인하지 못했습니다.") } as const;
@@ -63,6 +58,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
       ...(snapshot ? { snapshot } : { snapshotWarning: "변경사항은 저장되었습니다. 최신 결과를 다시 불러와주세요." }), ...extras });
   }
   function requestFailure(error: unknown) {
+    if (error instanceof Error && error.name === "ReviewEmailPreviewError" && "status" in error && typeof error.status === "number") return failure(error.status, error.message);
     if (error && typeof error === "object" && "status" in error && error.status === 413) return failure(413, "파일 또는 입력 데이터가 허용 크기를 초과했습니다.");
     return failure(500, "서비스 연결 또는 처리 상태를 확인하지 못했습니다. 최신 내용을 다시 불러온 뒤 확인해주세요.");
   }
@@ -79,11 +75,16 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         ]);
         const schemaReady = !protocol.error && protocol.data?.protocol === DESK_PROTOCOL_VERSION && !station.error && !outbox.error;
         return jsonResponse({ ok: schemaReady, protocol: DESK_PROTOCOL_VERSION, schemaReady,
-          capabilities: { stationResults: schemaReady, onlineBundle: schemaReady, certificate: schemaReady },
+          capabilities: { stationResults: schemaReady, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true },
           ...(schemaReady ? {} : { error: "심의 연동 서비스 업데이트가 아직 완료되지 않았습니다." }),
         }, schemaReady ? 200 : 503);
       }
       if (!uuid.safeParse(id).success) return failure(400, "접수 ID를 확인해주세요.");
+      const preview = new URL(request.url).searchParams.get("preview");
+      if (preview !== null) {
+        if (preview !== "email") return failure(400, "미리보기 항목을 확인해주세요.");
+        return jsonResponse(await deps.previewEmail({ submissionId: id }));
+      }
       const asset = new URL(request.url).searchParams.get("asset");
       if (asset !== null) {
         const parsed = assetSchema.safeParse(asset);
@@ -121,8 +122,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
           declaredMime: declaredMime === "application/octet-stream" ? undefined : declaredMime,
         });
         if (!saved.ok) return failure(saved.status, saved.error);
-        const notification = await notifySafely(() => deps.notifyOnline({ submissionId: id }));
-        return finish(auth.db, id, saved.changed, notification, { certificate: { originalName: saved.certificate.originalName, uploadedAt: saved.certificate.uploadedAt } });
+        return finish(auth.db, id, saved.changed, null, { certificate: { originalName: saved.certificate.originalName, uploadedAt: saved.certificate.uploadedAt } });
       }
       if (url.searchParams.has("action")) return failure(400, "지원하지 않는 작업입니다.");
       if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
@@ -133,35 +133,17 @@ export function createReviewDeskHandlers(deps: Dependencies) {
       if (body.operation === "station") {
         const saved = await deps.saveStation(auth.db, { ...body, reviewId: body.reviewId ?? undefined, actorUserId: auth.actorId, submissionId: id });
         if (!saved.ok || !saved.row) return saveFailure(saved);
-        const savedRow = saved.row;
-        const notification = saved.changed ? await notifySafely(() => deps.notifyUpdate({
-          submissionId: id, headline: "방송국 심의 정보가 업데이트되었습니다.",
-          summary: `${saved.stationName ?? "신청 방송국"}: ${getStationReviewDisplayStatus(savedRow).label}\n신청 내역에서 방송국·트랙별 심의 결과를 확인해주세요.`,
-          subject: "[onside] 방송국 심의 업데이트 안내", changeKey: saved.changeKey,
-          markResultNotified: saved.submissionStatus === "RESULT_READY",
-        })) : null;
-        return finish(auth.db, id, saved.changed === true, notification);
+        return finish(auth.db, id, saved.changed === true, null);
       }
       if (body.operation === "online") {
         const saved = await deps.saveOnline(auth.db, { ...body, actorUserId: auth.actorId, submissionId: id });
         if (!saved.ok) return saveFailure(saved);
-        // The shared immutable bundle key also makes a no-op retry safe.
-        const notification = await notifySafely(() => deps.notifyOnline({ submissionId: id }));
-        return finish(auth.db, id, saved.changed === true, notification);
+        return finish(auth.db, id, saved.changed === true, null);
       }
-      const snapshot = await deps.loadSnapshot(auth.db, id);
-      if (snapshot.submission.updated_at !== body.expectedUpdatedAt) return failure(409, "다른 화면에서 접수가 변경되었습니다. 최신 결과를 다시 불러와주세요.", "CONFLICT");
-      const resendKey = `desk-resend-${auth.requestId}`;
-      let notification: SubmissionNotificationOutcome;
-      if (snapshot.type === "MV_DISTRIBUTION") {
-        notification = await notifySafely(() => deps.notifyOnline({ submissionId: id, forceResendKey: resendKey }));
-      } else if (["ALBUM", "MV_BROADCAST"].includes(snapshot.type) && snapshot.stations.some(station => station.review.status !== "NOT_SENT")) {
-        notification = await notifySafely(() => deps.notifyUpdate({ submissionId: id, headline: "현재 방송국 심의 결과를 안내드립니다.",
-          summary: snapshot.stations.map(station => `${station.name || station.code}: ${getStationReviewDisplayStatus({ ...station.review, station }, { albumTracks: snapshot.tracks }).label}`).join("\n") + "\n신청 내역에서 방송국·트랙별 상세 결과를 확인해주세요.",
-          subject: "[onside] 방송국 심의 결과 재안내", changeKey: resendKey,
-          markResultNotified: snapshot.submission.status === "RESULT_READY" || snapshot.submission.status === "COMPLETED",
-        }));
-      } else return failure(400, "안내할 심의 진행 또는 결과를 먼저 입력해주세요.");
+      const notification = await deps.sendSummary({ submissionId: id, requestId: auth.requestId,
+        expectedRevision: body.expectedRevision, expectedUpdatedAt: body.expectedUpdatedAt });
+      if (notification.errorCode) return failure(notification.errorCode === "CONFLICT" ? 409 : notification.errorCode === "LOAD_FAILED" ? 503 : 400,
+        notification.error ?? "이메일 미리보기를 다시 확인해주세요.", notification.errorCode);
       return finish(auth.db, id, false, notification);
     } catch (error) { return requestFailure(error); }
   }

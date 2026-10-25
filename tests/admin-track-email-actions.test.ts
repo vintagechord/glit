@@ -20,7 +20,7 @@ async function fixture() {
           "@/lib/supabase/admin": `${shared}export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared}export const createServerSupabase=async()=>db;`,
           "@/lib/admin/action-auth": `${shared}export const requireAdminAction=async()=>{if(!state.isAdmin)throw Error('forbidden');return {id:'admin'}};`,
-          "@/lib/admin/submission-notifications": `${shared}export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:undefined}};export const sendSubmissionResultNotificationById=async()=>({});export const sendOnlineMvResultNotificationById=async()=>{throw Error("Online bundle is unexpected in this station/track fixture")};`,
+          "@/lib/admin/submission-notifications": `${shared}export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:undefined}};export const sendSubmissionResultNotificationById=async()=>({});export const sendReviewSummaryNotificationById=async()=>{throw Error("Summary send is unexpected in this station/track fixture")};export const sendOnlineMvResultNotificationById=async()=>{throw Error("Online bundle is unexpected in this station/track fixture")};`,
           "next/server": "export const after=()=>{};",
           "next/cache": "export const revalidatePath=()=>{};export const updateTag=()=>{};",
           "next/navigation": "export const redirect=url=>{throw Error('redirect:'+url)};",

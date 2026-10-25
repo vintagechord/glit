@@ -138,7 +138,7 @@ export function CertificateUploader({
           uploadedAt: json.certificate.uploadedAt,
         });
       }
-      const successMessage = ["필증을 업로드했습니다.", json?.deliveredCount ? "세 파일을 첨부한 결과 이메일이 발송 업체에 접수되었습니다." : null, json?.warning].filter(Boolean).join(" ");
+      const successMessage = "필증을 저장했습니다. 이메일은 결과 안내에서 따로 발송해주세요.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setFile(null);
@@ -214,7 +214,7 @@ export function CertificateUploader({
           {isUploading ? "업로드 중..." : "필증 업로드"}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">결과 이메일은 등급 이미지·사용 예시 PDF·필증의 합계가 18MB 이하일 때 첨부할 수 있습니다.</p>
+      <p className="text-xs text-muted-foreground">저장 후 결과 안내에서 등급 이미지·사용 예시 PDF·필증을 확인하고 이메일을 따로 발송해주세요. 첨부 합계는 18MB 이하입니다.</p>
       {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
     </div>
   );

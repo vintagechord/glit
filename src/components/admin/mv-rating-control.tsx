@@ -30,17 +30,20 @@ export function MvRatingControl({
   submissionId,
   initialRating,
   expectedUpdatedAt,
+  isResultSaved,
   isResultNotified = false,
 }: {
   submissionId: string;
   initialRating?: string | null;
   expectedUpdatedAt: string;
+  isResultSaved?: boolean;
   isResultNotified?: boolean;
 }) {
   const router = useRouter();
   const [rating, setRating] = React.useState(() => getInitialResultRating(initialRating));
   const [savedRating, setSavedRating] = React.useState(() => getInitialResultRating(initialRating));
   const [resultNotified, setResultNotified] = React.useState(isResultNotified);
+  const [hasSavedResult, setHasSavedResult] = React.useState(isResultSaved ?? isResultNotified);
   const [loading, setLoading] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [savePopup, setSavePopup] = React.useState<{
@@ -58,7 +61,8 @@ export function MvRatingControl({
     setRating(nextRating);
     setSavedRating(nextRating);
     setResultNotified(isResultNotified);
-  }, [initialRating, isResultNotified]);
+    setHasSavedResult(isResultSaved ?? isResultNotified);
+  }, [initialRating, isResultNotified, isResultSaved]);
 
   const handleSave = async () => {
     if (!rating) {
@@ -88,8 +92,9 @@ export function MvRatingControl({
       }
       setSavedRating(json?.rating ?? rating);
       setRating(json?.rating ?? rating);
-      setResultNotified(Boolean(json?.deliveredCount));
-      const successMessage = ["결과 등급을 저장했습니다.", json?.deliveredCount ? "결과 이메일이 발송 업체에 접수되었습니다." : null, json?.warning].filter(Boolean).join(" ");
+      setResultNotified(false);
+      setHasSavedResult(true);
+      const successMessage = "결과 등급을 저장했습니다. 이메일은 결과 안내에서 따로 발송해주세요.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
       setError(null);
@@ -133,7 +138,7 @@ export function MvRatingControl({
           </span>
         ) : !resultNotified && savedRating ? (
           <span className="ml-2 font-semibold text-[#1556a4]">
-            이메일 안내 확인 필요
+            저장됨 · 이메일 별도 발송
           </span>
         ) : null}
       </div>
@@ -155,13 +160,13 @@ export function MvRatingControl({
         </select>
       </label>
       <p className="text-xs text-muted-foreground">
-        저장한 등급은 사용자 결과 페이지에 반영됩니다. 등급과 필증이 준비되면 세 파일을 첨부한 결과 이메일을 보냅니다.
+        저장한 등급은 사용자 결과 페이지에 반영됩니다. 등급과 필증을 저장한 뒤 결과 안내에서 이메일 내용을 확인하고 발송해주세요.
       </p>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={handleSave}
-          disabled={loading || !rating || (!hasChanges && resultNotified)}
+          disabled={loading || !rating || (!hasChanges && hasSavedResult)}
           className="rounded-full bg-foreground px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "저장 중..." : "등급 저장"}

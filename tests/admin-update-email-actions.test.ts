@@ -7,7 +7,7 @@ const submissionId = "11111111-1111-4111-8111-111111111111";
 
 async function fixture() {
   const bundle = await build({
-    stdin: { contents: `export {updateSubmissionStatusAction,updateSubmissionBasicInfoAction,updateSubmissionResultFormAction,saveSubmissionAdminFormAction,notifySubmissionResultAction,notifySubmissionProgressAction} from './src/features/admin/actions';export {state,calls} from 'actions-fixture';`, resolveDir: process.cwd(), loader: "ts" },
+    stdin: { contents: `export {updateSubmissionMvRatingAction,updateSubmissionStatusAction,updateSubmissionBasicInfoAction,updateSubmissionResultFormAction,saveSubmissionAdminFormAction,notifySubmissionResultAction,notifySubmissionProgressAction} from './src/features/admin/actions';export {state,calls} from 'actions-fixture';`, resolveDir: process.cwd(), loader: "ts" },
     bundle: true, write: false, platform: "node", format: "cjs", packages: "external",
     plugins: [{ name: "actions-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(actions-fixture|@\/lib\/(?:supabase\/(?:server|admin)|admin\/(?:action-auth|submission-notifications|mv-review-flow))|next\/(?:server|cache|navigation))$/ }, args => ({ path: args.path, namespace: "fixture" }));
@@ -19,7 +19,7 @@ async function fixture() {
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>db;`,
           "@/lib/admin/action-auth": `${shared} export const requireAdminAction=async()=>{if(!state.isAdmin)throw Error('forbidden');return {id:'admin'}};`,
-          "@/lib/admin/submission-notifications": `${shared} export const sendOnlineMvResultNotificationById=async input=>{calls.push({name:'bundle',input});return {warning:state.warning}}; export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async input=>{calls.push({name:'result',input});return {warning:state.warning}};`,
+          "@/lib/admin/submission-notifications": `${shared} export const sendReviewSummaryNotificationById=async input=>{calls.push({name:"summary",input});return {warning:state.warning}}; export const sendOnlineMvResultNotificationById=async input=>{calls.push({name:'bundle',input});return {warning:state.warning}}; export const sendSubmissionUpdateNotificationById=async input=>{calls.push({name:'notice',input});return {warning:state.warning}};export const sendSubmissionResultNotificationById=async input=>{calls.push({name:'result',input});return {warning:state.warning}};`,
           "@/lib/admin/mv-review-flow": `${shared} export const completeMvReviewFlow=async(_db,id,input)=>{if(state.failUpdate)return {completed:false,error:'atomic write failed'};const changed=state.submission.status!=='RESULT_READY'||state.submission.result_status!==input.resultStatus||(state.submission.result_memo??'')!==(input.resultMemo??'');if(changed){Object.assign(state.submission,{status:'RESULT_READY',result_status:input.resultStatus,result_memo:input.resultMemo});calls.push({name:'atomic',input})}return {completed:true,changed,resultStatus:input.resultStatus,changeKey:'fixture-revision'}};export const resolveMvFallbackStationId=async()=>({stationId:'fixture'});`,
           "next/server": "export const after=()=>{};",
           "next/cache": "export const revalidatePath=()=>{};export const updateTag=()=>{};",
@@ -30,7 +30,7 @@ async function fixture() {
     } }],
   });
   type Actions = typeof import("../src/features/admin/actions");
-  const output = { exports: {} as Pick<Actions, "updateSubmissionStatusAction" | "updateSubmissionBasicInfoAction" | "updateSubmissionResultFormAction" | "saveSubmissionAdminFormAction" | "notifySubmissionResultAction" | "notifySubmissionProgressAction"> & {
+  const output = { exports: {} as Pick<Actions, "updateSubmissionMvRatingAction" | "updateSubmissionStatusAction" | "updateSubmissionBasicInfoAction" | "updateSubmissionResultFormAction" | "saveSubmissionAdminFormAction" | "notifySubmissionResultAction" | "notifySubmissionProgressAction"> & {
     state: { isAdmin: boolean; failUpdate: boolean; failEvent: boolean; warning?: string; submission: Record<string, unknown> };
     calls: Array<{ name: string; input: Record<string, unknown> }>;
   } };
@@ -77,16 +77,16 @@ test("main admin form distinguishes saved changes from delivery failure and send
   assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
 });
 
-test("result form dispatches only once after saving and preserves warning through its redirect", async () => {
+test("result form saves never enqueue email, including unchanged retries", async () => {
   const api = await fixture();
   const form = new FormData();
   form.set("submissionId", submissionId); form.set("resultStatus", "APPROVED"); form.set("resultMemo", "result details");
   api.state.warning = "이메일 발송 보류";
-  await assert.rejects(api.updateSubmissionResultFormAction(form), error => error instanceof Error && error.message.includes("saved=result_warning"));
-  assert.equal(api.calls.filter(call => call.name === "result").length, 1);
+  await assert.rejects(api.updateSubmissionResultFormAction(form), error => error instanceof Error && error.message.includes("saved=result"));
+  assert.equal(api.calls.filter(call => call.name === "result").length, 0);
   assert.equal(api.state.submission.result_status, "APPROVED");
   await assert.rejects(api.updateSubmissionResultFormAction(form), /redirect:/);
-  assert.equal(api.calls.filter(call => call.name === "result").length, 1);
+  assert.equal(api.calls.filter(call => call.name === "result").length, 0);
 });
 
 
@@ -99,22 +99,21 @@ test("audit insert failures are reported without hiding a committed change or sk
   assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
 });
 
-test("manual result resend requires an admin and published result, then makes an explicit fresh attempt", async () => {
+test("explicit result send requires admin permission and a preview revision plus stable request ID", async () => {
   const api = await fixture();
+  const preview = { expectedRevision: "a".repeat(64), expectedUpdatedAt: "2026-10-25T00:00:00Z", requestId: "22222222-2222-4222-8222-222222222222" };
   api.state.isAdmin = false;
-  await assert.rejects(api.notifySubmissionResultAction(submissionId), /forbidden/);
+  await assert.rejects(api.notifySubmissionResultAction(submissionId, preview), /forbidden/);
   api.state.isAdmin = true;
   assert.ok((await api.notifySubmissionResultAction(submissionId)).error);
-  assert.equal(api.calls.filter(call => call.name === "result").length, 0);
-  api.state.submission.status = "RESULT_READY";
-  api.state.submission.result_status = "APPROVED";
+  assert.equal(api.calls.length, 0);
   api.state.warning = "자동 재시도 예정";
-  assert.equal((await api.notifySubmissionResultAction(submissionId)).warning, api.state.warning);
-  await api.notifySubmissionResultAction(submissionId);
-  const attempts = api.calls.filter(call => call.name === "result");
+  assert.equal((await api.notifySubmissionResultAction(submissionId, preview)).warning, api.state.warning);
+  await api.notifySubmissionResultAction(submissionId, preview);
+  const attempts = api.calls.filter(call => call.name === "summary");
   assert.equal(attempts.length, 2);
-  assert.notEqual(attempts[0].input.changeKey, attempts[1].input.changeKey);
-  assert.equal(api.calls.filter(call => call.name === "event").length, 2);
+  assert.equal(attempts[0].input.requestId, attempts[1].input.requestId);
+  assert.equal(attempts[0].input.expectedRevision, preview.expectedRevision);
 });
 
 test("manual progress resend validates current state, reports audit and enqueue failure, and sends no private notes", async () => {
@@ -145,18 +144,25 @@ test("manual progress resend validates current state, reports audit and enqueue 
   assert.equal(api.calls.filter(call => call.name === "write").length, 0);
 });
 
-test("online result saves and explicit resends always use the three-file bundle path", async () => {
+test("online legacy grade and result saves never send; only the preview-confirmed action requests summary delivery", async () => {
   const api = await fixture();
   api.state.submission.type = "MV_DISTRIBUTION";
   const form = new FormData();
   form.set("submissionId", submissionId); form.set("resultStatus", "APPROVED");
   await assert.rejects(api.updateSubmissionResultFormAction(form), /redirect:/);
   await assert.rejects(api.updateSubmissionResultFormAction(form), /redirect:/);
-  assert.equal(api.calls.filter(call => call.name === "bundle").length, 2, "unchanged saves may retry preparation with the same durable bundle key");
-  assert.equal(api.calls.filter(call => call.name === "result").length, 0);
-  await api.notifySubmissionResultAction(submissionId);
-  await api.notifySubmissionResultAction(submissionId);
-  const retries = api.calls.filter(call => call.name === "bundle" && call.input.forceResendKey);
-  assert.equal(retries.length, 2);
-  assert.notEqual(retries[0].input.forceResendKey, retries[1].input.forceResendKey);
+  await api.updateSubmissionMvRatingAction({ submissionId, rating: "15" });
+  assert.equal(api.calls.filter(call => ["bundle", "result", "notice", "summary"].includes(call.name)).length, 0);
+  await api.notifySubmissionResultAction(submissionId, { expectedRevision: "a".repeat(64), expectedUpdatedAt: "2026-10-25T00:00:00Z", requestId: "22222222-2222-4222-8222-222222222222" });
+  assert.equal(api.calls.filter(call => call.name === "summary").length, 1);
+});
+
+test("saving overall final workflow status does not send result mail", async () => {
+  const api = await fixture();
+  await api.updateSubmissionStatusAction({ submissionId, status: "RESULT_READY" });
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
+  const form = new FormData();
+  for (const [key, value] of Object.entries({ submissionId, status: "COMPLETED", paymentStatus: "PAID", title: "Original", artistName: "Artist" })) form.set(key, value);
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
 });

@@ -13,8 +13,6 @@ import {
   createTrackForSubmissionAction,
   deleteTrackForSubmissionAction,
   saveSubmissionAdminFormAction,
-  notifySubmissionResultFormAction,
-  notifySubmissionProgressFormAction,
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
@@ -22,11 +20,12 @@ import { formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults } from "@/lib/track-results";
-import { RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
+import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { ReviewEmailControl } from "@/components/admin/review-email-control";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
@@ -194,7 +193,7 @@ const operationalStageOptions = [
   { value: "APPLICATION_RECEIVED", label: "신청접수" },
   { value: "PAYMENT_COMPLETE", label: "결제완료" },
   { value: "REVIEW_IN_PROGRESS", label: "심의진행" },
-  { value: "RESULT_NOTIFIED", label: "결과 통보" },
+  { value: "RESULT_NOTIFIED", label: "결과 준비" },
 ] as const;
 
 export default async function AdminSubmissionDetailPage({
@@ -703,7 +702,7 @@ export default async function AdminSubmissionDetailPage({
   }).length;
   const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
   const hasPaymentComplete = submission.payment_status === "PAID";
-  const hasResultNotified =
+  const hasResultPublished =
     submission.status === "RESULT_READY" ||
     submission.status === "COMPLETED" ||
     Boolean(submission.result_status || submission.result_notified_at);
@@ -711,12 +710,12 @@ export default async function AdminSubmissionDetailPage({
     reviews.length > 0 && stationSubmittedCount === reviews.length;
   const hasAllReviewsCompleted =
     reviews.length > 0 && completedReviewCount === reviews.length;
-  const hasMvRating = Boolean(submission.mv_desired_rating);
+  const hasMvRating = isRatingCode(submission.mv_desired_rating);
   const hasMvCertificate = Boolean(submission.certificate_b2_path);
-  const hasMvResultGrade = isMvDistribution && hasMvRating && hasResultNotified;
+  const hasMvResultGrade = isMvDistribution && hasMvRating && hasResultPublished;
   const hasMvResultComplete = isMvDistribution
     ? hasMvResultGrade && hasMvCertificate
-    : isMvSubmission && hasResultNotified;
+    : isMvSubmission && hasResultPublished;
   const hasMvReceptionStarted =
     isMvSubmission &&
     hasPaymentComplete &&
@@ -724,7 +723,7 @@ export default async function AdminSubmissionDetailPage({
       submission.status === "RESULT_READY" ||
       submission.status === "COMPLETED" ||
       stationSubmittedCount > 0 ||
-      hasResultNotified);
+      hasResultPublished);
   const hasAlbumResultNotified = !isMvSubmission && hasAllReviewsCompleted;
   const hasAlbumReviewInProgress =
     !isMvSubmission &&
@@ -735,7 +734,7 @@ export default async function AdminSubmissionDetailPage({
       stationSubmittedCount > 0 ||
       completedReviewCount > 0);
   const currentOperationalStage =
-    (isMvSubmission ? hasResultNotified : hasAlbumResultNotified)
+    (isMvSubmission ? hasResultPublished : hasAlbumResultNotified)
       ? "RESULT_NOTIFIED"
       : isMvSubmission
         ? hasMvReceptionStarted
@@ -752,7 +751,7 @@ export default async function AdminSubmissionDetailPage({
     reviews.length > 0
       ? `${completedReviewCount}/${reviews.length} 결과`
       : "결과 대기";
-  const finalReviewStepLabel = "결과 통보";
+  const finalReviewStepLabel = "결과 등록";
   const finalReviewStepValue = isMvSubmission
     ? isMvDistribution
       ? hasMvResultComplete
@@ -761,14 +760,14 @@ export default async function AdminSubmissionDetailPage({
           ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 대기`
           : hasMvReceptionStarted
             ? "결과 등급 선택"
-            : "접수 후 통보"
-      : hasResultNotified
+            : "접수 후 결과 등록"
+      : hasResultPublished
         ? resultStatusLabelMap[
             submission.result_status as keyof typeof resultStatusLabelMap
-          ] ?? "결과 통보 완료"
+          ] ?? "결과 등록 완료"
         : hasMvReceptionStarted
           ? "결과 입력 대기"
-          : "접수 후 통보"
+          : "접수 후 결과 등록"
     : reviews.length > 0
       ? stationResultProgressLabel
       : "결과 대기";
@@ -802,7 +801,7 @@ export default async function AdminSubmissionDetailPage({
     {
       label: isMvSubmission ? "접수 진행" : "심의진행",
       value: isMvSubmission
-        ? hasResultNotified
+        ? hasResultPublished
           ? "접수 진행 완료"
           : hasMvReceptionStarted
             ? "접수 진행 중"
@@ -817,7 +816,7 @@ export default async function AdminSubmissionDetailPage({
               ? "심의 진행 준비"
               : "결제 완료 후 진행",
       state: isMvSubmission
-        ? hasResultNotified
+        ? hasResultPublished
           ? "done"
           : hasPaymentComplete || hasMvReceptionStarted
             ? "active"
@@ -1123,7 +1122,7 @@ export default async function AdminSubmissionDetailPage({
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     운영 단계
                   </label>
-                  {isMvSubmission && hasResultNotified ? (
+                  {isMvSubmission && hasResultPublished ? (
                     <>
                       <input
                         type="hidden"
@@ -1131,7 +1130,7 @@ export default async function AdminSubmissionDetailPage({
                         value={currentOperationalStage}
                       />
                       <input
-                        value="결과 통보"
+                        value="결과 준비"
                         readOnly
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                       />
@@ -1182,37 +1181,16 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
 
-          {submission.status !== "DRAFT" && (
-            <form action={notifySubmissionProgressFormAction} className="mt-4 flex flex-wrap items-center gap-3">
-              <input type="hidden" name="submissionId" value={submission.id} />
-              <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
-              <ConfirmSubmitButton message="현재 진행상황 안내 이메일을 다시 보내시겠습니까? 이전 메일이 접수되었다면 중복 수신될 수 있습니다. 발송 내역을 먼저 확인해주세요." className="rounded-full border border-border px-4 py-2 text-sm font-semibold">
-                현재 진행상황 안내 다시 보내기
-              </ConfirmSubmitButton>
-              <Link href="/admin/emails" className="text-sm underline">이메일 발송 내역 확인</Link>
-            </form>
-          )}
-
-          {["RESULT_READY", "COMPLETED"].includes(submission.status ?? "") && (
-            <form action={notifySubmissionResultFormAction} className="mt-4 flex flex-wrap items-center gap-3">
-              <input type="hidden" name="submissionId" value={submission.id} />
-              <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
-              <ConfirmSubmitButton message="현재 결과 안내 이메일을 다시 보내시겠습니까? 이미 발송된 경우 중복 수신될 수 있습니다." className="rounded-full border border-border px-4 py-2 text-sm font-semibold">
-                결과 안내 이메일 다시 보내기
-              </ConfirmSubmitButton>
-              <Link href="/admin/emails" className="text-sm underline">이메일 발송 내역 확인</Link>
-            </form>
-          )}
 
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                    3. 접수 진행 / 4. 결과 통보
+                    3. 접수 진행 / 4. 결과 저장
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    이 카드에서 결과 통보를 완료합니다.
+                    등급과 필증을 저장한 뒤 아래 결과 이메일 안내에서 미리보고 발송해주세요.
                   </p>
                 </div>
                 <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
@@ -1225,7 +1203,7 @@ export default async function AdminSubmissionDetailPage({
                     접수 진행
                   </p>
                   <p className="mt-2 font-semibold text-foreground">
-                    {hasResultNotified
+                    {hasResultPublished
                       ? "접수 진행 완료"
                       : hasMvReceptionStarted
                         ? "접수 진행 중"
@@ -1253,6 +1231,7 @@ export default async function AdminSubmissionDetailPage({
                         initialRating={submission.mv_desired_rating ?? ""}
                         expectedUpdatedAt={submission.updated_at}
                         isResultNotified={Boolean(submission.result_notified_at)}
+                        isResultSaved={hasMvResultGrade}
                       />
                     </div>
                   </div>
@@ -1279,7 +1258,7 @@ export default async function AdminSubmissionDetailPage({
           <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-                3. 심의진행 / 4. 결과 통보
+                3. 심의진행 / 4. 결과 저장
               </p>
               <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
                 {completedReviewCount}/{reviews.length} 결과
@@ -1370,6 +1349,7 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
           )}
+          <ReviewEmailControl key={`${submission.id}-${submission.updated_at}`} submissionId={submission.id} lastNotifiedAt={submission.result_notified_at} />
 
         </div>
 

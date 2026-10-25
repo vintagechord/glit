@@ -10,6 +10,7 @@ const actor = "22222222-2222-4222-8222-222222222222";
 const stationId = "33333333-3333-4333-8333-333333333333";
 const requestId = "44444444-4444-4444-8444-444444444444";
 const revision = "2026-10-25T00:00:00.000Z";
+const previewRevision = "a".repeat(64);
 const context = { params: Promise.resolve({ id: sid }) };
 type Deps = Parameters<typeof createReviewDeskHandlers>[0];
 type Snapshot = Awaited<ReturnType<Deps["loadSnapshot"]>>;
@@ -33,7 +34,8 @@ function fixture() {
     async saveStation(_db, input) { calls.push({ name: "station", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: state.changed, changeKey: "revision-2", stationName: "KBS", submissionStatus: "RESULT_READY", row: { id: "review", submission_id: sid, station_id: stationId, status: "APPROVED", age_rating: "12", result_note: null, updated_at: revision } }; },
     async saveOnline(_db, input) { calls.push({ name: "online", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: state.changed }; },
     async saveCertificate(_db, input) { calls.push({ name: "certificate", input: { ...input, body: input.body.toString() } }); return { ok: true, changed: state.changed, certificate: { objectKey: "private/b2/path.pdf", originalName: input.filename, uploadedAt: revision } }; },
-    notifyUpdate: input => notify("update-notice", input), notifyOnline: input => notify("online-notice", input),
+    async previewEmail() { calls.push({ name: "preview" }); return { subject: "현재 결과", html: "<p>KBS: 12세 · MBC: 15세</p>", recipientMasked: "te***@example.test", revision: previewRevision, updatedAt: revision, canSend: true, missingAssets: [], warnings: [], attachmentCount: 0 }; },
+    async sendSummary(input) { if (input.expectedRevision !== previewRevision || input.expectedUpdatedAt !== revision) return { deliveredCount: 0, skippedCount: 0, failedCount: 0, recipientCount: 0, errorCode: "CONFLICT", error: "미리보기가 변경되었습니다." }; return notify("summary-notice", input); },
     revalidate(id) { calls.push({ name: "revalidate", input: id }); },
   });
   return { handlers, state, calls };
@@ -86,7 +88,7 @@ test("health checks protocol/schema and GET returns the raw snapshot or bounded 
   assert.equal((await f.handlers.GET(signedRequest("GET", undefined, { path: `/api/internal/review-desk/${sid}?asset=arbitrary` }), context)).status, 400);
 });
 
-test("station saves pass the authenticated actor and exact revision; conflicts/no-ops never notify", async () => {
+test("station saves pass the authenticated actor and exact revision; no result save notifies", async () => {
   const f = fixture();
   f.state.saveError = "CONFLICT";
   assert.equal((await f.handlers.POST(signedRequest("POST", stationBody), context)).status, 409);
@@ -98,24 +100,22 @@ test("station saves pass the authenticated actor and exact revision; conflicts/n
   f.state.changed = true;
   const saved = await (await f.handlers.POST(signedRequest("POST", stationBody), context)).json();
   assert.equal(saved.ok, true);
-  assert.equal(saved.notification.queuedCount, 1);
+  assert.equal(saved.notification, null);
   const call = f.calls.find(c => c.name === "station")!.input as Record<string, unknown>;
   assert.equal(call.actorUserId, actor);
   assert.equal(call.expectedUpdatedAt, revision);
   assert.equal(call.reviewId, undefined);
-  const notices = f.calls.filter(c => c.name === "update-notice");
-  assert.equal(notices.length, 1);
-  assert.match(String((notices[0].input as Record<string, unknown>).summary), /KBS: 12세 이상 시청가/);
+  assert.equal(f.calls.filter(c => c.name.includes("notice")).length, 0);
 });
 
-test("online and deterministic certificate retries run the shared bundle notification even for no-op saves", async () => {
+test("online and deterministic certificate retries never send result mail, including no-op saves", async () => {
   const f = fixture(); f.state.changed = false;
   assert.equal((await f.handlers.POST(signedRequest("POST", { operation: "online", expectedUpdatedAt: revision, rating: "15" }), context)).status, 200);
   const path = `/api/internal/review-desk/${sid}?action=certificate&filename=${encodeURIComponent("필증.pdf")}&expectedUpdatedAt=${encodeURIComponent(revision)}&requestId=${requestId}`;
   const response = await f.handlers.POST(signedRequest("POST", undefined, { path, bytes: "%PDF-1.7 fixture", contentType: "application/pdf" }), context);
   const body = await response.json();
   assert.equal(body.changed, false);
-  assert.equal(f.calls.filter(c => c.name === "online-notice").length, 2);
+  assert.equal(f.calls.filter(c => c.name.includes("notice")).length, 0);
   assert.doesNotMatch(JSON.stringify(body), /private\/b2|objectKey/);
   const file = f.calls.find(c => c.name === "certificate")!.input as Record<string, unknown>;
   assert.equal(file.requestId, requestId);
@@ -125,19 +125,19 @@ test("online and deterministic certificate retries run the shared bundle notific
 
 test("explicit resend uses the signed stable UUID and refuses stale revisions or mismatched request IDs", async () => {
   const f = fixture();
-  const body = { operation: "resend", expectedUpdatedAt: revision, requestId };
+  const body = { operation: "send", expectedUpdatedAt: revision, expectedRevision: previewRevision, requestId };
   await f.handlers.POST(signedRequest("POST", body), context);
   await f.handlers.POST(signedRequest("POST", body), context);
-  const notices = f.calls.filter(c => c.name === "update-notice").map(c => c.input as Record<string, unknown>);
+  const notices = f.calls.filter(c => c.name === "summary-notice").map(c => c.input as Record<string, unknown>);
   assert.equal(notices.length, 2);
-  assert.equal(notices[0].changeKey, `desk-resend-${requestId}`);
-  assert.equal(notices[0].changeKey, notices[1].changeKey, "shared outbox deduplicates exact retry keys");
+  assert.equal(notices[0].requestId, requestId);
+  assert.equal(notices[0].requestId, notices[1].requestId, "shared outbox deduplicates exact retry keys");
   assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, expectedUpdatedAt: "2026-10-24T00:00:00.000Z" }), context)).status, 409);
   assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, requestId: actor }), context)).status, 400);
   assert.equal(f.calls.filter(c => c.name.includes("notice")).length, 2);
 });
 
-test("size/content guards stop work and unexpected notification or refresh failures do not conceal committed saves", async () => {
+test("size/content guards stop work and refresh failure does not conceal a save or call mail", async () => {
   const f = fixture();
   assert.equal((await f.handlers.POST(signedRequest("POST", stationBody, { contentLength: String(3 * 1024 * 1024 + 1) }), context)).status, 413);
   assert.equal(f.calls.length, 0);
@@ -149,7 +149,23 @@ test("size/content guards stop work and unexpected notification or refresh failu
   assert.equal(saved.status, 200);
   const body = await saved.json();
   assert.equal(body.changed, true);
-  assert.match(body.notification.warning, /저장된 결과는 유지/);
+  assert.equal(body.notification, null);
+  assert.equal(f.calls.filter(c => c.name.includes("notice")).length, 0);
   assert.match(body.snapshotWarning, /저장되었습니다/);
   assert.doesNotMatch(JSON.stringify(body), /private provider|private read/);
+});
+
+
+test("multiple broadcaster saves and email preview cause zero mail until one explicit send", async () => {
+  const f = fixture();
+  await f.handlers.POST(signedRequest("POST", stationBody), context);
+  await f.handlers.POST(signedRequest("POST", { ...stationBody, stationId: "77777777-7777-4777-8777-777777777777", ageRating: "15" }), context);
+  const preview = await f.handlers.GET(signedRequest("GET", undefined, { path: `/api/internal/review-desk/${sid}?preview=email` }), context);
+  const data = await preview.json();
+  assert.match(data.html, /KBS.*MBC/);
+  assert.equal(f.calls.filter(c => c.name.includes("notice")).length, 0);
+  const response = await f.handlers.POST(signedRequest("POST", { operation: "send", expectedRevision: data.revision, expectedUpdatedAt: data.updatedAt, requestId }), context);
+  assert.equal(response.status, 200);
+  assert.equal(f.calls.filter(c => c.name === "summary-notice").length, 1);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { operation: "send", requestId }), context)).status, 400);
 });

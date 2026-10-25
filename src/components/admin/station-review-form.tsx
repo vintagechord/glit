@@ -145,7 +145,7 @@ export function StationReviewForm({
             <option value="">등급 선택</option>
             <option value="ALL">전체 시청가</option><option value="12">12세 이상 시청가</option><option value="15">15세 이상 시청가</option><option value="19">19세 이상 시청가</option>
           </select>
-          <span className="block text-xs text-muted-foreground">선택한 방송사의 결과만 변경됩니다. 저장 시 의뢰자에게 이메일로 알립니다.</span>
+          <span className="block text-xs text-muted-foreground">선택한 방송사의 결과를 저장합니다. 모든 결과를 확인한 뒤 결과 안내에서 이메일을 따로 발송해주세요.</span>
         </label>
       ) : null}
       {trackStates.length > 0 ? (

@@ -30,7 +30,7 @@ async function fixture() {
             export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.memberEmail}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){let update;const chain={select(){return chain},eq(){return chain},update(value){update=value;calls.push({name:'record',input:value});return chain},async maybeSingle(){return {data:table==='profiles'?{phone:null}:state.submission,error:null}},then(resolve){resolve({error:state.recordError?{message:'record failed'}:null,data:update})}};return chain}};`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:{id:'admin'}}})},rpc:async()=>({data:state.isAdmin})});`,
-          "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',input});if(state.throwEmail)throw Error('transport failure');return state.emailResult}; export const sendResultEmail=async input=>{calls.push({name:'result',input});return state.emailResult};`,
+          "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',input});if(state.throwEmail)throw Error('transport failure');return state.emailResult}; export const sendResultEmail=async input=>{calls.push({name:'result',input});return state.emailResult}; export const sendReviewSummaryEmail=async()=>{throw Error('Unexpected aggregate send')}; export const renderReviewSummaryEmail=()=>{throw Error('Unexpected aggregate preview')};`,
           "@/lib/email-attachments": `${shared}
             export {inspectOnlineMvBundleReadiness,EmailAttachmentError} from '${process.cwd()}/src/lib/email-attachments';
             export const prepareOnlineMvAttachmentRefs=async submission=>{calls.push({name:'prepare'});if(state.attachmentError)throw Error('fixture asset unavailable');return ['rating-image','usage-guide','certificate'].map(kind=>({kind,objectKey:kind==='certificate'?submission.certificate_b2_path:kind,sha256:kind,submissionId:submission.id,rating:submission.mv_desired_rating,certificateKey:submission.certificate_b2_path}));};`,
@@ -115,7 +115,7 @@ test("result emails omit notes and delegate acceptance audit metadata to the dur
   assert.equal(api.calls.find(call => call.name === "result")?.input?.submissionId, update.submissionId);
 });
 
-test("active MV rating API authorizes, notifies only a committed change once, and reports delivery warnings", async () => {
+test("active MV rating API authorizes and saves without result notification", async () => {
   const api = await fixture();
   const request = () => new Request("https://fixture.invalid/api", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ rating: "REJECT", expectedUpdatedAt: "2026-10-25T00:00:00Z" }) });
   const invoke = () => api.PATCH(request() as Parameters<typeof api.PATCH>[0], { params: Promise.resolve({ id: update.submissionId }) });
@@ -124,22 +124,14 @@ test("active MV rating API authorizes, notifies only a committed change once, an
   assert.equal(api.calls.length, 0);
   api.state.isAdmin = true; api.state.completionError = "저장 실패";
   assert.equal((await invoke()).status, 500);
-  assert.equal(api.calls.filter((call) => call.name === "result").length, 0);
-  api.state.completionError = null; api.state.emailResult = { ok: false }; api.calls.length = 0;
+  assert.equal(api.calls.filter(call => ["email", "result", "prepare"].includes(call.name)).length, 0);
+  api.state.completionError = null; api.calls.length = 0;
   const response = await invoke();
   assert.equal(response.status, 200);
-  assert.match((await response.json()).warning, /발송에 실패/);
-  assert.equal(api.calls.filter((call) => call.name === "result").length, 1);
-  assert.equal(api.calls.find((call) => call.name === "commit")?.input?.rating, "REJECT");
-  assert.equal(api.calls.find(call => call.name === "result")?.input?.markResultNotified, true);
-  assert.equal(api.calls.find(call => call.name === "result")?.input?.submissionId, update.submissionId);
-  assert.ok(api.calls.findIndex((call) => call.name === "commit") < api.calls.findIndex((call) => call.name === "result"));
-  const initialNoticeKey = api.calls.find(call => call.name === "result")?.input?.idempotencyKey;
-  api.calls.length = 0;
+  assert.equal((await response.json()).notification, null);
+  assert.equal(api.calls.find(call => call.name === "commit")?.input?.rating, "REJECT");
   assert.equal((await (await invoke()).json()).unchanged, true);
-  assert.equal(api.calls.filter((call) => call.name === "result").length, 1, "unchanged saves retry the same durable notification key");
-  assert.equal(api.calls.find(call => call.name === "result")?.input?.idempotencyKey, initialNoticeKey);
-  assert.equal(api.calls.filter((call) => call.name === "commit").length, 1, "atomic RPC verifies station state before declaring a no-op");
+  assert.equal(api.calls.filter(call => ["email", "result", "prepare"].includes(call.name)).length, 0);
 });
 
 
@@ -198,7 +190,7 @@ test("online bundle file failure is truthful and rejection sends no approval att
   assert.equal(api.calls.find(call => call.name === "result")?.input?.attachmentRefs, undefined);
 });
 
-test("grade route requires the displayed revision, reports conflicts, and waits for certificate", async () => {
+test("grade route requires the displayed revision, reports conflicts, and saves without preparing email", async () => {
   const api = await fixture();
   const invoke = (body: object) => api.PATCH(new Request("https://fixture.invalid/api", { method: "PATCH", body: JSON.stringify(body), headers: { "content-type": "application/json" } }) as Parameters<typeof api.PATCH>[0], { params: Promise.resolve({ id: update.submissionId }) });
   assert.equal((await invoke({ rating: "12" })).status, 400);
@@ -211,7 +203,6 @@ test("grade route requires the displayed revision, reports conflicts, and waits 
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.rating, "19");
-  assert.equal(body.pendingAssets, true);
-  assert.equal(body.deliveredCount, 0);
+  assert.equal(body.notification, null);
   assert.equal(api.calls.filter(call => ["email", "result", "prepare"].includes(call.name)).length, 0);
 });
