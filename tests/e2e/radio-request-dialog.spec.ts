@@ -158,14 +158,15 @@ test("a rejected broadcaster cannot open a song request guide", async ({ page })
   await expect(page.getByRole("button", { name: "라디오 신청 가이드", exact: true })).toHaveCount(0);
 });
 
-test("video approval shows a separate audio review requirement without generating a song request", async ({ page }) => {
+test("video approval never opens a song request guide", async ({ page }) => {
+  // Radio requests are for audio; a music video approval is not an audio approval.
   await mount(page, "mv");
-  await page.getByRole("button", { name: /Arirang · 적격/ }).click();
-  const dialog = page.getByRole("dialog", { name: /Arirang.*라디오 신청 가이드/ });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("뮤직비디오 적격은 음원 적격과 별개입니다. 라디오 신청 전 해당 음원의 심의 결과를 확인하세요.")).toBeVisible();
-  await expect(dialog.getByLabel("신청할 적격 곡")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "본문 복사" })).toHaveCount(0);
+  const station = page.getByRole("button", { name: /Arirang · 적격/ });
+  await expect(station).toBeVisible();
+  await station.click();
+  await expect(page.getByRole("button", { name: /라디오 신청 가이드/ })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /라디오 신청 가이드/ })).toHaveCount(0);
+  await expect(page.getByTestId("broadcast-support")).toHaveCount(0);
 });
 
 test("the station dialog shares its draft with the main panel without background focus stealing", async ({ page }) => {

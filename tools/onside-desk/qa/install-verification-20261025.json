@@ -1,0 +1,58 @@
+{
+  "verifiedAt": "2026-10-25T09:35:37.478Z",
+  "appVersion": "2.0.0",
+  "signatureValid": true,
+  "launchAgentRunning": true,
+  "loopbackListener": true,
+  "unauthenticatedApiStatus": 403,
+  "authenticatedStateStatus": 200,
+  "sourceConnected": true,
+  "resultsConfigured": true,
+  "caseCount": 11,
+  "lastSync": "2026-10-25T09:35:09.613Z",
+  "connectionConfigMode": "600",
+  "serviceUrlConfigured": true,
+  "adminIdentityConfigured": true,
+  "secretExposureDetected": false,
+  "hostedHealthStatus": 200,
+  "hostedHealthProtocol": 2,
+  "hostedSchemaReady": true,
+  "hostedResultStatus": 200,
+  "installedSourceFiles": [
+    {
+      "file": "server.mjs",
+      "matches": true
+    },
+    {
+      "file": "remote.mjs",
+      "matches": true
+    },
+    {
+      "file": "public/app.js",
+      "matches": true
+    },
+    {
+      "file": "public/index.html",
+      "matches": true
+    },
+    {
+      "file": "public/styles.css",
+      "matches": true
+    },
+    {
+      "file": "README.md",
+      "matches": true
+    }
+  ],
+  "uiRegressionChecks": [
+    "lean snapshot retains payment and updates service status",
+    "three email attachments combined18MB guidance"
+  ],
+  "uiSmokeFlowCount": 16,
+  "liveServiceWritesPerformed": false,
+  "emailRequestsPerformed": false,
+  "nativeWindowReopened": false,
+  "nativeWindowRefreshed": true,
+  "nativeVersionVisible": "2.0",
+  "nativeLayoutVerified": true
+}

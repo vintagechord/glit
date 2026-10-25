@@ -1,0 +1,46 @@
+{
+  "references": [
+    {
+      "name": "앨범정보_예시.docx",
+      "sha256": "a0b3a1aec448df82f3dbf03a30d175dd0c2b4b31a6802d9fb2d7b54e096c0a1f"
+    },
+    {
+      "name": "PBC신청서_예시.hwp",
+      "sha256": "20eadddd5bbcf781670f254fd7bf40a494a220c2935daadd1400a8178e2cd8e4"
+    },
+    {
+      "name": "음반심의_서류생성_최신프롬프트_20261007_예시양식준수.docx",
+      "sha256": "6ba06823fa600528f8ef9647c4a6aef9e04e19bd6f045ed3b895ef28f8bbdf41"
+    },
+    {
+      "name": "TBS신청서_예시.hwp",
+      "sha256": "fc8406486bb9cfdae5af95ac4eb12d1b5fc33590b7b8f633fed672c735c0a145"
+    },
+    {
+      "name": "가사 트랙별 개별 파일_예시.hwp",
+      "sha256": "cbca86edcdabbc609fde3d346acc8b65dae6d2fd01d3f49e1d611b368fde046a"
+    },
+    {
+      "name": "가사전체파일_예시.hwp",
+      "sha256": "9891ba61142a99336414527f0d0f029bcb8d635546068dd7a06904b0a4692830"
+    },
+    {
+      "name": "WBS신청서_예시.hwp",
+      "sha256": "5e2eb15bea87de5ba03fe33576028ce82ec9ee93d159af0a2981f47e44dbfee0"
+    },
+    {
+      "name": "가요심의요청서_예시.hwp",
+      "sha256": "860226d294bf5c4c0a8aed3b955cf629550112f18bb7058744c52e3c8232e55a"
+    }
+  ],
+  "mapping": {
+    "PBC": "PBC신청서_예시.hwp — 심의 음반 접수 목록",
+    "TBS": "TBS신청서_예시.hwp — 음원심의신청서",
+    "WBS": "WBS신청서_예시.hwp"
+  },
+  "notes": [
+    "기존 저장소의 HWP 기반 DOCX 변환 양식을 사용하고, 20261007 프롬프트대로 첨부 파일명 기준을 복원함",
+    "심의폼 예시가 별도 첨부되지 않아 앨범정보 예시와 기존 동일 양식 사용",
+    "가요심의요청서 상단 반복 속성 제거, 타이틀 [T] 슬롯 적용, 원본에 없는 담당자 이메일 제거"
+  ]
+}

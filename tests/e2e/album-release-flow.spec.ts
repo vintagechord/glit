@@ -182,16 +182,21 @@ test("asks release status before showing packages and uses the same prices for b
   await expect(page.getByText("URL 접수 추가금 0원", { exact: true })).toHaveCount(0);
 });
 
-test("prerelease albums open the online application directly and preserve entered information", async ({ page }) => {
+test("prerelease albums choose online or file applications and preserve entered information", async ({ page }) => {
   await page.goto(albumPath);
   await releaseChoice(page, false).click();
   await page.getByRole("button", { name: "신청서 작성으로 계속" }).click();
-  await expect(page.getByRole("radio", { name: /온라인 작성/ })).toHaveCount(0);
+  // Unreleased albums choose between the online form and an uploaded form.
+  await expect(page.getByRole("radio", { name: /온라인 작성/ })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /파일로 제출/ })).toBeVisible();
+  await page.getByRole("radio", { name: /온라인 작성/ }).click();
+  await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toContainText("온라인 신청서 작성");
   await expect(page.getByRole("heading", { name: "기본 정보", exact: true })).toBeVisible();
   await page.locator('[data-preflight-field="title"]').fill("발매 전 앨범");
   await expect(page.locator("#released-album-url")).not.toBeVisible();
 
+  // Going back from the form returns to the release choice.
   await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await releaseChoice(page, true).click();
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
@@ -199,6 +204,8 @@ test("prerelease albums open the online application directly and preserve entere
   await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await releaseChoice(page, false).click();
   await page.getByRole("button", { name: "신청서 작성으로 계속" }).click();
+  await page.getByRole("radio", { name: /온라인 작성/ }).click();
+  await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
   await expect(page.locator('[data-preflight-field="title"]')).toHaveValue("발매 전 앨범");
 });
 
@@ -288,7 +295,7 @@ test("rejects song URLs before advancing to audio attachment", async ({ page }) 
   await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill("https://www.melon.com/song/detail.htm?songId=1234567");
   await fillApplicant(page);
   await page.getByRole("button", { name: "저장하고 음원 첨부" }).click();
-  await expect(page.getByRole("alertdialog", { name: "입력 확인" })).toContainText("곡·아티스트 링크는 사용할 수 없습니다.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("곡·아티스트 링크는 사용할 수 없습니다.");
   await expect(page.getByRole("heading", { name: "URL과 접수자 정보" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
 });
@@ -341,17 +348,20 @@ for (const width of [390, 1440]) {
     await capture("packages");
     await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
     await expect(page.getByRole("heading", { name: "URL과 접수자 정보" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toBeInViewport();
+    // A new step scrolls to just below the sticky header; its content must be on screen.
+    await expect(page.locator("[data-submission-step]").first()).toBeInViewport();
     await capture("url-entry");
     await page.getByLabel("멜론·지니 앨범 URL *", { exact: true }).fill("https://www.genie.co.kr/detail/albumInfo?axnm=1234567");
     await fillApplicant(page);
     await saveUrlAndOpenUpload(page);
-    await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toBeInViewport();
+    // A new step scrolls to just below the sticky header; its content must be on screen.
+    await expect(page.locator("[data-submission-step]").first()).toBeInViewport();
     await capture("audio-upload-required");
     await uploadAudio(page, "zip");
     await capture("audio-upload-complete");
     await openFinalReview(page, "https://www.genie.co.kr/detail/albumInfo?axnm=1234567");
-    await expect(page.getByRole("navigation", { name: "신청 진행 단계" })).toBeInViewport();
+    // A new step scrolls to just below the sticky header; its content must be on screen.
+    await expect(page.locator("[data-submission-step]").first()).toBeInViewport();
     await capture("final-review");
   });
 }

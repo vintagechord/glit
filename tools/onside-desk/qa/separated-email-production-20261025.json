@@ -1,0 +1,118 @@
+{
+  "checkedAt": "2026-10-25T11:51:48.049Z",
+  "readOnly": true,
+  "checks": [
+    {
+      "name": "database_protocol_2",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "station_age_rating_column",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "outbox_attachment_refs_column",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "public_health",
+      "ok": true,
+      "http": 200,
+      "errorCount": 0,
+      "warningCount": 1
+    },
+    {
+      "name": "unsigned_desk_rejected",
+      "ok": true,
+      "http": 401
+    },
+    {
+      "name": "unsigned_relay_rejected",
+      "ok": true,
+      "http": 401
+    },
+    {
+      "name": "signed_desk_protocol_2",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "separated_email_capabilities",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "snapshot_1",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "email_preview_1",
+      "ok": true,
+      "http": 200,
+      "attachmentCount": 0,
+      "canSend": true,
+      "missingAssets": [],
+      "warnings": []
+    },
+    {
+      "name": "snapshot_2",
+      "ok": true,
+      "http": 200
+    },
+    {
+      "name": "email_preview_2",
+      "ok": true,
+      "http": 200,
+      "attachmentCount": 3,
+      "canSend": false,
+      "missingAssets": [],
+      "warnings": [
+        "수신 이메일을 확인하지 못했습니다."
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "type": "MV_BROADCAST",
+      "skipped": "no_matching_record",
+      "http": 200
+    },
+    {
+      "sample": 1,
+      "type": "ALBUM",
+      "http": 200,
+      "ok": true,
+      "stationCount": 10,
+      "trackCount": 1,
+      "privateStoragePointerOmitted": true,
+      "assets": [],
+      "emailPreview": {
+        "ok": true,
+        "http": 200,
+        "attachmentCount": 0,
+        "canSend": true
+      }
+    },
+    {
+      "sample": 2,
+      "type": "MV_DISTRIBUTION",
+      "http": 200,
+      "ok": true,
+      "stationCount": 1,
+      "trackCount": 0,
+      "privateStoragePointerOmitted": true,
+      "assets": [],
+      "emailPreview": {
+        "ok": true,
+        "http": 200,
+        "attachmentCount": 3,
+        "canSend": false
+      }
+    }
+  ],
+  "ok": true
+}
