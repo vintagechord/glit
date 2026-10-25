@@ -165,6 +165,8 @@ test("signed recovery waits for explicit submit, reports validation and completi
   await expect(page.getByRole("main").getByRole("alert")).toContainText("비밀번호가 일치하지 않습니다.");
   delete actionResult.fieldErrors;
   actionResult.message = "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.";
+  // React resets the uncontrolled password fields after a server action response.
+  await page.locator("#reset-new-password").fill(fixturePassword);
   await page.locator("#reset-confirm-password").fill(fixturePassword);
   await page.getByRole("button", { name: "비밀번호 변경", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("비밀번호가 변경되었습니다.");

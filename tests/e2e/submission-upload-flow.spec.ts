@@ -85,10 +85,19 @@ async function openFileSubmission(page: Page, kind: "album" | "mv") {
   await page.getByRole("radio", { name: /파일로 제출/ }).click();
   await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
   await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  // Guests leave contact details even when the form itself is uploaded.
+  await fillGuestContact(page, kind);
   await page.getByRole("button", { name: kind === "album" ? "다음 단계" : "파일 업로드로 이동", exact: true }).click();
   const files = page.locator('[data-preflight-field="files"]');
   await expect(files.locator('input[type="file"]')).toBeEnabled();
   return files;
+}
+
+async function fillGuestContact(page: Page, kind: "album" | "mv") {
+  const prefix = kind === "album" ? "applicant" : "guest";
+  await page.locator(`[data-preflight-field="${prefix}Name"]`).fill("검증 접수자");
+  await page.locator(`[data-preflight-field="${prefix}Email"]`).fill("guest-upload@example.invalid");
+  await page.locator(`[data-preflight-field="${prefix}Phone"]`).fill("01012345678");
 }
 
 for (const kind of ["album", "mv"] as const) {
@@ -173,6 +182,7 @@ test("English album email delivery retains the application ID and does not claim
   await page.getByRole("radio", { name: /Submit a File/ }).click();
   await page.getByRole("button", { name: "Continue with Selection", exact: true }).click();
   await page.locator('[data-preflight-field="aiUsed"]').getByRole("button").first().click();
+  await fillGuestContact(page, "album");
   await page.getByRole("button", { name: "Next Step", exact: true }).click();
   await page.getByRole("button", { name: "Send Files Later by Email", exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy Email Subject", exact: true })).toBeVisible();
