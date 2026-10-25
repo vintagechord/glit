@@ -51,7 +51,7 @@ test("broadcast forms require a rating and publish independent KBS/MBC grades to
   await page.getByLabel("KBS 연령 등급").selectOption("12");
   await form(page, "KBS").getByRole("button", { name: "저장", exact: true }).click();
   await expect(requester.getByRole("button", { name: /KBS · 12세 이상 시청가/ })).toBeVisible();
-  await expect(requester.getByRole("button", { name: /MBC · 결과대기/ })).toBeVisible();
+  await expect(requester.getByRole("button", { name: /MBC · 접수완료/ })).toBeVisible();
   await page.getByLabel("MBC 심의 상태", { exact: true }).selectOption("APPROVED");
   await page.getByLabel("MBC 연령 등급").selectOption("15");
   await form(page, "MBC").getByRole("button", { name: "저장", exact: true }).click();

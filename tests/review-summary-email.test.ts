@@ -35,7 +35,7 @@ const previewInput = { submissionId: id };
 test("preview is read-only, masked, includes all requested stations, and exactly matches the sent HTML", async () => {
   const api = await fixture();const preview = await api.getReviewSummaryEmailPreviewById(previewInput);
   assert.equal(preview.canSend,true);assert.equal(preview.recipientMasked,'ar***@example.invalid');assert.equal(api.calls.length,0);
-  for(const value of ['KBS','MBC','SBS','결과대기','접수대기','전체 심의 현황 확인','1곡 적격'])assert.ok(preview.html.includes(value),value);
+  for(const value of ['KBS','MBC','SBS','접수완료','접수예정','전체 심의 현황 확인','1곡 적격'])assert.ok(preview.html.includes(value),value);
   assert.doesNotMatch(preview.html,/artist@example\.invalid|fictional-guest-link/);
   assert.match(preview.html,/\/dashboard\/submissions\//);
   const outcome=await api.sendReviewSummaryNotificationById({...previewInput,requestId,expectedRevision:preview.revision,expectedUpdatedAt:preview.updatedAt});
@@ -84,7 +84,7 @@ test("online sends keep three attachments, reject missing files, and revalidate 
 
 test("broadcast summary includes each age rating and online rejection has no approval attachments", async () => {
   const api=await fixture();api.state.submission.type='MV_BROADCAST';api.state.stations[0].review.age_rating='15';
-  let preview=await api.getReviewSummaryEmailPreviewById(previewInput);assert.match(preview.html,/15세 이상 시청가/);assert.match(preview.html,/접수대기/);
+  let preview=await api.getReviewSummaryEmailPreviewById(previewInput);assert.match(preview.html,/15세 이상 시청가/);assert.match(preview.html,/접수예정/);
   Object.assign(api.state.submission,{type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'REJECTED',mv_desired_rating:'REJECT'});
   preview=await api.getReviewSummaryEmailPreviewById(previewInput);assert.equal(preview.canSend,true);assert.equal(preview.attachmentCount,0);
   await api.sendReviewSummaryNotificationById({...previewInput,requestId,expectedRevision:preview.revision});assert.equal(api.calls.some(call=>call.kind==='prepare'),false);assert.equal(api.calls.find(call=>call.kind==='send')!.mail!.attachmentRefs,undefined);

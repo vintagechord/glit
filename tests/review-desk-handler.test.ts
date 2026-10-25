@@ -32,6 +32,7 @@ function fixture() {
     async loadSnapshot() { calls.push({ name: "snapshot" }); if (state.snapshotThrows) throw Error("private read error"); return state.snapshot; },
     async downloadAsset(_db, id, kind) { calls.push({ name: "download", input: { id, kind } }); return new Response("fixture-pdf", { headers: { "Content-Type": "application/pdf" } }); },
     async saveStation(_db, input) { calls.push({ name: "station", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: state.changed, changeKey: "revision-2", stationName: "KBS", submissionStatus: "RESULT_READY", row: { id: "review", submission_id: sid, station_id: stationId, status: "APPROVED", age_rating: "12", result_note: null, updated_at: revision } }; },
+    async saveStations(_db, input) { calls.push({ name: "bulk-stations", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: true, savedCount: input.stations.length }; },
     async saveOnline(_db, input) { calls.push({ name: "online", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: state.changed }; },
     async saveCertificate(_db, input) { calls.push({ name: "certificate", input: { ...input, body: input.body.toString() } }); return { ok: true, changed: state.changed, certificate: { objectKey: "private/b2/path.pdf", originalName: input.filename, uploadedAt: revision } }; },
     async previewEmail() { calls.push({ name: "preview" }); return { subject: "현재 결과", html: "<p>KBS: 12세 · MBC: 15세</p>", recipientMasked: "te***@example.test", revision: previewRevision, updatedAt: revision, canSend: true, missingAssets: [], warnings: [], attachmentCount: 0 }; },
@@ -168,4 +169,16 @@ test("multiple broadcaster saves and email preview cause zero mail until one exp
   assert.equal(response.status, 200);
   assert.equal(f.calls.filter(c => c.name === "summary-notice").length, 1);
   assert.equal((await f.handlers.POST(signedRequest("POST", { operation: "send", requestId }), context)).status, 400);
+});
+
+
+test("signed bulk saves return one refreshed snapshot and never send mail", async () => {
+  const f=fixture();
+  const input={operation:"bulk-stations",stations:[{stationId,reviewId:null,expectedUpdatedAt:revision}],status:"SENT",requestId};
+  const response=await f.handlers.POST(signedRequest("POST",input),context);
+  assert.equal(response.status,200);const body=await response.json();assert.equal(body.savedCount,1);assert.equal(body.notification,null);
+  assert.equal(f.calls.filter(c=>c.name==="bulk-stations").length,1);assert.ok(!f.calls.some(c=>c.name.includes("notice")));
+  const saved=f.calls.find(c=>c.name==="bulk-stations")!.input as Record<string,unknown>;assert.equal(saved.actorUserId,actor);assert.equal(saved.submissionId,sid);
+  f.state.saveError="CONFLICT";
+  assert.equal((await f.handlers.POST(signedRequest("POST",input),context)).status,409);
 });

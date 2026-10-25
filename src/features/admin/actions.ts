@@ -18,7 +18,7 @@ import {
   stationReviewStatusEnum,
   stationReviewStatusOptions,
 } from "@/constants/review-status";
-import { saveManagedStationReview } from "@/lib/admin/review-management";
+import { saveManagedStationReview, saveManagedStationReviews, type BulkStationReviewInput } from "@/lib/admin/review-management";
 import { sendReviewSummaryNotificationById, sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -138,6 +138,7 @@ const stationReviewPayloadSchema = z.object({
   status: stationReviewStatusEnum,
   resultNote: z.string().optional(),
   trackResults: z.array(trackResultSchema).optional(),
+  applyOverallStatus: z.boolean().optional(),
   expectedUpdatedAt: z.string().datetime({ offset: true }).nullable(),
   ageRating: z.enum(["ALL", "12", "15", "19"]).nullable().optional(),
 });
@@ -155,14 +156,13 @@ const normalizeUuid = (value?: string | null) => {
 };
 
 const revalidateUserDashboards = (submissionId?: string) => {
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/history");
-  revalidatePath("/dashboard/status");
-  revalidatePath("/mypage");
-  revalidatePath("/mypage/history");
-  if (submissionId) {
-    revalidatePath(`/dashboard/submissions/${submissionId}`);
-    revalidatePath(`/mypage/submissions/${submissionId}`);
+  for (const prefix of ["", "/en"]) {
+    for (const path of ["/dashboard", "/dashboard/history", "/dashboard/status", "/mypage", "/mypage/history"]) revalidatePath(`${prefix}${path}`);
+    if (submissionId) {
+      revalidatePath(`${prefix}/dashboard/submissions/${submissionId}`);
+      revalidatePath(`${prefix}/mypage/submissions/${submissionId}`);
+    }
+    revalidatePath(`${prefix}/track/[token]`, "page");
   }
 };
 
@@ -769,9 +769,23 @@ export async function updateStationReviewAction(
   if (!result.ok || !result.row) return { error: result.error ?? "심의 결과를 저장하지 못했습니다." };
   if (!result.changed) return { message: "변경된 내용이 없습니다.", row: result.row };
   revalidatePath("/admin/submissions");
-  revalidatePath(`/admin/submissions/detail?id=${input.submissionId}`);
+  revalidatePath("/admin/submissions/detail");
+  revalidatePath(`/admin/submissions/${input.submissionId}`);
   revalidateUserDashboards(input.submissionId);
   return { message: "심의 결과가 저장되었습니다. 이메일은 결과 안내에서 따로 발송해주세요.", row: result.row };
+}
+
+export async function updateStationReviewsBulkAction(payload: Omit<BulkStationReviewInput, "actorUserId">): Promise<AdminActionState> {
+  const actor = await requireAdminAction();
+  const result = await saveManagedStationReviews(createAdminClient(), { ...payload, actorUserId: actor.id });
+  if (!result.ok) return { error: result.error ?? "선택한 방송사를 저장하지 못했습니다." };
+  for (const prefix of ["", "/en"]) {
+    revalidatePath(`${prefix}/admin/submissions`);
+    revalidatePath(`${prefix}/admin/submissions/detail`);
+    revalidatePath(`${prefix}/admin/submissions/${payload.submissionId}`);
+  }
+  revalidateUserDashboards(payload.submissionId);
+  return { message: `${result.savedCount ?? payload.stations.length}개 방송사의 결과를 저장했습니다. 이메일은 별도로 발송해주세요.` };
 }
 
 export async function updateStationReviewFormAction(
@@ -928,6 +942,7 @@ export async function updateStationReviewFormAction(
     trackResults,
     expectedUpdatedAt,
     ageRating: ageRating as "ALL" | "12" | "15" | "19" | null,
+    applyOverallStatus: getFormValue("apply_overall_status") === "true",
   });
   if (result.error) {
     console.error("[station_review][form][save][error]", {

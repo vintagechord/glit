@@ -49,13 +49,11 @@ export function StationReviewForm({
   maxDecidedTracks,
 }: StationReviewFormProps) {
   const formId = React.useId();
-  const normalizedInitialStatus = maxDecidedTracks && initialStatus !== "NEEDS_FIX" ? "SENT" : statusOptions.some(
-    (option) => option.value === initialStatus,
-  )
-    ? initialStatus
-    : "SENT";
+  const normalizedInitialStatus = statusOptions.some(option => option.value === initialStatus)
+    ? initialStatus : initialStatus === "RECEIVED" ? "SENT" : "NOT_SENT";
   const [stationStatus, setStationStatus] = React.useState(normalizedInitialStatus);
   const [stationMemo, setStationMemo] = React.useState(initialMemo ?? "");
+  const [applyOverallStatus, setApplyOverallStatus] = React.useState(false);
   const [trackStates, setTrackStates] = React.useState(
     trackResults.map((track) => ({
       id: track.id ?? null,
@@ -89,6 +87,7 @@ export function StationReviewForm({
       <input type="hidden" name="review_id" value={reviewId ?? ""} />
       <input type="hidden" name="track_results_json" value={trackResultsJson} />
       <input type="hidden" name="expected_updated_at" value={expectedUpdatedAt ?? ""} />
+      <input type="hidden" name="apply_overall_status" value={String(applyOverallStatus)} />
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
 
       <div className="min-w-0 self-center">
@@ -108,7 +107,8 @@ export function StationReviewForm({
           onChange={(e) => {
             const status = e.target.value;
             setStationStatus(status);
-            if (["APPROVED", "REJECTED", "SENT", "NOT_SENT", "RECEIVED"].includes(status)) {
+            setApplyOverallStatus(true);
+            if (["APPROVED", "REJECTED", "SENT", "NOT_SENT", "RECEIVED", "NEEDS_FIX"].includes(status)) {
               setTrackStates((prev) => prev.map((track) => ({
                 ...track,
                 status: ["APPROVED", "REJECTED"].includes(status) ? status : "PENDING",
@@ -182,6 +182,7 @@ export function StationReviewForm({
                         i === index ? { ...t, status: e.target.value } : t,
                       );
                       setTrackStates(next);
+                      setApplyOverallStatus(false);
                       if (stationStatus !== "NEEDS_FIX") {
                         setStationStatus(next.some((track) => track.status === "PENDING")
                           ? "SENT"

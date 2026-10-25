@@ -14,5 +14,7 @@ review_psql() { docker exec --interactive "$review_sql_container" psql -X -U pos
 review_psql < "$review_sql_root/tests/sql/review-management-bootstrap.sql"
 review_psql < "$review_sql_root/supabase/migrations/20261023212253_certificate_result_history.sql"
 review_psql < "$review_sql_root/supabase/migrations/20261025080739_station_review_management.sql"
+review_psql < "$review_sql_root/supabase/migrations/20261025123610_station_review_bulk_save.sql"
 review_psql < "$review_sql_root/tests/sql/review-management.sql"
+review_psql < "$review_sql_root/tests/sql/station-review-bulk.sql"
 echo "Shared web/Mac review SQL integration passed; disposable database will be removed."

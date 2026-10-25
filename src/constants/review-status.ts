@@ -76,19 +76,20 @@ export const stationReviewStatusOptions: Array<{
   value: StationReviewStatus;
   label: string;
 }> = [
+  { value: "NOT_SENT", label: "접수예정" },
   { value: "SENT", label: "접수완료" },
   { value: "APPROVED", label: "적격" },
   { value: "REJECTED", label: "부적격" },
-  { value: "NEEDS_FIX", label: "수정요청" },
+  { value: "NEEDS_FIX", label: "보완 요청" },
 ];
 
 export const stationReviewStatusLabelMap: Record<StationReviewStatus, string> = {
-  NOT_SENT: "대기",
+  NOT_SENT: "접수예정",
   SENT: "접수완료",
   RECEIVED: "접수완료",
   APPROVED: "적격",
   REJECTED: "부적격",
-  NEEDS_FIX: "수정요청",
+  NEEDS_FIX: "보완 요청",
 };
 
 export const normalizeStationReviewStatus = (

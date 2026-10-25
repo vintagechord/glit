@@ -54,13 +54,13 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt }: { submissio
     finally { pending.current = false; setBusy(null); }
   }
   return (
-    <section className="rounded-[28px] border border-border/60 bg-card/80 p-6" aria-label="결과 이메일 안내">
-      <h2 className="text-base font-semibold">결과 이메일 안내</h2>
+    <section id="result-email" className="rounded-[28px] border border-border/60 bg-card/80 p-6" aria-label="결과 이메일 안내">
+      <h2 className="text-base font-semibold">현재 결과 이메일 발송</h2>
       <p className="mt-2 text-sm text-muted-foreground">방송사별 결과와 필증을 먼저 저장한 뒤, 저장된 현재 결과를 한 통의 이메일로 안내합니다.</p>
       <p className="mt-2 text-xs text-muted-foreground">{lastNotifiedAt ? `마지막 결과 이메일 접수: ${new Date(lastNotifiedAt).toLocaleString("ko-KR")}` : "현재 저장된 결과의 이메일 발송 기록이 없습니다."}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={loadPreview} disabled={busy !== null} className="rounded-full border border-border px-4 py-2 text-sm font-semibold disabled:opacity-50">
-          {busy === "preview" ? "미리보기 준비 중…" : "이메일 미리보기"}
+        <button type="button" onClick={loadPreview} disabled={busy !== null} className="rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background disabled:opacity-50">
+          {busy === "preview" ? "미리보기 준비 중…" : "이메일 발송 · 현재 결과 확인"}
         </button>
         <a href="/admin/emails" className="text-sm underline">이메일 발송 내역</a>
       </div>

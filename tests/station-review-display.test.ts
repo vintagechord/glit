@@ -6,15 +6,15 @@ import { getStationReviewDisplayStatus } from "../src/lib/station-review-display
 test("station display status maps waiting submission and waiting result", () => {
   assert.equal(
     getStationReviewDisplayStatus({ status: "NOT_SENT" }).label,
-    "접수대기",
+    "접수예정",
   );
   assert.equal(
     getStationReviewDisplayStatus({ status: "SENT" }).label,
-    "결과대기",
+    "접수완료",
   );
   assert.equal(
     getStationReviewDisplayStatus({ status: "RECEIVED" }).label,
-    "결과대기",
+    "접수완료",
   );
 });
 
@@ -24,7 +24,7 @@ test("station display status prioritizes action-needed and final results", () =>
       status: "NEEDS_FIX",
       track_results: [{ status: "APPROVED" }],
     }).label,
-    "보완요청",
+    "보완 요청",
   );
   assert.equal(
     getStationReviewDisplayStatus({
@@ -55,7 +55,7 @@ test("station display status does not finish review while any track is pending",
     { showPartialTrackBreakdown: true },
   );
 
-  assert.equal(status.label, "심의중");
+  assert.equal(status.label, "접수완료");
   assert.equal(status.isComplete, false);
   assert.equal(status.summaryText, "1곡 적격 / 1곡 부적격 / 1곡 대기");
 });
@@ -107,6 +107,6 @@ test("broadcast ratings are station-specific final labels without changing album
   assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "12" }).label, "12세 이상 시청가");
   assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "ALL" }).label, "전체 시청가");
   assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: null }).label, "적격");
-  assert.equal(getStationReviewDisplayStatus({ status: "NEEDS_FIX", age_rating: "19" }).label, "보완요청");
+  assert.equal(getStationReviewDisplayStatus({ status: "NEEDS_FIX", age_rating: "19" }).label, "보완 요청");
   assert.equal(getStationReviewDisplayStatus({ status: "REJECTED", age_rating: "19" }).label, "부적격");
 });

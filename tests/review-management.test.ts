@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { saveManagedOnlineReview, saveManagedStationReview, type ManagedStationReviewInput } from "../src/lib/admin/review-management";
+import { saveManagedOnlineReview, saveManagedStationReview, saveManagedStationReviews, type ManagedStationReviewInput } from "../src/lib/admin/review-management";
 
 const sid = "11111111-1111-4111-8111-111111111111";
 const actor = "22222222-2222-4222-8222-222222222222";
@@ -21,7 +21,7 @@ function fixture({ type = "MV_BROADCAST", code = "KBS", previous = { updated_at:
     },
     async rpc(name: string, args: Record<string, unknown>) {
       calls.push({ name, args });
-      return { data: rpcError ? null : { completed: true, changed: true, changeKey: "revision-2", submissionStatus: "IN_PROGRESS", row: { id: "review", status: args.p_status, age_rating: args.p_age_rating, track_results_json: args.p_track_results } }, error: rpcError };
+      return { data: rpcError ? null : { completed: true, changed: true, savedCount: Array.isArray(args.p_updates) ? args.p_updates.length : undefined, changeKey: "revision-2", submissionStatus: "IN_PROGRESS", row: { id: "review", status: args.p_status, age_rating: args.p_age_rating, track_results_json: args.p_track_results } }, error: rpcError };
     },
   } as unknown as SupabaseClient;
   return { db, calls };
@@ -102,4 +102,32 @@ test("WBS legacy unknown selection accepts three final IDs plus other pending fo
   assert.equal(saved.ok, true);
   assert.equal(f.calls[0].args.p_status, "APPROVED");
   assert.equal((f.calls[0].args.p_track_results as Row[]).length, 3);
+});
+
+
+test("explicit overall changes replace stale per-track decisions instead of reverting the selected state", async () => {
+  const tracks = [1, 2].map(no => ({ id: trackId(no), track_no: no }));
+  const old = tracks.map(t => ({ trackId: t.id, trackNo: t.track_no, status: "APPROVED" as const }));
+  const f = fixture({ type: "ALBUM", tracks, previous: { updated_at: revision, status: "APPROVED", track_results_json: old } });
+  for (const status of ["NOT_SENT", "SENT", "REJECTED", "NEEDS_FIX"] as const) {
+    const saved = await saveManagedStationReview(f.db, { ...input, status, ageRating: null, trackResults: old, applyOverallStatus: true });
+    assert.equal(saved.ok, true);
+    assert.equal(f.calls.at(-1)?.args.p_status, status);
+    assert.ok((f.calls.at(-1)?.args.p_track_results as Row[]).every(t => t.status === (status === "REJECTED" ? "REJECTED" : "PENDING")));
+  }
+});
+
+test("bulk validates every revision before one RPC, preserves notes, and forces the requested overall decision", async () => {
+  const tracks = [1, 2].map(no => ({ id: trackId(no), track_no: no }));
+  const f = fixture({ type: "ALBUM", tracks, previous: { updated_at: revision, status: "APPROVED", result_note: "기존 안내", track_results_json: tracks.map(t => ({track_id:t.id, track_no:t.track_no,status:"REJECTED"})) } });
+  const stations = [stationId, "55555555-5555-4555-8555-555555555555"].map(stationId => ({stationId,expectedUpdatedAt:revision}));
+  const saved = await saveManagedStationReviews(f.db, { actorUserId: actor, submissionId: sid, stations, status: "APPROVED" });
+  assert.equal(saved.ok,true);assert.equal(saved.savedCount,2);assert.equal(f.calls.length,1);assert.equal(f.calls[0].name,"save_station_review_results_bulk");
+  const entries = f.calls[0].args.p_updates as Row[];
+  assert.ok(entries.every(row=>row.resultNote === "기존 안내" && row.status === "APPROVED"));
+  assert.ok(entries.every(row=>(row.trackResults as Row[]).every(t=>t.status === "APPROVED")));
+  const stale = await saveManagedStationReviews(f.db,{actorUserId:actor,submissionId:sid,stations:[stations[0],{...stations[1],expectedUpdatedAt:null}],status:"SENT"});
+  assert.equal(stale.ok,false);assert.equal(stale.errorCode,"CONFLICT");assert.equal(f.calls.length,1);
+  const duplicate = await saveManagedStationReviews(f.db,{actorUserId:actor,submissionId:sid,stations:[stations[0],stations[0]],status:"SENT"});
+  assert.equal(duplicate.ok,false);assert.equal(f.calls.length,1);
 });

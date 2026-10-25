@@ -31,6 +31,7 @@ import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
+import { StationReviewBulkForm } from "@/components/admin/station-review-bulk-form";
 import { updateStationReviewFormAction } from "@/features/admin/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
@@ -1182,6 +1183,7 @@ export default async function AdminSubmissionDetailPage({
           </div>
 
 
+          <ReviewEmailControl key={`${submission.id}-${submission.updated_at}`} submissionId={submission.id} lastNotifiedAt={submission.result_notified_at} />
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1190,7 +1192,7 @@ export default async function AdminSubmissionDetailPage({
                     3. 접수 진행 / 4. 결과 저장
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    등급과 필증을 저장한 뒤 아래 결과 이메일 안내에서 미리보고 발송해주세요.
+                    등급과 필증을 저장한 뒤 결과 이메일 안내에서 미리보고 발송해주세요.
                   </p>
                 </div>
                 <span className="rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
@@ -1265,6 +1267,16 @@ export default async function AdminSubmissionDetailPage({
               </span>
             </div>
             <div className="mt-4 space-y-4">
+              {reviews.length > 0 ? <StationReviewBulkForm
+                key={`bulk-${submission.id}-${reviews.map(review => review.updated_at).join("-")}`}
+                submissionId={submission.id}
+                broadcast={submission.type === "MV_BROADCAST"}
+                stations={reviews.filter(review => review.station_id && uuidPattern.test(review.station_id)).map(review => {
+                  const station = Array.isArray(review.station) ? review.station[0] : review.station;
+                  const persisted = typeof review.id === "string" && uuidPattern.test(review.id);
+                  return { stationId: review.station_id!, reviewId: persisted ? review.id : null, expectedUpdatedAt: persisted ? review.updated_at : null, name: station?.name ?? station?.code ?? "방송사" };
+                })}
+              /> : null}
               {reviews.length > 0 ? (
                 reviews.map((review, reviewIndex) => {
                   const stationInfo = Array.isArray(review.station)
@@ -1328,14 +1340,14 @@ export default async function AdminSubmissionDetailPage({
                       stationId={review.station_id ?? null}
                       stationCode={stationInfo?.code ?? undefined}
                       stationName={stationInfo?.name ?? undefined}
-                      initialStatus={review.status === "RECEIVED" || review.status === "NOT_SENT" ? review.status : normalizeStationReviewStatus(review.status)}
+                      initialStatus={normalizeStationReviewStatus(review.status)}
                       initialMemo={review.result_note ?? ""}
                       expectedUpdatedAt={typeof review.id === "string" && uuidPattern.test(review.id) ? review.updated_at : null}
                       showAgeRating={submission.type === "MV_BROADCAST"}
                       initialAgeRating={review.age_rating ?? null}
                       trackResults={submission.type === "ALBUM" ? trackResults : []}
                       maxDecidedTracks={isWbsReview(stationInfo) && stationTracks.length > 3 ? 3 : undefined}
-                      statusOptions={[{ value: "NOT_SENT", label: "접수 대기" }, ...stationReviewStatusOptions, { value: "RECEIVED", label: "방송사 확인 완료" }]}
+                      statusOptions={stationReviewStatusOptions}
                       action={updateStationReviewFormAction}
                       returnTo={adminSubmissionListHref}
                     />
@@ -1349,7 +1361,7 @@ export default async function AdminSubmissionDetailPage({
             </div>
           </div>
           )}
-          <ReviewEmailControl key={`${submission.id}-${submission.updated_at}`} submissionId={submission.id} lastNotifiedAt={submission.result_notified_at} />
+
 
         </div>
 

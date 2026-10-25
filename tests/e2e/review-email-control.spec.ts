@@ -25,7 +25,7 @@ async function mount(page: Page) {
 test("preview includes all current broadcasters and sends one summary only after the explicit button", async ({ page }) => {
   const state = await mount(page);
   await expect(page.getByRole("button", { name: "이 내용으로 이메일 발송" })).toHaveCount(0);
-  await page.getByRole("button", { name: "이메일 미리보기", exact: true }).click();
+  await page.getByRole("button", { name: "이메일 발송 · 현재 결과 확인", exact: true }).click();
   await expect(page.frameLocator('iframe').getByText("KBS: 12세 이상 시청가")).toBeVisible();
   await expect(page.frameLocator('iframe').getByText("MBC: 15세 이상 시청가")).toBeVisible();
   await expect(page.frameLocator('iframe').getByText("SBS: 심의중")).toBeVisible();
@@ -40,13 +40,13 @@ test("preview includes all current broadcasters and sends one summary only after
 
 test("a changed preview is rejected and missing online attachments disable sending", async ({ page }) => {
   const state = await mount(page);
-  await page.getByRole("button", { name: "이메일 미리보기", exact: true }).click();
+  await page.getByRole("button", { name: "이메일 발송 · 현재 결과 확인", exact: true }).click();
   state.conflict = true;
   await page.getByRole("button", { name: "이 내용으로 이메일 발송", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("미리보기를 다시 확인");
   await expect(page.getByRole("button", { name: "이 내용으로 이메일 발송" })).toHaveCount(0);
   state.ready = false;
-  await page.getByRole("button", { name: "이메일 미리보기", exact: true }).click();
+  await page.getByRole("button", { name: "이메일 발송 · 현재 결과 확인", exact: true }).click();
   await expect(page.getByText("발송 준비 필요: 영등위 필증")).toBeVisible();
   await expect(page.getByRole("button", { name: "이 내용으로 이메일 발송" })).toBeDisabled();
   expect(state.sends).toHaveLength(1);

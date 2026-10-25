@@ -29,28 +29,28 @@ type StationDisplayStatusBase = {
 const statusMap: Record<StationDisplayStatusKey, StationDisplayStatusBase> = {
   WAITING_SUBMISSION: {
     key: "WAITING_SUBMISSION",
-    label: "접수대기",
+    label: "접수예정",
     tone: "bauhaus-status-chip--waiting",
     isComplete: false,
     needsAttention: false,
   },
   WAITING_RESULT: {
     key: "WAITING_RESULT",
-    label: "결과대기",
+    label: "접수완료",
     tone: "bauhaus-status-chip--info",
     isComplete: false,
     needsAttention: false,
   },
   IN_REVIEW: {
     key: "IN_REVIEW",
-    label: "심의중",
+    label: "접수완료",
     tone: "bg-violet-600 text-white dark:bg-violet-300 dark:text-[#06111f]",
     isComplete: false,
     needsAttention: false,
   },
   NEEDS_FIX: {
     key: "NEEDS_FIX",
-    label: "보완요청",
+    label: "보완 요청",
     tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
     isComplete: false,
     needsAttention: true,

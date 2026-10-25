@@ -11,6 +11,7 @@ export const stationManagementSchema = z.object({
   expectedUpdatedAt: z.string().datetime({ offset: true }).nullable(),
   status: z.enum(["NOT_SENT", "SENT", "RECEIVED", "APPROVED", "REJECTED", "NEEDS_FIX"]),
   resultNote: z.string().max(4000).optional(),
+  applyOverallStatus: z.boolean().optional(),
   ageRating: z.enum(broadcastRatingValues).nullable().optional(),
   trackResults: z.array(z.object({
     trackId: z.string().uuid().optional(), trackNo: z.number().int().positive().optional(),
@@ -32,16 +33,15 @@ export function reviewManagementError(error: { message?: string | null; code?: s
   if (message.includes("REVIEW_STATION_NOT_REQUESTED")) return failure("NOT_REQUESTED", "이 신청에 포함된 방송사만 수정할 수 있습니다.");
   if (message.includes("REVIEW_BROADCAST_PER_STATION_REQUIRED")) return failure("PER_STATION_REQUIRED", "방송용 MV는 신청 방송사별로 등급과 결과를 입력해주세요.");
   if (message.includes("REVIEW_RATING_REQUIRED")) return failure("RATING_REQUIRED", "방송용 MV 적격 결과에는 해당 방송사의 연령 등급을 선택해주세요.");
-  if (/REVIEW_(?:TRACK|RATING|MEMO|TYPE|STATUS|RESULT)_INVALID/.test(message)) return failure("INVALID", "심의 결과·등급·트랙 입력을 확인해주세요.");
+  if (/REVIEW_(?:TRACK|RATING|MEMO|TYPE|STATUS|RESULT|BULK)_INVALID/.test(message)) return failure("INVALID", "심의 결과·등급·트랙 입력을 확인해주세요.");
   if (["42883", "PGRST202"].includes(error?.code ?? "")) return failure("UPGRADE_REQUIRED", "심의 연동 업데이트가 아직 적용되지 않았습니다. 서비스 업데이트 후 다시 시도해주세요.");
   return failure("SAVE_FAILED", "심의 결과를 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.");
 }
 
-/** Shared by the authenticated web administrator and the Mac desktop bridge.
- * Validation happens before the single transaction. Publication/email are deliberately
- * outside this function: the caller queues the shared notification only when changed.
- */
-export async function saveManagedStationReview(client: SupabaseClient, input: ManagedStationReviewInput): Promise<ManagedReviewResult> {
+type PreparedStation = { ok: true; stationName: string; args: Record<string, unknown> };
+
+/** Prepare against current source rows, then commit in one guarded transaction. */
+async function prepareStationReview(client: SupabaseClient, input: ManagedStationReviewInput): Promise<PreparedStation | ManagedReviewResult> {
   const parsed = stationManagementSchema.safeParse(input);
   if (!parsed.success) return failure("INVALID", "심의 입력값과 최신 변경 시각을 확인해주세요.");
   const value = parsed.data;
@@ -65,9 +65,11 @@ export async function saveManagedStationReview(client: SupabaseClient, input: Ma
     if (value.status === "APPROVED" && !ageRating) return reviewManagementError({ message: "REVIEW_RATING_REQUIRED" });
   } else {
     if (value.ageRating) return failure("INVALID", "음반 심의에는 영상 연령 등급을 저장할 수 없습니다.");
-    const raw = value.trackResults === undefined && previous?.status === value.status
-      ? previous.track_results_json ?? previous.track_results
-      : value.trackResults;
+    const previousTracks = previous?.track_results_json ?? previous?.track_results;
+    const selectedTargets = getStationReviewTracks(tracksResult.data ?? [], stationResult.data, previousTracks);
+    const raw = value.applyOverallStatus
+      ? selectedTargets.map(track => ({ track_id: track.id, track_no: track.track_no, title: track.track_title, status: ["APPROVED", "REJECTED"].includes(value.status) ? value.status : "PENDING" }))
+      : value.trackResults === undefined && previous?.status === value.status ? previousTracks : value.trackResults;
     const normalized = normalizeTrackResults(raw);
     const allTracks = tracksResult.data ?? [];
     const targets = getStationReviewTracks(allTracks, stationResult.data, raw);
@@ -84,14 +86,49 @@ export async function saveManagedStationReview(client: SupabaseClient, input: Ma
     tracks = resolveStationTrackResults(raw, allTracks, status, stationResult.data);
     status = resolveStationStatusForSave(status, tracks);
   }
-  const { data, error } = await client.rpc("save_station_review_result", {
+  return { ok: true, stationName: stationResult.data.name ?? stationResult.data.code, args: {
     p_submission_id: value.submissionId, p_station_id: value.stationId, p_actor_user_id: value.actorUserId,
     p_expected_updated_at: value.expectedUpdatedAt, p_status: status,
     p_result_note: value.resultNote === undefined ? previous?.result_note ?? null : value.resultNote.trim() || null,
     p_track_results: tracks, p_age_rating: ageRating,
-  });
+  } };
+}
+
+export async function saveManagedStationReview(client: SupabaseClient, input: ManagedStationReviewInput): Promise<ManagedReviewResult> {
+  const prepared = await prepareStationReview(client, input);
+  if (!prepared.ok || !("args" in prepared)) return prepared;
+  const { data, error } = await client.rpc("save_station_review_result", prepared.args);
   if (error || !data?.completed || !data.row) return reviewManagementError(error);
-  return { ok: true, changed: data.changed === true, stationName: stationResult.data.name ?? stationResult.data.code, row: { ...data.row, track_results: data.row.track_results_json }, changeKey: data.changeKey, submissionStatus: data.submissionStatus, resultStatus: data.resultStatus };
+  return { ok: true, changed: data.changed === true, stationName: prepared.stationName, row: { ...data.row, track_results: data.row.track_results_json }, changeKey: data.changeKey, submissionStatus: data.submissionStatus, resultStatus: data.resultStatus };
+}
+
+export const stationBulkSchema = z.object({
+  actorUserId: z.string().uuid(), submissionId: z.string().uuid(),
+  stations: z.array(z.object({ stationId: z.string().uuid(), reviewId: z.string().uuid().nullish(), expectedUpdatedAt: z.string().datetime({ offset: true }).nullable() })).min(1).max(50),
+  status: z.enum(["NOT_SENT", "SENT", "APPROVED", "REJECTED", "NEEDS_FIX"]),
+  ageRating: z.enum(broadcastRatingValues).nullable().optional(),
+});
+export type BulkStationReviewInput = z.infer<typeof stationBulkSchema>;
+
+export async function saveManagedStationReviews(client: SupabaseClient, input: BulkStationReviewInput): Promise<ManagedReviewResult & { savedCount?: number }> {
+  const parsed = stationBulkSchema.safeParse(input);
+  if (!parsed.success || new Set(parsed.data.stations.map(station => station.stationId)).size !== parsed.data.stations.length) return failure("INVALID", "일괄 저장할 방송사와 상태를 확인해주세요.");
+  const value = parsed.data;
+  const prepared = await Promise.all(value.stations.map(station => prepareStationReview(client, {
+    ...station, reviewId: station.reviewId ?? undefined, actorUserId: value.actorUserId, submissionId: value.submissionId,
+    status: value.status, ageRating: value.ageRating, applyOverallStatus: true,
+  })));
+  const failed = prepared.find(result => !result.ok || !("args" in result));
+  if (failed) return { ...failed, ok: false, error: `일괄 저장하지 않았습니다. ${"error" in failed ? failed.error : "방송사 입력을 확인해주세요."}` };
+  const entries = (prepared as PreparedStation[]).map(({ args }) => ({
+    stationId: args.p_station_id, expectedUpdatedAt: args.p_expected_updated_at, status: args.p_status,
+    resultNote: args.p_result_note, trackResults: args.p_track_results, ageRating: args.p_age_rating,
+  }));
+  const { data, error } = await client.rpc("save_station_review_results_bulk", {
+    p_submission_id: value.submissionId, p_actor_user_id: value.actorUserId, p_updates: entries,
+  });
+  if (error || !data?.completed) return reviewManagementError(error);
+  return { ok: true, changed: data.changed === true, savedCount: data.savedCount, submissionStatus: data.submissionStatus, resultStatus: data.resultStatus };
 }
 
 export async function saveManagedOnlineReview(client: SupabaseClient, input: {
