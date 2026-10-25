@@ -1,0 +1,11 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { generateDocuments } from '../documents.mjs';
+const dir=path.resolve(process.argv[2]||'/tmp/onside-manual-document-qa');
+await fs.mkdir(dir,{recursive:true});
+const submission={id:'manual-synthetic-qa',source:'manual',type:'ALBUM',title:'수동 접수 검수 앨범',artist_name:'검수 아티스트',release_date:'2026-10-25',genre:'발라드',production_company:'검수 레이블',distributor:'검수 유통사',delivery_method:'EMAIL'};
+const tracks=[{id:'manual-track-one',track_no:1,track_title:'함께 걷는 길',is_title:true,composer:'검수 작곡가',lyricist:'검수 작사가',arranger:'검수 편곡가',lyrics:'잠든 골목 위로 달빛이 내려\nHello world (번역 : 안녕 세상아)\n\n이 길을 따라 함께 걸어요\n이 길을 따라 함께 걸어요\n\n씨 발 — 원문 보존 및 관리자 확인 검수\nㅅㅂ — 의심 표현 검수\n未翻訳の歌詞'},{id:'manual-track-two',track_no:2,track_title:'함께 걷는 길 (Inst.)',is_instrumental:true,composer:'검수 작곡가',arranger:'검수 편곡가'}];
+const album=await generateDocuments({submission,tracks,files:[{name:'합성 기준자료.docx'}],outputDir:path.join(dir,'album'),settings:{pagination:false,applicationDate:'2026-10-25'}});
+const mv=await generateDocuments({submission:{...submission,type:'MV_DISTRIBUTION',title:'수동 접수 검수 영상',mv_song_title:'함께 걷는 길',mv_runtime:'03:15',mv_director:'검수 감독',mv_lead_actor:'검수 출연자',mv_production_company:'검수 레이블',mv_storyline:'밤길을 걸으며 과거를 회상하는 합성 검수 영상입니다.',mv_composer:'검수 작곡가',mv_lyricist:'검수 작사가',mv_lyrics:tracks[0].lyrics},outputDir:path.join(dir,'mv'),settings:{pagination:false,applicationDate:'2026-10-25'}});
+await fs.writeFile(path.join(dir,'results.json'),JSON.stringify({album,mv},null,2));
+console.log(JSON.stringify({directory:dir,docx:album.summary.docxCount+mv.summary.docxCount,screening:{album:album.screening.counts,mv:mv.screening.counts}}));

@@ -1,0 +1,35 @@
+{
+  "version": "2.1.0",
+  "commit": "8a3d2370559e21a7e3e9866f58e8eb1088fecc6a",
+  "deployment": "dep-dbeup4a9lscs7387531g",
+  "validation": {
+    "webSuite": {
+      "passed": 1024,
+      "skipped": 6,
+      "failed": 0
+    },
+    "finalTargetedTests": 17,
+    "emailAttachmentOutboxTests": 27,
+    "webBrowserFlows": 6,
+    "macCoreTests": 23,
+    "sourceReadOnlyTests": 7,
+    "macResultUiFlows": 21,
+    "macExistingUiFlows": 12,
+    "typescript": "passed",
+    "scopedEslint": "passed",
+    "productionNode22Build": "passed",
+    "realCustomerEmailsSent": 0,
+    "productionReadOnlyChecks": 12,
+    "onlineSampleNote": "Synthetic QA record has no recipient email; preview correctly blocks sending.",
+    "nativeAppPreview": "verified actual srcdoc content, ten requested station rows, customer status link, and separate send button; no writes or sends",
+    "nativePreviewFix": "allow only about:srcdoc/about:blank in non-main frame under the local app origin",
+    "appSignature": "verified"
+  },
+  "deploymentState": "live",
+  "installationState": "installed_verified",
+  "emailExamples": "email-preview/",
+  "deployedAt": "2026-10-25T20:50:52+09:00",
+  "deploymentDuration": "2m19s",
+  "installedApp": "/Users/vintagechord/Applications/온사이드 심의 데스크.app",
+  "nativeSourceSha256": "d4033057849198fbc790cabd171d016858acf819a82ad6bbce4df7c4ac93714b"
+}

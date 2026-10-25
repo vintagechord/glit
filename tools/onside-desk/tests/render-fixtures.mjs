@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { generateDocuments } from '../documents.mjs';
+const dir=path.resolve(process.argv[2]||'/tmp/onside-desk-document-qa');
+await fs.mkdir(dir,{recursive:true});
+const s={id:'synthetic-qa',type:'ALBUM',title:'검수용 앨범',artist_name:'온사이드',release_date:'2026-10-25',genre:'발라드',production_company:'테스트 레이블',distributor:'테스트 유통사'};
+const tracks=[{track_no:1,track_title:'달빛 아래',is_title:true,composer:'작곡가',lyricist:'작사가',arranger:'편곡가',lyrics:'잠든 골목 위로 달빛이 내려\n지나간 계절을 조용히 걸어요\n\n우리 함께 걷던 그 길을 따라\n다시 한 번 노래를 불러요'},{track_no:2,track_title:'달빛 아래 (Inst.)',composer:'작곡가',arranger:'편곡가'}];
+const sample=await generateDocuments({submission:s,tracks,outputDir:path.join(dir,'album'),settings:{pagination:false,applicationDate:'2026-10-25'}});
+const long=await generateDocuments({submission:{...s,title:'긴 가사 및 크레딧 검수'},tracks:[{...tracks[0],lyrics:Array.from({length:130},(_,i)=>`가사 ${i+1}번째 줄이 차례대로 이어지고 같은 말도 모두 보존합니다`).join('\n'),composer:Array.from({length:90},(_,i)=>`작곡가${i+1}`).join(', ')},{...tracks[1],track_no:2}],outputDir:path.join(dir,'long'),settings:{applicationDate:'2026-10-25'}});
+const mv=await generateDocuments({submission:{...s,type:'MV_DISTRIBUTION',mv_song_title:'달빛 아래',mv_runtime:'03:15',mv_lyrics:tracks[0].lyrics,files_submitted_by_email:true},outputDir:path.join(dir,'mv'),settings:{pagination:false,applicationDate:'2026-10-25'}});
+await fs.writeFile(path.join(dir,'results.json'),JSON.stringify({sample,long,mv},null,2));
+console.log(JSON.stringify({directory:dir,docx:sample.summary.docxCount+long.summary.docxCount+mv.summary.docxCount,pagination:long.summary.lyricPagination}));

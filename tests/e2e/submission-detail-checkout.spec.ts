@@ -16,7 +16,10 @@ test.beforeAll(async () => {
       import {GUEST_SUBMISSION_ORDERS_STORAGE_KEY} from './src/lib/guest-submission-cart';
       const linked=!location.search.includes('unlinked');
       const bank=location.search.includes('bank');
-      const submission={id:'${first}',title:'Checkout fixture',artist_name:'Fixture artist',type:'ALBUM',status:'SUBMITTED',payment_status:linked?'PAYMENT_PENDING':'UNPAID',payment_method:bank?'BANK':'CARD',current_order_id:linked?'${orderId}':null,amount_krw:50000,created_at:'2026-10-24T00:00:00Z',updated_at:'2026-10-24T00:00:00Z',package:{name:'방송국 1곳',station_count:1,price_krw:50000},album_tracks:[]};
+      // A closed card window leaves the order linked with UNPAID/WAITING_PAYMENT;
+      // only an in-flight approval (or a bank request) keeps PAYMENT_PENDING.
+      const pending=bank||location.search.includes('pending');
+      const submission={id:'${first}',title:'Checkout fixture',artist_name:'Fixture artist',type:'ALBUM',status:linked&&!pending?'WAITING_PAYMENT':'SUBMITTED',payment_status:linked&&pending?'PAYMENT_PENDING':'UNPAID',payment_method:bank?'BANK':'CARD',current_order_id:linked?'${orderId}':null,amount_krw:50000,created_at:'2026-10-24T00:00:00Z',updated_at:'2026-10-24T00:00:00Z',package:{name:'방송국 1곳',station_count:1,price_krw:50000},album_tracks:[]};
       localStorage.setItem(GUEST_SUBMISSION_ORDERS_STORAGE_KEY,JSON.stringify([{submissionId:'${first}',guestToken:'first-private-proof'},{submissionId:'${second}',guestToken:'second-private-proof'}]));
       window.__checkoutNavigation=[];
       createRoot(document.getElementById('root')).render(<><SubmissionDetailClient submissionId={submission.id} initialSubmission={submission} initialFiles={[]} initialStationReviews={[]} enableRealtime={false} initialDataComplete={true} guestToken="first-private-proof"/><EnglishLanguagePack/></>);
@@ -89,6 +92,15 @@ test("an unlinked application goes directly to its selected payment step without
   const fixture = await mount(page, { query: "?unlinked" });
   await page.getByRole("button", { name: "결제하기", exact: true }).click();
   await expect.poll(() => navigation(page)).toEqual([`/mypage/cart?step=payment&items=${first}`]);
+  expect(fixture.calls).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test("a card approval still being confirmed sends the customer to orders instead of retrying", async ({ page }) => {
+  const fixture = await mount(page, { query: "?pending" });
+  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "주문내역 확인", exact: true }).click();
+  await expect.poll(() => navigation(page)).toEqual([`/mypage/orders?focus=${first}`]);
   expect(fixture.calls).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });

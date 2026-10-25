@@ -74,10 +74,10 @@ test("administrator results reach the requester live and unlock radio requests o
   await page.getByLabel("첫 번째 노래 심의 결과").selectOption("APPROVED");
   await page.getByLabel("KBS 의뢰자에게 전달할 메모").fill("첫 곡 확인 완료, 두 번째 곡 확인 중");
   await save(page);
-  await expect(requester.getByRole("button", { name: /KBS · 심의중/ })).toBeVisible();
+  await expect(requester.getByRole("button", { name: /KBS · 접수완료/ })).toBeVisible();
   await expect(requester.getByText("결과 0/1", { exact: true })).toBeVisible();
   await expect(requester.getByTestId("broadcast-support")).toHaveCount(0);
-  await requester.getByRole("button", { name: /KBS · 심의중/ }).click();
+  await requester.getByRole("button", { name: /KBS · 접수완료/ }).click();
   await expect(page.getByRole("dialog").getByText("첫 곡 확인 완료, 두 번째 곡 확인 중")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
 
@@ -103,7 +103,7 @@ test("overall approval fills each track, preserves approval notes and correction
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
   await page.getByLabel("KBS 심의 상태").selectOption("NEEDS_FIX");
   await save(page);
-  await expect(requester.getByRole("button", { name: /KBS · 보완요청/ })).toBeVisible();
+  await expect(requester.getByRole("button", { name: /KBS · 보완 요청/ })).toBeVisible();
   await expect(requester.getByTestId("broadcast-support")).toHaveCount(0);
 });
 
@@ -114,7 +114,7 @@ test("failed admin save leaves the requester waiting without a false approval", 
   await save(page);
   await expect(page.getByRole("alert")).toContainText("저장하지 못했습니다");
   const requester = page.getByRole("region", { name: "의뢰자 심의 결과" });
-  await expect(requester.getByRole("button", { name: /KBS · 결과대기/ })).toBeVisible();
+  await expect(requester.getByRole("button", { name: /KBS · 접수완료 · 0곡 적격/ })).toBeVisible();
   await expect(requester.getByTestId("broadcast-support")).toHaveCount(0);
 });
 
