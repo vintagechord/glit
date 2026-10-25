@@ -1,1 +1,3 @@
-export { default, metadata, dynamic } from "@/app/reset-password/page";
+export { default, metadata } from "@/app/reset-password/page";
+
+export const dynamic = "force-dynamic";
