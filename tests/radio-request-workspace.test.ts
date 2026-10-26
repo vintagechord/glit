@@ -182,3 +182,18 @@ test("snapshots stay referentially stable and server snapshots never include bro
   assert.deepEqual(server.state, createEmptyRadioRequestWorkspace());
   assert.equal(server.storageStatus, "ready");
 });
+
+test("preparation and separate story / song outcomes survive reload without asserting eligibility", () => {
+  const storage = memoryStorage();
+  const store = createRadioRequestWorkspaceStore("album-one", { getStorage: () => storage });
+  const record = { playlistFit: true, themeChecked: true, songFindable: false, storyRead: true, songAired: false, airedDate: "2026-10-27", followUpDate: "2026-10-28", evidenceUrl: "https://www.cbs.co.kr/program/playlist/cbs_P000004" };
+  store.setField("progress", { "mbc/song": record });
+  const restored = createRadioRequestWorkspaceStore("album-one", { getStorage: () => storage }).getSnapshot();
+  assert.deepEqual(restored.state.progress["mbc/song"], record);
+  assert.equal(restored.state.progress["cbs/song"], undefined);
+  assert.equal(restored.storageStatus, "restored");
+  for (const invalid of [{ airedDate: "2026-02-30" }, { followUpDate: "tomorrow" }, { songAired: "yes" }]) {
+    const raw = envelope({ ...createEmptyRadioRequestWorkspace(), progress: { context: invalid } });
+    assert.equal(parseRadioRequestWorkspace(raw, "album-one"), null);
+  }
+});

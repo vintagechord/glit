@@ -355,7 +355,8 @@ test("authorized evidence response forces attachment, private no-store, nosniff 
 test("provider configuration and database failures keep their truthful status and do not leak infrastructure details", async () => {
   const h = await harness();
   const unsupported = await h.searchArchiveArtists(OWNER, new URLSearchParams({ provider: "spotify", q: "Artist" }));
-  assert.equal(unsupported.queryStatus, "unsupported");
+  assert.equal(unsupported.queryStatus, "forbidden");
+  assert.equal((unsupported as { code?: string }).code, "configuration_required");
   const previous = process.env.MUSICBRAINZ_COMMERCIAL_USE_APPROVED;
   try {
     delete process.env.MUSICBRAINZ_COMMERCIAL_USE_APPROVED;

@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { ArchiveError, archiveDatabaseError } from "./http";
 import { getMusicProviderStatuses, type MusicBrainzCursor } from "./providers";
+import { collectDomesticStep, type DomesticCursor } from "./domestic-catalog";
+import { collectStreamingStep, type StreamingCursor } from "./streaming";
 import { collectAppleStep, type AppleCursor } from "./apple";
 import { collectMusicBrainzStep, MusicProviderError } from "./musicbrainz";
 import { type ArchiveLibrary, type ArchiveSyncJob } from "./model";
@@ -11,7 +13,7 @@ import { mergeArchiveImports } from "./import";
 import { getOwnedCreditSubmissions, mergeSubmissionCredits } from "./credits";
 import { enrichLinkedDomesticAlbums } from "./domestic-credits";
 
-export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "apple" = "musicbrainz") {
+export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "apple" | "melon" | "genie" | "spotify" | "youtube" = "musicbrainz") {
   const { data, error } = await createAdminClient().rpc("reserve_music_archive_provider_slot", { p_provider: provider });
   archiveDatabaseError(error);
   const wait = Number(data);
@@ -21,7 +23,7 @@ export async function acquireArchiveProviderPermit(provider: "musicbrainz" | "ap
 
 function syncPermission(provider: string) {
   const support = getMusicProviderStatuses().find(item => item.id === provider);
-  if (!support || support.status !== "available" || !["musicbrainz", "apple"].includes(provider)) throw new ArchiveError(support?.message ?? "이 제공처는 수동 연결을 지원합니다.", 422, support?.status ?? "UNSUPPORTED");
+  if (!support || support.status !== "available" || !["musicbrainz", "apple", "melon", "genie", "spotify"].includes(provider)) throw new ArchiveError(support?.message ?? "이 제공처는 수동 연결을 지원합니다.", 422, support?.status ?? "UNSUPPORTED");
 }
 /** Each confirmed catalog profile has its own durable cursor, even within one provider. */
 export async function enqueueArchiveSync(owner: string, library: ArchiveLibrary, provider: string, externalArtistId?: string) {
@@ -98,7 +100,11 @@ export async function runArchiveJob(libraryId?: string) {
     syncPermission(job.provider);
     const step = job.provider === "apple"
       ? await collectAppleStep(job.external_artist_id, job.cursor.providerCursor as unknown as AppleCursor ?? null, { acquirePermit: () => acquireArchiveProviderPermit("apple") })
-      : await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
+      : job.provider === "melon" || job.provider === "genie"
+        ? await collectDomesticStep(job.provider, job.external_artist_id, job.cursor.providerCursor as DomesticCursor ?? null, { acquirePermit: () => acquireArchiveProviderPermit(job.provider as "melon" | "genie") })
+        : job.provider === "spotify"
+          ? await collectStreamingStep("spotify", job.external_artist_id, job.cursor.providerCursor as StreamingCursor ?? null, { acquirePermit: () => acquireArchiveProviderPermit("spotify") })
+          : await collectMusicBrainzStep(job.external_artist_id, cursor, { acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
     // Refetch after the network wait; optimistic commit still protects a concurrent edit.
     const library = await getOwnedLibrary(job.owner_id, job.library_id);
     let merged = mergeArchiveImports(library.data, step.releases, { combineManagedProfiles: library.data.connections.filter(item => item.provider === job.provider && item.confirmed).length > 1 });
@@ -107,7 +113,7 @@ export async function runArchiveJob(libraryId?: string) {
       const submissions = await getOwnedCreditSubmissions(job.owner_id);
       merged = mergeSubmissionCredits(merged, submissions, library.id);
       const importedIds = merged.releases.filter(release => step.releases.some(item => release.source?.provider === item.provider && release.source.externalId === item.externalId)).map(release => release.id);
-      const enriched = await enrichLinkedDomesticAlbums(merged, importedIds, submissions, library.id, { signal: AbortSignal.timeout(15_000) });
+      const enriched = ["melon", "genie"].includes(job.provider) ? { data: merged, notices: [] as string[] } : await enrichLinkedDomesticAlbums(merged, importedIds, submissions, library.id, { signal: AbortSignal.timeout(15_000) });
       merged = enriched.data;
       metadataNotices = enriched.notices;
     }

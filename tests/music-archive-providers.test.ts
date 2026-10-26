@@ -24,11 +24,18 @@ test("official provider URLs canonicalize IDs and reject SSRF/lookalike/protocol
   assert.equal(parseMusicProviderUrl(`https://musicbrainz.org/release/${releaseId(1)}`, "artist"), null);
 });
 
-test("provider statuses never advertise unimplemented domestic or Spotify scraping; commercial permission gates all MB calls", async () => {
+test("provider statuses distinguish implemented imports, channel links, and missing credentials; MB permission gates remain", async () => {
   assert.equal(getMusicProviderStatuses({}).find(item => item.id === "musicbrainz")!.status, "permission_required");
   assert.equal(getMusicProviderStatuses({ MUSICBRAINZ_COMMERCIAL_USE_APPROVED: "true" }).find(item => item.id === "musicbrainz")!.status, "configuration_required");
   assert.equal(getMusicProviderStatuses(env).find(item => item.id === "musicbrainz")!.status, "available");
-  assert.ok(getMusicProviderStatuses(env).filter(item => !["apple", "musicbrainz"].includes(item.id)).every((value) => !value.automaticImplemented && value.status !== "available"));
+  const supported = getMusicProviderStatuses(env);
+  assert.ok(supported.filter(item => ["melon", "genie"].includes(item.id)).every(item => item.automaticImplemented && item.status === "available"));
+  assert.equal(supported.find(item => item.id === "spotify")?.status, "configuration_required");
+  assert.equal(supported.find(item => item.id === "youtube")?.automaticImplemented, false);
+  assert.equal(supported.find(item => item.id === "bugs")?.status, "link_only");
+  const configured = getMusicProviderStatuses({ SPOTIFY_CLIENT_ID: "id", SPOTIFY_CLIENT_SECRET: "secret", YOUTUBE_DATA_API_KEY: "key" });
+  assert.equal(configured.find(item => item.id === "spotify")?.status, "available");
+  assert.equal(configured.find(item => item.id === "youtube")?.status, "available");
   let called = false;
   await assert.rejects(() => searchMusicBrainzArtists("Nirvana", { ...options(() => { called = true; return {}; }), env: {} }), (error: unknown) => error instanceof MusicProviderError && error.code === "permission_required");
   assert.equal(called, false);

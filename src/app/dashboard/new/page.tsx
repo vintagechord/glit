@@ -1,7 +1,7 @@
 import { Clapperboard, Disc3, Tv } from "lucide-react";
 
 import { ReliableLink } from "@/components/site/reliable-link";
-import { reviewServices, reviewServiceNotice } from "@/lib/onside-content";
+import { reviewServices } from "@/lib/onside-content";
 
 export const metadata = {
   title: "새 심의 접수",
@@ -42,15 +42,6 @@ export default function NewSubmissionPage() {
         <h1 className="font-display mt-4 break-keep text-balance text-2xl font-black leading-tight text-foreground sm:text-4xl">
           무엇을 신청하시나요?
         </h1>
-        <div className="mt-4 flex flex-wrap gap-2" aria-label="접수 특징">
-          <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
-            비회원 가능
-          </span>
-          <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
-            로그인 시 자동 저장
-          </span>
-        </div>
-
         <div className="mt-6 grid gap-4 lg:grid-cols-3 sm:mt-8 sm:gap-5">
           {submissionCards.map((card, index) => (
             <ReliableLink
@@ -75,12 +66,17 @@ export default function NewSubmissionPage() {
             </ReliableLink>
           ))}
         </div>
-        <p className="mt-6 text-sm leading-6 text-muted-foreground">{reviewServiceNotice}</p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">Mnet·ETN 옵션은 편성·기존 심의 등 선행조건을 상담한 뒤 선택해주세요.</p>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+            비회원 가능
+          </span>
+          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="bauhaus-button min-h-11 px-5 py-2 text-sm">
+            문의하기
+          </ReliableLink>
+        </div>
         <details className="mt-6 rounded-[8px] border border-border p-4">
           <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>
           <p className="mt-3 text-sm leading-6">공개할 곳, 제출할 방송사·유통사, 요청받은 서류 이름을 확인해주세요. 음원인지 영상인지와 제출처의 요구사항을 기준으로 안내해 드립니다.</p>
-          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-4">신청·결제 도움말 및 문의 (새 창)</ReliableLink>
         </details>
       </section>
       <div className="mt-4 text-right text-xs font-semibold text-muted-foreground">

@@ -49,4 +49,8 @@ docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-domestic.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-multiple-profiles.sql"
 docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-admin-directory.sql"
+# Keep the earlier provider-boundary assertions against their original schema,
+# then verify the expanded providers and inherited security boundary together.
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/supabase/migrations/20261026150859_music_archive_more_catalogs.sql"
+docker exec --interactive "$archive_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 < "$archive_sql_root/tests/sql/music-archive-more-catalogs.sql"
 echo "Music archive SQL integration checks passed; disposable container will be removed."

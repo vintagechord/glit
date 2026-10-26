@@ -29,12 +29,13 @@ export async function searchCatalogArtists(query: string, offset: number, acquir
   }
   const key = createHash("sha256").update(`apple:KR:${normalized}`).digest("hex");
   const { data: cached, error: cacheError } = await admin.from("music_archive_search_cache").select("payload").eq("query_key", key).gt("expires_at", new Date().toISOString()).maybeSingle();
-  archiveDatabaseError(cacheError);
+  // Cache availability must not prevent a live public catalog search.
+  void cacheError;
   let result = cached?.payload as CachedCatalogResult | undefined;
   let changed = false;
   if (!result) {
     result = await searchAppleArtists(query, { offset: 0, pageSize: 200, acquirePermit });
-    await indexCatalogArtists(result.items, result.checkedAt ?? new Date().toISOString());
+    await indexCatalogArtists(result.items, result.checkedAt ?? new Date().toISOString()).catch(() => undefined);
     changed = true;
   }
   const page = result.items.slice(offset, offset + 20);
@@ -56,7 +57,7 @@ export async function searchCatalogArtists(query: string, offset: number, acquir
   }
   if (changed) {
     const { error } = await admin.from("music_archive_search_cache").upsert({ query_key: key, payload: result, expires_at: new Date(Date.now() + 15 * 60_000).toISOString() });
-    archiveDatabaseError(error);
+    void error;
     // Bounded expiry cleanup: cached searches carry no member identity or raw query.
     await admin.from("music_archive_search_cache").delete().lt("expires_at", new Date(Date.now() - 86400_000).toISOString());
   }

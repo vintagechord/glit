@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import PizZip from 'pizzip';
 import {createDesk} from '../server.mjs';
+import {Store} from '../core.mjs';
 
 async function setup(t, options = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-manual-server-'));
@@ -92,6 +93,85 @@ test('deletion is blocked while a generation is queued or a translation is activ
   const created=await s.create();id=created.id;s.desk.enqueue(id,'generate');await s.desk.idle();
   assert.equal((await s.api(`/api/cases/${id}/translate`,{method:'POST',body:JSON.stringify({expectedSourceHash:created.detail.screening.sourceHash})})).status,200);
   assert.equal(s.desk.publicState().cases.length,1);
+});
+
+const trashInput = desk => JSON.stringify({confirmation:'EMPTY_TRASH',cases:desk.publicState().trashCases.map(({id,deletedAt})=>({id,deletedAt}))});
+
+test('empty trash requires local authentication, same origin, and explicit confirmation',async t=>{
+  const s=await setup(t);const {id}=await s.create();await s.api(`/api/cases/${id}`,{method:'DELETE'});
+  const body=trashInput(s.desk);
+  assert.equal((await fetch(s.url+'/api/trash/empty',{method:'POST',body})).status,403);
+  assert.equal((await s.api('/api/trash/empty',{method:'POST',headers:{Origin:'https://foreign.invalid'},body})).status,403);
+  assert.equal((await s.api('/api/trash/empty',{method:'POST',body:JSON.stringify({cases:JSON.parse(body).cases})})).status,400);
+  assert.equal(s.desk.publicState().trashCases.length,1);
+  assert.equal(s.desk.store.data.cases[id].purgeRequestedAt,undefined);
+  assert.ok(await fs.stat(path.join(s.root,'신청별 자료',id)));
+});
+
+test('empty trash removes local files and jobs, preserves active cases and backups, and cannot reimport online cases',async t=>{
+  const s=await setup(t);const {id}=await s.create();const active=await s.create();await s.desk.sync();
+  const online=s.desk.publicState().cases.find(c=>c.source==='online').id;
+  const originalSource=await fs.readFile(path.join(s.root,'신청별 자료',active.id,'기준파일','수신 신청서.docx'));
+  await fs.mkdir(path.join(s.root,'신청별 자료',online),{recursive:true});await fs.writeFile(path.join(s.root,'신청별 자료',online,'original.wav'),'online-original');
+  s.desk.store.data.jobs.push({id:'job-purged',caseId:id,status:'completed'},{id:'job-active',caseId:active.id,status:'completed'});
+  const backup=await s.desk.backup();
+  for(const caseId of [id,online]) await s.api(`/api/cases/${caseId}`,{method:'DELETE'});
+  const response=await s.api('/api/trash/empty',{method:'POST',body:trashInput(s.desk)});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,deletedCount:2,failedCases:[]});
+  assert.equal(s.desk.publicState().trashCases.length,0);assert.equal(s.desk.publicState().cases.length,1);
+  for(const caseId of [id,online]){await assert.rejects(fs.stat(path.join(s.root,'신청별 자료',caseId)),{code:'ENOENT'});assert.equal((await s.api(`/api/cases/${caseId}/restore`,{method:'POST',body:'{}'})).status,404);}
+  assert.deepEqual(await fs.readFile(path.join(s.root,'신청별 자료',active.id,'기준파일','수신 신청서.docx')),originalSource);
+  assert.ok(await fs.stat(backup.path));assert.deepEqual(s.desk.store.data.jobs.map(j=>j.id),['job-active']);
+  const saved=await new Store(s.root).init();s.desk.store.data=saved.data;
+  assert.equal(typeof saved.data.purgedCases[online],'string');assert.equal(saved.data.purgedCases[id],undefined);
+  await s.desk.sync();assert.equal(s.desk.publicState().cases.length,1);assert.equal(s.desk.publicState().trashCases.length,0);assert.equal(s.calls.remote,0);
+});
+
+test('empty trash rejects restored or busy snapshot targets before deleting anything',async t=>{
+  const s=await setup(t);const first=await s.create();const second=await s.create();
+  for(const {id} of [first,second])await s.api(`/api/cases/${id}`,{method:'DELETE'});
+  const body=trashInput(s.desk);await s.api(`/api/cases/${second.id}/restore`,{method:'POST',body:'{}'});
+  assert.equal((await s.api('/api/trash/empty',{method:'POST',body})).status,409);
+  assert.ok(await fs.stat(path.join(s.root,'신청별 자료',first.id)));assert.equal(s.desk.store.data.cases[first.id].purgeRequestedAt,undefined);
+  s.desk.store.data.jobs.push({id:'busy-job',caseId:first.id,status:'running'});
+  const response=await s.api('/api/trash/empty',{method:'POST',body:trashInput(s.desk)});assert.equal(response.status,409);assert.equal((await response.json()).code,'CASE_BUSY');
+});
+
+test('empty trash only removes the confirmed snapshot and leaves newly trashed cases',async t=>{
+  const s=await setup(t);const first=await s.create();const second=await s.create();
+  await s.api(`/api/cases/${first.id}`,{method:'DELETE'});const body=trashInput(s.desk);
+  await s.api(`/api/cases/${second.id}`,{method:'DELETE'});
+  const response=await s.api('/api/trash/empty',{method:'POST',body});assert.equal((await response.json()).deletedCount,1);
+  assert.deepEqual(s.desk.publicState().trashCases.map(c=>c.id),[second.id]);assert.ok(await fs.stat(path.join(s.root,'신청별 자료',second.id)));
+});
+
+test('failed file cleanup remains retryable and cannot restore partly removed files',async t=>{
+  const s=await setup(t);const first=await s.create();const second=await s.create();
+  for(const {id} of [first,second])await s.api(`/api/cases/${id}`,{method:'DELETE'});
+  const originalRm=fs.rm;const failingDir=path.join(s.root,'신청별 자료',first.id);
+  const mock=t.mock.method(fs,'rm',async(target,options)=>{if(target===failingDir)throw Object.assign(new Error('파일 사용 중'),{code:'EBUSY'});return originalRm(target,options);});
+  const result=await(await s.api('/api/trash/empty',{method:'POST',body:trashInput(s.desk)})).json();
+  assert.equal(result.ok,false);assert.equal(result.deletedCount,1);assert.equal(result.failedCases[0].id,first.id);
+  assert.equal(s.desk.publicState().trashCases[0].purgePending,true);
+  assert.equal((await s.api(`/api/cases/${first.id}/restore`,{method:'POST',body:'{}'})).status,409);
+  assert.ok((await new Store(s.root).init()).data.cases[first.id].purgeRequestedAt);
+  mock.mock.restore();
+  assert.equal((await(await s.api('/api/trash/empty',{method:'POST',body:trashInput(s.desk)})).json()).deletedCount,1);
+  assert.equal(s.desk.publicState().trashCases.length,0);
+});
+
+test('concurrent empty and restore requests cannot race a permanent deletion',async t=>{
+  const s=await setup(t);const {id}=await s.create();await s.api(`/api/cases/${id}`,{method:'DELETE'});
+  const body=trashInput(s.desk), originalRm=fs.rm, targetDir=path.join(s.root,'신청별 자료',id);
+  let entered,release;const deleting=new Promise(resolve=>{entered=resolve;});const proceed=new Promise(resolve=>{release=resolve;});
+  const mock=t.mock.method(fs,'rm',async(target,options)=>{if(target===targetDir){entered();await proceed;}return originalRm(target,options);});
+  const first=s.api('/api/trash/empty',{method:'POST',body});await deleting;
+  try {
+    assert.equal((await s.api('/api/trash/empty',{method:'POST',body})).status,409);
+    assert.equal((await s.api(`/api/cases/${id}/restore`,{method:'POST',body:'{}'})).status,409);
+  } finally { release(); }
+  assert.equal((await(await first).json()).deletedCount,1);mock.mock.restore();
+  assert.equal(s.desk.publicState().trashCases.length,0);
 });
 
 test('translation is explicit, validates source revision and leaves original reference unchanged',async t=>{

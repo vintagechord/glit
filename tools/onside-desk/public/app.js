@@ -52,7 +52,27 @@ async function discardEdits() {
 function heading(title, subtitle, action = '') { return `<div class="page-heading"><div><div class="eyebrow">ONSIDE REVIEW DESK</div><h1>${e(title)}</h1><p>${e(subtitle)}</p></div>${action}</div>`; }
 function trashButton() { return `<button class="button secondary" data-action="view-trash">목록 휴지통 ${trashCases().length ? `(${trashCases().length})` : ''}</button>`; }
 function trashScreen() {
-  screen.innerHTML = `${heading('목록 휴지통','이 Mac의 목록에서 삭제한 신청을 복원할 수 있습니다.')}<section class="panel trash-panel"><div class="notice good">온라인 서비스의 신청·결과는 유지됩니다. 이 Mac의 원본 파일과 생성 이력도 복원할 수 있도록 보관됩니다.</div>${trashCases().length ? `<div class="trash-list">${trashCases().map(c => `<article><div><strong>${e(value(c.title))}</strong><p>${e(value(c.artist_name))} · ${e(TYPE[c.type])} · ${isManual(c) ? '수동 작업' : '온라인 신청'}</p><small>${e(formatDate(c.deletedAt || c.local?.deletedAt,true))} 삭제</small></div><button class="button secondary small" data-restore-case="${e(c.id)}">목록으로 복원</button></article>`).join('')}</div>` : '<div class="empty-list">목록에서 삭제한 신청이 없습니다.</div>'}</section>`;
+  screen.innerHTML = `${heading('목록 휴지통','삭제한 신청을 복원하거나 이 Mac의 보관 자료를 영구 삭제할 수 있습니다.',`<button class="button secondary" data-action="empty-trash"${!trashCases().length || ui.emptyingTrash ? ' disabled' : ''}>${ui.emptyingTrash ? '비우는 중…' : '휴지통 비우기'}</button>`)}<section class="panel trash-panel"><div class="notice good">온라인 서비스의 신청·결과는 유지됩니다. 휴지통을 비우면 여기에 있는 신청의 원본·생성 파일과 작업 기록이 이 Mac에서 영구 삭제됩니다. 별도로 만든 백업은 유지됩니다.</div>${trashCases().length ? `<div class="trash-list">${trashCases().map(c => `<article><div><strong>${e(value(c.title))}</strong><p>${e(value(c.artist_name))} · ${e(TYPE[c.type])} · ${isManual(c) ? '수동 작업' : '온라인 신청'}</p><small>${e(formatDate(c.deletedAt || c.local?.deletedAt,true))} 삭제${c.purgePending ? ' · 영구 삭제가 미완료되었습니다. 휴지통 비우기를 다시 실행하세요.' : ''}</small></div><button class="button secondary small" data-restore-case="${e(c.id)}"${c.purgePending || ui.emptyingTrash ? ' disabled' : ''}>목록으로 복원</button></article>`).join('')}</div>` : '<div class="empty-list">목록에서 삭제한 신청이 없습니다.</div>'}</section>`;
+}
+async function emptyTrash() {
+  if (ui.emptyingTrash || !trashCases().length) return;
+  const targets = trashCases().map(c => ({ id: c.id, deletedAt: c.deletedAt }));
+  const dialog = document.getElementById('confirm-dialog');
+  if (dialog.open) return;
+  document.getElementById('confirm-title').textContent = '휴지통을 영구적으로 비울까요?';
+  document.getElementById('confirm-message').textContent = `${targets.length}건의 원본·받은 파일·생성 문서·작업 기록을 이 Mac에서 영구 삭제합니다. 수동 작업의 기준파일도 삭제되며 이 작업은 되돌릴 수 없습니다. 온라인 신청과 고객 결과, 기존 백업은 유지됩니다.`;
+  dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = `${targets.length}건 영구 삭제`; dialog.returnValue = ''; dialog.showModal();
+  dialog.querySelector('[value=cancel]').focus();
+  const confirmed = await new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+  dialog.querySelector('[value=cancel]').textContent = '계속 편집'; dialog.querySelector('[value=confirm]').textContent = '변경 버리기';
+  if (!confirmed) return;
+  ui.emptyingTrash = true; render();
+  try {
+    const result = await api('/api/trash/empty', { method: 'POST', body: { confirmation: 'EMPTY_TRASH', cases: targets } });
+    await refresh();
+    toast(result.failedCases?.length ? `${result.deletedCount}건 삭제 완료. ${result.failedCases.length}건은 삭제하지 못했습니다. 저장 공간과 파일 권한을 확인한 뒤 다시 비워주세요.` : `${result.deletedCount}건의 자료와 작업 기록을 영구 삭제했습니다.`, !!result.failedCases?.length);
+  } catch (error) { await refresh().catch(() => {}); toast(error.message, true); }
+  finally { ui.emptyingTrash = false; render(); }
 }
 async function deleteCase(id) {
   if (!(await discardEdits())) return;
@@ -525,6 +545,7 @@ async function action(name, button) {
   try {
     if (name === 'new-manual') { if (!(await discardEdits())) return; ui.importOpen = true; ui.referenceFile = null; manualScreen(); }
     else if (name === 'view-trash') { if (!(await discardEdits())) return; ui.nav = 'trash'; render(); }
+    else if (name === 'empty-trash') await emptyTrash();
     else if (name === 'edit-manual') { if (!(await discardEdits())) return; ui.tab = 'documents'; ui.docTab = 'edit'; detailRender(); }
     else if (name === 'translate-manual') await translateManualLyrics();
     else if (name === 'reload-results') { if (!(await discardEdits())) return; ui.dirty = false; await loadResults(true); }

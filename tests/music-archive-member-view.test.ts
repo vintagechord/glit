@@ -17,8 +17,9 @@ test("member API boundary strips provenance and private operational records with
   const raw = { library: { id: "library", owner_id: "private-owner", version: 1, data }, events: [{ details: "secret audit" }], evidence: [{ file_name: "private evidence" }], jobs: [{ id: "new", library_id: "library", provider: "apple", external_artist_id: "1", status: "completed", created_at: "2026-09-09", cursor: { token: "internal cursor" } }, { id: "old", library_id: "library", provider: "apple", external_artist_id: "1", status: "failed", created_at: "2026-09-08", error_message: "internal error" }], providers: [{ id: "apple", status: "available", automaticImplemented: true, message: "source details", checkedAt: "date" }] };
   const projected = memberArchiveResponse(raw);
   const serialized = JSON.stringify(projected);
-  assert.doesNotMatch(serialized, /private-owner|secret audit|private evidence|internal cursor|internal error|source details|checkedAt|"source"/);
+  assert.doesNotMatch(serialized, /private-owner|secret audit|private evidence|internal cursor|internal error|checkedAt|"source"/);
   assert.deepEqual(projected.jobs, [{ id: "new", library_id: "library", status: "completed" }]);
+  assert.equal((projected.providers as { message: string }[])[0].message, "source details", "safe provider setup guidance is visible to the member");
   assert.equal(raw.library.data.releases[0].source?.provider, "apple");
   assert.equal(raw.jobs.length, 2);
 });

@@ -1,3 +1,5 @@
+import { isRadioCalendarDate } from "@/lib/radio-program-plans";
+
 export type RadioRequestDraft = {
   title: string;
   body: string;
@@ -24,6 +26,14 @@ export type RadioRequestProgress = {
   postUrl?: string;
   memo?: string;
   postedAt?: string;
+  playlistFit?: boolean;
+  themeChecked?: boolean;
+  songFindable?: boolean;
+  storyRead?: boolean;
+  songAired?: boolean;
+  airedDate?: string;
+  evidenceUrl?: string;
+  followUpDate?: string;
 };
 
 export type RadioRequestWorkspaceState = {
@@ -119,9 +129,9 @@ function readManualName(value: unknown): RadioRequestManualName | null {
 }
 
 function readProgress(value: unknown): RadioRequestProgress | null {
-  if (!isRecord(value) || !optionalText(value.postUrl, 2000) || !optionalText(value.memo, 1000)) return null;
+  if (!isRecord(value) || !optionalText(value.postUrl, 2000) || !optionalText(value.memo, 1000) || !optionalText(value.evidenceUrl, 2000)) return null;
   const result: RadioRequestProgress = {};
-  for (const key of ["rules", "privacy", "posted", "playlist"] as const) {
+  for (const key of ["rules", "privacy", "posted", "playlist", "playlistFit", "themeChecked", "songFindable", "storyRead", "songAired"] as const) {
     if (value[key] !== undefined && typeof value[key] !== "boolean") return null;
     if (typeof value[key] === "boolean") result[key] = value[key];
   }
@@ -133,6 +143,12 @@ function readProgress(value: unknown): RadioRequestProgress | null {
   }
   if (value.postUrl !== undefined) result.postUrl = value.postUrl as string;
   if (value.memo !== undefined) result.memo = value.memo as string;
+  if (value.evidenceUrl !== undefined) result.evidenceUrl = value.evidenceUrl as string;
+  for (const key of ["airedDate", "followUpDate"] as const) {
+    if (value[key] === undefined) continue;
+    if (typeof value[key] !== "string" || (value[key] !== "" && !isRadioCalendarDate(value[key]))) return null;
+    result[key] = value[key];
+  }
   return result;
 }
 

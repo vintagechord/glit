@@ -16,7 +16,7 @@ export function resolveArchiveReviewEntry(data: ArchiveData, context: ArchiveRev
   if (trackIds && (tracks.length !== new Set(trackIds).size || tracks.some(track => !trackIds.includes(track.id)))) throw new Error("신청 음원의 관리 상태가 변경되었습니다. 내 음악 관리에서 신청 범위를 확인해주세요.");
   if (tracks.length > 100) throw new Error("한 번에 100곡까지 신청할 수 있습니다. 음원을 나누어 신청해주세요.");
   if (!tracks.length) throw new Error("신청할 음원을 내 음악 관리에서 선택해주세요.");
-  const priority = ["melon", "genie", "bugs", "apple"];
+  const priority = ["melon", "genie", "bugs", "apple", "spotify"];
   const source = [...release.links].sort((a, b) => priority.indexOf(a.provider) - priority.indexOf(b.provider))
     .map(link => parseReleasedAlbumUrl(link.url)).find(Boolean);
   if (!source) throw new Error("앨범의 발매 링크를 내 음악 관리에 등록해주세요.");

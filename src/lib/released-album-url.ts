@@ -1,5 +1,5 @@
 export type ReleasedAlbumUrl = {
-  provider: "melon" | "genie" | "apple" | "bugs";
+  provider: "melon" | "genie" | "apple" | "bugs" | "spotify";
   albumId: string;
   canonicalUrl: string;
 };
@@ -44,6 +44,9 @@ export const parseReleasedAlbumUrl = (
     const bugsAlbum = ["music.bugs.co.kr", "m.bugs.co.kr"].includes(url.hostname)
       ? url.pathname.match(/^\/album\/([1-9]\d*)\/?$/i) : null;
     if (bugsAlbum) return { provider: "bugs", albumId: bugsAlbum[1], canonicalUrl: `https://music.bugs.co.kr/album/${bugsAlbum[1]}` };
+    const spotifyAlbum = url.hostname === "open.spotify.com"
+      ? url.pathname.match(/^\/(?:intl-[a-z]{2}\/)?album\/([A-Za-z0-9]{22})\/?$/) : null;
+    if (spotifyAlbum) return { provider: "spotify", albumId: spotifyAlbum[1], canonicalUrl: `https://open.spotify.com/album/${spotifyAlbum[1]}` };
 
     const isMelon =
       melonHosts.has(url.hostname) &&
@@ -72,5 +75,5 @@ export const getReleasedAlbumUrlError = (value?: string | null) => {
   if (!value?.trim()) return "발매된 앨범의 링크를 입력해주세요.";
   return parseReleasedAlbumUrl(value)
     ? null
-    : "멜론·지니·벅스·Apple Music의 앨범 상세 페이지 URL을 확인해주세요. 곡·아티스트 링크는 사용할 수 없습니다.";
+    : "멜론·지니·벅스·Apple Music·Spotify의 앨범 상세 페이지 URL을 확인해주세요. 곡·아티스트 링크는 사용할 수 없습니다.";
 };

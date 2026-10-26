@@ -378,3 +378,23 @@ test("the second same-provider profile resumes by exact identity and removing it
   assert.deepEqual(h.state.tables.music_archive_jobs.map(item => item.status), ["queued", "cancelled"]);
   assert.deepEqual((h.state.tables.music_archive_libraries[0].data as ArchiveLibrary["data"]).connections.map(item => item.externalArtistId), ["100"]);
 });
+
+test("a missing optional search cache does not block live catalog candidates", async () => {
+  const h = await harness();
+  h.state.appleSearchRows = [artist(100)];
+  h.state.failure = { table: "music_archive_search_cache", operation: "select", code: "PGRST205", message: "missing optional cache" };
+  const result = await h.searchArchiveArtists(OWNER, search("김아티스트"));
+  assert.equal(result.queryStatus, "success");
+  assert.deepEqual(result.items.map(item => item.externalId), ["100"]);
+});
+
+test("a missing optional artist index cannot prevent a verified connection and queued import", async () => {
+  const h = await harness();
+  h.state.tables.music_archive_libraries = [library()];
+  h.state.appleLookupRows = [artist(100)];
+  h.state.failure = { table: "music_archive_artist_index", operation: "upsert", code: "PGRST205", message: "missing optional index" };
+  const response = await h.apiPOST(post(connect));
+  assert.equal(response.status, 202);
+  assert.equal(h.state.tables.music_archive_jobs.length, 1);
+  assert.equal((h.state.tables.music_archive_libraries[0].data as ArchiveLibrary["data"]).connections[0].externalArtistId, "100");
+});
