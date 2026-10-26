@@ -1,0 +1,39 @@
+{
+  "version": "2.3.2",
+  "build": "7",
+  "nodeVersion": "24.7.0",
+  "nodeOfficialSHA256": "ff8298faaf82c85444aad7f1e12a4882496286ea9008702029b359d7fac7f8b3",
+  "installedAt": "2026-10-26T15:31:13.759Z",
+  "preserved": {
+    "connectionKeysUnchanged": true,
+    "allCasesPreserved": true,
+    "allTrashPreserved": true,
+    "allExistingFilesPreserved": true
+  },
+  "installedSourceHashes": {
+    "server.mjs": "64057d43c47e388793ab1b4df2cc00e80ae522ba3348d1db0fee1b5711453d2e",
+    "core.mjs": "fffe76f00a195b17e0db89343c0f6ba13cc723a92e31b6d05d57d77408b0319c",
+    "public/app.js": "5571172ee5680438821970ebcad7c993574a3dbc9cbbad3806ce4baa09537c2a",
+    "public/index.html": "168e464312a6cfac733899a970d4d83fdf9e29e3bad6470cb174ee25f51c098a"
+  },
+  "realTrashEmptied": false,
+  "verification": {
+    "signature": "codesign --verify --deep --strict passed",
+    "runtimeHealth": {
+      "app": "onside-review-desk",
+      "version": "2.3.2"
+    },
+    "launchAgent": "running",
+    "nativeUiVersion": "v2.3.2",
+    "nativeTrashButtonVisible": true,
+    "permanentDeleteButtonClicked": false,
+    "stateBackupCreated": true,
+    "previousApplicationRetained": true,
+    "connectionKeyHashStillMatches": true
+  },
+  "validation": {
+    "localApiRegression": "35 passing tests (server, manual-server, remote)",
+    "syntheticUiSmoke": "passed; includes cancellation, explicit confirmation, and disabled empty state",
+    "realDataChangedByVerification": false
+  }
+}

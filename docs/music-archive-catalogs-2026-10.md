@@ -18,7 +18,8 @@
 - 지니 상세 페이지에서 앨범 종류를 제공하지 않으면 `기타`로 남긴다. 가사·음원·영상·이미지 파일은 수집하지 않고 공식 썸네일 URL만 표시한다.
 - Spotify: 서버의 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`으로 공식 API를 사용한다. YouTube: `YOUTUBE_DATA_API_KEY`로 공식 채널 검색/조회만 수행한다. 키가 없으면 구성 필요 안내와 공식 사이트의 텍스트 검색 링크를 제공한다. 키는 클라이언트 응답에 포함하지 않는다.
 - Apple 검색 캐시·초성 인덱스는 보조 자료다. 캐시/인덱스 쓰기 실패 때문에 정상 공개 검색이나 검증된 아티스트 연결을 실패시키지 않는다. 초성 검색 자체는 기존 공개 인덱스 범위에서만 가능하다.
-- DB 배포에는 `supabase/migrations/20261026150859_music_archive_more_catalogs.sql`이 필요하다. 기존 owner RLS와 service-role 전용 큐/슬롯 권한을 유지하고 제공처 제약만 확장한다. YouTube는 발매 앨범 동기화 큐에 추가하지 않는다.
+- `supabase/migrations/20261026150859_music_archive_more_catalogs.sql`은 2026-10-27 운영 적용했다. 전후 스키마·이력 비교에서 기존 owner RLS와 service-role 전용 큐/슬롯 권한 보존 및 검토한 제공처 제약만 확장됨을 확인했다. YouTube는 발매 앨범 동기화 큐에 추가하지 않는다.
+- 사용자 요청으로 Spotify·YouTube API 키 발급·등록·활성화는 보류한다. 사용자가 재개를 요청하면 진행하며, 다른 제공처와 심의 관리의 운영 반영을 막지 않는다.
 
 ## 검증 범위
 
