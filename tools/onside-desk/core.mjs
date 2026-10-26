@@ -140,6 +140,8 @@ export class Store {
       this.data = { version: 1, settings: { ...DEFAULT_SETTINGS }, cases: {}, jobs: [], lastSync: null, syncError: null };
     }
     if (this.data.version !== 1 || !this.data.cases || !Array.isArray(this.data.jobs)) throw new Error('지원하지 않는 로컬 관리 데이터입니다.');
+    this.data.purgedCases ||= {};
+    if (typeof this.data.purgedCases !== 'object' || Array.isArray(this.data.purgedCases)) throw new Error('휴지통 삭제 기록을 확인할 수 없습니다. 백업을 확인하세요.');
     this.data.settings = { ...DEFAULT_SETTINGS, ...this.data.settings };
     for (const job of this.data.jobs) if (['running', 'queued'].includes(job.status)) Object.assign(job, { status: 'failed', message: '앱 종료로 중단되었습니다. 다시 실행하세요.', finishedAt: now() });
     await this.save();

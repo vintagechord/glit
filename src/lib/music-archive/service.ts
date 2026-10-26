@@ -8,6 +8,8 @@ import { getMusicProviderStatuses, parseMusicProviderUrl, type ArtistCandidate }
 import { MusicProviderError, searchMusicBrainzArtists, lookupMusicBrainzRelease } from "./musicbrainz";
 import { lookupAppleArtist, lookupAppleAlbumMetadata } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
+import { searchDomesticArtists, lookupDomesticArtist } from "./domestic-catalog";
+import { searchStreamingArtists, lookupStreamingArtist } from "./streaming";
 import { agencyGuides } from "./guides";
 import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
@@ -52,7 +54,7 @@ export async function getArchiveOverview(owner: string, page = 0) {
     admin.from("music_archive_libraries").select("id", { count: "exact", head: true }).eq("owner_id", owner),
   ]);
   archiveDatabaseError(libraries.error); archiveDatabaseError(jobs.error); archiveDatabaseError(count.error);
-  return { libraries: libraries.data ?? [], jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses().filter(item => item.status === "available" && item.id !== "musicbrainz"), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
+  return { libraries: libraries.data ?? [], jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses().filter(item => item.id !== "musicbrainz"), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
 }
 
 export async function getArchiveDetail(owner: string, libraryId: string) {
@@ -98,7 +100,7 @@ export async function searchOwnedSubmissions(owner: string, query: string, page 
 
 export async function searchArchiveArtists(owner: string, params: URLSearchParams) {
   const provider = params.get("provider") ?? "apple";
-  if (!["apple", "musicbrainz"].includes(provider)) return { items: [], total: 0, nextOffset: null, queryStatus: "unsupported", message: "아티스트 이름으로 앨범을 찾아주세요." };
+  if (!["apple", "musicbrainz", "melon", "genie", "spotify", "youtube"].includes(provider)) return { items: [], total: 0, nextOffset: null, queryStatus: "unsupported", message: "아티스트 이름으로 앨범을 찾아주세요." };
   const rate = consumeRateLimit({ namespace: "archive-provider-search", identifier: owner, limit: 40, windowMs: 60000 });
   if (!rate.allowed) throw new ArchiveError("검색 요청이 많습니다. 잠시 후 다시 검색해주세요.", 429);
   const query = z.string().trim().min(1).max(200).parse(params.get("q") ?? "");
@@ -106,7 +108,11 @@ export async function searchArchiveArtists(owner: string, params: URLSearchParam
   try {
     const result = provider === "apple"
       ? await searchCatalogArtists(query, offset, () => acquireArchiveProviderPermit("apple"))
-      : await searchMusicBrainzArtists(query, { offset, acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
+      : provider === "melon" || provider === "genie"
+        ? await searchDomesticArtists(provider, query, { acquirePermit: () => acquireArchiveProviderPermit(provider) })
+        : provider === "spotify" || provider === "youtube"
+          ? await searchStreamingArtists(provider, query, { acquirePermit: () => acquireArchiveProviderPermit(provider) })
+          : await searchMusicBrainzArtists(query, { offset, acquirePermit: () => acquireArchiveProviderPermit("musicbrainz") });
     return { ...result, queryStatus: result.items.length ? "success" : "no_results" };
   } catch (error) {
     if (!(error instanceof MusicProviderError)) throw error;
@@ -339,7 +345,11 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     if (parsed.provider === "apple") {
       // Revalidate the chosen ID; never silently map an unrelated domestic provider ID by name.
       verifiedArtist = await lookupAppleArtist(parsed.externalId, { includeArtwork: true, acquirePermit: () => acquireArchiveProviderPermit("apple") });
-      await indexCatalogArtists([verifiedArtist], new Date().toISOString());
+      await indexCatalogArtists([verifiedArtist], new Date().toISOString()).catch(() => undefined);
+    } else if (parsed.provider === "melon" || parsed.provider === "genie") {
+      verifiedArtist = await lookupDomesticArtist(parsed.provider, parsed.externalId, { acquirePermit: () => acquireArchiveProviderPermit(parsed.provider as "melon" | "genie") });
+    } else if ((parsed.provider === "spotify" || parsed.provider === "youtube") && getMusicProviderStatuses().find(item => item.id === parsed.provider)?.status === "available") {
+      verifiedArtist = await lookupStreamingArtist(parsed.provider, parsed.externalId, { acquirePermit: () => acquireArchiveProviderPermit(parsed.provider as "spotify" | "youtube") });
     }
     command.connection.url = parsed.url; command.connection.externalArtistId = parsed.externalId;
   }
@@ -359,9 +369,9 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     const { error } = await cancellation;
     if (error) return { library: result, syncNotice: "연결 변경을 저장했습니다. 해당 불러오기 작업은 다음 실행 때 연결 해제를 확인하고 중단됩니다." };
   }
-  if (command.type === "set_connection" && command.connection.provider === "apple" && command.connection.confirmed) {
-    try { return { library: result, ...await enqueueArchiveSync(owner, result, "apple", command.connection.externalArtistId) }; }
+  if (command.type === "set_connection" && ["apple", "melon", "genie", "spotify"].includes(command.connection.provider) && command.connection.confirmed && getMusicProviderStatuses().find(item => item.id === command.connection.provider)?.status === "available") {
+    try { return { library: result, ...await enqueueArchiveSync(owner, result, command.connection.provider, command.connection.externalArtistId) }; }
     catch { return { library: result, syncNotice: "아티스트 연결을 저장했습니다. 앨범 불러오기를 다시 눌러주세요." }; }
   }
-  return { library: result };
+  return { library: result, ...(command.type === "set_connection" && ["youtube", "bugs", "spotify"].includes(command.connection.provider) ? { syncNotice: command.connection.provider === "youtube" ? "YouTube 채널을 연결했습니다. 앨범 발매 정보는 멜론·지니·Spotify·Apple Music에서 같은 아티스트를 선택해 불러와 주세요." : "아티스트 링크를 저장했습니다. 이 제공처의 자동 불러오기가 준비되지 않아 다른 음악 서비스에서 앨범을 불러오거나 직접 추가해주세요." } : {}) };
 }

@@ -25,7 +25,7 @@ for (const width of [360, 390, 430, 768, 1024, 1440]) {
       await expect(card).toContainText("신청하기");
     }
     await page.locator("summary").filter({ hasText: "어떤 심의가 필요한지 모르겠어요" }).click();
-    const support = page.getByRole("link", { name: "신청·결제 도움말 및 문의 (새 창)", exact: true });
+    const support = page.getByRole("main").getByRole("link", { name: "문의하기", exact: true });
     await expect(support).toHaveCount(1);
     await expect(support).toBeVisible();
     await expect(support).toHaveAttribute("href", "/support");
@@ -96,7 +96,7 @@ test("English service cards preserve explicit purpose and locale", async ({ page
     await expect(card).not.toContainText("Pricing Basis");
   }
   await page.locator("summary").filter({ hasText: "Which review do I need?" }).click();
-  const support = page.getByRole("link", { name: "Application and Payment Support (New Window)", exact: true });
+  const support = page.getByRole("main").getByRole("link", { name: "Contact us", exact: true });
   await expect(support).toHaveCount(1);
   await expect(support).toHaveAttribute("href", "/en/support");
   await expect(support).toHaveAttribute("target", "_blank");

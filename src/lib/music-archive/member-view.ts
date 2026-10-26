@@ -39,7 +39,7 @@ export function memberArchiveResponse(value: unknown): Record<string, unknown> {
   if (response.jobs) result.jobs = currentJobs(response.jobs);
   if (response.job) result.job = keep(response.job as Record<string, unknown>, ["id", "library_id", "status"]);
   if (response.guides) result.guides = rows(response.guides).filter(guide => ["komca", "koscap", "fkmp", "tj", "ky"].includes(String(guide.id))).map(row => keep(row, ["id", "name", "kind", "introduction", "preparation", "steps", "url", "searchUrl", "applyUrl", "visible"]));
-  if (response.providers) result.providers = rows(response.providers).map(row => keep(row, ["id", "status", "automaticImplemented"]));
+  if (response.providers) result.providers = rows(response.providers).map(row => keep(row, ["id", "name", "message", "status", "automaticImplemented"]));
   if (response.reviews) result.reviews = rows(response.reviews).map(row => keep(row, ["id", "title", "artist_name", "release_date", "status", "album_tracks", "station_reviews"]));
   // Detail endpoints and mutation responses use the same boundary.
   delete result.events; delete result.evidence; delete result.runLibraryId;

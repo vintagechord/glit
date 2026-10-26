@@ -51,3 +51,12 @@ test("persisted track snapshots do not widen when later sync adds another song",
   assert.deepEqual(entry.tracks.map(track => track.id), ["one"]);
   assert.throws(() => resolveArchiveReviewEntry(data, { libraryId, releaseId: "release" }, ["one", "missing"]), /관리 상태가 변경/);
 });
+
+test("Spotify-only release can enter review with its exact selected track metadata", () => {
+  const data = fixture();
+  const url = `https://open.spotify.com/album/${"B".repeat(22)}`;
+  data.releases[0].links = [{ provider: "spotify", url }];
+  const entry = resolveArchiveReviewEntry(data, { libraryId, releaseId: "release", trackId: "two" });
+  assert.equal(entry.albumUrl, url);
+  assert.deepEqual(entry.tracks.map(track => track.id), ["two"]);
+});

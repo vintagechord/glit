@@ -4,9 +4,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, CheckCircle2, ChevronDown, ExternalLink, FileText, Headphones, ListMusic, Music2, Radio, RotateCcw, Search } from "lucide-react";
 import { broadcastArtist, broadcastTrackTitle, buildRadioRequest, type BroadcastReview, type BroadcastSubmission, type BroadcastTrack } from "@/lib/broadcast-support";
 import { getRadioStationGuide } from "@/lib/radio-station-guide";
+import { filterRadioPrograms, formatRadioSchedule, getRadioProgramPlan, type RadioRouteFilter, type RadioTimeFilter } from "@/lib/radio-program-plans";
 import type { RadioRequestDraft, RadioRequestProgress, RadioRequestSelection } from "@/lib/radio-request-workspace";
 import { useRadioRequestWorkspace } from "./use-radio-request-workspace";
 import { RadioDraftEditor, downloadRadioText, radioExternalUrl, radioButtonClass, radioCardClass, radioControlClass, radioNoteClass, radioPrimaryClass } from "./radio-request-ui";
+import { RadioProgramSchedule, RadioProgramStrategy } from "./radio-program-plan";
+import { RadioRequestOutcome } from "./radio-request-outcome";
 
 export { radioButtonClass } from "./radio-request-ui";
 export type RadioRequestCandidate = { review: BroadcastReview; tracks: { key: string; track: BroadcastTrack }[]; manual: boolean };
@@ -16,6 +19,8 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
   const workspace = useRadioRequestWorkspace(submission.id);
   const { stationId, selections, manualNames, drafts, progress } = workspace;
   const [query, setQuery] = useState("");
+  const [timeFilter, setTimeFilter] = useState<RadioTimeFilter>("all");
+  const [routeFilter, setRouteFilter] = useState<RadioRouteFilter>("all");
   const [resetOpen, setResetOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -50,10 +55,11 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
   const canContinue = step === 1 ? songReady : step === 2 ? Boolean(program) : draftReady;
   const listeningUrl = radioExternalUrl(draft.listeningUrl);
   const postUrl = radioExternalUrl(currentProgress.postUrl);
+  const evidenceUrl = radioExternalUrl(currentProgress.evidenceUrl);
   const postedAt = currentProgress.postedAt
     ? new Intl.DateTimeFormat(isEnglish ? "en" : "ko", { dateStyle: "medium", timeStyle: "short" }).format(new Date(currentProgress.postedAt))
     : "";
-  const filteredPrograms = (guide?.programs ?? []).filter(item => `${item.name} ${item.description[locale]}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const filteredPrograms = filterRadioPrograms(guide?.programs ?? [], { query, time: timeFilter, route: routeFilter });
   const stepLabels = isEnglish ? ["Your song", "Program", "Your story", "Submit & track"] : ["내 곡 확인", "프로그램", "신청글 작성", "신청·확인"];
   const titles = isEnglish
     ? ["Which song would you like to share?", "Choose the program for your song", "Make the request sound like you", "Send your music, then keep the link"]
@@ -99,6 +105,12 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
       selectedProgram?.messageUrl ?? guide?.directoryUrl ?? "",
       currentProgress.posted ? `${isEnglish ? "Posted (marked by you)" : "신청 완료 (직접 표시)"}${postedAt ? ` · ${postedAt}` : ""}` : "",
       postUrl ?? "", currentProgress.memo ?? "",
+      selectedProgram ? formatRadioSchedule(getRadioProgramPlan(selectedProgram), isEnglish) : "",
+      `${isEnglish ? "Story read (self-recorded)" : "사연 소개 (직접 기록)"}: ${currentProgress.storyRead ? (isEnglish ? "Yes" : "확인") : (isEnglish ? "Unconfirmed" : "미확인")}`,
+      `${isEnglish ? "Song aired (self-recorded)" : "곡 방송 (직접 기록)"}: ${currentProgress.songAired ? (isEnglish ? "Yes" : "확인") : (isEnglish ? "Unconfirmed" : "미확인")}`,
+      `${isEnglish ? "Broadcast date" : "방송일"}: ${currentProgress.airedDate ?? ""}`,
+      `${isEnglish ? "Evidence" : "확인 근거"}: ${evidenceUrl ?? ""}`,
+      `${isEnglish ? "Next check date" : "다음 확인일"}: ${currentProgress.followUpDate ?? ""}`,
     ].join("\n"));
   }
 
@@ -154,7 +166,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
         {step === 1 && <div className={`${radioCardClass} space-y-5`}>
           {needsTrackConfirmation && <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "Your previously selected song is no longer in this broadcaster’s approved list. Confirm an available song to continue." : "이전에 선택한 곡이 현재 적격 목록에서 빠졌어요. 신청할 곡을 다시 확인한 뒤 진행해주세요."}</p>}
           {candidates.length > 1 && <div><label htmlFor={`${id}-station`} className="mb-2 block text-sm font-bold">{isEnglish ? "Approved broadcaster" : "적격 방송국"}</label>
-            <select id={`${id}-station`} value={selected.review.id} className={radioControlClass} onChange={event => { workspace.setStationId(event.target.value); setQuery(""); }}>
+            <select id={`${id}-station`} value={selected.review.id} className={radioControlClass} onChange={event => { workspace.setStationId(event.target.value); setQuery(""); setTimeFilter("all"); setRouteFilter("all"); }}>
               {candidates.map(item => <option key={item.review.id} value={item.review.id}>{item.review.station?.name || item.review.station?.code || (isEnglish ? "Broadcaster" : "방송국")}</option>)}
             </select>
           </div>}
@@ -174,11 +186,18 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
         </div>}
         {step === 2 && <>
           {Boolean(guide?.programs.length) && <>
+            <RadioProgramSchedule programs={guide!.programs} isEnglish={isEnglish} />
             <div><label htmlFor={`${id}-search`} className="mb-2 flex items-center gap-2 text-sm font-bold"><Search size={16} aria-hidden />{isEnglish ? "Find a program" : "프로그램 검색"}</label><input id={`${id}-search`} type="search" className={radioControlClass} value={query} onChange={event => setQuery(event.target.value)} placeholder={isEnglish ? "Program name or introduction" : "프로그램명 또는 소개로 검색"} /></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div><label htmlFor={`${id}-time-filter`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Broadcast time" : "방송 시간대"}</label><select id={`${id}-time-filter`} value={timeFilter} onChange={event => setTimeFilter(event.target.value as RadioTimeFilter)} className={radioControlClass}><option value="all">{isEnglish ? "All times" : "전체 시간"}</option><option value="morning">{isEnglish ? "Morning (05–12)" : "아침 (05~12시)"}</option><option value="daytime">{isEnglish ? "Daytime (12–18)" : "낮 (12~18시)"}</option><option value="evening">{isEnglish ? "Evening / overnight (18–05)" : "저녁·심야 (18~05시)"}</option></select></div>
+              <div><label htmlFor={`${id}-route-filter`} className="mb-2 block text-sm font-semibold">{isEnglish ? "Participation type" : "참여 방식"}</label><select id={`${id}-route-filter`} value={routeFilter} onChange={event => setRouteFilter(event.target.value as RadioRouteFilter)} className={radioControlClass}><option value="all">{isEnglish ? "All routes" : "전체 경로"}</option><option value="request">{isEnglish ? "Verified song requests" : "곡 신청 가능 확인"}</option><option value="story">{isEnglish ? "Story segment" : "사연 코너 있음"}</option></select></div>
+            </div>
+            {(timeFilter !== "all" || routeFilter !== "all") && <p className={radioNoteClass}>{isEnglish ? "Filters include only programs with verified time or participation details. Select All to see other programs." : "필터에는 시간·참여 방식이 확인된 프로그램만 표시합니다. 나머지는 ‘전체’에서 확인하세요."}</p>}
             <div className="grid gap-3 sm:grid-cols-2">
               {filteredPrograms.map(item => <article key={item.name} className={`flex min-w-0 flex-col rounded-2xl border-2 p-4 ${program === item.name ? "border-blue-600 bg-blue-50/50 dark:border-blue-400 dark:bg-blue-950/30" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"}`}>
                 <div className="mb-2 flex flex-wrap gap-1.5 text-[10px] font-semibold"><span className="rounded bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{stationName}</span><span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{isEnglish ? "Official request board" : "공식 신청 게시판"}</span></div>
                 <h4 className="text-base font-bold">{item.name}</h4>
+                <p className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-300">{formatRadioSchedule(getRadioProgramPlan(item), isEnglish)}</p>
                 <p className={`mt-2 flex-1 ${radioNoteClass}`}>{item.description[locale]}</p>
                 <div className="mt-3 flex flex-wrap gap-2"><a href={item.url} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Program info" : "프로그램 소개"}<ArrowUpRight size={13} aria-hidden /><span className="sr-only">{isEnglish ? " (new tab)" : " (새 창)"}</span></a><a href={item.playlistUrl} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Recent playlist" : "최근 선곡표"}<ArrowUpRight size={13} aria-hidden /><span className="sr-only">{isEnglish ? " (new tab)" : " (새 창)"}</span></a></div>
                 <button type="button" aria-pressed={program === item.name} onClick={() => updateSelection({ program: item.name })} className={`${program === item.name ? radioPrimaryClass : radioButtonClass} mt-3 w-full`}>{program === item.name && <Check size={15} aria-hidden />}{isEnglish ? `Choose ${item.name}` : `${item.name} 선택`}</button>
@@ -195,6 +214,12 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
         </>}
         {step === 3 && <>
           <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">{stationName} <span className="mx-1 text-blue-400">/</span> {program}</p>
+          {selectedProgram && <RadioProgramStrategy program={selectedProgram} isEnglish={isEnglish} />}
+          <fieldset className={`${radioCardClass} space-y-2`}><legend className="px-1 text-sm font-bold">{isEnglish ? "Prepare a relevant request" : "신청 전 준비 확인"}</legend>{([
+            ["playlistFit", isEnglish ? "I found a connection in recent playlists" : "최근 선곡표에서 내 곡과 어울리는 분위기를 확인했어요"],
+            ["themeChecked", isEnglish ? "I checked the segment topic and deadline" : "코너 주제와 접수 기한을 확인했어요"],
+            ["songFindable", isEnglish ? "The title, artist and public listening link identify the right song" : "곡명·아티스트·공개 음원 링크로 정확한 곡을 찾을 수 있어요"],
+          ] as const).map(([key, label]) => <label key={key} className="flex min-h-11 items-start gap-2.5 text-sm leading-6"><input type="checkbox" checked={Boolean(currentProgress[key])} onChange={event => updateProgress({ [key]: event.target.checked })} className="mt-1 size-4 shrink-0 accent-blue-700" /><span>{label}</span></label>)}</fieldset>
           <div className="min-w-0 space-y-4">
             <details className={`${radioCardClass} group bg-slate-50/70 dark:bg-slate-900/50`} data-testid="radio-writing-help">
               <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-bold text-blue-700 dark:text-blue-300">
@@ -265,6 +290,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
               <button type="button" onClick={downloadRequest} className={`${radioButtonClass} w-full`}><FileText size={15} aria-hidden />{isEnglish ? "Save request & notes as TXT" : "신청글과 기록 TXT 저장"}</button>
               </div>
             </div>
+            <RadioRequestOutcome progress={currentProgress} onChange={updateProgress} isEnglish={isEnglish} />
           </div>
         </>}
       </div>

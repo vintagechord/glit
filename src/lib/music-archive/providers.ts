@@ -1,9 +1,9 @@
 import type { ArchiveContributor } from "./model";
 /** Provider URLs are links, never arbitrary URLs to fetch. See docs/music-archive-providers.md. */
-export type MusicProvider = "musicbrainz" | "spotify" | "melon" | "genie" | "bugs" | "apple";
+export type MusicProvider = "musicbrainz" | "spotify" | "melon" | "genie" | "bugs" | "apple" | "youtube";
 export type MusicEntityKind = "artist" | "release" | "track" | "recording" | "work";
 export type MusicProviderLink = { provider: MusicProvider; kind: MusicEntityKind; externalId: string; url: string };
-export const MUSIC_PROVIDER_CHECKED_AT = "2026-09-08";
+export const MUSIC_PROVIDER_CHECKED_AT = "2026-10-27";
 const mbid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isMusicBrainzId = (value: string) => mbid.test(value);
 
@@ -26,6 +26,9 @@ export function parseMusicProviderUrl(value: string, expectedKind?: MusicEntityK
         const id = kind === "track" && trackId ? trackId : match[2];
         result = { provider: "apple", kind, externalId: id, url: `https://music.apple.com/kr/${kind === "release" ? "album" : kind === "track" ? "song" : "artist"}/${id}` };
       }
+    } else if (["www.youtube.com", "youtube.com", "music.youtube.com"].includes(url.hostname)) {
+      const match = url.pathname.match(/^\/channel\/(UC[A-Za-z0-9_-]{22})\/?$/);
+      if (match) result = { provider: "youtube", kind: "artist", externalId: match[1], url: `https://www.youtube.com/channel/${match[1]}` };
     } else if (url.hostname === "open.spotify.com") {
       const match = url.pathname.match(/^\/(?:intl-[a-z]{2}\/)?(artist|album|track)\/([A-Za-z0-9]{22})\/?$/);
       if (match) result = { provider: "spotify", kind: match[1] === "album" ? "release" : match[1] as MusicEntityKind, externalId: match[2], url: `https://open.spotify.com/${match[1]}/${match[2]}` };
@@ -64,8 +67,10 @@ export function getMusicProviderStatuses(env: Record<string, string | undefined>
   return [
     { id: "apple", name: "Apple Music 한국 카탈로그", status: "available", automaticImplemented: true, message: "한국 카탈로그에서 아티스트와 발매 음반을 찾습니다. 제공 목록의 범위와 수집 건수를 함께 확인할 수 있습니다.", url: "https://music.apple.com/kr/", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
     { id: "musicbrainz", name: "MusicBrainz", status: !permitted ? "permission_required" : !identified ? "configuration_required" : "available", automaticImplemented: true, message: !permitted ? "자동 수집 코드 준비 · 상업적 API 이용 허가 확인 필요. 공식 링크와 수동 등록을 이용할 수 있습니다." : !identified ? "서버의 서비스명·버전·연락처 User-Agent 설정이 필요합니다." : "공식 API 조회 가능. MusicBrainz 수록 범위만 확인하며 전곡 수집을 보장하지 않습니다.", url: "https://musicbrainz.org/doc/MusicBrainz_API", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
-    { id: "spotify", name: "Spotify", status: "permission_required", automaticImplemented: false, message: "공식 API는 있으나 업무용 아카이브 이용·저장 정책과 운영 접근 심사 확인이 필요합니다. 현재 링크 연결만 지원합니다.", url: "https://developer.spotify.com/policy", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
-    ...(["melon", "genie", "bugs"] as const).map((id) => ({ id, name: { melon: "멜론", genie: "지니뮤직", bugs: "벅스" }[id], status: "link_only" as const, automaticImplemented: false, message: "공개된 공식 아카이브 API와 이용 허가를 확인하지 못했습니다. 공식 링크 연결·직접 입력을 지원합니다.", url: { melon: "https://www.melon.com/", genie: "https://www.genie.co.kr/", bugs: "https://music.bugs.co.kr/" }[id], checkedAt: MUSIC_PROVIDER_CHECKED_AT })),
+    { id: "spotify", name: "Spotify", status: env.SPOTIFY_CLIENT_ID?.trim() && env.SPOTIFY_CLIENT_SECRET?.trim() ? "available" : "configuration_required", automaticImplemented: true, message: env.SPOTIFY_CLIENT_ID?.trim() && env.SPOTIFY_CLIENT_SECRET?.trim() ? "공식 API에서 아티스트와 발매 앨범·수록곡을 확인합니다. 운영 앱 접근 범위에 따라 결과가 제한될 수 있습니다." : "Spotify 검색·앨범 불러오기는 서버 API 연결이 필요합니다. 공식 사이트 검색과 링크 연결은 이용할 수 있습니다.", url: "https://developer.spotify.com/documentation/web-api", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
+    { id: "youtube", name: "YouTube", status: env.YOUTUBE_DATA_API_KEY?.trim() ? "available" : "configuration_required", automaticImplemented: false, message: env.YOUTUBE_DATA_API_KEY?.trim() ? "공식 채널을 찾아 아티스트에 연결합니다. 영상 게시일은 앨범 발매일이 아니므로 발매 정보는 다른 음악 서비스에서 불러와 주세요." : "YouTube 채널 검색은 서버 API 연결이 필요합니다. 공식 사이트 검색과 채널 링크 연결은 이용할 수 있습니다.", url: "https://developers.google.com/youtube/v3/docs/search/list", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
+    ...(["melon", "genie"] as const).map(id => ({ id, name: { melon: "멜론", genie: "지니뮤직" }[id], status: "available" as const, automaticImplemented: true, message: "공개 검색에서 아티스트를 선택하고 해당 ID의 앨범·수록곡을 불러옵니다. 사이트 접근 제한이나 구조 변경 시 재시도할 수 있습니다.", url: id === "melon" ? "https://www.melon.com/" : "https://www.genie.co.kr/", checkedAt: MUSIC_PROVIDER_CHECKED_AT })),
+    { id: "bugs", name: "벅스", status: "link_only", automaticImplemented: false, message: "공식 아티스트 링크를 연결할 수 있습니다. 앨범은 다른 제공처에서 불러오거나 직접 추가해주세요.", url: "https://music.bugs.co.kr/", checkedAt: MUSIC_PROVIDER_CHECKED_AT },
   ];
 }
 export const getProviderRegistry = getMusicProviderStatuses;
@@ -75,7 +80,7 @@ export function isValidMusicBrainzUserAgent(value: string) {
 
 export type ArtistCandidate = { provider: MusicProvider; externalId: string; name: string; sortName: string; disambiguation: string; country: string; type: string; url: string; imageUrl: string | null; representativeRelease: string | null };
 export type ImportedTrack = { externalId: string; recordingId: string | null; title: string; version: string; artistName: string; artistIds: string[]; position: number; discNumber: number; durationMs: number | null; isrcs: string[]; managedByArtist: boolean; url: string; works?: { externalId: string; title: string; iswc?: string; contributors: ArchiveContributor[] }[] };
-export type ImportedRelease = { provider: "musicbrainz" | "apple"; externalId: string; title: string; date: string; type: "album" | "ep" | "single" | "other"; secondaryTypes: string[]; participation: boolean; artistName: string; artistIds: string[]; barcode: string | null; version: string; country: string; tracks: ImportedTrack[]; url: string; imageUrl: string | null; checkedAt: string };
+export type ImportedRelease = { provider: "musicbrainz" | "apple" | "melon" | "genie" | "spotify"; externalId: string; title: string; date: string; type: "album" | "ep" | "single" | "other"; secondaryTypes: string[]; participation: boolean; artistName: string; artistIds: string[]; barcode: string | null; version: string; country: string; tracks: ImportedTrack[]; url: string; imageUrl: string | null; checkedAt: string };
 /** Persist atomically with imported metadata; retry the old cursor after a failed commit. */
 export type MusicBrainzCursor = { version: 1; artistId: string; phase: "artist" | "track_artist" | "done"; offset: number; pending: string[]; total?: number };
 export type MusicBrainzStep = { releases: ImportedRelease[]; nextCursor: MusicBrainzCursor | null; status: "collecting" | "completed"; checkedAt: string; scopeNote: string };

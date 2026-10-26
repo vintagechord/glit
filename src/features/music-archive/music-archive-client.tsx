@@ -93,15 +93,15 @@ export function MusicArchiveClient() {
   async function addArtist(name: string, candidate?: ArtistCandidate, link?: MusicProviderLink) {
     if (busy) return; setBusy(true); setError(""); setMessage("");
     try {
-      let library = dialog?.type === "connect" ? latest.current : connectionDraft.current; let jobs: SyncJob[] = [];
+      let library = dialog?.type === "connect" ? latest.current : connectionDraft.current; let jobs: SyncJob[] = []; let syncNotice = "";
       if (!library) { const created = await archiveRequest<{ library: Library }>("", { action: "create", name }); library = created.library; connectionDraft.current = library; acceptLibrary(library); }
       if (candidate || link) {
         const connected = await archiveRequest<SyncResponse & { library: Library }>("", { action: "connect", libraryId: library.id, version: library.version, provider: candidate?.provider ?? link!.provider, externalId: candidate?.externalId ?? link!.externalId, url: candidate?.url ?? link!.url, candidateName: name });
-        library = connected.library; jobs = responseSyncJobs(connected);
+        library = connected.library; jobs = responseSyncJobs(connected); syncNotice = connected.syncNotice ?? ""; connectionDraft.current = library;
       }
       navigate(library.id); acceptLibrary(library);
       if (jobs.length) setDetail((previous) => previous?.library.id === library.id ? { ...previous, jobs: mergeSyncJobs(previous.jobs, jobs) } : previous);
-      setDialog(null); connectionDraft.current = null; setMessage(jobs.some((job) => ["queued", "running"].includes(job.status)) ? "앨범을 불러오고 있습니다." : "아티스트를 저장했습니다.");
+      setDialog(null); connectionDraft.current = null; setMessage(syncNotice || (jobs.some((job) => ["queued", "running"].includes(job.status)) ? "앨범을 불러오고 있습니다." : "아티스트를 저장했습니다."));
     } catch (error) { setError(failure(error)); throw error; } finally { setBusy(false); }
   }
   const library = current?.library; const data = library?.data;

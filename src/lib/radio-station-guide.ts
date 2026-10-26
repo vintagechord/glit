@@ -44,6 +44,20 @@ const arirangPrograms: RadioProgramGuide[] = [
   },
 ];
 
+// Current CoolFM program list and the program's live navigation checked
+// 2026-10-27. The old Gayo host's page is still online, so do not infer on-air
+// status merely from a reachable archived program page.
+const kbsPrograms: RadioProgramGuide[] = [{
+  name: "이현우의 음악앨범",
+  description: {
+    ko: "KBS CoolFM에서 아침의 일상과 음악을 나누는 프로그램. ‘청취자 참여 → 청취자 게시판’에서 사연·신청곡을 보내고 ‘선곡표&당첨자’에서 방송 곡을 확인하세요.",
+    en: "A KBS CoolFM morning music program. Use Listener Participation → Listener Board for stories and requests, then check Playlist & Winners for aired tracks.",
+  },
+  url: "https://program.kbs.co.kr/2fm/radio/album",
+  messageUrl: "https://program.kbs.co.kr/2fm/radio/album/pc/board.html?smenu=322d71&bbs_loc=R2007-0069-03-848149,list,none,1,0",
+  playlistUrl: "https://program.kbs.co.kr/2fm/radio/album/pc/board.html?smenu=38992e&bbs_loc=R2007-0069-03-136492,list,none,1,0",
+}];
+
 // Rechecked 2026-10-20 against the program's official navigation.
 const mbcPrograms: RadioProgramGuide[] = [
   {
@@ -100,6 +114,7 @@ const cbsPrograms: RadioProgramGuide[] = [
 ];
 
 const verifiedProgramsByDirectory: Record<string, RadioProgramGuide[]> = {
+  "https://radio.kbs.co.kr/": kbsPrograms,
   "https://m.imbc.com/RadioMain": mbcPrograms,
   "https://radio.sbs.co.kr/": sbsPrograms,
   "https://www.cbs.co.kr/radio": cbsPrograms,
@@ -174,6 +189,6 @@ export function getRadioStationGuide(input: {
     },
     programs: verifiedProgramsByDirectory[directory.url] ?? [],
     participationLink: participationLinks[directory.url],
-    verifiedAt: verifiedProgramsByDirectory[directory.url] ? "2026-10-20" : participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
+    verifiedAt: directory.url === "https://radio.kbs.co.kr/" ? "2026-10-27" : verifiedProgramsByDirectory[directory.url] ? "2026-10-20" : participationLinks[directory.url] ? "2026-10-17" : "2026-10-16",
   };
 }

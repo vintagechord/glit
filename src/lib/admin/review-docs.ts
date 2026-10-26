@@ -963,7 +963,7 @@ async function hydrateReleasedAlbumBundle(
   }
   // These released-album links are prepared by staff using the saved scope;
   // the existing Melon/Genie document importer does not fetch these services.
-  if (sourceUrl.provider === "apple" || sourceUrl.provider === "bugs") return bundle;
+  if (sourceUrl.provider === "apple" || sourceUrl.provider === "bugs" || sourceUrl.provider === "spotify") return bundle;
   const sourceLabel = SOURCE_LABELS[sourceUrl.provider];
   try {
     const album = await fetchMusicSourceAlbum(sourceUrl.canonicalUrl, 0, options, true);

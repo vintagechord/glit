@@ -10,7 +10,10 @@ const candidateOne = "123456";
 const candidateTwo = "123457";
 const providers = [
   { id: "apple", name: "Apple Music 한국 카탈로그", status: "available", automaticImplemented: true, message: "테스트의 모의 제공처 응답입니다.", url: "https://music.apple.com/kr", checkedAt: "2026-09-08" },
-  { id: "spotify", name: "Spotify", status: "permission_required", automaticImplemented: false, message: "이용 허가 확인 필요", url: "https://developer.spotify.com/policy", checkedAt: "2026-09-08" },
+  { id: "melon", name: "멜론", status: "available", automaticImplemented: true, message: "공개 페이지 조회", url: "https://www.melon.com/", checkedAt: "2026-10-27" },
+  { id: "genie", name: "지니뮤직", status: "available", automaticImplemented: true, message: "공개 페이지 조회", url: "https://www.genie.co.kr/", checkedAt: "2026-10-27" },
+  { id: "spotify", name: "Spotify", status: "configuration_required", automaticImplemented: true, message: "Spotify 검색은 서버 API 연결이 필요합니다.", url: "https://developer.spotify.com/", checkedAt: "2026-10-27" },
+  { id: "youtube", name: "YouTube", status: "configuration_required", automaticImplemented: false, message: "YouTube 채널 검색은 서버 API 연결이 필요합니다.", url: "https://www.youtube.com/", checkedAt: "2026-10-27" },
 ];
 test.use({actionTimeout:5000});
 test.setTimeout(25000);
@@ -86,7 +89,7 @@ async function tab(page: Page, name: string) {
   await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toHaveCSS("border-bottom-color", "rgb(17, 17, 17)");
 }
-const forbiddenMemberCopy = /메타데이터 출처|Apple Music|MusicBrainz|Spotify|업무 기록|업무 이력|변경 이력|이용 허가|아티스트 ID|공식 조회 미확인|사용자 입력|공식 출처 확인일/;
+const forbiddenMemberCopy = /메타데이터 출처|업무 기록|업무 이력|변경 이력|이용 허가|아티스트 ID|공식 조회 미확인|사용자 입력|공식 출처 확인일/;
 
 for (const width of [390, 1440]) {
   test(`member keeps four simple tabs and per-recording registration at ${width}px`, async ({page}, testInfo) => {
@@ -169,11 +172,11 @@ test("Onside review tab opens the live result popup and respects selected track 
   expect(harness.errors).toEqual([]);
 });
 
-test("artist autocomplete confirms identity without exposing metadata sources or job details",async ({page}) => {
+test("artist autocomplete confirms source identity while keeping private job details hidden",async ({page}) => {
   const harness=await mount(page); harness.jobsArrayResponse=true;
   await page.getByRole("button",{name:"아티스트 추가",exact:true}).click();
   const input=page.getByRole("combobox",{name:"아티스트 이름",exact:true}); await input.fill("ㄷㅁ");
-  await expect(page.getByRole("option")).toHaveCount(2); expect(harness.writes).toHaveLength(0);
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(2); expect(harness.writes).toHaveLength(0);
   await expect(page.getByRole("dialog")).not.toContainText(forbiddenMemberCopy);
   await input.press("ArrowDown"); await input.press("ArrowDown"); await input.press("Enter");
   await expect(page.getByRole("dialog")).toContainText("서울 인디 밴드");
@@ -398,4 +401,32 @@ test("album editing connects a domestic album URL while preserving its imported 
   await page.getByRole("button",{name:"수정",exact:true}).click();
   await expect(page.getByLabel("음원 사이트 앨범 URL (선택)",{exact:true})).toHaveValue("https://www.melon.com/album/detail.htm?albumId=23456789");
   expect(harness.errors).toEqual([]);
+});
+
+
+test("provider selection sends the selected catalog and missing API setup offers official search", async ({page}) => {
+  const harness = await mount(page);
+  await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
+  await page.getByLabel("검색할 음악 서비스").selectOption("genie");
+  await page.getByRole("combobox", {name:"아티스트 이름", exact:true}).fill("이름 검색");
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(2);
+  expect(new URL(harness.searches.at(-1)!).searchParams.get("provider")).toBe("genie");
+  const prior = harness.searches.length;
+  await page.getByLabel("검색할 음악 서비스").selectOption("youtube");
+  await expect(page.getByRole("dialog")).toContainText("YouTube 채널 검색은 서버 API 연결이 필요합니다.");
+  await expect(page.getByRole("button", {name:"아티스트 검색", exact:true})).toBeDisabled();
+  await expect(page.getByRole("link", {name:"공식 사이트에서 같은 이름 검색 ↗"})).toHaveAttribute("href", /youtube\.com\/results\?search_query=/);
+  expect(harness.searches).toHaveLength(prior);
+  expect(harness.writes).toHaveLength(0);
+});
+
+test("partial album review keeps a request link only for the uncovered track", async ({page}) => {
+  const harness = await mount(page, [fixture()]);
+  harness.onsideReviews = [{submissionId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", releaseId:"album", trackIds:["original"], status:"COMPLETED"}];
+  await openAlbum(page);
+  await expect(page.getByRole("link", {name:"이 곡 심의 신청", exact:true})).toHaveCount(1);
+  await expect(page.getByRole("link", {name:"이 곡 심의 신청", exact:true})).toHaveAttribute("href", /archiveTrack=clean/);
+  await page.getByText("다른 방송사 심의가 필요한가요?", {exact:true}).click();
+  await expect(page.getByRole("link", {name:"다른 방송사 심의 신청", exact:true})).toHaveAttribute("href", /archiveTrack=original/);
+  await expect(page.getByRole("link", {name:"심의 결과와 방송사별 처리 내역"})).toHaveAttribute("href", /dashboard\/submissions\/aaaaaaaa-/);
 });

@@ -13,9 +13,9 @@ export type Evidence = { id: string; task_id: string; file_name: string; size_by
 export type ArchiveEvent = { id: string; action: string; before_version: number; after_version: number; created_at: string };
 export type LibraryDetail = { library: Library; jobs: SyncJob[]; reviews: Submission[]; evidence: Evidence[]; events: ArchiveEvent[]; onsideReviews?: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[] };
 export type ArchiveIndex = { libraries: Library[]; providers: ProviderSupport[]; guides: AgencyGuide[]; jobs: SyncJob[]; nextPage?: number | null; total?: number };
-export const providerNames: Record<string, string> = { musicbrainz: "MusicBrainz", spotify: "Spotify", apple: "Apple Music 한국 카탈로그", melon: "멜론", genie: "지니뮤직", bugs: "벅스", user: "사용자 입력", manual: "사용자 입력" };
+export const providerNames: Record<string, string> = { musicbrainz: "MusicBrainz", spotify: "Spotify", youtube: "YouTube", apple: "Apple Music 한국 카탈로그", melon: "멜론", genie: "지니뮤직", bugs: "벅스", user: "사용자 입력", manual: "사용자 입력" };
 export const isDomesticMusicProvider = (provider: string) => ["melon", "genie", "bugs"].includes(provider);
-export const availableImportProviders = (providers: ProviderSupport[]) => providers.filter((provider) => (isDomesticMusicProvider(provider.id) || provider.id === "apple") && provider.status === "available" && provider.automaticImplemented);
+export const availableImportProviders = (providers: ProviderSupport[]) => providers.filter((provider) => (isDomesticMusicProvider(provider.id) || provider.id === "apple" || provider.id === "spotify") && provider.status === "available" && provider.automaticImplemented);
 export const supportLabels: Record<string, string> = { available: "자동 조회 가능", configuration_required: "서버 설정 필요", permission_required: "이용 허가 확인 필요", link_only: "링크 안내" };
 export const jobLabels: Record<string, string> = { queued: "불러오기 준비 중", running: "앨범·트랙 불러오는 중", partial: "일부 불러옴", completed: "불러오기 완료", blocked: "불러오기 중단", failed: "다시 시도 필요", cancelled: "중단됨" };
 export const releaseLabels: Record<string, string> = { album: "앨범", ep: "EP", single: "싱글", other: "기타" };

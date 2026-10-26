@@ -61,3 +61,12 @@ test("archive release pages accept canonical Apple/Bugs albums without accepting
   assert.equal(parseReleasedAlbumUrl("https://music.bugs.co.kr/album/12345?ref=share")?.canonicalUrl, "https://music.bugs.co.kr/album/12345");
   for (const url of ["https://music.apple.com/kr/album/name/1259084205?i=123", "https://music.apple.com/kr/artist/name/1259084205", "https://music.apple.com.evil.example/kr/album/123", "https://music.apple.com/kr/album/0", "https://music.bugs.co.kr/track/12345"]) assert.equal(parseReleasedAlbumUrl(url), null, url);
 });
+
+test("Spotify album links support archive applications without accepting tracks or other hosts", () => {
+  const id = "B".repeat(22);
+  for (const url of [`https://open.spotify.com/album/${id}?si=share`, `https://open.spotify.com/intl-ko/album/${id}`]) {
+    assert.deepEqual(parseReleasedAlbumUrl(url), { provider: "spotify", albumId: id, canonicalUrl: `https://open.spotify.com/album/${id}` });
+    assert.equal(getReleasedAlbumUrlError(url), null);
+  }
+  for (const url of [`https://open.spotify.com/track/${id}`, `https://open.spotify.com/artist/${id}`, `https://open.spotify.com.evil.test/album/${id}`, `https://user@open.spotify.com/album/${id}`, "https://open.spotify.com/album/short", `https://open.spotify.com:444/album/${id}`]) assert.equal(parseReleasedAlbumUrl(url), null);
+});

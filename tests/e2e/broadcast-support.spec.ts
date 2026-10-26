@@ -28,6 +28,56 @@ async function chooseArirang(page: Page, program = "K-POPPIN’") {
   await next(page, 2);
 }
 
+test("verified schedule, story routes and independent airplay evidence guide an approved song", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mount(page);
+  await page.getByLabel("적격 방송국", { exact: true }).selectOption("mbc");
+  await next(page, 1);
+  await expect(page.getByTestId("radio-program-schedule")).toContainText("20:00–22:00");
+  await page.getByLabel("방송 시간대", { exact: true }).selectOption("morning");
+  await expect(page.getByText(/검색 결과가 없습니다/)).toBeVisible();
+  await page.getByLabel("방송 시간대", { exact: true }).selectOption("evening");
+  await page.getByLabel("참여 방식", { exact: true }).selectOption("story");
+  await page.getByRole("button", { name: "김이나의 별이 빛나는 밤에 선택", exact: true }).click();
+  await next(page, 2);
+  await expect(page.getByTestId("radio-program-strategy")).toContainText("사연이 채택되어도 내 곡이 함께 나오는 것은 아닙니다");
+  await page.screenshot({ path: testInfo.outputPath("program-strategy-390.png"), fullPage: true });
+  await page.getByLabel("최근 선곡표에서 내 곡과 어울리는 분위기를 확인했어요").check();
+  await next(page, 3);
+  await page.getByLabel("내 사연이 소개된 것을 확인했어요", { exact: true }).check();
+  await expect(page.getByLabel("이 곡이 방송된 것을 확인했어요", { exact: true })).not.toBeChecked();
+  await page.getByLabel("확인한 방송일 (한국시간)", { exact: true }).fill("2026-10-27");
+  await page.getByLabel("다음 선곡표 확인일", { exact: true }).fill("2026-10-28");
+  await page.getByLabel("확인한 선곡표·다시듣기 주소", { exact: true }).fill("javascript:alert(1)");
+  await expect(page.getByRole("link", { name: "확인 근거 열기" })).toHaveCount(0);
+  await page.getByLabel("확인한 선곡표·다시듣기 주소", { exact: true }).fill("https://m.imbc.com/Radio/Music/1000672100000100000?objid=RASFM210");
+  await page.reload();
+  await expect(page.getByLabel("내 사연이 소개된 것을 확인했어요", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("이 곡이 방송된 것을 확인했어요", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("다음 선곡표 확인일", { exact: true })).toHaveValue("2026-10-28");
+  await page.screenshot({ path: testInfo.outputPath("airplay-record-390.png"), fullPage: true });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "신청글과 기록 TXT 저장" }).click();
+  const download = await downloadPromise;
+  const text = await readFile((await download.path())!, "utf8");
+  expect(text).toContain("사연 소개 (직접 기록): 확인");
+  expect(text).toContain("곡 방송 (직접 기록): 미확인");
+  expect(text).toContain("다음 확인일: 2026-10-28");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test("KBS offers its current music program with verified listener and playlist links", async ({ page }) => {
+  await mount(page);
+  await next(page, 1);
+  await expect(page.getByTestId("radio-program-schedule")).toContainText("09:00–11:00");
+  await page.getByRole("button", { name: "이현우의 음악앨범 선택", exact: true }).click();
+  await next(page, 2);
+  await expect(page.getByTestId("radio-program-strategy")).toContainText("청취자 참여 → 청취자 게시판");
+  await next(page, 3);
+  await expect(page.getByRole("link", { name: /이현우의 음악앨범 신청 게시판 열기/ })).toHaveAttribute("href", /R2007-0069-03-848149/);
+  await expect(page.getByRole("link", { name: /이현우의 음악앨범 선곡표 확인/ })).toHaveAttribute("href", /R2007-0069-03-136492/);
+});
+
 for (const english of [false, true]) for (const width of [320, 390, 1280]) {
   test(`personalized four-step request is usable at ${width}px in ${english ? "English" : "Korean"}`, async ({ page, context }, testInfo) => {
     await page.setViewportSize({ width, height: 800 });
@@ -46,7 +96,7 @@ for (const english of [false, true]) for (const width of [320, 390, 1280]) {
     await expect(page.getByTestId("radio-step-2").getByRole("heading", { level: 3 })).toBeFocused();
     await expect(page.getByRole("button", { name: english ? "Prepare request" : "이 프로그램으로 초안 만들기" })).toBeDisabled();
     await expect(page.getByRole("link", { name: /KBS 라디오/ })).toHaveAttribute("href", "https://radio.kbs.co.kr/");
-    await page.getByLabel(english ? "Program name you checked (required)" : "직접 확인한 프로그램명 (필수)").fill("나의 저녁 라디오");
+    await page.getByLabel(english ? "Selected program or another program name" : "선택한 프로그램 또는 다른 프로그램명").fill("나의 저녁 라디오");
     await next(page, 2, english);
     const writingHelp = page.locator("summary").filter({ hasText: english ? "Add my story or listening link" : "내 이야기·음원 링크 더하기" });
     await writingHelp.click();
@@ -222,7 +272,7 @@ test("an approved song with missing artist metadata can prepare a draft after en
   await expect(page.getByRole("button", { name: "이 곡으로 프로그램 고르기" })).toBeDisabled();
   await page.getByLabel("아티스트명 (필수)").fill("직접 입력 활동명");
   await next(page, 1);
-  await page.getByLabel("직접 확인한 프로그램명 (필수)").fill("저녁 라디오");
+  await page.getByLabel("선택한 프로그램 또는 다른 프로그램명").fill("저녁 라디오");
   await next(page, 2);
   await expect(page.getByLabel("게시글 제목")).toHaveValue("[신청곡] 직접 입력 활동명 - 함께 듣는 노래");
 });

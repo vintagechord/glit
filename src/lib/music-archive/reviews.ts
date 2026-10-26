@@ -22,6 +22,38 @@ export function normalizeSubmissionTitles<T extends { album_tracks?: { track_tit
 }
 
 export type OnsideArchiveReview = { submissionId: string; releaseId: string; trackIds: string[]; status: string };
+
+/** Find the exact track scope still needing an application, including partial albums. */
+export function unreviewedArchiveTracks(data: ArchiveData, releaseId: string, reviews: OnsideArchiveReview[], trackId?: string) {
+  const tracks = data.tracks.filter(track => track.releaseId === releaseId && track.managed && !track.excluded && !track.mergedInto && (!trackId || track.id === trackId));
+  const covered = new Set<string>();
+  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT", "PRE_REVIEW"].includes(review.status))) {
+    for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) covered.add(id);
+  }
+  const latest = new Map<string, typeof data.tasks[number]>();
+  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([task.trackId, task.agency]), task);
+  for (const task of latest.values()) {
+    if (["completed", "submitted", "processing"].includes(task.status) || ["eligible", "ineligible", "rejected"].includes(task.result)) covered.add(task.trackId);
+  }
+  return tracks.filter(track => !covered.has(track.id));
+}
+
+/** Completed scopes can apply to another station; an active submission takes priority. */
+export function additionalStationReviewTracks(data: ArchiveData, releaseId: string, reviews: OnsideArchiveReview[], trackId?: string) {
+  const tracks = data.tracks.filter(track => track.releaseId === releaseId && track.managed && !track.excluded && !track.mergedInto && (!trackId || track.id === trackId));
+  const completed = new Set<string>(); const ongoing = new Set<string>();
+  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT", "PRE_REVIEW"].includes(review.status))) {
+    const target = ["COMPLETED", "APPROVED", "REJECTED"].includes(review.status) ? completed : ongoing;
+    for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) target.add(id);
+  }
+  const latest = new Map<string, typeof data.tasks[number]>();
+  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([task.trackId, task.agency]), task);
+  for (const task of latest.values()) {
+    if (["submitted", "processing"].includes(task.status)) ongoing.add(task.trackId);
+    else if (task.status === "completed" || ["eligible", "ineligible", "rejected"].includes(task.result)) completed.add(task.trackId);
+  }
+  return tracks.filter(track => completed.has(track.id) && !ongoing.has(track.id));
+}
 type MatchSubmission = { id: string; status: string; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] };
 
 /** Caller must supply only the authenticated owner's undeleted album submissions. */

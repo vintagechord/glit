@@ -36,15 +36,16 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const shutdown = new AbortController();
   const caseDir = id => childPath(outputRoot, id);
   const activeOperations = new Map();
+  let emptyingTrash = false;
   const getCase = (id, includeDeleted = false) => { const item = Object.hasOwn(store.data.cases, id) && store.data.cases[id]; if (!item) throw Object.assign(new Error('신청 내역을 찾을 수 없습니다. 먼저 동기화하세요.'), { status: 404 }); if (item.deletedAt && !includeDeleted) throw Object.assign(new Error('휴지통으로 이동한 신청입니다. 복원한 뒤 작업하세요.'), { status: 410, code: 'CASE_DELETED' }); return item; };
   const safeError = error => error?.message && !/(?:eyJ[A-Za-z0-9_-]{20}|https?:|secret|credential|Bearer)/i.test(error.message) ? error.message.slice(0, 500) : '작업에 실패했습니다. 연결 설정과 저장 공간을 확인한 뒤 다시 시도하세요.';
   function summary(item) {
     const s = item.source === 'manual' ? applyOverrides(item.detail, item.local).submission : item.submission;
-    return { id: s.id, source: item.source || 'online', deletedAt: item.deletedAt || null, type: s.type, title: s.title, artist_name: s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged };
+    return { id: s.id, source: item.source || 'online', deletedAt: item.deletedAt || null, purgePending: !!item.purgeRequestedAt, type: s.type, title: s.title, artist_name: s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged };
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.3.1' };
+    return { connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.3.2' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -99,6 +100,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         const submissions = await source.fetchSubmissions();
         const toGenerate = [];
         for (const submission of submissions) {
+          if (Object.hasOwn(store.data.purgedCases, submission.id)) continue;
           const old = store.data.cases[submission.id];
           if (!old) {
             store.data.cases[submission.id] = { submission, local: { stage: 'RECEIVED', notes: '', dueDate: '', checklist: {} }, generations: [], downloads: [], attachments: [], history: [] };
@@ -115,13 +117,48 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         await store.save();
         const dailyBackup = path.join(dataRoot, '자동백업', `${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())}.json`);
         if (!await fs.stat(dailyBackup).catch(() => null)) await atomicJSON(dailyBackup, store.data);
-        for (const id of toGenerate) if (!store.data.cases[id]?.deletedAt) enqueue(id, 'generate');
+        for (const id of toGenerate) if (store.data.cases[id] && !store.data.cases[id].deletedAt) enqueue(id, 'generate');
         return { count: submissions.length, lastSync: store.data.lastSync };
       } catch (error) {
         connected = false; store.data.syncError = safeError(error); await store.save(); throw error;
       } finally { syncPromise = null; }
     })();
     return syncPromise;
+  }
+  async function emptyTrash(input) {
+    if (emptyingTrash) throw Object.assign(new Error('휴지통을 비우고 있습니다. 잠시 후 다시 확인하세요.'), { status: 409, code: 'TRASH_BUSY' });
+    if (input?.confirmation !== 'EMPTY_TRASH' || !Array.isArray(input.cases) || !input.cases.length || input.cases.length > 10000 || new Set(input.cases.map(item => item?.id)).size !== input.cases.length) throw Object.assign(new Error('삭제할 휴지통 항목을 확인한 뒤 다시 시도하세요.'), { status: 400 });
+    // Validate the entire confirmed snapshot before removing anything. Newly trashed
+    // cases and cases restored while the confirmation was open are never swept up.
+    const targets = input.cases.map(target => {
+      const item = typeof target?.id === 'string' && Object.hasOwn(store.data.cases, target.id) && store.data.cases[target.id];
+      if (!item?.deletedAt || item.deletedAt !== target.deletedAt) throw Object.assign(new Error('휴지통 목록이 변경되었습니다. 새로고침한 뒤 다시 확인하세요.'), { status: 409, code: 'TRASH_CHANGED' });
+      if (activeOperations.get(target.id) || store.data.jobs.some(job => job.caseId === target.id && ['queued', 'running'].includes(job.status))) throw Object.assign(new Error('진행 중인 작업이 있습니다. 완료된 뒤 휴지통을 비우세요.'), { status: 409, code: 'CASE_BUSY' });
+      return { id: target.id, item };
+    });
+    emptyingTrash = true;
+    try {
+      // Persist intent first. If disk removal is interrupted, restoration stays
+      // disabled and the same confirmed operation can safely be retried.
+      for (const { item } of targets) item.purgeRequestedAt ||= now();
+      await store.save();
+      let deletedCount = 0;
+      const failedCases = [];
+      for (const { id, item } of targets) {
+        try {
+          await fs.rm(caseDir(id), { recursive: true, force: true });
+        } catch (error) {
+          failedCases.push({ id, error: safeError(error) });
+          continue;
+        }
+        if (item.source !== 'manual') store.data.purgedCases[id] = item.purgeRequestedAt;
+        delete store.data.cases[id];
+        store.data.jobs = store.data.jobs.filter(job => job.caseId !== id);
+        await store.save();
+        deletedCount++;
+      }
+      return { ok: failedCases.length === 0, deletedCount, failedCases };
+    } finally { emptyingTrash = false; }
   }
   async function download(id, job) {
     const current = await detail(id, true);
@@ -276,7 +313,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.3.1' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.3.2' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -288,6 +325,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       }
       if (!checkToken(req)) return sendJSON(res, 403, { error: '앱 화면을 새로고침한 후 다시 시도하세요.' });
       if (url.pathname === '/api/state' && req.method === 'GET') return sendJSON(res, 200, publicState());
+      if (url.pathname === '/api/trash/empty' && req.method === 'POST') return sendJSON(res, 200, await emptyTrash(await readJSON(req)));
       if (url.pathname === '/api/manual/import' && req.method === 'POST') {
         const filename = url.searchParams.get('filename');
         if (!filename || filename.length > 500) return sendJSON(res, 400, { error: '기준파일 이름을 확인하세요.' });
@@ -326,6 +364,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         return sendJSON(res, 200, { ok: true, deletedAt: item.deletedAt });
       }
       if (action === 'restore' && req.method === 'POST') {
+        if (item.purgeRequestedAt) return sendJSON(res, 409, { error: '영구 삭제가 시작된 항목입니다. 휴지통 비우기를 다시 실행해 남은 자료를 정리하세요.', code: 'PURGE_PENDING' });
         if (item.deletedAt) { delete item.deletedAt; if (item.source !== 'manual') item.detailStale = true; store.audit(id, 'restore', '휴지통의 신청을 복원했습니다.'); await store.save(); }
         return sendJSON(res, 200, { ok: true });
       }

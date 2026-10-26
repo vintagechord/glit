@@ -6,6 +6,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import type { ArchiveCommand, ArchiveRelease, ArchiveTask, ArchiveTrack } from "@/lib/music-archive/model";
 import type { AgencyGuide } from "@/lib/music-archive/guides";
 import { buildArchiveReviewEntryHref } from "@/lib/music-archive/review-entry-url";
+import { additionalStationReviewTracks, unreviewedArchiveTracks } from "@/lib/music-archive/reviews";
 import type { LibraryDetail } from "./types";
 import { Button, External, Modal, panelClass } from "./ui";
 import { MusicStatusBadge } from "./music-status-badge";
@@ -98,13 +99,26 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   const registered = records.some((item) => ["approved", "information_found", "listed"].includes(item.result)) || credits.some(group => group.institutionNumbers.length);
   const finishedReviewIds = new Set(records.filter((item) => item.status === "completed" || ["eligible", "ineligible", "rejected"].includes(item.result)).map((item) => item.trackId));
   const reviewSummary = memberReviewStatus(detail, release.id, track?.id);
+  const pendingTracks = unreviewedArchiveTracks(data, release.id, detail.onsideReviews ?? [], track?.id);
+  const additionalTracks = additionalStationReviewTracks(data, release.id, detail.onsideReviews ?? [], track?.id);
   return <section className={`${panelClass} space-y-5`} aria-label={`${labels[tab]} 정보`}>
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><MusicStatusBadge status={tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && credits.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"} /></div>
     {tab === "review" ? <>
       {onside.length > 0 ? <div className="flex justify-end"><Button primary onClick={() => setShowResult(true)}>심의 결과 보기</Button></div> : <>
         {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
-        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!finishedReviewIds.size && <Link className="inline-flex min-h-11 items-center justify-center rounded-lg border-2 border-foreground bg-foreground px-4 py-2 text-sm font-bold text-background" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: track?.id, localePrefix })}>온사이드에 심의 신청</Link>}<Button primary={!!finishedReviewIds.size} disabled={busy || !tracks.length} onClick={() => setEditing({})}>심의 내역 입력</Button></div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4"><Button primary={!!finishedReviewIds.size} disabled={busy || !tracks.length} onClick={() => setEditing({})}>심의 내역 입력</Button></div>
       </>}
+      {onside.length > 0 && <div className="space-y-2 rounded-xl border border-border p-4"><p className="text-sm font-bold">진행 내역·보완 자료 확인</p>{onside.map(item => <Link key={item.submissionId} href={`${localePrefix}/dashboard/submissions/${item.submissionId}`} className="flex min-h-11 items-center justify-between gap-2 text-sm underline underline-offset-4"><span>{["COMPLETED", "APPROVED", "REJECTED"].includes(item.status) ? "심의 결과와 방송사별 처리 내역" : "신청 진행·결제·자료 보완"}</span><ExternalLink className="h-4 w-4 shrink-0" aria-hidden /></Link>)}</div>}
+      {pendingTracks.length > 0 && <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+        <p className="text-sm font-bold">심의 신청 가능한 음원 {pendingTracks.length}곡</p>
+        <p className="text-xs leading-5 text-muted-foreground">온사이드에 연결된 진행·완료 내역이 없는 곡입니다. 외부에서 심의를 마쳤다면 먼저 내역을 입력해주세요.</p>
+        {pendingTracks.length === tracks.length ? <Link className="inline-flex min-h-11 items-center justify-center rounded-lg border-2 border-foreground bg-foreground px-4 py-2 text-sm font-bold text-background" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: track?.id, localePrefix })}>온사이드에 심의 신청</Link> : <ul className="space-y-2">{pendingTracks.map(item => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{item.trackNumber}. {item.title}</span><Link className="inline-flex min-h-10 items-center rounded-lg border border-border px-3 font-bold" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: item.id, localePrefix })}>이 곡 심의 신청</Link></li>)}</ul>}
+      </div>}
+      {additionalTracks.length > 0 && <details className="rounded-xl border border-border p-4 text-sm">
+        <summary className="cursor-pointer font-bold">다른 방송사 심의가 필요한가요?</summary>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">기존 결과에서 방송사별 심의 이력을 확인한 뒤, 아직 완료하지 않은 방송사를 선택해 신청해주세요. 현재 진행 중인 신청은 위 상세 내역에서 확인할 수 있습니다.</p>
+        {additionalTracks.length === tracks.length ? <Link className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-border px-4 font-bold" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: track?.id, localePrefix })}>다른 방송사 심의 신청</Link> : <ul className="mt-3 space-y-2">{additionalTracks.map(item => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2"><span>{item.trackNumber}. {item.title}</span><Link className="inline-flex min-h-10 items-center rounded-lg border border-border px-3 font-bold" href={buildArchiveReviewEntryHref({ libraryId: detail.library.id, releaseId: release.id, trackId: item.id, localePrefix })}>다른 방송사 심의 신청</Link></li>)}</ul>}
+      </details>}
     </> : <>
       {credits.length > 0 && <div className="space-y-3">{credits.map(group => <article key={group.track.id} aria-label={`${group.track.title}${group.track.version ? ` (${group.track.version})` : ""} 저작자 정보`} className="space-y-1 rounded-lg border border-border p-3 text-sm">
         {!track && <p className="font-bold">{group.track.trackNumber}. {group.track.title}{group.track.version ? ` (${group.track.version})` : ""}</p>}

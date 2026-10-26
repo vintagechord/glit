@@ -5,6 +5,7 @@ import { getRadioStationGuide } from "../src/lib/radio-station-guide";
 
 test("program choices keep every participation link on the selected broadcaster", () => {
   const hosts = {
+    KBS: "program.kbs.co.kr",
     MBC: "m.imbc.com",
     SBS: "programs.sbs.co.kr",
     CBS: "www.cbs.co.kr",
@@ -51,10 +52,12 @@ test("CBS program choices retain current names and correct request-board privacy
   assert.equal(noon.playlistUrl, "https://www.cbs.co.kr/program/playlist/cbs_P000004");
 });
 
-test("unverified specific boards keep their official directory fallback without borrowing another broadcaster", () => {
+test("KBS uses its verified current program while unknown stations cannot borrow another broadcaster", () => {
   const kbs = getRadioStationGuide({ stationCode: "KBS" })!;
   assert.equal(kbs.directoryUrl, "https://radio.kbs.co.kr/");
-  assert.deepEqual(kbs.programs, []);
+  assert.equal(kbs.programs[0].name, "이현우의 음악앨범");
+  assert.match(kbs.programs[0].messageUrl, /R2007-0069-03-848149/);
+  assert.match(kbs.programs[0].playlistUrl, /R2007-0069-03-136492/);
   assert.equal(kbs.participationLink?.name, "KBS 콩");
   assert.equal(getRadioStationGuide({ stationCode: "KISS", stationName: "SBS" }), null);
   assert.equal(getRadioStationGuide({ stationCode: "ARIRANG" })?.verifiedAt, "2026-10-17");
