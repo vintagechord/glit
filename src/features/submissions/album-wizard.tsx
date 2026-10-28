@@ -4369,9 +4369,6 @@ export function AlbumWizard({
             <>
               <div>
                 <h2 className="font-display text-2xl text-foreground">방송국 패키지 선택</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  심의를 진행할 방송국을 선택해주세요. 발매 여부에 따른 추가금은 없습니다.
-                </p>
               </div>
               <div
                 data-preflight-field="package"

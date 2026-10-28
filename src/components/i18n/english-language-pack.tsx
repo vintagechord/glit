@@ -278,7 +278,6 @@ const exactTranslations: Record<string, string> = {
   "URL 입력 → 음원 첨부 → 관리자 자료 준비": "Enter URL → Upload Audio → Staff Prepare Materials",
   "URL 접수 추가금 0원": "No Extra Charge for URL Submission",
   "추가 앨범이 등록된 경우 발매 여부는 변경할 수 없습니다.": "Release status cannot be changed after adding another album.",
-  "심의를 진행할 방송국을 선택해주세요. 발매 여부에 따른 추가금은 없습니다.": "Choose your broadcasters. There is no extra charge based on release status.",
   "URL 입력으로 계속": "Continue to Album URL",
   "신청서 작성으로 계속": "Continue to Application",
   "URL과 접수자 정보": "Album URL and Contact Details",
