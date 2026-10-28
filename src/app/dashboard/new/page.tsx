@@ -66,13 +66,10 @@ export default function NewSubmissionPage() {
             </ReliableLink>
           ))}
         </div>
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mt-6 flex">
           <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
             비회원 가능
           </span>
-          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="bauhaus-button min-h-11 px-5 py-2 text-sm">
-            문의하기
-          </ReliableLink>
         </div>
         <details className="mt-6 rounded-[8px] border border-border p-4">
           <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>

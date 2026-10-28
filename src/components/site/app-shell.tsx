@@ -6,7 +6,6 @@ import * as React from "react";
 
 import { SiteFooter } from "@/components/site/footer";
 import { SiteHeader } from "@/components/site/header";
-import { ReliableLink } from "@/components/site/reliable-link";
 
 const EnglishLanguagePack = dynamic(
   () =>
@@ -86,13 +85,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main id="main-content" className="flex-1">
         {children}
       </main>
-      {isSubmissionFlow && basePath !== "/dashboard/new" ? (
-        <div className="mx-auto w-full max-w-6xl px-4 py-6 text-sm sm:px-6">
-          <ReliableLink href="/support" target="_blank" rel="noopener noreferrer" className="bauhaus-button min-h-11 px-5 py-2 text-sm">
-            문의하기
-          </ReliableLink>
-        </div>
-      ) : null}
       <SiteFooter />
       {shouldLoadChatbot && loadChatbot ? <ChatbotWidget /> : null}
     </div>

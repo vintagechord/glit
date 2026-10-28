@@ -336,6 +336,15 @@ export function SiteFooter() {
             <p className="text-base font-medium text-white/72">
               상담시간 {APP_CONFIG.supportHours}
             </p>
+            <Link
+              href={`${siteLinkPrefix}/support`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={isEnglishRoute ? "Opens in a new tab" : "새 창에서 열기"}
+              className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#f2cf27] bg-[#f2cf27] px-5 py-2 text-sm font-black text-[#111111] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f2cf27]"
+            >
+              {isEnglishRoute ? "Contact us" : "문의하기"}
+            </Link>
           </div>
           <div className="min-w-0 space-y-2.5 [overflow-wrap:anywhere]">
             <p className="w-fit bg-[#1556a4] px-3 py-1 text-xs font-black uppercase tracking-normal text-white">
@@ -374,9 +383,6 @@ export function SiteFooter() {
               </Link>
               <Link href={`${siteLinkPrefix}/faq`} className={footerLinkClass}>
                 FAQ
-              </Link>
-              <Link href={`${siteLinkPrefix}/support`} className={footerLinkClass}>
-                고객센터
               </Link>
               <Link
                 href="https://onside17.com/"
