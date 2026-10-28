@@ -81,8 +81,11 @@ for (const width of [320, 390, 1280]) {
       });
       const services = benefits.getByRole("button");
       const serviceNames = english
-        ? ["Broadcast guide", "Review archive", "Artmelon store"]
-        : ["방송 신청 가이드", "심의 기록 보관", "아트멜론 입점"];
+        ? ["Broadcast request instructions", "Review archive", "Artmelon store"]
+        : ["방송 신청 방법 제공", "심의 기록 보관", "아트멜론 입점"];
+      const serviceDescriptions = english
+        ? ["Onside recommends radio programs that match your music after its review is complete.", "Your Onside reviews are saved to your account automatically. You can also record reviews handled elsewhere.", "We connect you with Artmelon, a platform for selling CDs, vinyl and merch."]
+        : ["심의가 완료된 내 음악에 맞는 방송국의 프로그램을 온사이드가 제안합니다.", "온사이드의 심의는 자동으로 계정에 저장되며, 외부 진행 심의도 계정에 기록할 수 있습니다", "CD·LP·굿즈 판매 플랫폼 아트멜론과 연결합니다"];
       await expect(services).toHaveCount(3);
       for (const name of serviceNames) {
         await expect(benefits.getByRole("button", { name, exact: true })).toBeVisible();
@@ -117,7 +120,8 @@ for (const width of [320, 390, 1280]) {
         const dialog = page.getByRole("dialog", { name: serviceNames[index], exact: true });
         await expect(dialog).toBeVisible();
         expect(await dialog.evaluate(element => element instanceof HTMLDialogElement && element.matches(":modal"))).toBe(true);
-        await expect(dialog.getByText(english ? "Service preview" : "서비스 이용 예시", { exact: true })).toBeVisible();
+        await expect(dialog.getByText(english ? "Service preview" : "서비스 이용 예시", { exact: true })).toHaveCount(0);
+        await expect(dialog.getByText(serviceDescriptions[index], { exact: true })).toBeVisible();
         await expect(dialog.getByText(english ? "ILLUSTRATIVE EXAMPLE · FICTIONAL DATA" : "이해를 돕기 위한 가상의 예시입니다", { exact: true })).toBeVisible();
         await expect(dialog.getByRole("link")).toHaveCount(0);
         await expect(dialog.locator("form")).toHaveCount(0);

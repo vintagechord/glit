@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Archive, Check, Disc3, Package, Plus, Radio, X } from "lucide-react";
 
 const services = [
-  { key: "broadcast", icon: Radio, color: "bg-[#1556a4] text-white", ko: "방송 신청 가이드", en: "Broadcast guide" },
+  { key: "broadcast", icon: Radio, color: "bg-[#1556a4] text-white", ko: "방송 신청 방법 제공", en: "Broadcast request instructions" },
   { key: "archive", icon: Archive, color: "bg-[#f2cf27] text-[#111111]", ko: "심의 기록 보관", en: "Review archive" },
   { key: "artmelon", icon: Disc3, color: "bg-[#d9362c] text-white", ko: "아트멜론 입점", en: "Artmelon store" },
 ] as const;
@@ -79,14 +79,14 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
   const Icon = service.icon;
   const descriptions = {
     broadcast: isEnglish
-      ? "From your review results to your song request. Guidance made for your music."
-      : "내 곡의 심의 결과부터 신청 사연까지. 내 음악에 맞춘 방송 신청을 준비하세요.",
+      ? "Onside recommends radio programs that match your music after its review is complete."
+      : "심의가 완료된 내 음악에 맞는 방송국의 프로그램을 온사이드가 제안합니다.",
     archive: isEnglish
-      ? "Every album, every review result. Keep your Onside history in one place."
-      : "이 음반, 심의했었나? 온사이드에서 진행한 모든 심의와 결과를 한곳에 보관하세요.",
+      ? "Your Onside reviews are saved to your account automatically. You can also record reviews handled elsewhere."
+      : "온사이드의 심의는 자동으로 계정에 저장되며, 외부 진행 심의도 계정에 기록할 수 있습니다",
     artmelon: isEnglish
-      ? "Bring CDs, vinyl and merch to your fans, even when your distributor does not sell physical releases."
-      : "유통사가 실물 판매를 지원하지 않아도, CD·LP·굿즈를 팬들에게 전할 수 있도록 연결합니다.",
+      ? "We connect you with Artmelon, a platform for selling CDs, vinyl and merch."
+      : "CD·LP·굿즈 판매 플랫폼 아트멜론과 연결합니다",
   };
 
   useEffect(() => {
@@ -137,10 +137,7 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold tracking-wider text-muted-foreground">
-              {isEnglish ? "Service preview" : "서비스 이용 예시"}
-            </p>
-            <h2 id={`${id}-title`} className="mt-2 flex items-center gap-2.5 text-lg font-black sm:text-xl">
+            <h2 id={`${id}-title`} className="flex items-center gap-2.5 text-lg font-black sm:text-xl">
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-md ${service.color}`}>
                 <Icon className="size-4" aria-hidden="true" />
               </span>
