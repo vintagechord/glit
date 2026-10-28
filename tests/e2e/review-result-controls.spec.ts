@@ -138,6 +138,9 @@ for (const width of [320, 390, 640, 1440]) {
         await expect(statuses.nth(0)).toHaveText(locale === "en" ? "Queued" : "접수예정");
         await expect(statuses.nth(4)).toHaveText(locale === "en" ? "Fix needed" : "보완 요청");
         await expect(statuses.nth(5)).toHaveText(locale === "en" ? "Partial" : "부분 적격");
+        for (const header of ["방송국", "Station", "Status"]) {
+          await expect(page.getByText(header, { exact: true })).toHaveCount(0);
+        }
         await expect(rows.locator("img")).toHaveCount(6);
         await expect.poll(() => rows.locator("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
 
@@ -167,6 +170,16 @@ for (const width of [320, 390, 640, 1440]) {
           expect(entry.logo.x + entry.logo.width).toBeLessThanOrEqual(entry.badge.x + 1);
           expect(Math.abs((entry.logo.y + entry.logo.height / 2) - (entry.badge.y + entry.badge.height / 2))).toBeLessThanOrEqual(entry.height / 2);
           expect(entry.badge.x + entry.badge.width).toBeLessThanOrEqual(entry.x + entry.width + 1);
+        }
+        const badgeWidths = await statuses.evaluateAll(elements => elements.map(element => {
+          const style = getComputedStyle(element);
+          const contentWidth = element.firstElementChild!.getBoundingClientRect().width;
+          const spacing = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+            + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
+          return { width: element.getBoundingClientRect().width, contentWidth, spacing };
+        }));
+        for (const badge of badgeWidths) {
+          expect(badge.width).toBeLessThanOrEqual(badge.contentWidth + badge.spacing + 1);
         }
         const colors = await statuses.evaluateAll(elements => elements.map(element => {
           const style = getComputedStyle(element);
