@@ -60,3 +60,40 @@ test("Spotify-only release can enter review with its exact selected track metada
   assert.equal(entry.albumUrl, url);
   assert.deepEqual(entry.tracks.map(track => track.id), ["two"]);
 });
+
+function groupedFixture() {
+  let data = createArchiveData("한국 가수");
+  for (const provider of ["melon", "genie"] as const) {
+    data = applyArchiveCommand(data, { type: "add_release", release: { id: provider, title: "같은 발매작", artistName: "한국 가수", releaseDate: "2026-10-01", links: [{ provider, url: provider === "melon" ? "https://www.melon.com/album/detail.htm?albumId=100" : "https://www.genie.co.kr/detail/albumInfo?axnm=200" }] } });
+    for (const n of [1, 2]) data = applyArchiveCommand(data, { type: "add_track", track: { id: `${provider}-${n}`, releaseId: provider, title: `곡 ${n}`, artistName: "한국 가수", trackNumber: n, managed: provider === "genie" || n === 1, links: [{ provider, url: provider === "melon" ? `https://www.melon.com/song/detail.htm?songId=${1000 + n}` : `https://www.genie.co.kr/detail/songInfo?xgnm=${2000 + n}` }] } });
+  }
+  return data;
+}
+
+test("grouped review entries select each logical managed track once using actual source IDs", () => {
+  const data = groupedFixture(); const original = structuredClone(data);
+  const entry = resolveArchiveReviewEntry(data, { libraryId, releaseId: "genie" });
+  assert.deepEqual(entry.tracks.map(track => track.id), ["melon-1", "genie-2"]);
+  assert.equal(entry.context.releaseId, "genie", "keep the requested album ID in the saved application context");
+  assert.equal(entry.albumUrl, "https://www.melon.com/album/detail.htm?albumId=100");
+  assert.deepEqual(resolveArchiveReviewEntry(data, { libraryId, releaseId: "melon", trackId: "genie-1" }).tracks.map(track => track.id), ["melon-1"]);
+  assert.deepEqual(data, original, "presentation grouping cannot mutate original albums or management flags");
+});
+
+test("grouped saved snapshots retain their actual IDs and order without alias substitution or duplicate logical songs", () => {
+  const data = groupedFixture();
+  const context = { libraryId, releaseId: "melon" };
+  assert.deepEqual(resolveArchiveReviewEntry(data, context, ["genie-2", "genie-1"]).tracks.map(track => track.id), ["genie-2", "genie-1"]);
+  assert.throws(() => resolveArchiveReviewEntry(data, context, ["melon-1", "genie-1"]), /관리 상태가 변경/);
+  assert.throws(() => resolveArchiveReviewEntry(data, context, ["melon-1", "melon-1"]), /관리 상태가 변경/);
+  assert.throws(() => resolveArchiveReviewEntry(data, context, ["melon-2"]), /관리 상태가 변경/);
+  assert.throws(() => resolveArchiveReviewEntry(data, { ...context, trackId: "melon-1" }, ["genie-2"]), /관리 상태가 변경/);
+  data.tracks.find(track => track.id === "genie-1")!.excluded = true;
+  assert.throws(() => resolveArchiveReviewEntry(data, { libraryId, releaseId: "genie" }, ["genie-1"]), /관리 상태가 변경/);
+});
+
+test("a changed edition cannot widen a previously selected album's saved review scope", () => {
+  const data = groupedFixture();
+  data.releases[1].version = "Live";
+  assert.throws(() => resolveArchiveReviewEntry(data, { libraryId, releaseId: "melon" }, ["genie-1"]), /관리 상태가 변경/);
+});

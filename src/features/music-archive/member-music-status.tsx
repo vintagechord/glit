@@ -13,6 +13,7 @@ import { MusicStatusBadge } from "./music-status-badge";
 import { OnsideResultPopup } from "./onside-result-popup";
 import { MemberRecordEditor } from "./member-record-editor";
 import { CopyrightCreditDetails, trackCopyrightCredits } from "./track-credits";
+import { originalTaskTrackId } from "./album-display";
 
 export type MemberMusicTab = "review" | "copyright" | "performer" | "karaoke";
 const labels: Record<MemberMusicTab, string> = { review: "심의", copyright: "저작권 등록", performer: "실연자 등록", karaoke: "노래방" };
@@ -24,7 +25,7 @@ const institutions: Record<Exclude<MemberMusicTab, "review">, { id: string; labe
 const matchesTab = (task: ArchiveTask, tab: MemberMusicTab) => tab === "copyright" ? ["copyright_work", "copyright_legal"].includes(task.kind) : task.kind === tab;
 function latestRecords(records: ArchiveTask[]) {
   const latest = new Map<string, ArchiveTask>();
-  for (const task of records) latest.set(JSON.stringify([task.trackId, task.kind, task.agency, task.participant || "", task.role || ""]), task);
+  for (const task of records) latest.set(JSON.stringify([originalTaskTrackId(task), task.kind, task.agency, task.participant || "", task.role || ""]), task);
   return [...latest.values()];
 }
 function taskLabel(task: ArchiveTask, tab: MemberMusicTab) {

@@ -1,0 +1,2259 @@
+{
+  "description": "Official public Melon/Genie album metadata only. IDs are public catalog IDs; flags are synthetic defaults. No member, owner, job, task, review or recording identifiers. Captured 2026-10-28.",
+  "releases": [
+    {
+      "title": "Whispers in the Dark",
+      "type": "single",
+      "releaseDate": "2026-01-12",
+      "artistName": "이윤정",
+      "id": "melon-album:12476612",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=12476612"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Whispers in the Dark",
+      "type": "other",
+      "releaseDate": "2026-01-12",
+      "artistName": "이윤정 & 빈티지코드",
+      "id": "genie-album:87126182",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=87126182"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "모험은 발끝부터 자란다",
+      "type": "single",
+      "releaseDate": "2025-09-26",
+      "artistName": "grooming shagatto",
+      "id": "melon-album:12137192",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=12137192"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디",
+      "type": "other",
+      "releaseDate": "2025-07-14",
+      "artistName": "13LAYER",
+      "id": "genie-album:86491811",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=86491811"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디",
+      "type": "single",
+      "releaseDate": "2025-07-14",
+      "artistName": "13LAYER",
+      "id": "melon-album:11890166",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=11890166"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "겨울 봄 여름 가을",
+      "type": "other",
+      "releaseDate": "2025-06-24",
+      "artistName": "더즌 크레이프",
+      "id": "genie-album:86404556",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=86404556"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "겨울 봄 여름 가을",
+      "type": "single",
+      "releaseDate": "2025-06-24",
+      "artistName": "더즌 크레이프",
+      "id": "melon-album:11863710",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=11863710"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Take It Away",
+      "type": "other",
+      "releaseDate": "2023-11-30",
+      "artistName": "OVRSIZE & OTWO (오투) & 빈티지코드",
+      "id": "genie-album:84539803",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=84539803"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Fig Wasp",
+      "type": "single",
+      "releaseDate": "2024-12-06",
+      "artistName": "Odd Factory",
+      "id": "melon-album:11659939",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=11659939"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Banana Omakase",
+      "type": "other",
+      "releaseDate": "2022-11-03",
+      "artistName": "blue vanana",
+      "id": "genie-album:83126884",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=83126884"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Take It Away",
+      "type": "single",
+      "releaseDate": "2023-11-30",
+      "artistName": "OVRSIZE",
+      "id": "melon-album:11375676",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=11375676"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "gray",
+      "type": "other",
+      "releaseDate": "2021-05-09",
+      "artistName": "빈티지코드 & 가연",
+      "id": "genie-album:82033396",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=82033396"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Banana Omakase",
+      "type": "ep",
+      "releaseDate": "2022-11-03",
+      "artistName": "blue vanana",
+      "id": "melon-album:11091863",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=11091863"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sun",
+      "type": "other",
+      "releaseDate": "2020-11-18",
+      "artistName": "빈티지코드 & 가연",
+      "id": "genie-album:81739773",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=81739773"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "gray",
+      "type": "single",
+      "releaseDate": "2021-05-09",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10603877",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10603877"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "riverside stories",
+      "type": "other",
+      "releaseDate": "2019-04-10",
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-album:81183418",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=81183418"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sun",
+      "type": "single",
+      "releaseDate": "2020-11-18",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10519377",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10519377"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "크리스마스 카드",
+      "type": "other",
+      "releaseDate": "2018-12-14",
+      "artistName": "빈티지코드 & 제이니루즈",
+      "id": "genie-album:81138035",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=81138035"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "riverside stories",
+      "type": "album",
+      "releaseDate": "2019-04-10",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10271933",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10271933"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Comma Of Maison D",
+      "type": "other",
+      "releaseDate": "2018-05-11",
+      "artistName": "빈티지코드",
+      "id": "genie-album:81062823",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=81062823"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "크리스마스 카드",
+      "type": "ep",
+      "releaseDate": "2018-12-14",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10232701",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10232701"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "comma of Maison D",
+      "type": "ep",
+      "releaseDate": "2018-05-11",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10165526",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10165526"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "The Moon And The Stars",
+      "type": "other",
+      "releaseDate": "2017-04-11",
+      "artistName": "빈티지코드",
+      "id": "genie-album:80937505",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=80937505"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "The Moon And The Stars",
+      "type": "album",
+      "releaseDate": "2017-04-11",
+      "artistName": "빈티지코드",
+      "id": "melon-album:10053210",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=10053210"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "오브제텐",
+      "type": "other",
+      "releaseDate": "2016-05-11",
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-album:80816955",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/albumInfo?axnm=80816955"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "오브제텐",
+      "type": "album",
+      "releaseDate": "2016-05-11",
+      "artistName": "그루브찬스",
+      "id": "melon-album:2684019",
+      "participation": "unknown",
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/album/detail.htm?albumId=2684019"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    }
+  ],
+  "tracks": [
+    {
+      "title": "Whispers in the Dark",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "이윤정",
+      "id": "melon-song:600865299",
+      "releaseId": "melon-album:12476612",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=600865299"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Whispers in the Dark",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "이윤정 & 빈티지코드",
+      "id": "genie-song:113373802",
+      "releaseId": "genie-album:87126182",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=113373802"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "모험은 발끝부터 자란다",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "grooming shagatto",
+      "id": "melon-song:600186810",
+      "releaseId": "melon-album:12137192",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=600186810"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디 (Vocal. SunizShine)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "13LAYER",
+      "id": "genie-song:110903322",
+      "releaseId": "genie-album:86491811",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=110903322"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디 (Vocal. Iroso)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "13LAYER",
+      "id": "genie-song:110903323",
+      "releaseId": "genie-album:86491811",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=110903323"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디 (Vocal by SunizShine)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "13LAYER",
+      "id": "melon-song:39297442",
+      "releaseId": "melon-album:11890166",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=39297442"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "너와 나의 멜로디 (Vocal by Iroso)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "13LAYER",
+      "id": "melon-song:39297443",
+      "releaseId": "melon-album:11890166",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=39297443"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "서로의 계절",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "더즌 크레이프",
+      "id": "genie-song:110572375",
+      "releaseId": "genie-album:86404556",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=110572375"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "꽃잠 (Love Drive)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "더즌 크레이프",
+      "id": "genie-song:110572376",
+      "releaseId": "genie-album:86404556",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=110572376"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "서로의 계절",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "더즌 크레이프",
+      "id": "melon-song:39181950",
+      "releaseId": "melon-album:11863710",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=39181950"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "꽃잠 (Love Drive)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "더즌 크레이프",
+      "id": "melon-song:39181951",
+      "releaseId": "melon-album:11863710",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=39181951"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Take It Away",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "OVRSIZE & OTWO (오투) & 빈티지코드",
+      "id": "genie-song:104534544",
+      "releaseId": "genie-album:84539803",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=104534544"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Fig Wasp",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "Odd Factory",
+      "id": "melon-song:38302146",
+      "releaseId": "melon-album:11659939",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=38302146"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Say Something",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835577",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835577"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Love Song",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835578",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835578"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Three Apes",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835579",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835579"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "어른",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835580",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835580"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sick and Tired",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835581",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835581"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "하소연",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835582",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835582"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Breaking the Doors",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "blue vanana",
+      "id": "genie-song:98835583",
+      "releaseId": "genie-album:83126884",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=98835583"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Take It Away",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "OVRSIZE",
+      "id": "melon-song:37017659",
+      "releaseId": "melon-album:11375676",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=37017659"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Rolling Stone",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드 & 가연",
+      "id": "genie-song:93232284",
+      "releaseId": "genie-album:82033396",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=93232284"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "가끔",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드 & 가연",
+      "id": "genie-song:93232285",
+      "releaseId": "genie-album:82033396",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=93232285"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Say Something",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788452",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788452"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Love Song",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788453",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788453"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Three Apes",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788454",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788454"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "어른",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788455",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788455"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sick and Tired",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788456",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788456"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "하소연",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788457",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788457"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Breaking the Doors",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "blue vanana",
+      "id": "melon-song:35788458",
+      "releaseId": "melon-album:11091863",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=35788458"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sun",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드 & 가연",
+      "id": "genie-song:91396448",
+      "releaseId": "genie-album:81739773",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=91396448"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Rolling Stone",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:33461562",
+      "releaseId": "melon-album:10603877",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=33461562"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "가끔",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "melon-song:33461563",
+      "releaseId": "melon-album:10603877",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=33461563"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Riots",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752611",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752611"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "On the Brink",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752612",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752612"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Chromatography",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752613",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752613"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Flood Tides",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752614",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752614"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Entangled",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752615",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752615"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Christa",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752616",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752616"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Layover",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752617",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752617"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Curtains, Gins and Twilights",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "빈티지코드 & RUWA",
+      "id": "genie-song:88752618",
+      "releaseId": "genie-album:81183418",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88752618"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sun",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:33067596",
+      "releaseId": "melon-album:10519377",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=33067596"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "크리스마스 즈음 (Around Christmas Time) (Feat. 디아빈슬로)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드 & 제이니루즈",
+      "id": "genie-song:88468042",
+      "releaseId": "genie-album:81138035",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88468042"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "When It’s Christmas",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드 & 제이니루즈",
+      "id": "genie-song:88468043",
+      "releaseId": "genie-album:81138035",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88468043"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Tell Me True",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드 & 제이니루즈",
+      "id": "genie-song:88468044",
+      "releaseId": "genie-album:81138035",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88468044"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Wishes",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드 & 제이니루즈",
+      "id": "genie-song:88468045",
+      "releaseId": "genie-album:81138035",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=88468045"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Riots",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726501",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726501"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "On the Brink",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726502",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726502"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Chromatography",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726503",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726503"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Flood Tides",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726504",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726504"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Entangled",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726505",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726505"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Christa",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726506",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726506"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Layover",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726507",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726507"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Curtains, Gins and Twilights",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31726508",
+      "releaseId": "melon-album:10271933",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31726508"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "A Morning Walk",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87971621",
+      "releaseId": "genie-album:81062823",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87971621"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Nights (With RUWA)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87971622",
+      "releaseId": "genie-album:81062823",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87971622"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Swimming Pool",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87971623",
+      "releaseId": "genie-album:81062823",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87971623"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Daydream",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87971624",
+      "releaseId": "genie-album:81062823",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87971624"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "크리스마스 즈음 (Around Christmas Time) (Feat.디아빈슬로)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31491753",
+      "releaseId": "melon-album:10232701",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31491753"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "When It’s Christmas",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31491754",
+      "releaseId": "melon-album:10232701",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31491754"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Tell Me True",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31491755",
+      "releaseId": "melon-album:10232701",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31491755"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Wishes",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31491756",
+      "releaseId": "melon-album:10232701",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31491756"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "a morning walk",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31067155",
+      "releaseId": "melon-album:10165526",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31067155"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Nights (With. RUWA)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31067156",
+      "releaseId": "melon-album:10165526",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31067156"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "swimming pool",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31067157",
+      "releaseId": "melon-album:10165526",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31067157"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "daydream",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "melon-song:31067158",
+      "releaseId": "melon-album:10165526",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=31067158"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Wake Up (With FADE & 디아빈슬로)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067625",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067625"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Stars (Inst.)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067626",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067626"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Next Dream (With 그루브찬스 & PAXY)",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067627",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067627"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "사슴의 피가 흐르는 호랑이 (Inst.)",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067628",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067628"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Same Click Different Days (With Teth & The Z)",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067629",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067629"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "I Dreamed World (With 최고은)",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067630",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067630"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Stay Together (With La.Q & 김다영 of 뉴클리어스)",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067631",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067631"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Man On Fire (With VA)",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067632",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067632"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Home (With 이선정)",
+      "discNumber": 1,
+      "trackNumber": 9,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067633",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067633"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "재생 불가",
+      "discNumber": 1,
+      "trackNumber": 10,
+      "artistName": "빈티지코드",
+      "id": "genie-song:87067634",
+      "releaseId": "genie-album:80937505",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=87067634"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Wake Up (With FADE, 디아빈슬로)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352198",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352198"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Stars (Inst.)",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352199",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352199"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Next Dream (With 그루브찬스, PAXY)",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352200",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352200"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "사슴의 피가 흐르는 호랑이 (Inst.)",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352201",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352201"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Same Click Different Days (With Teth, The Z)",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352202",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352202"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "I Dreamed World (With 최고은)",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352203",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352203"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Stay Together (With La.Q, 김다영 Of 뉴클리어스)",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352204",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352204"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Man On Fire (With VA)",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352205",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352205"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Home (With 이선정)",
+      "discNumber": 1,
+      "trackNumber": 9,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352206",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352206"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "I'm A Rocker (Guide Ver.) (CD Only)",
+      "discNumber": 1,
+      "trackNumber": 10,
+      "artistName": "빈티지코드",
+      "id": "melon-song:30352207",
+      "releaseId": "melon-album:10053210",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=30352207"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "OUR (Intro)",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230547",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230547"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "PAPER Rapper",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230548",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230548"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "TAPE Rec (Feat. 화나)",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230549",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230549"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "I Am Future (Feat. anybody)",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230550",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230550"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "MPC10000",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230551",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230551"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "INTERNET",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230552",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230552"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "SIGN CD",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230553",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230553"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "TEAM Taeb",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230543",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230543"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "IF Weburnyouburnwithus",
+      "discNumber": 1,
+      "trackNumber": 9,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230544",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230544"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "COCKTAIL",
+      "discNumber": 1,
+      "trackNumber": 10,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230545",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230545"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "재생 불가",
+      "discNumber": 1,
+      "trackNumber": 11,
+      "artistName": "그루브찬스 & 빈티지코드",
+      "id": "genie-song:86230546",
+      "releaseId": "genie-album:80816955",
+      "managed": true,
+      "links": [
+        {
+          "provider": "genie",
+          "url": "https://www.genie.co.kr/detail/songInfo?xgnm=86230546"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Our Intro",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175903",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175903"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Paper Rapper",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175904",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175904"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Tape Rec (Feat. 화나)",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175905",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175905"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "I Am Future (Feat. Anybody)",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175906",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175906"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Mpc10000",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175907",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175907"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Internet",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175908",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175908"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Sign Cd",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175909",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175909"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Team Taeb",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175910",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175910"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "IF Weburnyouburnwithus",
+      "discNumber": 1,
+      "trackNumber": 9,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175911",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175911"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "Cocktail",
+      "discNumber": 1,
+      "trackNumber": 10,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175912",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175912"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    },
+    {
+      "title": "! (Hidden Track) (Cd Only)",
+      "discNumber": 1,
+      "trackNumber": 11,
+      "artistName": "그루브찬스",
+      "id": "melon-song:8175913",
+      "releaseId": "melon-album:2684019",
+      "managed": true,
+      "links": [
+        {
+          "provider": "melon",
+          "url": "https://www.melon.com/song/detail.htm?songId=8175913"
+        }
+      ],
+      "excluded": false,
+      "userEdited": false
+    }
+  ]
+}

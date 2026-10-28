@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit } from "@/lib/request-rate-limit";
 import { ArchiveError, archiveDatabaseError } from "./http";
-import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveLibrary } from "./model";
+import { applyArchiveCommand, archiveCommandSchema, createArchiveData, validateArchiveData, type ArchiveData, type ArchiveLibrary } from "./model";
 import { getMusicProviderStatuses, parseMusicProviderUrl, type ArtistCandidate } from "./providers";
 import { MusicProviderError, searchMusicBrainzArtists, lookupMusicBrainzRelease } from "./musicbrainz";
 import { lookupAppleArtist, lookupAppleAlbumMetadata } from "./apple";
@@ -18,11 +18,14 @@ import { previewArchiveCsv, importArchiveCsv } from "./csv";
 import { mergeArchiveImports } from "./import";
 import { getOwnedCreditSubmissions, mergeSubmissionCredits } from "./credits";
 import { fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits } from "./domestic-credits";
+import { findArchiveAlbumGroup, groupArchiveAlbums } from "./album-groups";
+import { resolveArchiveReviewScope, storedArchiveReviewContextSchema } from "./review-entry";
 
 const uuid = z.string().uuid();
 const paging = (value: number) => Number.isSafeInteger(value) && value >= 0 && value <= 10000 ? value : 0;
 const libraryFields = "id,owner_id,version,data,archived_at,created_at,updated_at";
 const publicJobFields = "id,library_id,provider,external_artist_id,status,cursor,counts,error_code,error_message,attempts,available_at,created_at,updated_at,checked_at";
+type ArchiveOverviewSummary = { releaseCount: number; trackCount: number; needsCheck: number; inProgress: number; needsChanges: number; awaitingResult: number };
 
 export async function getOwnedLibrary(owner: string, libraryId: string): Promise<ArchiveLibrary> {
   const { data, error } = await createAdminClient().from("music_archive_libraries").select(libraryFields).eq("id", uuid.parse(libraryId)).eq("owner_id", owner).maybeSingle();
@@ -55,7 +58,22 @@ export async function getArchiveOverview(owner: string, page = 0) {
     admin.from("music_archive_libraries").select("id", { count: "exact", head: true }).eq("owner_id", owner),
   ]);
   archiveDatabaseError(libraries.error); archiveDatabaseError(jobs.error); archiveDatabaseError(count.error);
-  return { libraries: libraries.data ?? [], jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses().filter(item => item.id !== "musicbrainz"), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
+  const listed = (libraries.data ?? []) as (ArchiveLibrary & { summary: ArchiveOverviewSummary })[];
+  // The index RPC deliberately returns only 12 covers and no tracks. Read the
+  // grouping inputs for this owner's page, without loading private work/task data.
+  const grouping = listed.length ? await admin.from("music_archive_libraries")
+    .select("id,releases:data->releases,tracks:data->tracks,recordings:data->recordings")
+    .eq("owner_id", owner).in("id", listed.map(row => row.id)) : { data: [], error: null };
+  archiveDatabaseError(grouping.error);
+  const inputs = new Map(((grouping.data ?? []) as { id: string; releases: ArchiveData["releases"]; tracks: ArchiveData["tracks"]; recordings: ArchiveData["recordings"] }[]).map(row => [row.id, row]));
+  const groupedLibraries = listed.flatMap(library => {
+    const input = inputs.get(library.id);
+    if (!input) return [];
+    const groups = groupArchiveAlbums({ releases: input.releases ?? [], tracks: input.tracks ?? [], recordings: input.recordings ?? [] });
+    const releases = groups.map(group => group.release).sort((a, b) => (b.releaseDate ?? "").localeCompare(a.releaseDate ?? "") || a.id.localeCompare(b.id)).slice(0, 12);
+    return [{ ...library, data: { ...library.data, releases }, summary: { ...library.summary, releaseCount: groups.length, trackCount: groups.reduce((total, group) => total + group.tracks.filter(item => item.track.managed).length, 0) } }];
+  });
+  return { libraries: groupedLibraries, jobs: jobs.data ?? [], guides, providers: getMusicProviderStatuses().filter(item => item.id !== "musicbrainz"), page: paging(page), total: count.count ?? 0, nextPage: start + 20 < (count.count ?? 0) ? paging(page) + 1 : null };
 }
 
 export async function getArchiveDetail(owner: string, libraryId: string) {
@@ -187,17 +205,18 @@ export async function linkArchiveSubmission(owner: string, context: { libraryId:
   if (targetIds.some(id => !savedTracks.some(track => track.id === id)) || new Set(targetIds).size !== targetIds.length) throw new ArchiveError("심의 트랙 연결을 확인해주세요.", 422);
   for (let attempt = 0; attempt < 4; attempt++) {
     const library = await getOwnedLibrary(owner, context.libraryId);
-    const release = library.data.releases.find(row => row.id === context.releaseId && !row.excluded && !row.mergedInto);
-    const availableTracks = library.data.tracks.filter(row => row.releaseId === context.releaseId && row.managed && !row.excluded && !row.mergedInto && (!context.trackId || row.id === context.trackId)).sort((a, b) => a.discNumber - b.discNumber || a.trackNumber - b.trackNumber);
-    const snapshot = submission.archive_review_context as { libraryId?: string; releaseId?: string; trackIds?: string[] } | null;
-    const tracks = snapshot?.libraryId === context.libraryId && snapshot.releaseId === context.releaseId && Array.isArray(snapshot.trackIds)
-      ? snapshot.trackIds.flatMap(id => availableTracks.find(track => track.id === id) ?? []) : availableTracks;
-    if (!release || !tracks.length || tracks.length !== targetIds.length) throw new ArchiveError("앨범과 심의 트랙 구성이 달라졌습니다. 새로고침해주세요.", 409);
-    const links = tracks.map((track, index) => ({ id: `onside:${submissionId}:${index}`, submissionId, releaseId: release.id, trackId: track.id, submissionTrackId: targetIds[index] }));
+    if (library.archived_at) throw new ArchiveError("삭제한 아티스트의 심의 연결은 변경할 수 없습니다.", 409);
+    const snapshot = submission.archive_review_context ? storedArchiveReviewContextSchema.safeParse(submission.archive_review_context) : null;
+    if (snapshot && (!snapshot.success || snapshot.data.libraryId !== context.libraryId || snapshot.data.releaseId !== context.releaseId || snapshot.data.trackId !== context.trackId)) throw new ArchiveError("저장한 심의 신청 범위가 일치하지 않습니다. 새로고침해주세요.", 409);
+    let tracks;
+    try { tracks = resolveArchiveReviewScope(library.data, context, snapshot?.success ? snapshot.data.trackIds : undefined).tracks; }
+    catch { throw new ArchiveError("앨범과 심의 트랙 구성이 달라졌습니다. 새로고침해주세요.", 409); }
+    if (tracks.length !== targetIds.length) throw new ArchiveError("앨범과 심의 트랙 구성이 달라졌습니다. 새로고침해주세요.", 409);
+    const links = tracks.map((track, index) => ({ id: `onside:${submissionId}:${index}`, submissionId, releaseId: track.releaseId, trackId: track.id, submissionTrackId: targetIds[index] }));
     // Track links preserve participation/subset scope even for an album-level application.
     const data = { ...library.data, reviewLinks: [...library.data.reviewLinks.filter(link => link.submissionId !== submissionId), ...links] };
     if (JSON.stringify(data.reviewLinks) === JSON.stringify(library.data.reviewLinks)) return;
-    try { await saveArchiveLibrary(owner, library, data, "link_review", owner, library.archived_at, { submissionId, releaseId: release.id, trackIds: tracks.map(track => track.id) }); return; }
+    try { await saveArchiveLibrary(owner, library, data, "link_review", owner, library.archived_at, { submissionId, releaseId: context.releaseId, trackIds: tracks.map(track => track.id) }); return; }
     catch (error) { if (!(error instanceof ArchiveError) || error.code !== "VERSION_CONFLICT" || attempt === 3) throw error; }
   }
 }
@@ -278,8 +297,13 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
   if (body.action === "refresh-metadata") {
     const releaseId = z.string().min(1).max(256).optional().parse(body.releaseId);
     const offset = z.number().int().min(0).max(5000).default(0).parse(body.offset);
-    const releases = library.data.releases.filter(item => !item.excluded && !item.mergedInto && (!releaseId || item.id === releaseId));
-    if (releaseId && !releases.length) throw new ArchiveError("앨범을 찾을 수 없습니다.", 404);
+    const selected = releaseId ? findArchiveAlbumGroup(library.data, releaseId) : undefined;
+    if (releaseId && !selected) throw new ArchiveError("앨범을 찾을 수 없습니다.", 404);
+    const available = library.data.releases.filter(item => !item.excluded && !item.mergedInto && (!selected || selected.releaseIds.includes(item.id)));
+    const refreshReleaseIds = z.array(z.string().min(1).max(256)).min(1).max(5000).optional().parse(body.refreshReleaseIds)
+      ?? available.map(release => release.id).sort();
+    if (new Set(refreshReleaseIds).size !== refreshReleaseIds.length || refreshReleaseIds.some(id => !available.some(release => release.id === id))) throw new ArchiveError("새로고침할 앨범 구성이 변경되었습니다. 앨범에서 다시 시도해주세요.", 409);
+    const releases = refreshReleaseIds.map(id => available.find(release => release.id === id)!);
     let updated = library.data;
     const creditSubmissions = await getOwnedCreditSubmissions(owner);
     const refreshDeadline = AbortSignal.timeout(45_000);
@@ -330,10 +354,12 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
     const saved = await saveArchiveLibrary(owner, library, updated, "refresh_metadata", owner, library.archived_at, { releaseId, offset, notices });
     const nextOffset = offset + attemptedAlbums < releases.length ? offset + attemptedAlbums : null;
     const scopeIds = new Set(releases.map(release => release.id));
-    const scopedTracks = updated.tracks.filter(track => scopeIds.has(track.releaseId) && !track.excluded && !track.mergedInto);
-    const creditCount = scopedTracks.filter(track => updated.recordings.find(recording => recording.id === track.recordingId)?.workIds.some(id => updated.works.find(work => work.id === id)?.contributors?.length)).length;
+    const creditedWorks = new Set(updated.works.filter(work => work.contributors?.length).map(work => work.id));
+    const creditedRecordings = new Set(updated.recordings.filter(recording => recording.workIds.some(id => creditedWorks.has(id))).map(recording => recording.id));
+    const creditedTracks = new Set(updated.tracks.filter(track => creditedRecordings.has(track.recordingId ?? "")).map(track => track.id));
+    const creditCount = groupArchiveAlbums(updated).filter(group => group.releaseIds.some(id => scopeIds.has(id))).flatMap(group => group.tracks).filter(item => item.trackIds.some(id => creditedTracks.has(id))).length;
     const summary = `${checkedAlbums ? `음원 사이트에서 앨범 ${checkedAlbums}개를 다시 확인했습니다.` : "다시 조회할 수 있는 음원 사이트 정보가 없습니다."} ${creditCount ? `저작자 정보 ${creditCount}곡이 연결되어 있습니다.` : "현재 연결된 자료에서 작사·작곡·편곡 정보를 찾지 못했습니다. 직접 입력할 수 있습니다."}`;
-    return { library: saved, nextOffset, metadataNotice: [summary, ...notices].join("\n"), creditCount };
+    return { library: saved, nextOffset, refreshReleaseIds, metadataNotice: [summary, ...notices].join("\n"), creditCount };
   }
   if (body.action === "csv-import") return { library: await saveArchiveLibrary(owner, library, importArchiveCsv(z.string().max(400000).parse(body.csv), library.data), "csv_import") };
   if (body.action === "commands") {
