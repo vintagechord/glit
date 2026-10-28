@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useId } from "react";
 
 import { getAuthReturnPath } from "./navigation";
 import { socialProviders, type SocialAvailability } from "./social-contract";
@@ -29,16 +30,29 @@ export function SocialAuthNotice({ errorCode, linked, english = false }: {
   return null;
 }
 
+export function NaverReviewNotice({ id, english = false }: { id: string; english?: boolean }) {
+  return (
+    <p id={id} className="rounded-[8px] border-2 border-[#111111] bg-[#f2d524] px-3 py-2 text-xs leading-5 text-[#111111]">
+      <strong className="font-black">{english ? "Under review" : "검수 중"}</strong>{" "}
+      {english
+        ? "Until Naver approves this app, only app administrators and registered testers can use Naver sign-in."
+        : "네이버 로그인은 검수 완료 전까지 네이버 앱 관리자와 등록된 테스터만 이용할 수 있습니다."}
+    </p>
+  );
+}
+
 export type SocialAuthButtonsProps = {
   availability: SocialAvailability;
   nextPath?: string | null;
   mode?: "login" | "signup";
   errorCode?: string | null;
   loading?: boolean;
+  naverReviewPending?: boolean;
 };
 
-export function SocialAuthButtons({ availability, nextPath, mode = "login", errorCode, loading = false }: SocialAuthButtonsProps) {
+export function SocialAuthButtons({ availability, nextPath, mode = "login", errorCode, loading = false, naverReviewPending = false }: SocialAuthButtonsProps) {
   const pathname = usePathname();
+  const naverReviewNoticeId = useId();
   const english = pathname === "/en" || pathname.startsWith("/en/");
   const next = getAuthReturnPath(nextPath, english);
   const query = new URLSearchParams({ locale: english ? "en" : "ko" });
@@ -51,13 +65,19 @@ export function SocialAuthButtons({ availability, nextPath, mode = "login", erro
           const providerName = english ? ({ google: "Google", naver: "Naver", kakao: "Kakao" } as const)[id] : label;
           const text = english ? `Continue with ${providerName}` : `${providerName}로 ${mode === "signup" ? "시작하기" : "로그인"}`;
           const className = `flex min-h-12 w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] px-4 py-3 text-center text-sm font-black shadow-[3px_3px_0_#111111] ${socialProviderStyles[id]}`;
-          return availability[id] ? (
-            // Native links deliberately avoid framework prefetch and preserve PKCE cookie redirects.
-            <a key={id} href={`/auth/social/${id}?${query}`} className={`${className} transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground`}><SocialProviderMark provider={id} /><span>{text}</span></a>
-          ) : (
-            <button key={id} type="button" disabled className={`${className} cursor-not-allowed`}>
-              <SocialProviderMark provider={id} /><span>{text}</span><span className="rounded border border-current px-1.5 py-0.5 text-[10px]">{loading ? (english ? "Checking..." : "확인 중...") : (english ? "Setup pending" : "준비 중")}</span>
-            </button>
+          const showReviewNotice = id === "naver" && availability.naver && naverReviewPending;
+          return (
+            <div key={id} className="space-y-2">
+              {availability[id] ? (
+                // Native links deliberately avoid framework prefetch and preserve PKCE cookie redirects.
+                <a href={`/auth/social/${id}?${query}`} aria-describedby={showReviewNotice ? naverReviewNoticeId : undefined} className={`${className} transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground`}><SocialProviderMark provider={id} /><span>{text}</span></a>
+              ) : (
+                <button type="button" disabled className={`${className} cursor-not-allowed`}>
+                  <SocialProviderMark provider={id} /><span>{text}</span><span className="rounded border border-current px-1.5 py-0.5 text-[10px]">{loading ? (english ? "Checking..." : "확인 중...") : (english ? "Setup pending" : "준비 중")}</span>
+                </button>
+              )}
+              {showReviewNotice && <NaverReviewNotice id={naverReviewNoticeId} english={english} />}
+            </div>
           );
         })}
       </div>

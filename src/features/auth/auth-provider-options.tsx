@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import { SocialAuthButtons, type SocialAuthButtonsProps } from "./social-auth-buttons";
 import { emptySocialAvailability } from "./social-contract";
-import { getSocialAvailability } from "./social";
+import { getSocialAvailability, isNaverReviewPending } from "./social";
 
-type Props = Omit<SocialAuthButtonsProps, "availability" | "loading">;
+type Props = Omit<SocialAuthButtonsProps, "availability" | "loading" | "naverReviewPending">;
 
 async function AvailableProviderOptions(props: Props) {
   const availability = await getSocialAvailability();
-  return <SocialAuthButtons {...props} availability={availability} />;
+  return <SocialAuthButtons {...props} availability={availability} naverReviewPending={isNaverReviewPending()} />;
 }
 
 export function AuthProviderOptions(props: Props) {
