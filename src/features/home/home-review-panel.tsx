@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { ArrowRight, ChevronRight, CreditCard } from "lucide-react";
+import { ArrowRight, CreditCard } from "lucide-react";
 import { ReviewResultControl } from "@/components/review-result-control";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate } from "@/lib/format";
@@ -167,7 +167,7 @@ const stageStatusMap = {
   },
   attention: {
     label: "보완 요청",
-    tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
+    tone: "bauhaus-status-chip--attention",
   },
   partial: {
     label: "일부 결과 도착",
@@ -391,38 +391,6 @@ function getLatestStationUpdatedAt(stations: StationItem[]) {
   return latestValue;
 }
 
-const stationBadgeMap: Record<
-  string,
-  { label: string; color: string; bg: string }
-> = {
-  KBS: { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
-  "KBS 1FM": { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
-  "KBS 2FM": { label: "KBS", color: "#0c4da2", bg: "#e2ecf9" },
-  MBC: { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
-  "MBC FM4U": { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
-  "MBC 표준FM": { label: "MBC", color: "#0c2e63", bg: "#e1e7f7" },
-  SBS: { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
-  "SBS 파워FM": { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
-  "SBS 러브FM": { label: "SBS", color: "#1b74e4", bg: "#e4efff" },
-  TBS: { label: "TBS", color: "#0a9389", bg: "#dbf4f1" },
-  "TBS eFM": { label: "TBS", color: "#0a9389", bg: "#dbf4f1" },
-  YTN: { label: "YTN", color: "#0d74b7", bg: "#e3f2fb" },
-  CBS: { label: "CBS", color: "#1c6ac9", bg: "#e1edff" },
-  BBS: { label: "BBS", color: "#7b3f98", bg: "#f2e9fb" },
-  WBS: { label: "WBS", color: "#0f6b4f", bg: "#e4f5ee" },
-  PBC: { label: "PBC", color: "#a4002f", bg: "#fbe7ed" },
-  FEBC: { label: "FEBC", color: "#d97706", bg: "#fff4e5" },
-  ARIRANG: { label: "ARIRANG", color: "#d00023", bg: "#fde6ea" },
-  "GYEONGIN IFM": { label: "gfm", color: "#2563eb", bg: "#e0ebff" },
-  TBN: { label: "TBN", color: "#0ea5e9", bg: "#e0f7ff" },
-  KISS: { label: "KISS", color: "#15803d", bg: "#e4f6ea" },
-  GUGAK: { label: "GUGAK", color: "#92400e", bg: "#f7efe6" },
-  EBS: { label: "EBS", color: "#0d6e8d", bg: "#e1edf5" },
-  TVN: { label: "TVN", color: "#d90429", bg: "#fde8ec" },
-  JTBC: { label: "JTBC", color: "#ff7f50", bg: "#fff0e8" },
-  G1: { label: "G1", color: "#2563eb", bg: "#e0ebff" },
-};
-
 function StationLogo({
   station,
   hideOnMobile = false,
@@ -432,13 +400,12 @@ function StationLogo({
   hideOnMobile?: boolean;
   compact?: boolean;
 }) {
-  const key = (station?.name ?? station?.code ?? "").trim().toUpperCase();
   const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
   const logoFrameClass = compact
-    ? "h-8 w-[76px]"
+    ? "h-8 w-full max-w-[70px]"
     : "h-11 w-[112px] sm:h-12 sm:w-[132px]";
   const fallbackFrameClass = compact
-    ? "min-h-8 w-[76px]"
+    ? "min-h-8 w-full max-w-[70px]"
     : "min-h-11 w-[112px] sm:min-h-12 sm:w-[132px]";
   const mappedLogo = getLocalStationLogoSource(station);
 
@@ -457,7 +424,7 @@ function StationLogo({
   if (src) {
     return (
       <span
-        className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center overflow-hidden bg-white p-1.5 ${compact ? "rounded-[6px]" : "rounded-[8px] border border-border/60 shadow-sm"}`}
+        className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center overflow-hidden bg-white ${compact ? "rounded-[4px] p-0.5" : "rounded-[8px] border border-border/60 p-1.5 shadow-sm"}`}
       >
         <Image
           src={src}
@@ -473,11 +440,9 @@ function StationLogo({
     );
   }
 
-  const badge = stationBadgeMap[key] ?? { label: key || "-", color: "#111", bg: "#e5e7eb" };
   return (
     <span
-      className={`${visibilityClass} ${fallbackFrameClass} shrink-0 items-center justify-center break-words rounded-[8px] border border-border/60 p-1.5 text-center text-xs font-bold leading-tight`}
-      style={{ color: badge.color, backgroundColor: badge.bg }}
+      className={`${visibilityClass} ${fallbackFrameClass} min-w-0 items-center justify-center break-words rounded-[4px] border border-[#111111] bg-white p-1 text-center text-[10px] font-black leading-tight text-[#111111] sm:text-xs`}
       title={getStationName(station)}
     >
       {getStationName(station)}
@@ -489,39 +454,43 @@ function CompactStationRow({
   station,
   status,
   onClick,
+  english,
 }: {
   station: StationItem["station"];
   status: ReturnType<typeof getDisplayStatusForReview>;
   onClick?: () => void;
+  english: boolean;
 }) {
   const stationName = getStationName(station);
   const statusClass = status.tone.includes("--danger")
-    ? "bg-rose-50 text-rose-700 dark:bg-rose-400/15 dark:text-rose-200"
+    ? "bg-[#d9362c] text-white"
     : status.tone.includes("--success")
-      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200"
+      ? "bg-[#1f7a5a] text-white"
       : status.needsAttention
-        ? "bg-orange-50 text-orange-700 dark:bg-orange-400/15 dark:text-orange-200"
+        ? "bg-[#ff6b00] text-[#111111]"
         : status.key === "WAITING_SUBMISSION"
-          ? "bg-foreground/5 text-muted-foreground"
-          : "bg-blue-50 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200";
+          ? "bg-[#f2cf27] text-[#111111]"
+          : "bg-[#1556a4] text-white";
+  const shortEnglishLabels: Record<string, string> = {
+    "접수예정": "Queued", "접수완료": "Received", "심의중": "In review",
+    "심의 중": "In review", "적격": "Approved", "부적격": "Rejected",
+    "보완 요청": "Fix needed", "부분 적격": "Partial",
+  };
+  const label = english ? shortEnglishLabels[status.label] ?? status.label : status.label;
   const content = <>
     <StationLogo station={station} compact />
-    <span className="flex min-w-0 flex-1 flex-col items-end gap-1">
-      <span data-station-status className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-4 ${statusClass}`}>
-        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-        <span>{status.label}</span>
+    <span className="flex min-w-0 flex-col items-stretch gap-1">
+      <span data-station-status className={`inline-flex min-h-7 w-full items-center justify-center rounded-[4px] border-2 border-[#111111] px-0.5 py-1 text-center text-[10px] font-black leading-3.5 [overflow-wrap:anywhere] sm:text-[11px] ${statusClass}`}>
+        <span>{label}</span>
       </span>
-      {status.summaryText ? <span className="max-w-full text-right text-[10px] leading-4 text-muted-foreground">{status.summaryText}</span> : null}
-    </span>
-    <span className="flex w-3 shrink-0 justify-end" aria-hidden="true">
-      {onClick ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+      {status.summaryText ? <span className="text-center text-[10px] leading-4 text-foreground [overflow-wrap:anywhere]">{status.summaryText}</span> : null}
     </span>
   </>;
-  const className = "flex min-h-[50px] w-full items-center gap-2.5 px-3 py-2 text-left";
+  const className = "grid min-h-14 min-w-0 w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1 bg-white px-1 py-2 text-left dark:bg-[#171717]";
   return onClick ? (
     <button type="button" data-review-result-control data-station-row onClick={onClick}
       aria-label={`${stationName} ${status.label} 결과 보기`}
-      className={`${className} cursor-pointer transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary`}>
+      className={`${className} cursor-pointer transition-colors hover:bg-[#f2cf27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1556a4] dark:hover:bg-[#111111] dark:focus-visible:ring-[#f2cf27]`}>
       {content}
     </button>
   ) : (
@@ -873,7 +842,7 @@ export function HomeReviewPanel({
       {showDetailLink ? (
         <Link
           href={`${localePrefix}/dashboard/submissions/${activeSubmission.id}`}
-          className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:min-w-[8.5rem]"
+          className="inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:min-w-[8.5rem]"
         >
           자세히 보기
         </Link>
@@ -881,13 +850,13 @@ export function HomeReviewPanel({
       {!activeSubmission.current_order_id ? <Link
         href={editHref}
         onClick={prepareActiveSubmissionEdit}
-        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#fff7cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
+        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
       >
         수정하기
       </Link> : null}
       <Link
         href={`${localePrefix}/mypage/${activeSubmission.current_order_id ? "orders" : "cart"}?focus=${activeSubmission.id}`}
-        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:text-[#06111f] dark:hover:bg-[#ff7a72] sm:w-auto sm:min-w-[10.5rem]"
+        className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:bg-[#d9362c] dark:text-white dark:hover:bg-[#b92d25] sm:w-auto sm:min-w-[10.5rem]"
       >
         <CreditCard aria-hidden="true" className="h-4 w-4" />
         {activeSubmission.current_order_id ? "주문 내역 보기" : "결제하기"}
@@ -911,7 +880,9 @@ export function HomeReviewPanel({
   const stationProgressPercent =
     totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const progressPercent = stationProgressPercent;
-  const progressText = `방송국 ${totalCount}곳 중 ${completedCount}곳 결과 완료 · ${progressPercent}%`;
+  const progressText = localePrefix
+    ? `${completedCount} of ${totalCount} broadcaster results complete · ${progressPercent}%`
+    : `방송국 ${totalCount}곳 중 ${completedCount}곳 결과 완료 · ${progressPercent}%`;
   const isAlbumStatusContext = tab === "album" || activeSubmission?.type === "ALBUM";
   const hasAllStationResults =
     !needsPayment && totalCount > 0 && completedCount === totalCount;
@@ -936,9 +907,9 @@ export function HomeReviewPanel({
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const latestStationUpdatedAt = getLatestStationUpdatedAt(activeStations);
-  const stationGridRowsPerPage = compact ? rowsPerPage : Math.max(1, Math.ceil(rowsPerPage / 2));
-  const stationCardHeight = compact ? 50 : 86;
-  const stationCardGap = compact ? 1 : 10;
+  const stationGridRowsPerPage = Math.max(1, Math.ceil(rowsPerPage / 2));
+  const stationCardHeight = compact ? 56 : 86;
+  const stationCardGap = compact ? 2 : 10;
   const listPadding = compact ? 0 : 12;
   const listViewportHeight =
     stationGridRowsPerPage * stationCardHeight +
@@ -953,10 +924,10 @@ export function HomeReviewPanel({
         needsPayment ? "justify-center" : ""
       }`
     : "mt-5 space-y-4 sm:mt-6 sm:space-y-5";
-  const sectionPaddingClass = compact ? "p-3" : "p-4";
+  const sectionPaddingClass = compact ? "p-2 sm:p-3" : "p-4";
   const stationSectionClass = compact ? "flex flex-1 flex-col" : "";
   const stationTableShellClass = compact
-    ? "mt-2 overflow-hidden rounded-lg border border-border/60 bg-background/70"
+    ? "mt-2 overflow-hidden rounded-[6px] border-2 border-[#111111] bg-white dark:border-[#f2cf27] dark:bg-[#171717]"
     : "mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70";
   const stationEmptyClass = compact
     ? "flex flex-1 items-center justify-center px-3 py-5 text-center text-xs text-muted-foreground"
@@ -972,7 +943,7 @@ export function HomeReviewPanel({
     ? ""
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
   const stationGridClass = compact
-    ? "divide-y divide-border/60"
+    ? "grid grid-cols-2 [&>*:nth-child(odd)]:border-r-2 [&>*:nth-child(n+3)]:border-t-2 [&>*]:border-[#111111] dark:[&>*]:border-[#f2cf27]"
     : "grid grid-cols-1 gap-2.5 sm:grid-cols-2";
   const stationCardClass = "flex min-h-[112px] flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm md:min-h-[86px] md:flex-row md:justify-between";
   const stationInfoClass = "flex min-w-0 flex-1 items-center gap-3";
@@ -1221,7 +1192,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex <= 0}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f] dark:shadow-[3px_3px_0_#1556a4] dark:hover:bg-[#a8d2ff] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:bg-[#1556a4] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#0f4f99] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
             aria-label="이전 접수"
           >
             ←
@@ -1248,7 +1219,7 @@ export function HomeReviewPanel({
               }
             }}
             disabled={activeIndex >= Math.max(0, activeList.length - 1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#8bc3ff] dark:bg-[#8bc3ff] dark:text-[#06111f] dark:shadow-[3px_3px_0_#1556a4] dark:hover:bg-[#a8d2ff] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#1556a4] bg-[#1556a4] text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-white disabled:text-muted-foreground disabled:opacity-70 disabled:shadow-none disabled:hover:translate-y-0 dark:border-[#f2cf27] dark:bg-[#1556a4] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-[#0f4f99] dark:disabled:border-white/18 dark:disabled:bg-white/8 dark:disabled:text-white/45 dark:disabled:shadow-none sm:h-9 sm:w-9 sm:text-sm"
             aria-label="다음 접수"
           >
             →
@@ -1267,8 +1238,8 @@ export function HomeReviewPanel({
             ) : (
               <div className={progressBodyClass}>
                 <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>
-                  <div className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
-                    <span className="min-w-0 truncate">{progressText}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-foreground">
+                    <span className="min-w-0 flex-[1_1_160px] break-keep">{progressText}</span>
                     {currentSubmissionStatus ? (
                       <span
                         className={`bauhaus-status-chip bauhaus-status-chip--compact shrink-0 ${currentSubmissionStatus.tone}`}
@@ -1286,7 +1257,7 @@ export function HomeReviewPanel({
                     aria-valuenow={progressPercent}
                   >
                     <div
-                      className="h-2 rounded-full bg-primary transition-all dark:bg-[#2997ff]"
+                      className="h-2 rounded-full bg-[#1556a4] transition-all dark:bg-[#1556a4]"
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
@@ -1318,7 +1289,7 @@ export function HomeReviewPanel({
         </div>
 
         {!needsPayment ? (
-          <div className={`rounded-2xl border border-border/60 bg-background/80 ${sectionPaddingClass} ${stationSectionClass}`}>
+          <div className={`rounded-[8px] border-2 border-[#111111] bg-white ${sectionPaddingClass} ${stationSectionClass} dark:border-[#f2cf27] dark:bg-[#171717]`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground">
@@ -1342,7 +1313,7 @@ export function HomeReviewPanel({
                   type="button"
                   onClick={handlePrev}
                   disabled={needsPayment || !canScrollUp}
-                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
+                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#1556a4] dark:text-white dark:hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0`}
                   aria-label="이전 방송국 상태"
                 >
                   ↑
@@ -1351,7 +1322,7 @@ export function HomeReviewPanel({
                   type="button"
                   onClick={handleNext}
                   disabled={needsPayment || !canScrollDown}
-                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0`}
+                  className={`inline-flex ${roundButtonClass} items-center justify-center rounded-full border border-primary bg-primary font-bold text-primary-foreground shadow-[0_8px_18px_rgba(0,113,227,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#0077ed] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:bg-[#1556a4] dark:text-white dark:hover:bg-[#0f4f99] disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0`}
                   aria-label="다음 방송국 상태"
                 >
                   ↓
@@ -1359,6 +1330,14 @@ export function HomeReviewPanel({
               </div>
             </div>
             <div className={stationTableShellClass}>
+              {compact && !needsPayment && activeStations.length > 0 ? (
+                <div aria-hidden="true" className="grid grid-cols-2 border-b-2 border-[#111111] bg-[#111111] text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
+                  {[0, 1].map((column) => <div key={column} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-1 px-1 py-2 text-center text-[10px] font-black leading-3.5 sm:text-[11px]">
+                    <span>{localePrefix ? "Station" : "방송국"}</span>
+                    <span>{localePrefix ? "Status" : "접수 현황"}</span>
+                  </div>)}
+                </div>
+              ) : null}
               {!needsPayment && activeStations.length > 0 ? (
                 <div
                   ref={stationListRef}
@@ -1397,6 +1376,7 @@ export function HomeReviewPanel({
                           key={`${station.id}-${index}`}
                           station={station.station}
                           status={displayStatus}
+                          english={Boolean(localePrefix)}
                           onClick={canOpenResultModal ? () => setTrackResultModal(buildResultModalState(station, summary, displayStatus, activeSubmission)) : undefined}
                         />;
                       }
@@ -1451,7 +1431,7 @@ export function HomeReviewPanel({
               <div className="mt-4 flex justify-center">
                 <Link
                   href={`${localePrefix}/dashboard/submissions/${activeSubmission.id}`}
-                  className="rounded-full border border-primary bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-[0_12px_28px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+                  className="rounded-full border border-primary bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground shadow-[0_12px_28px_rgba(0,113,227,0.18)] transition hover:bg-[#0077ed] dark:bg-[#1556a4] dark:text-white dark:hover:bg-[#0f4f99]"
                 >
                   자세히 보기
                 </Link>
@@ -1537,7 +1517,7 @@ export function HomeReviewPanel({
               </div>
             ) : null}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-xl border border-[#1556a4]/30 bg-[#1556a4]/5 px-3 py-3 dark:border-[#8fb7e8]/40 dark:bg-[#0f1d2e]">
+              <div className="mt-4 rounded-xl border border-[#1556a4]/30 bg-white px-3 py-3 dark:border-[#8fb7e8]/40 dark:bg-[#171717]">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#b9d8ff]">
                   {["부적격", "수정요청"].includes(trackResultModal.resultLabel)
                     ? "부적격/수정 사유"
@@ -1591,7 +1571,7 @@ export function HomeReviewPanel({
             <button
               type="button"
               onClick={() => setTrackResultModal(null)}
-              className="mt-6 w-full rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#2997ff] dark:text-[#00101f] dark:hover:bg-[#45a6ff]"
+              className="mt-6 w-full rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-[#0077ed] dark:bg-[#1556a4] dark:text-white dark:hover:bg-[#0f4f99]"
             >
               닫기
             </button>

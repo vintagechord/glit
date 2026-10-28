@@ -44,14 +44,14 @@ const statusMap: Record<StationDisplayStatusKey, StationDisplayStatusBase> = {
   IN_REVIEW: {
     key: "IN_REVIEW",
     label: "접수완료",
-    tone: "bg-violet-600 text-white dark:bg-violet-300 dark:text-[#06111f]",
+    tone: "bauhaus-status-chip--progress",
     isComplete: false,
     needsAttention: false,
   },
   NEEDS_FIX: {
     key: "NEEDS_FIX",
     label: "보완 요청",
-    tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
+    tone: "bauhaus-status-chip--attention",
     isComplete: false,
     needsAttention: true,
   },
@@ -72,7 +72,7 @@ const statusMap: Record<StationDisplayStatusKey, StationDisplayStatusBase> = {
   PARTIAL: {
     key: "PARTIAL",
     label: "부분 적격",
-    tone: "bg-orange-500 text-white dark:bg-orange-300 dark:text-[#06111f]",
+    tone: "bauhaus-status-chip--attention",
     isComplete: true,
     needsAttention: true,
   },
