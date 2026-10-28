@@ -23,3 +23,7 @@ DB 스키마·키·요금제 변경은 없다. 배포에는 이번 음악 관리
 HEAD에서 만든 `/tmp/onside-artists-release-20261028`에 이번 코드·테스트 파일만 반영한 격리본도 프로덕션 빌드와 관련 검사 41개를 통과했다. 별도 문서 작업의 미커밋 소스는 포함하지 않았고 운영용 코드 6개 파일은 검증한 작업공간과 동일하다.
 
 사용자가 이번 변경 파일 12개의 기존 GitHub 저장소(`vintagechord/glit`) 업로드와 운영 배포를 명시적으로 승인했다. 배포 대상에는 위 검증한 음악 관리 코드·테스트와 이 기록만 포함한다.
+
+[PR #15](https://github.com/vintagechord/glit/pull/15)의 병합 커밋 `cb85fb205d6ca9e4940ba3b319713f5bafdee677`을 [Render 배포 dep-dbglsa5g1s2s73bo9p5g](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbglsa5g1s2s73bo9p5g)로 운영에 반영했다. 2026-10-28 11:32:22 KST Live, 배포 소요 2분 22초. 코드·설정 추가 변경 없이 검증한 커밋을 배포했다.
+
+11:32:42 KST 운영 비로그인 GET 검사 9개가 모두 통과했다. `/api/health`·`/readyz`는 HTTP 200, 오류 0개이며 기존 카카오 경고 1개는 유지됐다. 한국어·영어 로그인은 200, 음악 관리 경로 3개는 예상한 로그인 `next` 경로로 307 이동했고 비로그인 검색 API는 401 및 `private, no-store`를 반환했다. 운영 로그인 회원의 실제 검색·수집은 브라우저 연결 문제로 검증하지 못했으며, 회원 화면 검증 근거는 위 로컬 모의 API 검사 25개다. 이 배포 결과 기록만 추가하는 후속 커밋에는 `[skip render]`를 사용해 코드가 같은 운영 웹을 다시 배포하지 않는다.
