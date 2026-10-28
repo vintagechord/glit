@@ -4,6 +4,7 @@ import { collectDomesticStep, normalizeDomesticAlbum, parseDomesticAlbumIds, par
 import { MusicProviderError } from "../src/lib/music-archive/musicbrainz";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
 import { additionalStationReviewTracks, unreviewedArchiveTracks } from "../src/lib/music-archive/reviews";
+import { mergeArchiveImports } from "../src/lib/music-archive/import";
 
 const checked = "2026-10-27T00:00:00Z";
 const melonSearch = `<div class="list_atist12 d_artist_list"><ul><li><a class="thumb" href="javascript:melon.link.goArtistDetail('12');"><img src="https://cdnimg.melon.co.kr/artist.jpg"></a><dt><a href="javascript:melon.link.goArtistDetail('12');" class="ellipsis"><b>우리</b> 가수</a></dt><dd class="gubun">대한민국/솔로</dd></li><li><a href="javascript:melon.link.goArtistDetail('13');" class="ellipsis">우리 가수</a></li></ul></div><a href="javascript:melon.link.goArtistDetail('999');">추천</a>`;
@@ -26,6 +27,10 @@ test("public pages with changed containers or access blocks are errors, never in
   await assert.rejects(searchDomesticArtists("genie", "가수", { fetcher: async () => new Response("Access denied") }), /접근이 제한/);
 });
 test("nested popover lists cannot truncate album imports", () => assert.deepEqual(parseDomesticAlbumIds("melon", melonList(["100", "101", "102"])), ["100", "101", "102"]));
+test("album lists exclude adjacent recommendation widgets without a script boundary", () => {
+  assert.deepEqual(parseDomesticAlbumIds("melon", melonList(["100"]).replace(/<script>[\s\S]*?<\/script>/, "") + `<div><a href="javascript:melon.link.goAlbumDetail('999');">추천 앨범</a></div>`), ["100"]);
+  assert.throws(() => parseDomesticAlbumIds("melon", `<div class="list_album11"><ul><li><a href="javascript:melon.link.goAlbumDetail('100');">앨범</a></li></ul>`), /완전하지/);
+});
 test("exact track IDs prevent prefix collisions and mixed-artist ownership widening", () => {
   const album = normalizeDomesticAlbum("melon", melonAlbum(melonTrack("1234", "99", "타인 곡") + melonTrack("123", "12", "내 곡", 2)), "100", "12", checked);
   assert.deepEqual(album.tracks.map(track => [track.externalId, track.managedByArtist, track.discNumber]), [["1234", false, 1], ["123", true, 2]]);
@@ -35,6 +40,20 @@ test("missing track metadata cannot mark a partial album complete", () => {
   const html = melonAlbum(melonTrack("123", "12") + `<tr data-group-items="cd1"><td><a href="javascript:melon.link.goSongDetail('456');">곡명 없음</a></td></tr>`);
   assert.throws(() => normalizeDomesticAlbum("melon", html, "100", "12", checked), /전체 수록곡/);
   assert.throws(() => normalizeDomesticAlbum("melon", melonAlbum(melonTrack("123", "99")), "100", "12", checked), /아티스트의 수록곡/);
+  assert.throws(() => normalizeDomesticAlbum("melon", `<h5 class="title">수록곡 <span class="sum">(2)</span></h5>${melonAlbum(melonTrack("123", "12"))}`, "100", "12", checked), /전체 수록곡/);
+});
+test("catalog-confirmed participation retains an album without widening track ownership", () => {
+  const html = melonAlbum(melonTrack("123", "99", "참여곡")).replace("goArtistDetail('12')", "goArtistDetail('99')");
+  assert.throws(() => normalizeDomesticAlbum("melon", html, "100", "12", checked), /아티스트의 수록곡/);
+  assert.throws(() => normalizeDomesticAlbum("melon", html, "100", "12", checked, { listedArtistId: "99" }), /아티스트의 수록곡/);
+  const release = normalizeDomesticAlbum("melon", html, "100", "12", checked, { listedArtistId: "12" });
+  assert.equal(release.participation, true);
+  assert.deepEqual(release.artistIds, ["99"]);
+  assert.deepEqual(release.tracks.map(track => [track.artistIds, track.managedByArtist]), [[["99"], false]]);
+  const data = mergeArchiveImports(createArchiveData("우리 가수"), [release]);
+  assert.equal(data.releases.length, 1); assert.equal(data.tracks.length, 1);
+  assert.equal(data.tracks[0].managed, false);
+  assert.deepEqual(unreviewedArchiveTracks(data, data.releases[0].id, []), []);
 });
 test("Genie missing album type remains unknown and only album header supplies primary artist IDs", () => {
   const result = normalizeDomesticAlbum("genie", `<a onclick="fnViewArtist('99');">추천</a>${genieAlbum}`, "100", "12", checked);
@@ -63,6 +82,72 @@ test("failed request preserves the input cursor and invalid cursor phases fail b
   await assert.rejects(collectDomesticStep("melon", "12", cursor, { fetcher: async () => new Response("", { status: 429 }) }), error => error instanceof MusicProviderError && error.code === "rate_limited");
   assert.deepEqual(cursor, before);
   await assert.rejects(collectDomesticStep("melon", "12", { ...cursor, pending: [] }, { fetcher: async () => { throw new Error("must not run"); } }), error => error instanceof MusicProviderError && error.code === "invalid_input");
+});
+
+const melonTotal = (total: number) => `<a title="전체앨범 보기" radio-value="0"><span>전체앨범</span>(${total})</a>`;
+test("Melon imports every primary and participation album across all pages using catalog total", async () => {
+  const ids = Array.from({ length: 31 }, (_, i) => String(100 + i));
+  const requestedPages: number[] = [];
+  let permits = 0;
+  const fetcher: typeof fetch = async input => {
+    const url = new URL(String(input));
+    const albumId = url.searchParams.get("albumId");
+    if (albumId) {
+      const artistId = Number(albumId) % 2 ? "99" : "12";
+      return new Response(melonAlbum(melonTrack(`5${albumId}`, artistId)).replace("goArtistDetail('12')", `goArtistDetail('${artistId}')`));
+    }
+    assert.equal(url.searchParams.get("listType"), "0");
+    const start = Number(url.searchParams.get("startIndex") ?? 1);
+    requestedPages.push(start);
+    // Deliberately omit the navigation widget; an observed total is authoritative.
+    return new Response((start === 1 ? melonTotal(ids.length) : "") + melonList(ids.slice(start - 1, start + 14)));
+  };
+  let cursor: DomesticCursor | null = null;
+  const releases = [];
+  for (let i = 0; i < 40; i++) {
+    const before: DomesticCursor | null = structuredClone(cursor);
+    const step = await collectDomesticStep("melon", "12", cursor, { fetcher, acquirePermit: async () => { permits++; } });
+    assert.deepEqual(cursor, before);
+    releases.push(...step.releases);
+    cursor = step.nextCursor;
+    if (step.status === "completed") break;
+  }
+  assert.equal(cursor, null);
+  assert.deepEqual(requestedPages, [1, 16, 31]);
+  assert.deepEqual(releases.map(release => release.externalId), ids);
+  assert.equal(releases.filter(release => release.participation).length, 15);
+  assert.equal(releases.flatMap(release => release.tracks).filter(track => track.managedByArtist).length, 16);
+  assert.equal(permits, 34);
+});
+
+test("an existing v1 job resumes past the participation album that previously halted it", async () => {
+  const cursor: DomesticCursor = { provider: "melon", version: 1, artistId: "12", page: 2, pending: ["101", "102"], seen: ["100"], more: false, phase: "tracks" };
+  const fetcher: typeof fetch = async input => {
+    const id = new URL(String(input)).searchParams.get("albumId")!;
+    const artist = id === "101" ? "99" : "12";
+    return new Response(melonAlbum(melonTrack(`5${id}`, artist)).replace("goArtistDetail('12')", `goArtistDetail('${artist}')`));
+  };
+  const first = await collectDomesticStep("melon", "12", cursor, { fetcher });
+  assert.equal(first.releases[0].participation, true);
+  assert.deepEqual(first.nextCursor?.seen, ["100", "101"]);
+  assert.deepEqual(cursor.seen, ["100"]);
+  const last = await collectDomesticStep("melon", "12", first.nextCursor, { fetcher });
+  assert.equal(last.status, "completed"); assert.equal(last.nextCursor, null);
+  assert.equal(last.releases[0].externalId, "102");
+});
+
+test("Melon never completes a shortened or duplicate final page below the catalog total", async () => {
+  await assert.rejects(collectDomesticStep("melon", "12", null, { fetcher: async () => new Response(melonTotal(20) + melonList(["100"])) }), /전체 앨범 수/);
+  const cursor: DomesticCursor = { provider: "melon", version: 1, artistId: "12", page: 2, pending: [], seen: Array.from({ length: 15 }, (_, i) => String(100 + i)), total: 17, more: true, phase: "albums" };
+  await assert.rejects(collectDomesticStep("melon", "12", cursor, { fetcher: async () => new Response(melonList(["114", "115"])) }), /전체 앨범 수/);
+  assert.equal(cursor.seen.length, 15);
+});
+
+test("v1 cursors understand numeric and Unicode-escaped next-page offsets", async () => {
+  for (const pagination of ["pageObj.sendPage(16)", "pageObj.sendPage(\\u002716\\u0027)"]) {
+    const result = await collectDomesticStep("melon", "12", null, { fetcher: async () => new Response(melonList(["100"]) + `<script>${pagination}</script>`) });
+    assert.equal(result.nextCursor?.more, true);
+  }
 });
 test("partial review history leaves uncovered tracks available for exact-track applications", () => {
   let data = createArchiveData("가수"); data = applyArchiveCommand(data, { type: "add_release", release: { id: "album", title: "앨범" } });
