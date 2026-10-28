@@ -1,6 +1,7 @@
 import { normalizeTrackResults } from "@/lib/track-results";
 import type { ArchiveData } from "./model";
 import { parseMusicProviderUrl } from "./providers";
+import { groupArchiveAlbums } from "./album-groups";
 
 type ReviewRow = { status?: string; track_results_json?: unknown; updated_at?: string };
 
@@ -31,7 +32,7 @@ export function unreviewedArchiveTracks(data: ArchiveData, releaseId: string, re
     for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) covered.add(id);
   }
   const latest = new Map<string, typeof data.tasks[number]>();
-  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([task.trackId, task.agency]), task);
+  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([(task as typeof task & { originalTrackId?: string }).originalTrackId ?? task.trackId, task.agency]), task);
   for (const task of latest.values()) {
     if (["completed", "submitted", "processing"].includes(task.status) || ["eligible", "ineligible", "rejected"].includes(task.result)) covered.add(task.trackId);
   }
@@ -47,7 +48,7 @@ export function additionalStationReviewTracks(data: ArchiveData, releaseId: stri
     for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) target.add(id);
   }
   const latest = new Map<string, typeof data.tasks[number]>();
-  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([task.trackId, task.agency]), task);
+  for (const task of data.tasks.filter(task => task.kind === "review")) latest.set(JSON.stringify([(task as typeof task & { originalTrackId?: string }).originalTrackId ?? task.trackId, task.agency]), task);
   for (const task of latest.values()) {
     if (["submitted", "processing"].includes(task.status)) ongoing.add(task.trackId);
     else if (task.status === "completed" || ["eligible", "ineligible", "rejected"].includes(task.result)) completed.add(task.trackId);
@@ -59,6 +60,8 @@ type MatchSubmission = { id: string; status: string; melon_url?: string | null; 
 /** Caller must supply only the authenticated owner's undeleted album submissions. */
 export function matchArchiveReviews(data: ArchiveData, submissions: MatchSubmission[], libraryId?: string): OnsideArchiveReview[] {
   const matches: OnsideArchiveReview[] = [];
+  let albumGroups: ReturnType<typeof groupArchiveAlbums> | undefined;
+  let tracksById: Map<string, ArchiveData["tracks"][number]> | undefined;
   for (const submission of submissions) {
     if (["DRAFT", "PRE_REVIEW", "CANCELLED"].includes(submission.status)) continue;
     const explicit = data.reviewLinks.filter(link => link.submissionId === submission.id);
@@ -78,9 +81,24 @@ export function matchArchiveReviews(data: ArchiveData, submissions: MatchSubmiss
       continue;
     }
     const context = submission.archive_review_context as { libraryId?: string; releaseId?: string; trackIds?: unknown } | null;
-    if (context?.libraryId === libraryId && context?.releaseId && Array.isArray(context.trackIds)) {
-      const trackIds = context.trackIds.filter((id): id is string => typeof id === "string" && data.tracks.some(track => track.id === id && track.releaseId === context.releaseId));
-      if (trackIds.length) matches.push({ submissionId: submission.id, releaseId: context.releaseId, trackIds, status: submission.status });
+    if (context) {
+      // A stored selection is authoritative, even when invalid or empty. It
+      // must never fall through to a broader album-URL match.
+      if (context.libraryId !== libraryId || !context.releaseId || !Array.isArray(context.trackIds)) continue;
+      const group = (albumGroups ??= groupArchiveAlbums(data)).find(item => item.releaseIds.includes(context.releaseId!));
+      if (!group) continue;
+      tracksById ??= new Map(data.tracks.map(track => [track.id, track]));
+      const releaseIds = new Set(group.releaseIds);
+      const scopes = new Map<string, Set<string>>();
+      for (const id of context.trackIds) {
+        const track = typeof id === "string" ? tracksById.get(id) : undefined;
+        if (!track || track.excluded || track.mergedInto || !releaseIds.has(track.releaseId)) continue;
+        const ids = scopes.get(track.releaseId) ?? new Set<string>();
+        ids.add(track.id); scopes.set(track.releaseId, ids);
+      }
+      // Keep real provider IDs and their original album scope. Display aliases
+      // are resolved separately and cannot grant an unselected song a result.
+      for (const [releaseId, ids] of scopes) matches.push({ submissionId: submission.id, releaseId, trackIds: [...ids], status: submission.status });
       continue;
     }
     // An exact public album identity can reconnect old URL applications. Names cannot.

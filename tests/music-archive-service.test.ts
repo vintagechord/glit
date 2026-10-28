@@ -41,6 +41,7 @@ const bundle = build({
         "archive-service-fixture": `
           export const state={user:{id:'${OWNER}'},authError:null,isAdmin:false,limited:false,allowProviderRequests:false,tables:{},databaseError:null,jobCancellationFailure:null,afterArchive:null};
           export const calls=[];
+          const createIndexData=data=>({...data,tracks:[],recordings:[],works:[],tasks:[],reviewLinks:[],connections:[],affiliations:[],conflicts:[]});
           function query(table){
             const operations=[]; const q={};
             for(const method of ['select','eq','is','in','lte','not','or','order','range','limit','insert','update','delete']) q[method]=(...args)=>{operations.push({method,args});return q;};
@@ -63,6 +64,7 @@ const bundle = build({
               const count=rows.length;
               for(const op of operations){if(op.method==='range')rows=rows.slice(op.args[0],op.args[1]+1);if(op.method==='limit')rows=rows.slice(0,op.args[0]);}
               for(const op of operations)if(op.method==='update')for(const row of rows)Object.assign(row,structuredClone(op.args[0]));
+              if(operations.some(op=>op.method==='select'&&op.args[0]==='id,releases:data->releases,tracks:data->tracks,recordings:data->recordings'))rows=rows.map(row=>({id:row.id,releases:row.data.releases,tracks:row.data.tracks,recordings:row.data.recordings}));
               return {data:single?(rows[0]??null):structuredClone(rows),error:null,count};
             }
             q.maybeSingle=()=>Promise.resolve(run(true));q.single=()=>Promise.resolve(run(true));q.then=(ok,fail)=>Promise.resolve(run()).then(ok,fail);
@@ -87,6 +89,7 @@ const bundle = build({
               return {data:saved,error:null};
             }
             if(name==='save_music_archive_guide')return {data:null,error:null};
+            if(name==='list_music_archive_libraries')return {data:(state.tables.music_archive_libraries??[]).filter(row=>row.owner_id===args.p_owner).slice(args.p_offset,args.p_offset+args.p_limit).map(row=>({...structuredClone(row),data:{...createIndexData(row.data),releases:row.data.releases.slice(0,12)},summary:{releaseCount:row.data.releases.length,trackCount:row.data.tracks.filter(track=>track.managed).length,needsCheck:3,inProgress:2,needsChanges:1,awaitingResult:2}})),error:null};
             throw new Error('Unexpected database mutation '+name);
           }};`,
         "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>client;`,
@@ -111,6 +114,15 @@ function libraryData() {
   data = applyArchiveCommand(data, { type: "add_release", release: { id: "release-one", title: "Shared album title" } });
   return applyArchiveCommand(data, { type: "add_track", track: { id: "track-one", releaseId: "release-one", title: "Shared track title" } });
 }
+function groupedLibraryData(total = 1) {
+  let data = createArchiveData("한국 가수");
+  for (let index = 0; index < total; index++) for (const provider of (index < 12 ? ["melon", "genie"] : ["melon"]) as ("melon" | "genie")[]) {
+    const id = `${provider}-${index}`; const externalId = String(100 + index);
+    data = applyArchiveCommand(data, { type: "add_release", release: { id, title: `같은 발매작 ${index}`, artistName: "한국 가수", releaseDate: "2026-10-01", links: [{ provider, url: provider === "melon" ? `https://www.melon.com/album/detail.htm?albumId=${externalId}` : `https://www.genie.co.kr/detail/albumInfo?axnm=${externalId}` }] } });
+    data = applyArchiveCommand(data, { type: "add_track", track: { id: `${id}-track`, releaseId: id, title: `곡 ${index}`, artistName: "한국 가수", links: [{ provider, url: provider === "melon" ? `https://www.melon.com/song/detail.htm?songId=${externalId}` : `https://www.genie.co.kr/detail/songInfo?xgnm=${externalId}` }] } });
+  }
+  return data;
+}
 function libraryRow(owner = OWNER, id = LIBRARY, data: ArchiveData = libraryData()): FixtureRow {
   return { id, owner_id: owner, version: 1, data, archived_at: null, created_at: "2026-09-08T00:00:00Z", updated_at: "2026-09-08T00:00:00Z" };
 }
@@ -122,6 +134,29 @@ const status = (expected: number) => (error: unknown) => error instanceof Error 
 const mutations = (h: Harness) => h.calls.filter(call => call.method === "rpc" || call.operations?.some(op => ["insert", "update", "delete"].includes(op.method)));
 const hasFilter = (call: FixtureCall, field: string, value: unknown) => call.operations?.some(op => op.method === "eq" && op.args[0] === field && op.args[1] === value);
 const jsonRequest = (body: unknown, headers: Record<string, string> = {}) => new Request("https://onside.test/api/music-archive", { method: "POST", headers: { "content-type": "application/json", origin: "https://onside.test", ...headers }, body: JSON.stringify(body) });
+
+test("overview counts all logical albums and managed songs beyond its twelve covers using owner-scoped metadata only", async () => {
+  const h = await harness(); const data = groupedLibraryData(14);
+  data.tracks.filter(track => track.releaseId.endsWith("-0")).forEach(track => { track.managed = false; });
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data), libraryRow(OTHER_OWNER, OTHER_LIBRARY, groupedLibraryData())];
+  const before = structuredClone(h.state.tables.music_archive_libraries);
+  const result = await h.getArchiveOverview(OWNER);
+  assert.equal(result.libraries.length, 1);
+  assert.equal(result.libraries[0].summary.releaseCount, 14);
+  assert.equal(result.libraries[0].summary.trackCount, 13);
+  assert.equal(result.libraries[0].summary.needsCheck, 3, "preserve the existing task metrics");
+  assert.equal(result.libraries[0].data.releases.length, 12);
+  assert.equal(result.libraries[0].data.tracks.length, 0, "index responses stay compact");
+  const query = h.calls.find(call => call.table === "music_archive_libraries" && call.operations?.some(op => op.method === "select" && op.args[0] === "id,releases:data->releases,tracks:data->tracks,recordings:data->recordings"))!;
+  assert.ok(hasFilter(query, "owner_id", OWNER));
+  assert.ok(query.operations?.some(op => op.method === "in" && op.args[0] === "id" && JSON.stringify(op.args[1]) === JSON.stringify([LIBRARY])));
+  assert.deepEqual(h.state.tables.music_archive_libraries, before);
+  assert.equal(h.calls.filter(call => call.name === "save_music_archive_library").length, 0);
+  const detail = await h.apiGET(new Request(`https://onside.test/api/music-archive?libraryId=${LIBRARY}`));
+  const payload = await detail.json();
+  assert.equal(payload.library.data.releases.length, 26, "detail projection preserves original source albums");
+  assert.equal(payload.library.data.tracks.length, 26);
+});
 
 
 test("library service and real detail route hide another owner's same-artist archive", async () => {
@@ -510,6 +545,75 @@ test("archive review linking rejects a saved track that is no longer available i
   h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, trackIds: ["track-one"] }, album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }] }];
   await assert.rejects(() => h.linkArchiveSubmission(OWNER, context, SUBMISSION), status(409));
   assert.equal(mutations(h).length, 0);
+});
+
+test("grouped review linking keeps a saved provider track and its actual release instead of the display representative", async () => {
+  const h = await harness(); const data = groupedLibraryData();
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const context = { libraryId: LIBRARY, releaseId: "melon-0" };
+  h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, trackIds: ["genie-0-track"] }, album_tracks: [{ id: SUBMISSION_TRACK, track_no: 1 }] }];
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  const saved = (h.state.tables.music_archive_libraries[0].data as ArchiveData);
+  assert.deepEqual(saved.reviewLinks.map(link => [link.releaseId, link.trackId, link.submissionTrackId]), [["genie-0", "genie-0-track", SUBMISSION_TRACK]]);
+  assert.deepEqual(saved.releases, data.releases); assert.deepEqual(saved.tracks, data.tracks);
+  await h.linkArchiveSubmission(OWNER, context, SUBMISSION);
+  assert.equal(h.calls.filter(call => call.name === "save_music_archive_library").length, 1);
+});
+
+test("grouped review linking rejects duplicate logical snapshots, changed context and archived libraries without writes", async () => {
+  for (const scenario of ["duplicate", "context", "archived"] as const) {
+    const h = await harness(); const row = libraryRow(OWNER, LIBRARY, groupedLibraryData());
+    if (scenario === "archived") row.archived_at = "2026-10-28T00:00:00Z";
+    h.state.tables.music_archive_libraries = [row];
+    const context = { libraryId: LIBRARY, releaseId: "melon-0" };
+    const trackIds = scenario === "duplicate" ? ["melon-0-track", "genie-0-track"] : ["genie-0-track"];
+    h.state.tables.submissions = [{ ...submissionRow(), archive_review_context: { ...context, ...(scenario === "context" ? { releaseId: "genie-0" } : {}), trackIds }, album_tracks: trackIds.map((_, index) => ({ id: index ? OTHER_SUBMISSION_TRACK : SUBMISSION_TRACK, track_no: index + 1 })) }];
+    await assert.rejects(() => h.linkArchiveSubmission(OWNER, context, SUBMISSION), status(409));
+    assert.equal(mutations(h).length, 0);
+  }
+});
+
+test("refreshing a grouped album checks both source releases while retaining originals and ownership/version checks", async (t) => {
+  const h = await harness(); const data = groupedLibraryData();
+  h.state.allowProviderRequests = true;
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const origins: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+    origins.push(new URL(input instanceof Request ? input.url : String(input)).origin);
+    return new Response("Temporarily unavailable", { status: 503 });
+  });
+  const result = await h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 1, releaseId: "genie-0" });
+  assert.deepEqual(new Set(origins), new Set(["https://www.melon.com", "https://www.genie.co.kr"]));
+  assert.deepEqual(result.refreshReleaseIds, ["genie-0", "melon-0"]);
+  assert.equal(result.nextOffset, null);
+  assert.deepEqual(result.library?.data, data, "provider failure cannot drop any raw album, song or history");
+  const requests = origins.length;
+  await assert.rejects(() => h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 1, releaseId: "melon-0" }), status(409));
+  await assert.rejects(() => h.mutateArchive(OTHER_OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 2, releaseId: "melon-0" }), status(404));
+  h.state.tables.music_archive_libraries[0].archived_at = "2026-10-28T00:00:00Z";
+  await assert.rejects(() => h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 2, releaseId: "melon-0" }), status(409));
+  assert.equal(origins.length, requests);
+});
+
+test("metadata refresh continuation retains its original raw-ID order when another source album appears", async (t) => {
+  const h = await harness(); let data = createArchiveData("Artist"); h.state.allowProviderRequests = true;
+  const add = (id: string, externalId: number) => {
+    data = applyArchiveCommand(data, { type: "add_release", release: { id, title: id, links: [{ provider: "apple", url: `https://music.apple.com/kr/album/${externalId}` }] } });
+  };
+  for (let n = 1; n <= 4; n++) add(`album-${n}`, 100 + n);
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const requests: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL) => {
+    const id = new URL(input instanceof Request ? input.url : String(input)).searchParams.get("id")!; requests.push(id);
+    return Response.json({ resultCount: 1, results: [{ wrapperType: "collection", collectionType: "Album", collectionId: Number(id), artistId: 456, collectionName: "Album", artistName: "Artist", trackCount: 1, releaseDate: "2026-10-01T00:00:00Z", collectionViewUrl: `https://music.apple.com/kr/album/${id}` }] });
+  });
+  const first = await h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: 1 });
+  assert.equal(first.nextOffset, 3); assert.deepEqual(requests, ["101", "102", "103"]);
+  data = first.library!.data; add("album-0-new", 999);
+  h.state.tables.music_archive_libraries[0].data = data;
+  const next = await h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: first.library!.version, offset: first.nextOffset, refreshReleaseIds: first.refreshReleaseIds });
+  assert.equal(next.nextOffset, null); assert.deepEqual(requests, ["101", "102", "103", "104"]);
+  await assert.rejects(() => h.mutateArchive(OWNER, { action: "refresh-metadata", libraryId: LIBRARY, version: next.library!.version, refreshReleaseIds: ["missing-private-album"] }), status(409));
 });
 
 test("metadata refresh fills a manual Apple album's artwork without a source or artist connection", async (t) => {
