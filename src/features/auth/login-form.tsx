@@ -104,10 +104,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
         )}
         <SubmitButton />
       </form>
-      <div className="grid grid-cols-3 gap-2">
-        <Link href={getAuthPageHref("find-id", effectiveNextPath, isEnglishRoute)} className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background">
-          {isEnglishRoute ? "Find account" : "아이디 찾기"}
-        </Link>
+      <div className="grid grid-cols-2 gap-2">
         <Link
           href={forgotPasswordHref}
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"

@@ -60,6 +60,16 @@ test("English signup return paths follow a language switch and discard external 
   await expect(page.locator('main a[href="/login"]')).toHaveCount(1);
 });
 
+test("retired account lookup URLs redirect to login and retain only safe return paths", async ({ page }) => {
+  for (const prefix of ["", "/en"]) {
+    await page.goto(`${prefix}/find-id?next=%2Fdashboard%2Fnew%3Fdraft%3Dfixture`);
+    await expect(page).toHaveURL((url) => url.pathname === `${prefix}/login` && url.searchParams.get("next") === `${prefix}/dashboard/new?draft=fixture`);
+    await expect(page.locator('main a[href*="find-id"]')).toHaveCount(0);
+    await page.goto(`${prefix}/find-id?next=https%3A%2F%2Fevil.invalid`);
+    await expect(page).toHaveURL((url) => url.pathname === `${prefix}/login` && !url.searchParams.has("next"));
+  }
+});
+
 test("guest lookup and footer policies keep focus inside and return it to the opener", async ({ page }) => {
   await page.goto("/login");
   await assertModalFocus(page, page.getByRole("main").getByRole("button", { name: "비회원 조회", exact: true }));

@@ -5,7 +5,7 @@ import { build } from "esbuild";
 import { getEmailDeliveryConfiguration, getEmailSenderConfiguration } from "../src/lib/email-config";
 import { setEmailOutboxTestDispatcher } from "../src/lib/email-transport";
 import {
-  sendAccountIdEmail, sendGuestSubmissionLookupEmail, sendPasswordResetEmail, sendResultEmail,
+  sendGuestSubmissionLookupEmail, sendPasswordResetEmail, sendResultEmail,
   sendSignupVerificationEmail, sendOrderBankTransferEmail, sendSubmissionReceiptEmail,
   sendSubmissionUpdateEmail, sendWelcomeEmail,
 } from "../src/lib/email";
@@ -151,10 +151,9 @@ test("Supabase SMTP relay sends one HTTPS request with only the dedicated secret
     };
     assert.deepEqual(await sendSignupVerificationEmail({ email: recipient, link }), { ok: true });
     assert.deepEqual(await sendPasswordResetEmail({ email: recipient, link }), { ok: true });
-    assert.deepEqual(await sendAccountIdEmail({ email: recipient }), { ok: true });
     assert.deepEqual(await sendSubmissionUpdateEmail({ email: recipient, title: "fixture", kind: "MV", headline: "fixture", summary: "fixture", idempotencyKey: "fixture-key" }), { ok: true, messageId: relayMessageId });
-    assert.equal(requests.length, 4);
-    assert.deepEqual(timeouts, [25000, 25000, 25000, 25000]);
+    assert.equal(requests.length, 3);
+    assert.deepEqual(timeouts, [25000, 25000, 25000]);
     assert.deepEqual(logs, []);
   });
 });
@@ -215,7 +214,7 @@ test("Supabase SMTP relay manual mode, invalid configuration and invalid recipie
     process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "manual";
     assert.equal(getEmailDeliveryConfiguration().relay, undefined);
     assert.equal((await sendSignupVerificationEmail({ email: recipient, link })).skipped, true);
-    assert.equal((await sendAccountIdEmail({ email: recipient })).skipped, true);
+    assert.equal((await sendPasswordResetEmail({ email: recipient, link })).skipped, true);
     assert.equal((await sendSubmissionUpdateEmail({ email: recipient, title: "fixture", kind: "MV", headline: "fixture", summary: "fixture" })).skipped, true);
     process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "transactional";
     delete process.env.EMAIL_RELAY_SECRET;
@@ -259,10 +258,9 @@ test("Gmail uses HTTPS OAuth and MIME for all auth mail without any SMTP or Rese
     };
     assert.equal((await sendSignupVerificationEmail({ email: recipient, link })).ok, true);
     assert.equal((await sendPasswordResetEmail({ email: recipient, link })).ok, true);
-    assert.equal((await sendAccountIdEmail({ email: recipient, link: "https://app.example.invalid/login" })).ok, true);
     assert.deepEqual(await sendSubmissionUpdateEmail({ email: recipient, title: "fixture", kind: "ALBUM", headline: "fixture", summary: "fixture" }), { ok: true, messageId: "fixture-message-id" });
-    assert.equal(requests.length, 8);
-    assert.equal(messages.length, 4);
+    assert.equal(requests.length, 6);
+    assert.equal(messages.length, 3);
     assert.deepEqual(logs, []);
   });
 });
@@ -297,9 +295,9 @@ test("Gmail failures stay private, do not fall back, and never retry uncertain s
     assert.equal((await sendPasswordResetEmail({ email: recipient, link })).reason, "configuration");
     Object.assign(process.env, gmailEnv);
     process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "manual";
-    assert.equal((await sendAccountIdEmail({ email: recipient })).skipped, true);
+    assert.equal((await sendPasswordResetEmail({ email: recipient, link })).skipped, true);
     process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "transactional";
-    assert.equal((await sendAccountIdEmail({ email: `${recipient},other@example.invalid` })).ok, false);
+    assert.equal((await sendPasswordResetEmail({ email: `${recipient},other@example.invalid`, link })).ok, false);
     assert.equal(requests, 0);
     assert.doesNotMatch(JSON.stringify(logs), sensitive);
   });
@@ -317,7 +315,6 @@ test("manual and invalid modes suppress every template including malformed link 
         sendWelcomeEmail({ email: recipient }),
         sendSignupVerificationEmail({ email: recipient, link: badLink }),
         sendPasswordResetEmail({ email: recipient, link: badLink }),
-        sendAccountIdEmail({ email: recipient, link: badLink }),
         sendGuestSubmissionLookupEmail({ email: recipient, items: [{ token: "private-token", link: badLink }] }),
         sendSubmissionReceiptEmail({ email: recipient, title: "fixture", kind: "ALBUM", submissionId: "fixture", link: badLink }),
         sendResultEmail({ email: recipient, title: "fixture", resultStatus: "APPROVED", link: badLink }),

@@ -8,11 +8,11 @@ import type { ActionState } from "../src/features/auth/actions";
 
 type Action = (state: ActionState, body: FormData) => Promise<ActionState>;
 type Fixture = {
-  signupAction: Action; resendSignupAction: Action; confirmSignupAction: Action; findAccountIdAction: Action; resetPasswordAction: Action; completePasswordRecoveryAction: Action;
+  signupAction: Action; resendSignupAction: Action; confirmSignupAction: Action; resetPasswordAction: Action; completePasswordRecoveryAction: Action;
   state: {
     configured: boolean; limited: boolean; signupError: unknown; updateError: unknown; signOutError: unknown; verifyError: unknown;
     account: { id: string; email: string; email_confirmed_at?: string; signupVerificationFlow?: string } | null;
-    linkType: string; linkUser: Record<string, unknown> | null; mailOk: boolean; used: boolean;
+    linkType: string; linkUser: Record<string, unknown> | null; mailOk: boolean; used: boolean; lookupThrows: boolean; mailThrows: boolean;
   };
   calls: Array<{ method: string; input?: Record<string, unknown> }>;
 };
@@ -26,7 +26,7 @@ async function fixture(): Promise<Fixture> {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'verification-fixture';";
         const modules: Record<string, string> = {
-          "verification-fixture": `export const calls=[]; export const state={configured:true,limited:false,signupError:null,updateError:null,signOutError:null,verifyError:null,account:null,linkType:'signup',linkUser:null,mailOk:true,used:false};`,
+          "verification-fixture": `export const calls=[]; export const state={configured:true,limited:false,signupError:null,updateError:null,signOutError:null,verifyError:null,account:null,linkType:'signup',linkUser:null,mailOk:true,used:false,lookupThrows:false,mailThrows:false};`,
           "@/lib/supabase/server": `export async function createServerSupabase(){throw Error('unexpected public/session client');}`,
           "@/lib/supabase/env": `export const getServiceRoleKey=()=> 'fixture-signing-key';`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){return {auth:{
@@ -36,8 +36,8 @@ async function fixture(): Promise<Fixture> {
             generateLink:async input=>{calls.push({method:'link',input});return {data:{user:state.linkUser||{id:state.account?.id||'fixture',email:'owner@example.invalid',email_confirmed_at:state.account?.email_confirmed_at,app_metadata:{signupVerificationFlow:'email_password_v1'}},properties:{hashed_token:'private-signup-token-0123456789',verification_type:state.linkType}},error:null};},
             signOut:async(token,scope)=>{calls.push({method:'revoke',input:{scope}});return {error:state.signOutError};}}}};}`,
           "@/lib/email-config": `${shared} export const getEmailDeliveryConfiguration=()=>({ok:state.configured,provider:'gmail'});`,
-          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});return Promise.resolve({ok:state.mailOk,reason:state.mailOk?undefined:'delivery'});}; export const sendWelcomeEmail=input=>send('welcome',input); export const sendSignupVerificationEmail=input=>send('confirmationMail',input); export const sendAccountIdEmail=input=>send('accountMail',input); export const sendPasswordResetEmail=input=>send('resetMail',input);`,
-          "./account-lookup": `${shared} export const SIGNUP_VERIFICATION_FLOW='email_password_v1'; export async function findAccountByEmail(email){calls.push({method:'lookup',input:{email}});return state.account;}`,
+          "@/lib/email": `${shared} const send=(method,input)=>{calls.push({method,input});if(state.mailThrows)throw new Error('private-provider-error');return Promise.resolve({ok:state.mailOk,reason:state.mailOk?undefined:'delivery'});}; export const sendWelcomeEmail=input=>send('welcome',input); export const sendSignupVerificationEmail=input=>send('confirmationMail',input); export const sendPasswordResetEmail=input=>send('resetMail',input);`,
+          "./account-lookup": `${shared} export const SIGNUP_VERIFICATION_FLOW='email_password_v1'; export async function findAccountByEmail(email){calls.push({method:'lookup',input:{email}});if(state.lookupThrows)throw new Error('private-lookup-error');return state.account;}`,
           "@/lib/request-rate-limit": `${shared} export const consumePersistentRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:120}); export const getRequestIdentifier=()=> 'fixture';`,
           "next/navigation": "export function redirect(){throw Error('unexpected redirect');}",
           "next/headers": "export async function headers(){return new Headers();}",
@@ -80,28 +80,54 @@ test("transactional signup stores unknown temporary credentials and confirms onl
   assert.doesNotMatch(JSON.stringify(result), /private-signup|attacker-known/);
 });
 
-test("signup retry cannot replace pending credentials or send a confirmation to an already confirmed account", async () => {
+test("duplicate signup reports an existing email without changing credentials or sending more mail", async () => {
+  for (const code of ["email_exists", "user_already_exists"]) {
+    for (const account of [
+      { id: "pending", email: signup.email, signupVerificationFlow: "email_password_v1" },
+      { id: "confirmed", email: signup.email, email_confirmed_at: "2026-01-01T00:00:00Z" },
+      { id: "legacy-pending", email: signup.email },
+    ]) {
+      const auth = await fixture();
+      auth.state.signupError = { code };
+      auth.state.account = account;
+      const result = await auth.signupAction({}, form(signup));
+      assert.equal(result.error, "이미 가입된 이메일입니다.");
+      assert.equal(result.notice, "email_already_registered");
+      assert.equal(result.message, undefined);
+      assert.equal(result.verificationPending, undefined);
+      assert.deepEqual(auth.calls.map(call => call.method), ["create"]);
+    }
+  }
+});
+
+test("only explicit verification resend sends mail to safe pending accounts", async () => {
   const auth = await fixture();
-  auth.state.signupError = { code: "email_exists" };
+  const absent = await auth.resendSignupAction({}, form({ email: signup.email }));
+  assert.equal(absent.error, "가입 이력이 없는 이메일입니다.");
+  assert.equal(absent.notice, "email_not_registered");
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
+
+  auth.calls.length = 0;
   auth.state.account = { id: "pending", email: signup.email, signupVerificationFlow: "email_password_v1" };
-  const retried = await auth.signupAction({}, form(signup));
-  assert.equal(retried.verificationPending, true);
-  assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup", "link", "confirmationMail"]);
+  const pending = await auth.resendSignupAction({}, form({ email: signup.email }));
+  assert.equal(pending.verificationPending, true);
+  assert.match(pending.message ?? "", /인증 메일을 발송/);
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "link", "confirmationMail"]);
   assert.equal(auth.calls.find(call => call.method === "link")?.input?.password, "");
-  assert.equal(auth.calls.some(call => call.method === "password"), false);
+
   auth.calls.length = 0;
   auth.state.account.email_confirmed_at = "2026-01-01T00:00:00Z";
-  const confirmed = await auth.signupAction({}, form(signup));
-  assert.equal(confirmed.message, retried.message);
-  assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup"]);
-  auth.calls.length = 0;
-  await auth.resendSignupAction({}, form({ email: signup.email }));
+  const confirmed = await auth.resendSignupAction({}, form({ email: signup.email }));
+  assert.equal(confirmed.notice, "email_already_registered");
+  assert.equal(confirmed.message, undefined);
   assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
+
   auth.calls.length = 0;
   auth.state.account = { id: "legacy-pending", email: signup.email };
-  await auth.signupAction({}, form(signup));
-  await auth.resendSignupAction({}, form({ email: signup.email }));
-  assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup", "lookup"], "legacy pending credentials must never be activated by this flow");
+  const legacy = await auth.resendSignupAction({}, form({ email: signup.email }));
+  assert.match(legacy.error ?? "", /고객센터/);
+  assert.equal(legacy.message, undefined);
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup"], "legacy pending credentials must never be activated by this flow");
 });
 
 test("confirmation replaces the password only after ownership proof, revokes sessions, and rejects replay and wrong token types", async () => {
@@ -139,8 +165,8 @@ test("confirmation and mail failures never report signup completion", async () =
   const auth = await fixture();
   auth.state.mailOk = false;
   const failed = await auth.signupAction({}, form(signup));
-  assert.ok(failed.message);
-  assert.equal(failed.error, undefined);
+  assert.ok(failed.error);
+  assert.equal(failed.message, undefined);
   assert.equal(failed.verificationPending, true);
   auth.calls.length = 0;
   auth.state.linkType = "recovery";
@@ -148,30 +174,17 @@ test("confirmation and mail failures never report signup completion", async () =
   assert.equal(auth.calls.some(call => call.method === "confirmationMail"), false);
 });
 
-test("account ID lookup is generic, sends only to the existing mailbox, and never creates a token/account", async () => {
-  const auth = await fixture();
-  const absent = await auth.findAccountIdAction({}, form({ email: signup.email }));
-  auth.state.account = { id: "member", email: signup.email };
-  const found = await auth.findAccountIdAction({}, form({ email: signup.email, next: "https://evil.invalid" }));
-  auth.state.mailOk = false;
-  const failed = await auth.findAccountIdAction({}, form({ email: signup.email }));
-  assert.deepEqual(found, absent);
-  assert.deepEqual(failed, absent);
-  assert.deepEqual([...new Set(auth.calls.map(call => call.method))], ["lookup", "accountMail"]);
-  assert.equal(auth.calls.find(call => call.method === "accountMail")?.input?.email, signup.email);
-  assert.doesNotMatch(String(auth.calls.find(call => call.method === "accountMail")?.input?.link), /evil/);
-});
 
 test("unconfigured delivery and request limits reject before account/token mutation", async () => {
   const auth = await fixture();
   auth.state.configured = false;
-  for (const action of [auth.signupAction, auth.resendSignupAction, auth.findAccountIdAction, auth.resetPasswordAction]) {
+  for (const action of [auth.signupAction, auth.resendSignupAction, auth.resetPasswordAction]) {
     assert.ok((await action({}, form({ ...signup, resetEmail: signup.email }))).error);
   }
   assert.equal(auth.calls.length, 0);
   auth.state.configured = true;
   auth.state.limited = true;
-  for (const action of [auth.signupAction, auth.resendSignupAction, auth.findAccountIdAction, auth.confirmSignupAction]) {
+  for (const action of [auth.signupAction, auth.resendSignupAction, auth.confirmSignupAction]) {
     assert.ok((await action({}, form({ ...signup, ...confirmation }))).error);
   }
   assert.equal(auth.calls.length, 0);
@@ -183,29 +196,48 @@ test("signup confirmation page never consumes the token automatically on load", 
   assert.doesNotMatch(source, /verifyOtp|verifyRecoverySession|\.auth\./);
 });
 
-test("recovery cannot activate legacy pending credentials; trusted pending users get signed signup instead", async () => {
+test("recovery distinguishes unknown emails and guides pending accounts through safe verification", async () => {
   const auth = await fixture();
   const absent = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.equal(absent.error, "가입 이력이 없는 이메일입니다.");
+  assert.equal(absent.notice, "email_not_registered");
+  assert.equal(absent.message, undefined);
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
+
   auth.state.account = { id: "legacy", email: signup.email };
   auth.calls.length = 0;
-  assert.deepEqual(await auth.resetPasswordAction({}, form({ resetEmail: signup.email })), absent);
+  const legacy = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.match(legacy.error ?? "", /고객센터/);
+  assert.equal(legacy.message, undefined);
+  assert.equal(legacy.notice, undefined);
   assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
+
   auth.state.account.signupVerificationFlow = "email_password_v1";
   auth.calls.length = 0;
-  assert.deepEqual(await auth.resetPasswordAction({}, form({ resetEmail: signup.email })), absent);
+  const pending = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.equal(pending.verificationPending, true);
+  assert.match(pending.message ?? "", /인증 메일을 발송/);
+  assert.equal(pending.notice, undefined, "a verification email is not a password reset email");
   assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "link", "confirmationMail"]);
   assert.equal(auth.calls[1].input?.type, "signup");
   assert.match(String(auth.calls[2].input?.link), /confirm-email/);
   assert.equal(auth.calls.some(call => call.method === "verify" || call.method === "password"), false);
+
+  auth.state.mailOk = false;
+  const failed = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.ok(failed.error);
+  assert.equal(failed.message, undefined);
+  assert.equal(failed.notice, undefined);
 });
 
-test("recovery signs only the same confirmed account and keeps delivery failure responses generic", async () => {
+test("recovery confirms sending only for the same confirmed account and reports delivery failures", async () => {
   const auth = await fixture();
-  const absent = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
   auth.state.account = { id: "member", email: signup.email, email_confirmed_at: "2026-01-01" };
   auth.state.linkType = "recovery";
-  auth.calls.length = 0;
-  assert.deepEqual(await auth.resetPasswordAction({}, form({ resetEmail: signup.email })), absent);
+  const sent = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.equal(sent.message, "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.");
+  assert.equal(sent.notice, "password_reset_sent");
+  assert.equal(sent.retryAfterSeconds, 60);
   const mailed = auth.calls.find(call => call.method === "resetMail")?.input;
   assert.ok(mailed);
   const link = new URL(String(mailed.link));
@@ -214,7 +246,10 @@ test("recovery signs only the same confirmed account and keeps delivery failure 
   assert.equal(fields.type, "recovery");
   assert.notEqual(fields.signature, confirmation.signature, "signup signatures cannot authorize recovery");
   auth.state.mailOk = false;
-  assert.deepEqual(await auth.resetPasswordAction({}, form({ resetEmail: signup.email })), absent);
+  const failed = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.ok(failed.error);
+  assert.equal(failed.message, undefined);
+  assert.equal(failed.notice, undefined);
   for (const user of [
     { id: "recreated", email: signup.email, email_confirmed_at: "2026-01-01" },
     { id: "member", email: signup.email, email_confirmed_at: null },
@@ -222,8 +257,26 @@ test("recovery signs only the same confirmed account and keeps delivery failure 
   ]) {
     auth.state.linkUser = user;
     auth.calls.length = 0;
-    assert.deepEqual(await auth.resetPasswordAction({}, form({ resetEmail: signup.email })), absent);
+    const invalid = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+    assert.ok(invalid.error);
+    assert.equal(invalid.message, undefined);
+    assert.equal(invalid.notice, undefined);
     assert.equal(auth.calls.some(call => call.method === "resetMail"), false);
+  }
+});
+
+test("lookup and thrown delivery errors never claim an absent account or a sent email", async () => {
+  for (const phase of ["lookupThrows", "mailThrows"] as const) {
+    const auth = await fixture();
+    auth.state.account = { id: "member", email: signup.email, email_confirmed_at: "2026-01-01" };
+    auth.state.linkType = "recovery";
+    auth.state[phase] = true;
+    const result = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+    assert.ok(result.error);
+    assert.equal(result.message, undefined);
+    assert.equal(result.notice, undefined);
+    assert.doesNotMatch(result.error, /private-|가입 이력이 없는/);
+    assert.deepEqual(auth.calls.map(call => call.method), phase === "lookupThrows" ? ["lookup"] : ["lookup", "link", "resetMail"]);
   }
 });
 

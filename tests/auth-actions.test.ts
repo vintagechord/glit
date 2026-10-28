@@ -15,7 +15,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
           '@/lib/supabase/env': `export const getServiceRoleKey=()=> 'fixture-only-signing-key';`,
           '@/lib/supabase/admin': `${shared} export function createAdminClient(){return {auth:{admin:{createUser:async input=>{calls.push({method:'signup',input});return {data:{user:{id:'fixture'}},error:state.error};},generateLink:async()=>{calls.push({method:'generateLink'});return {data:state.linkData,error:state.error};}}}};}`,
           './account-lookup': `${shared} export const SIGNUP_VERIFICATION_FLOW='email_password_v1'; export async function findAccountByEmail(){return state.account;}`,
-          '@/lib/email': `${shared} export async function sendSignupVerificationEmail(){return {ok:true};} export async function sendAccountIdEmail(){return {ok:true};} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
+          '@/lib/email': `${shared} export async function sendSignupVerificationEmail(){return {ok:true};} export async function sendWelcomeEmail(){calls.push({method:'welcome'});return {ok:true};} export async function sendPasswordResetEmail(input){calls.push({method:'sendReset',input});return state.emailResult;}`,
           '@/lib/request-rate-limit': `${shared} export const consumePersistentRateLimit=()=>({allowed:!state.limited,retryAfterSeconds:state.limited?120:0}); export const getRequestIdentifier=()=> 'fixture';`,
           'next/navigation': `export function redirect(location){throw Object.assign(new Error('test redirect'),{location});}`,
           'next/headers': `export async function headers(){return new Headers();}`,
@@ -24,7 +24,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       });
     } }],
   });
-  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string; retryAfterSeconds?: number }>;
+  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string; notice?: string; retryAfterSeconds?: number }>;
   const bundled = { exports: {} as { state: { error: unknown; throws: boolean; linkData: unknown; emailResult: {ok:boolean;reason?:string;retryAfterSeconds?:number}; limited:boolean; account: {id:string;email:string;email_confirmed_at:string}|null }; calls: { method: string; input?: unknown }[]; loginAction: Action; signupAction: Action; resetPasswordAction: Action } };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
   const auth = bundled.exports;
@@ -58,6 +58,14 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.ok(Number.isFinite(Date.parse(created.app_metadata.signupConsent.acceptedAt)));
     assert.deepEqual(Object.keys(created.app_metadata.signupConsent.versions).sort(), ["privacy", "refund", "terms"]);
     auth.calls.length = 0;
+    auth.state.error = { code: "email_exists" };
+    const duplicate = await auth.signupAction({}, form({ ...signIn, password: "fixture-password", confirmPassword: "fixture-password", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
+    assert.equal(duplicate.error, "이미 가입된 이메일입니다.");
+    assert.equal(duplicate.notice, "email_already_registered");
+    assert.equal(duplicate.message, undefined);
+    assert.deepEqual(auth.calls.map(call => call.method), ["signup"], "duplicate manual signup must not send a welcome email");
+    auth.state.error = null;
+    auth.calls.length = 0;
     const invalidSignup = await auth.signupAction({}, form({ ...signIn, password: "123", confirmPassword: "123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
     assert.match(invalidSignup.fieldErrors?.password ?? "", /8자 이상/); assert.equal(auth.calls.length, 0);
     process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE = "transactional";
@@ -74,7 +82,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     process.env.RESEND_FROM = validSender;
     auth.state.error = { message: "fetch failed", name: "AuthRetryableFetchError" };
     const reset = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
-    assert.ok(reset.message); assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink"]);
+    assert.ok(reset.error); assert.equal(reset.message, undefined); assert.equal(reset.notice, undefined); assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink"]);
     delete process.env.RESEND_API_KEY; auth.calls.length = 0;
     await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
     assert.equal(auth.calls.length, 0, "unconfigured mail must not consume Supabase built-in quota");
@@ -83,7 +91,8 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     auth.state.linkData = { user: auth.state.account, properties: { hashed_token: "fixture-recovery-hash", verification_type: "recovery", action_link: "https://provider.invalid/consume-once" } };
     auth.calls.length = 0;
     const sent = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
-    assert.ok(sent.message);
+    assert.equal(sent.message, "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.");
+    assert.equal(sent.notice, "password_reset_sent");
     assert.equal(sent.retryAfterSeconds, 60);
     assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink", "sendReset"]);
     const sentLink = new URL((auth.calls[1].input as {link:string}).link);
@@ -100,7 +109,9 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       auth.calls.length = 0;
       auth.state.emailResult = { ok: false, reason, retryAfterSeconds: reason === "rate_limit" ? 90 : undefined };
       const failed = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
-      assert.deepEqual(failed, sent, "recipient-specific delivery failures must not disclose account existence");
+      assert.ok(failed.error, "delivery failures must let the customer retry instead of wait for unsent mail");
+      assert.equal(failed.message, undefined);
+      assert.equal(failed.notice, undefined);
       assert.deepEqual(auth.calls.map((call) => call.method), ["generateLink", "sendReset"], "custom delivery failures must not consume default email quota or issue a second token");
 
     }
@@ -108,7 +119,9 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     auth.state.account = null;
     auth.state.error = { code: "user_not_found" };
     const unknown = await auth.resetPasswordAction({}, form({ resetEmail: signIn.email }));
-    assert.equal(unknown.message, sent.message, "do not disclose account existence");
+    assert.equal(unknown.error, "가입 이력이 없는 이메일입니다.");
+    assert.equal(unknown.notice, "email_not_registered");
+    assert.equal(unknown.message, undefined);
     assert.equal(auth.calls.length, 0);
     auth.calls.length = 0;
     auth.state.limited = true;

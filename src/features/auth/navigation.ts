@@ -14,7 +14,7 @@ export function getAuthReturnPath(value: string | null | undefined, english = fa
   return safe;
 }
 
-export function getAuthPageHref(page: "login" | "signup" | "forgot-password" | "reset-password" | "find-id" | "confirm-email", nextPath?: string | null, english = false, signupSuccess = false) {
+export function getAuthPageHref(page: "login" | "signup" | "forgot-password" | "reset-password" | "confirm-email", nextPath?: string | null, english = false, signupSuccess = false) {
   const query = new URLSearchParams();
   const next = getAuthReturnPath(nextPath, english);
   if (next) query.set("next", next);

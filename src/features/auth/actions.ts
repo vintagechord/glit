@@ -8,7 +8,6 @@ import {
   sendPasswordResetEmail,
   sendWelcomeEmail,
   sendSignupVerificationEmail,
-  sendAccountIdEmail,
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmailDeliveryConfiguration } from "@/lib/email-config";
@@ -32,11 +31,16 @@ export type ActionState = {
   fieldErrors?: Record<string, string>;
   retryAfterSeconds?: number;
   verificationPending?: boolean;
+  notice?: "email_already_registered" | "email_not_registered" | "password_reset_sent";
 };
 
-const resetSuccessMessage = "입력한 이메일로 안내 가능한 계정이면 복구 메일을 보내드립니다. 메일함과 스팸함을 확인해주세요.";
-const signupPendingMessage = "이메일 확인이 필요한 계정이면 인증 메일을 보내드립니다. 메일의 버튼으로 확인을 완료해주세요. 이미 가입했거나 메일이 오지 않으면 비밀번호 찾기 또는 고객센터를 이용해주세요.";
-const accountLookupMessage = "가입된 이메일이라면 아이디 안내를 보내드립니다. 메일함과 스팸함을 확인해주세요.";
+const resetSuccessMessage = "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.";
+const signupPendingMessage = "입력한 이메일로 인증 메일을 발송했습니다. 메일의 버튼에서 비밀번호를 설정하면 가입이 완료됩니다.";
+const duplicateAccountNotice: ActionState = { error: "이미 가입된 이메일입니다.", notice: "email_already_registered" };
+const missingAccountNotice: ActionState = { error: "가입 이력이 없는 이메일입니다.", notice: "email_not_registered" };
+const legacyPendingMessage = "이메일 인증을 완료하지 못한 계정입니다. 고객센터에 문의해주세요.";
+const resetDeliveryError = "비밀번호 재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.";
+const signupDeliveryError = "인증 메일을 보내지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.";
 const mailConfigurationError = "메일 발송 설정에 문제가 있어 메일을 보내지 못했습니다. 고객센터에 문의해주세요.";
 
 const isDuplicateAccount = (error: unknown) => {
@@ -56,7 +60,7 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
     type: "signup", email, password: "", options: { redirectTo },
   });
   if (error) {
-    if (isDuplicateAccount(error)) return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
+    if (isDuplicateAccount(error)) return duplicateAccountNotice;
     logAuthError("generate signup link", error);
     return { error: mapAuthError(error, "signup"), verificationPending: true };
   }
@@ -74,8 +78,14 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
       idempotencyKey: `signup:${createHash("sha256").update(data.properties.hashed_token).digest("hex")}`,
       expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
     });
-    if (!sent.ok) console.warn("[Auth] signup email not accepted", { reason: sent.reason });
-  } catch (error) { logAuthError("signup email delivery", error); }
+    if (!sent.ok) {
+      console.warn("[Auth] signup email not accepted", { reason: sent.reason });
+      return { error: signupDeliveryError, verificationPending: true };
+    }
+  } catch (error) {
+    logAuthError("signup email delivery", error);
+    return { error: signupDeliveryError, verificationPending: true };
+  }
   return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
 }
 
@@ -251,11 +261,7 @@ export async function signupAction(
     });
 
     if (error || !data.user) {
-      if (needsVerification && isDuplicateAccount(error)) {
-        const existing = await findAccountByEmail(parsed.data.email);
-        if (existing && !existing.email_confirmed_at && existing.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(existing.email, formData, existing.id);
-        return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
-      }
+      if (isDuplicateAccount(error)) return duplicateAccountNotice;
       logAuthError("signup", error);
       return { error: mapAuthError(error, "signup") };
     }
@@ -292,7 +298,9 @@ export async function resendSignupAction(_prevState: ActionState, formData: Form
     // this flow. Confirming legacy pending credentials before replacing them
     // could activate a password chosen by someone who did not own the inbox.
     if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(account.email, formData, account.id);
-    return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
+    if (!account) return missingAccountNotice;
+    if (account.email_confirmed_at) return duplicateAccountNotice;
+    return { error: legacyPendingMessage };
   } catch (error) {
     logAuthError("resend signup", error);
     return { error: "인증 메일 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
@@ -349,31 +357,6 @@ export async function confirmSignupAction(_prevState: ActionState, formData: For
   }
 }
 
-export async function findAccountIdAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  if (!getEmailDeliveryConfiguration().ok) return { error: mailConfigurationError };
-  const parsed = resetEmailSchema.safeParse(formData.get("email"));
-  if (!parsed.success) return { fieldErrors: { email: "유효한 이메일을 입력해주세요." } };
-  const limit = await checkAuthRateLimit({ namespace: "account-id", email: parsed.data, ipLimit: 10, emailLimit: 3, windowMs: 60 * 60 * 1000 });
-  if (!limit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: limit.retryAfterSeconds };
-  try {
-    const account = await findAccountByEmail(parsed.data);
-    if (account) {
-      const english = formData.get("locale") === "en";
-      try {
-        const result = await sendAccountIdEmail({ email: account.email, english, link: buildUrl(getAuthPageHref("login", String(formData.get("next") ?? ""), english), getBaseUrl()) });
-        if (!result.ok) console.warn("[Auth] account ID email not accepted", { reason: result.reason });
-      } catch (error) {
-        logAuthError("account ID delivery", error);
-      }
-    }
-    // Identical response on absent accounts and recipient-specific failures.
-    return { message: accountLookupMessage, retryAfterSeconds: 60 };
-  } catch (error) {
-    logAuthError("account ID lookup", error);
-    return { error: "아이디 안내 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
-  }
-}
-
 export async function resetPasswordAction(
   _prevState: ActionState,
   formData: FormData,
@@ -416,53 +399,54 @@ export async function resetPasswordAction(
     // built-in provider's project-wide email quota.
     const delivery = getEmailDeliveryConfiguration();
     if (!delivery.ok) {
-        console.error("[Email] password reset sender unavailable", { diagnostic: delivery.diagnostic });
-        return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+      console.error("[Email] password reset sender unavailable", { diagnostic: delivery.diagnostic });
+      return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
     }
-      const account = await findAccountByEmail(parsed.data);
-      const response = { message: resetSuccessMessage, retryAfterSeconds: 60 };
-      if (!account) return response;
-      if (!account.email_confirmed_at) {
-        // Recovery verification confirms an unconfirmed GoTrue account before
-        // changing its password. Only our unknowable-password signup flow is
-        // safe for pending accounts; legacy pending credentials stay inactive.
-        if (account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) {
-          const result = await sendSignupConfirmation(account.email, formData, account.id);
-          if (result.error) console.warn("[Auth] pending recovery email not accepted");
-        }
-        return response;
+    const account = await findAccountByEmail(parsed.data);
+    if (!account) return missingAccountNotice;
+    if (!account.email_confirmed_at) {
+      // Recovery verification confirms an unconfirmed GoTrue account before
+      // changing its password. Only our unknowable-password signup flow is
+      // safe for pending accounts; legacy pending credentials stay inactive.
+      if (account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) {
+        return await sendSignupConfirmation(account.email, formData, account.id);
       }
-      const admin = createAdminClient();
-      const { data, error } = await admin.auth.admin.generateLink({
-        type: "recovery",
-        email: parsed.data,
-        options: { redirectTo },
-      });
-      if (error) {
-        logAuthError("generate recovery link", error);
-        return response;
-      }
-      const tokenHash = data?.properties?.hashed_token;
-      if (!tokenHash || data.properties?.verification_type !== "recovery" ||
-          data.user?.id !== account.id || !data.user.email_confirmed_at ||
-          data.user.email?.trim().toLowerCase() !== account.email.trim().toLowerCase()) {
-        logAuthError("generate recovery link", { code: "missing_recovery_token" });
-        return response;
-      }
-      // Sign only confirmed-account tokens. The page collects a new password
-      // before any OTP verification; even JavaScript link scanners cannot
-      // consume credentials. Fragment tokens stay out of request/referrer logs.
-      const recoveryUrl = new URL(redirectTo);
-      recoveryUrl.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery", signature: signRecoveryToken(tokenHash) }).toString();
-      const emailResult = await sendPasswordResetEmail({
-        email: parsed.data,
-        english,
-        link: recoveryUrl.toString(),
-        idempotencyKey: `recovery:${createHash("sha256").update(tokenHash).digest("hex")}`,
-        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-      });
-      if (!emailResult.ok) console.warn("[Auth] recovery email not accepted", { reason: emailResult.reason });
-      return response;
+      return { error: legacyPendingMessage };
+    }
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: account.email,
+      options: { redirectTo },
+    });
+    if (error) {
+      logAuthError("generate recovery link", error);
+      return { error: mapAuthError(error, "reset") };
+    }
+    const tokenHash = data?.properties?.hashed_token;
+    if (!tokenHash || data.properties?.verification_type !== "recovery" ||
+        data.user?.id !== account.id || !data.user.email_confirmed_at ||
+        data.user.email?.trim().toLowerCase() !== account.email.trim().toLowerCase()) {
+      logAuthError("generate recovery link", { code: "missing_recovery_token" });
+      return { error: resetDeliveryError };
+    }
+    // Sign only confirmed-account tokens. The page collects a new password
+    // before any OTP verification; even JavaScript link scanners cannot
+    // consume credentials. Fragment tokens stay out of request/referrer logs.
+    const recoveryUrl = new URL(redirectTo);
+    recoveryUrl.hash = new URLSearchParams({ token_hash: tokenHash, type: "recovery", signature: signRecoveryToken(tokenHash) }).toString();
+    const emailResult = await sendPasswordResetEmail({
+      email: account.email,
+      english,
+      link: recoveryUrl.toString(),
+      idempotencyKey: `recovery:${createHash("sha256").update(tokenHash).digest("hex")}`,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    });
+    if (!emailResult.ok) {
+      console.warn("[Auth] recovery email not accepted", { reason: emailResult.reason });
+      return { error: resetDeliveryError };
+    }
+    return { message: resetSuccessMessage, notice: "password_reset_sent", retryAfterSeconds: 60 };
   } catch (error) {
     logAuthError("password reset", error);
     // Account lookup or provider outages are distinct from "no such account":

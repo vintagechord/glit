@@ -64,7 +64,7 @@ export function ConfirmEmailForm({ nextPath }: { nextPath?: string | null }) {
     </form>}
     <div className={credential ? "border-t-2 border-border pt-6" : ""}>
       <h2 className="mb-4 font-semibold">{english ? "Request a new verification email" : "인증 메일 다시 받기"}</h2>
-      <AccountEmailForm purpose="signup" nextPath={nextPath} />
+      <AccountEmailForm nextPath={nextPath} />
     </div>
   </div>;
 }

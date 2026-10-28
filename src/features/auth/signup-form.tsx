@@ -13,6 +13,7 @@ import { PasswordInput } from "./password-input";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 import { signupAction, type ActionState } from "./actions";
+import { useAuthNotice } from "./use-auth-notice";
 
 const initialState: ActionState = {};
 
@@ -23,6 +24,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const english = Boolean(localePrefix);
+  useAuthNotice(state, english);
   const needsVerification = getEmailDeliveryMode() !== "manual";
   const effectiveNextPath = getAuthReturnPath(nextPath, english);
   const loginHref = getAuthPageHref("login", effectiveNextPath, english);
