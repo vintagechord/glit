@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseMelonAlbumPage } from "@/lib/melon";
 import { parseGenieAlbumPage } from "@/lib/genie";
-import { domesticAlbumArtwork, parseDomesticTrackCredits, type DomesticTrackCredits } from "./domestic-credits";
+import { domesticAlbumArtwork, parseDomesticTrackCredits, parseGenieAlbumCreditFallbacks, type DomesticTrackCredits } from "./domestic-credits";
 import { MusicProviderError } from "./musicbrainz";
 import type { ArtistCandidate, ImportedRelease } from "./providers";
 
@@ -183,19 +183,22 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
   const scopeNote = `${label(provider)}의 공개 아티스트 전체 앨범 목록(참여 앨범 포함)과 수록곡 ID로 확인했습니다. 앨범 저장 후 곡별 작사·작곡·편곡 정보를 확인합니다. 참여 앨범에서 다른 아티스트가 부른 곡은 관리 대상으로 자동 지정하지 않습니다. 미공개·삭제 자료나 공개되지 않은 저작자 정보는 포함되지 않을 수 있습니다.`;
   const releases: ImportedRelease[] = [];
   const trackCredits: DomesticTrackCredits[] = [];
-  if (cursor.phase === "done") return { releases, trackCredits, nextCursor: null, status: "completed" as const, checkedAt, scopeNote };
+  let creditTracksCheckedDelta = 0;
+  if (cursor.phase === "done") return { releases, trackCredits, creditTracksCheckedDelta, nextCursor: null, status: "completed" as const, checkedAt, scopeNote };
   if (cursor.phase === "credits") {
     const albumIndex = cursor.creditAlbumIndex ?? 0;
     const albumId = cursor.seen[albumIndex];
     if (!cursor.creditPending) {
       const html = await request(provider, provider === "melon" ? "/album/detail.htm" : "/detail/albumInfo", provider === "melon" ? { albumId } : { axnm: albumId }, options);
       const album = normalizeDomesticAlbum(provider, html, albumId, artistId, checkedAt, { listedArtistId: artistId });
+      if (provider === "genie") trackCredits.push(...parseGenieAlbumCreditFallbacks(html, { albumId, tracks: album.tracks.map(track => ({ songId: track.externalId, trackNo: track.position, trackTitle: track.title })) }, checkedAt));
       next.creditAlbumIndex = albumIndex;
       next.creditPending = album.tracks.map(track => track.externalId);
     } else {
       const songId = cursor.creditPending[0];
       const html = await request(provider, provider === "melon" ? "/song/detail.htm" : "/detail/songInfo", provider === "melon" ? { songId } : { xgnm: songId }, options);
       trackCredits.push(parseDomesticTrackCredits(provider, html, albumId, songId, checkedAt));
+      creditTracksCheckedDelta = 1;
       next.creditPending!.shift();
       if (!next.creditPending!.length) {
         delete next.creditPending;
@@ -234,5 +237,5 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
     if (provider === "melon" && !next.more && next.total !== undefined && cursor.seen.length + next.pending.length !== next.total) return invalid("멜론의 전체 앨범 수와 수집한 앨범 수가 다릅니다. 확인한 자료는 유지됩니다.");
     next.page++; next.phase = next.pending.length ? "tracks" : next.seen.length ? "credits" : "done";
   }
-  return { releases, trackCredits, nextCursor: next.phase === "done" ? null : next, status: next.phase === "done" ? "completed" as const : "collecting" as const, checkedAt, scopeNote };
+  return { releases, trackCredits, creditTracksCheckedDelta, nextCursor: next.phase === "done" ? null : next, status: next.phase === "done" ? "completed" as const : "collecting" as const, checkedAt, scopeNote };
 }

@@ -249,3 +249,22 @@ test("deleting an artist during the external request prevents album and public s
   assert.equal(h.state.libraries[0].data.releases.length, 0);
   assert.equal(h.state.sources.length, 0);
 });
+
+test("verified album notes supplement credits before an empty song page without double-counting or replacing a direct cache", async () => {
+  const h = await harness("genie");
+  h.state.pages["/detail/albumInfo?100"] += `<script>var _rfr = "/detail/albumInfo?axnm=100";</script><!-- S. 앨범 DESC albumDesc--><div>[CREDIT]</div><div>01. 노래 100</div><div>Composed &amp; Arranged by 빈티지코드</div><div>Lyrics by 작사가</div><!-- E. 앨범 DESC -->`;
+  h.state.pages["/detail/songInfo?5100"] = `<h2 class="name">노래 100</h2>`;
+  const direct = { provider: "genie", external_id: "5100", kind: "work", payload: { songId: "5100", contributors: [{ name: "이전에 확인한 곡 원본", role: "composition" }] } };
+  h.state.sources.push(structuredClone(direct));
+  for (let step = 0; step < 3; step++) await h.runArchiveJob(LIBRARY);
+  const library = h.state.libraries[0];
+  assert.equal(h.state.jobs[0].counts.creditTracksChecked, 0);
+  assert.equal(h.state.jobs[0].counts.creditTracks, 1);
+  assert.equal(library.data.works[0].contributors?.length, 3);
+  const credits = structuredClone(library.data.works[0].contributors);
+  await h.runArchiveJob(LIBRARY);
+  assert.equal(h.state.jobs[0].status, "completed");
+  assert.equal(h.state.jobs[0].counts.creditTracksChecked, 1);
+  assert.deepEqual(library.data.works[0].contributors, credits);
+  assert.deepEqual(h.state.sources.find(source => source.kind === "work"), direct);
+});

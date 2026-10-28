@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { fetchMelonAlbumReviewData, parseMelonSongPage, type MelonAlbumReviewData } from "@/lib/melon";
-import { fetchGenieAlbumReviewData, parseGenieSongPage } from "@/lib/genie";
+import { fetchGenieAlbumReviewData, parseGenieAlbumPage, parseGenieSongPage } from "@/lib/genie";
 import { canonicalReviewUrl, createReviewUrlFetcher } from "@/lib/review-docs/urls";
 import { safeWebUrlSchema, validateArchiveData, type ArchiveContributor, type ArchiveData, type ArchiveTrack } from "./model";
 import { parseMusicProviderUrl } from "./providers";
@@ -14,7 +14,10 @@ const roleLabels = { lyrics: "작사", composition: "작곡", arrangement: "편�
 
 export type DomesticTrackCredits = {
   provider: "melon" | "genie"; albumId: string; songId: string;
-  contributors: ArchiveContributor[]; checkedAt: string;
+  contributors: ArchiveContributor[]; checkedAt: string; fallback?: true;
+};
+type DomesticCreditAlbum = Omit<MelonAlbumReviewData, "tracks"> & {
+  tracks: (MelonAlbumReviewData["tracks"][number] & { creditFallbackRoles?: ArchiveContributor["role"][] })[];
 };
 function contributorsFromFields(fields: { lyricist: string; composer: string; arranger: string }): ArchiveContributor[] {
   const unique = new Map<string, ArchiveContributor>();
@@ -25,6 +28,55 @@ function contributorsFromFields(fields: { lyricist: string; composer: string; ar
     }
   }
   return [...unique.values()].slice(0, 100);
+}
+
+function albumCreditText(html: string) {
+  return html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
+    .replace(/<br\s*\/?\s*>|<\/(?:div|p|li|h[1-6])>/gi, "\n").replace(/<[^>]*>/g, "")
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (entity, code: string) => {
+      const point = code[0].toLowerCase() === "x" ? parseInt(code.slice(1), 16) : Number(code);
+      return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : entity;
+    }).replace(/&(amp|quot|apos|lt|gt|nbsp);/gi, (_, name: string) => ({ amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " " })[name.toLowerCase()] ?? "");
+}
+const creditTitle = (value: string) => normalize(value).replace(/[^\p{L}\p{N}]/gu, "");
+
+/** Only numbered song credits in this exact official album, never album-wide names. */
+export function parseGenieAlbumCreditFallbacks(html: string, album: { albumId: string; tracks: { songId: string; trackNo: number; trackTitle: string }[] }, checkedAt: string): DomesticTrackCredits[] {
+  const declaredId = html.match(/\bvar\s+_rfr\s*=\s*["']\/detail\/albumInfo\?axnm=(\d+)/)?.[1];
+  if (declaredId !== album.albumId) return [];
+  const section = html.match(/<!--\s*S\.\s*앨범 DESC albumDesc\s*-->([\s\S]*?)<!--\s*E\.\s*앨범 DESC\s*-->/)?.[1];
+  if (!section) return [];
+  const lines = albumCreditText(section).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const markers = lines.flatMap((line, index) => /^\[credits?\]$/i.test(line) ? [index] : []);
+  if (markers.length !== 1) return [];
+  const blocks: { number: number; title: string; lyricist: string; composer: string; arranger: string }[] = [];
+  let current: typeof blocks[number] | undefined;
+  for (const line of lines.slice(markers[0] + 1)) {
+    const heading = line.match(/^(\d{1,3})[.)]\s+(.+)$/);
+    if (heading) {
+      current = { number: Number(heading[1]), title: heading[2], lyricist: "", composer: "", arranger: "" };
+      blocks.push(current); continue;
+    }
+    if (!current) continue;
+    const role = line.match(/^(Composed\s*(?:&|and)\s*Arranged|Composed|Arranged|Lyrics)\s+by\s+(.+)$/i);
+    // Only consecutive role lines belong to a numbered song. A footer, other
+    // production credit or missing line boundary ends this conservative scope.
+    if (!role || /(?:Composed|Arranged|Lyrics)\s+by/i.test(role[2])) { current = undefined; continue; }
+    const name = role[2].trim();
+    const fields = /composed/i.test(role[1]) ? /arranged/i.test(role[1]) ? ["composer", "arranger"] as const : ["composer"] as const : /arranged/i.test(role[1]) ? ["arranger"] as const : ["lyricist"] as const;
+    for (const field of fields) current[field] = [current[field], name].filter(Boolean).join(", ");
+  }
+  return blocks.flatMap(block => {
+    const title = creditTitle(block.title);
+    if (!title || blocks.filter(other => other.number === block.number || creditTitle(other.title) === title).length !== 1) return [];
+    const sameTitle = album.tracks.filter(track => creditTitle(track.trackTitle) === title);
+    if (sameTitle.length !== 1) return [];
+    const track = sameTitle[0];
+    if (track.trackNo !== block.number || album.tracks.filter(other => other.trackNo === block.number || other.songId === track.songId).length !== 1
+      || !/^[1-9]\d{0,19}$/.test(track.songId) || /재생\s*불가|서비스\s*(?:불가|중지)|unavailable/i.test(track.trackTitle)) return [];
+    const contributors = contributorsFromFields(block);
+    return contributors.length ? [{ provider: "genie" as const, albumId: album.albumId, songId: track.songId, contributors, checkedAt, fallback: true as const }] : [];
+  });
 }
 
 /** The fixed song URL is fetched by the catalog collector; retain credits only. */
@@ -45,10 +97,16 @@ function trackProviderIds(track: ArchiveTrack, provider: "melon" | "genie") {
 }
 
 function applyTrackCredits(data: ArchiveData, track: ArchiveTrack, update: Omit<DomesticTrackCredits, "albumId">) {
-  const { provider, songId, contributors, checkedAt } = update;
+  const { provider, songId, checkedAt } = update;
+  let contributors = update.contributors;
   if (!contributors.length) return;
   const recordingId = track.recordingId ?? `archive-recording:${hash(track.id)}`;
   let recording = data.recordings.find(item => item.id === recordingId);
+  if (update.fallback && recording) {
+    const knownRoles = new Set(recording.workIds.flatMap(id => data.works.find(work => work.id === id)?.contributors?.map(person => person.role) ?? []));
+    contributors = contributors.filter(person => !knownRoles.has(person.role));
+    if (!contributors.length) return;
+  }
   if (!recording) { recording = { id: recordingId, title: track.title, workIds: [] }; data.recordings.push(recording); track.recordingId = recordingId; }
   if (recording.workIds.some(id => data.works.find(work => work.id === id)?.userEdited)) return;
   const workId = `${provider}-work:${songId}`;
@@ -123,7 +181,7 @@ export function linkedDomesticAlbumUrl(data: ArchiveData, releaseId: string, sub
   return urls.length === 1 ? urls[0] : null;
 }
 
-export function mergeDomesticAlbumCredits(input: ArchiveData, releaseId: string, album: MelonAlbumReviewData, provider: "melon" | "genie", checkedAt: string, imageUrl?: string | null): ArchiveData {
+export function mergeDomesticAlbumCredits(input: ArchiveData, releaseId: string, album: DomesticCreditAlbum, provider: "melon" | "genie", checkedAt: string, imageUrl?: string | null): ArchiveData {
   const data = validateArchiveData(input);
   const release = data.releases.find(item => item.id === releaseId);
   if (!release) return data;
@@ -136,7 +194,10 @@ export function mergeDomesticAlbumCredits(input: ArchiveData, releaseId: string,
     });
     if (candidates.length !== 1) continue;
     const track = candidates[0];
-    applyTrackCredits(data, track, { provider, songId: imported.songId, contributors: contributorsFromFields(imported), checkedAt });
+    const contributors = contributorsFromFields(imported);
+    const fallbackRoles = new Set(imported.creditFallbackRoles ?? []);
+    applyTrackCredits(data, track, { provider, songId: imported.songId, contributors: contributors.filter(person => !fallbackRoles.has(person.role)), checkedAt });
+    applyTrackCredits(data, track, { provider, songId: imported.songId, contributors: contributors.filter(person => fallbackRoles.has(person.role)), checkedAt, fallback: true });
   }
   return validateArchiveData(data);
 }
@@ -144,6 +205,7 @@ export function mergeDomesticAlbumCredits(input: ArchiveData, releaseId: string,
 export async function fetchDomesticAlbumCredits(url: string, options: { fetcher?: typeof fetch; signal?: AbortSignal; acquirePermit?: (provider: "melon" | "genie") => Promise<void> } = {}) {
   const identity = canonicalReviewUrl(url);
   let imageUrl: string | null = null;
+  let albumHtml = "";
   const baseFetch = options.fetcher ?? fetch;
   const bounded = createReviewUrlFetcher(async (input, init) => {
     options.signal?.throwIfAborted();
@@ -155,14 +217,22 @@ export async function fetchDomesticAlbumCredits(url: string, options: { fetcher?
     const response = await bounded(input, init);
     if (canonicalReviewUrl(String(input), true).kind === "album" && response.ok) {
       const html = await response.clone().text();
+      albumHtml = html;
       imageUrl = domesticAlbumArtwork(html, identity.url);
     }
     return response;
   };
   const album = await (identity.provider === "melon" ? fetchMelonAlbumReviewData : fetchGenieAlbumReviewData)(identity.url, { fetcher, requireLyrics: false, tolerateSongErrors: true, maxTracks: 100 });
+  const fallbacks = identity.provider === "genie" ? new Map(parseGenieAlbumCreditFallbacks(albumHtml, parseGenieAlbumPage(albumHtml, album.albumId), new Date().toISOString()).map(update => [update.songId, update])) : new Map<string, DomesticTrackCredits>();
+  const tracks = album.tracks.map(track => {
+    const fallback = fallbacks.get(track.songId);
+    const names = (role: ArchiveContributor["role"]) => fallback?.contributors.filter(person => person.role === role).map(person => person.name).join(", ") ?? "";
+    const creditFallbackRoles = ([["composition", track.composer], ["lyrics", track.lyricist], ["arrangement", track.arranger]] as const).flatMap(([role, value]) => !value.trim() && names(role) ? [role] : []);
+    return { ...track, composer: track.composer.trim() ? track.composer : names("composition"), lyricist: track.lyricist.trim() ? track.lyricist : names("lyrics"), arranger: track.arranger.trim() ? track.arranger : names("arrangement"), lyrics: "", ...(creditFallbackRoles.length ? { creditFallbackRoles } : {}) };
+  });
   // The review-document parser also extracts lyrics. Archive metadata never
   // returns or persists them, including transient worker checkpoint payloads.
-  return { album: { ...album, tracks: album.tracks.map(track => ({ ...track, lyrics: "" })) }, provider: identity.provider, imageUrl, partial: album.tracks.some(track => "lyricFetchFailed" in track && track.lyricFetchFailed) };
+  return { album: { ...album, tracks }, provider: identity.provider, imageUrl, partial: album.tracks.some(track => "lyricFetchFailed" in track && track.lyricFetchFailed) };
 }
 
 /** Supplement newly imported albums using exact member-owned links only. */
