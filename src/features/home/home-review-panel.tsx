@@ -479,8 +479,8 @@ function CompactStationRow({
   const label = english ? shortEnglishLabels[status.label] ?? status.label : status.label;
   const content = <>
     <StationLogo station={station} compact />
-    <span className="flex min-w-0 flex-col items-stretch gap-1">
-      <span data-station-status className={`inline-flex min-h-7 w-full items-center justify-center rounded-[4px] border-2 border-[#111111] px-0.5 py-1 text-center text-[10px] font-black leading-3.5 [overflow-wrap:anywhere] sm:text-[11px] ${statusClass}`}>
+    <span className="flex min-w-0 flex-col items-center gap-1">
+      <span data-station-status className={`inline-flex min-h-7 w-fit max-w-full items-center justify-center rounded-[4px] border-2 border-[#111111] px-0.5 py-1 text-center text-[10px] font-black leading-3.5 [overflow-wrap:anywhere] sm:px-1.5 sm:text-[11px] ${statusClass}`}>
         <span>{label}</span>
       </span>
       {status.summaryText ? <span className="text-center text-[10px] leading-4 text-foreground [overflow-wrap:anywhere]">{status.summaryText}</span> : null}
@@ -1330,14 +1330,6 @@ export function HomeReviewPanel({
               </div>
             </div>
             <div className={stationTableShellClass}>
-              {compact && !needsPayment && activeStations.length > 0 ? (
-                <div aria-hidden="true" className="grid grid-cols-2 border-b-2 border-[#111111] bg-[#111111] text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]">
-                  {[0, 1].map((column) => <div key={column} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-1 px-1 py-2 text-center text-[10px] font-black leading-3.5 sm:text-[11px]">
-                    <span>{localePrefix ? "Station" : "방송국"}</span>
-                    <span>{localePrefix ? "Status" : "접수 현황"}</span>
-                  </div>)}
-                </div>
-              ) : null}
               {!needsPayment && activeStations.length > 0 ? (
                 <div
                   ref={stationListRef}
