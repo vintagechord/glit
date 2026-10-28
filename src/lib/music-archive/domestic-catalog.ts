@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseMelonAlbumPage } from "@/lib/melon";
 import { parseGenieAlbumPage } from "@/lib/genie";
-import { domesticAlbumArtwork } from "./domestic-credits";
+import { domesticAlbumArtwork, parseDomesticTrackCredits, type DomesticTrackCredits } from "./domestic-credits";
 import { MusicProviderError } from "./musicbrainz";
 import type { ArtistCandidate, ImportedRelease } from "./providers";
 
@@ -11,10 +11,14 @@ const digits = z.string().regex(/^[1-9]\d{0,19}$/);
 const cursorSchema = z.object({
   provider: z.enum(["melon", "genie"]), version: z.literal(1), artistId: digits,
   page: z.number().int().min(1).max(501), pending: z.array(digits).max(30),
-  seen: z.array(digits).max(5000), more: z.boolean(), phase: z.enum(["albums", "tracks", "done"]),
+  seen: z.array(digits).max(5000), more: z.boolean(), phase: z.enum(["albums", "tracks", "credits", "done"]),
   // Optional for existing v1 jobs. New Melon jobs retain the catalog total so a
   // changed/missing pagination widget cannot silently finish a partial import.
   total: z.number().int().min(0).max(5000).optional(),
+  // Album imports finish first. A later credit failure resumes this one-song
+  // checkpoint without preventing the remaining albums from being saved.
+  creditAlbumIndex: z.number().int().min(0).max(5000).optional(),
+  creditPending: z.array(digits).min(1).max(500).optional(),
 });
 export type DomesticCursor = z.infer<typeof cursorSchema>;
 const origin = (provider: DomesticProvider) => provider === "melon" ? "https://www.melon.com" : "https://www.genie.co.kr";
@@ -46,9 +50,11 @@ function albumUrl(provider: DomesticProvider, id: string) {
   return provider === "melon" ? `${origin(provider)}/album/detail.htm?albumId=${id}` : `${origin(provider)}/detail/albumInfo?axnm=${id}`;
 }
 async function request(provider: DomesticProvider, path: string, params: Record<string, string>, options: Options, post = false) {
-  const allowed = provider === "melon" ? ["/search/artist/index.htm", "/artist/album.htm", "/artist/albumPaging.htm", "/album/detail.htm"] : ["/search/searchArtist", "/detail/artistInfo", "/detail/artistAlbum", "/detail/bArtistAlbumList", "/detail/albumInfo"];
+  const allowed = provider === "melon" ? ["/search/artist/index.htm", "/artist/album.htm", "/artist/albumPaging.htm", "/album/detail.htm", "/song/detail.htm"] : ["/search/searchArtist", "/detail/artistInfo", "/detail/artistAlbum", "/detail/bArtistAlbumList", "/detail/albumInfo", "/detail/songInfo"];
   if (!allowed.includes(path)) throw new MusicProviderError("invalid_input", "지원하지 않는 음악 페이지입니다.");
+  options.signal?.throwIfAborted();
   await options.acquirePermit?.();
+  options.signal?.throwIfAborted();
   const url = new URL(path, origin(provider));
   const body = new URLSearchParams(params).toString();
   if (!post) url.search = body;
@@ -169,13 +175,35 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
   if (!parsed.success) throw new MusicProviderError("invalid_input", "저장한 아티스트 수집 지점이 올바르지 않습니다.");
   const cursor = parsed.data;
   if (cursor.provider !== provider || cursor.artistId !== artistId) throw new MusicProviderError("invalid_input", "아티스트 수집 지점이 일치하지 않습니다.");
-  if (new Set([...cursor.pending, ...cursor.seen]).size !== cursor.pending.length + cursor.seen.length || (cursor.phase === "tracks") !== (cursor.pending.length > 0) || (cursor.phase === "albums" && !cursor.more) || (cursor.phase === "done" && cursor.more)) throw new MusicProviderError("invalid_input", "수집 단계와 앨범 목록이 일치하지 않습니다.");
+  if (new Set([...cursor.pending, ...cursor.seen]).size !== cursor.pending.length + cursor.seen.length || (cursor.phase === "tracks") !== (cursor.pending.length > 0) || (cursor.phase === "albums" && !cursor.more) || (["credits", "done"].includes(cursor.phase) && cursor.more)
+    || (cursor.phase !== "credits" && (cursor.creditAlbumIndex !== undefined || cursor.creditPending !== undefined))
+    || (cursor.phase === "credits" && (!cursor.seen.length || (cursor.creditAlbumIndex ?? 0) >= cursor.seen.length || new Set(cursor.creditPending).size !== (cursor.creditPending?.length ?? 0)))) throw new MusicProviderError("invalid_input", "수집 단계와 앨범 목록이 일치하지 않습니다.");
   const next: DomesticCursor = structuredClone(cursor);
   const checkedAt = new Date(options.now?.() ?? Date.now()).toISOString();
-  const scopeNote = `${label(provider)}의 공개 아티스트 전체 앨범 목록(참여 앨범 포함)과 수록곡 ID로 확인했습니다. 참여 앨범에서 다른 아티스트가 부른 곡은 관리 대상으로 자동 지정하지 않습니다. 미공개·삭제 자료는 포함되지 않을 수 있습니다. 크레딧은 앨범의 정보 다시 가져오기에서 보완할 수 있습니다.`;
+  const scopeNote = `${label(provider)}의 공개 아티스트 전체 앨범 목록(참여 앨범 포함)과 수록곡 ID로 확인했습니다. 앨범 저장 후 곡별 작사·작곡·편곡 정보를 확인합니다. 참여 앨범에서 다른 아티스트가 부른 곡은 관리 대상으로 자동 지정하지 않습니다. 미공개·삭제 자료나 공개되지 않은 저작자 정보는 포함되지 않을 수 있습니다.`;
   const releases: ImportedRelease[] = [];
-  if (cursor.phase === "done") return { releases, nextCursor: null, status: "completed" as const, checkedAt, scopeNote };
-  if (cursor.phase === "tracks" && cursor.pending.length) {
+  const trackCredits: DomesticTrackCredits[] = [];
+  if (cursor.phase === "done") return { releases, trackCredits, nextCursor: null, status: "completed" as const, checkedAt, scopeNote };
+  if (cursor.phase === "credits") {
+    const albumIndex = cursor.creditAlbumIndex ?? 0;
+    const albumId = cursor.seen[albumIndex];
+    if (!cursor.creditPending) {
+      const html = await request(provider, provider === "melon" ? "/album/detail.htm" : "/detail/albumInfo", provider === "melon" ? { albumId } : { axnm: albumId }, options);
+      const album = normalizeDomesticAlbum(provider, html, albumId, artistId, checkedAt, { listedArtistId: artistId });
+      next.creditAlbumIndex = albumIndex;
+      next.creditPending = album.tracks.map(track => track.externalId);
+    } else {
+      const songId = cursor.creditPending[0];
+      const html = await request(provider, provider === "melon" ? "/song/detail.htm" : "/detail/songInfo", provider === "melon" ? { songId } : { xgnm: songId }, options);
+      trackCredits.push(parseDomesticTrackCredits(provider, html, albumId, songId, checkedAt));
+      next.creditPending!.shift();
+      if (!next.creditPending!.length) {
+        delete next.creditPending;
+        if (albumIndex + 1 < cursor.seen.length) next.creditAlbumIndex = albumIndex + 1;
+        else { delete next.creditAlbumIndex; next.phase = "done"; }
+      }
+    }
+  } else if (cursor.phase === "tracks" && cursor.pending.length) {
     const id = cursor.pending[0];
     const html = await request(provider, provider === "melon" ? "/album/detail.htm" : "/detail/albumInfo", provider === "melon" ? { albumId: id } : { axnm: id }, options);
     // Only this durable catalog cursor proves that a release belongs to the
@@ -183,7 +211,7 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
     // that artist a performer ID on any track; keep those tracks unmanaged.
     releases.push(normalizeDomesticAlbum(provider, html, id, artistId, checkedAt, { listedArtistId: artistId }));
     next.pending.shift(); next.seen.push(id);
-    if (!next.pending.length) next.phase = cursor.more ? "albums" : "done";
+    if (!next.pending.length) next.phase = cursor.more ? "albums" : "credits";
   } else {
     if (cursor.page > 500 || cursor.seen.length >= 5000) throw new MusicProviderError("invalid_response", "앨범 수집 범위에 도달했습니다. 확인한 자료는 유지됩니다.");
     const html = provider === "melon"
@@ -204,7 +232,7 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
     if (provider === "melon" && next.total === undefined && !pages.length && ids.length === 15) next.more = true;
     if (!next.pending.length && ids.length) return invalid("앨범 목록이 반복되어 수집을 중단했습니다. 같은 곡을 중복 저장하지 않았습니다.");
     if (provider === "melon" && !next.more && next.total !== undefined && cursor.seen.length + next.pending.length !== next.total) return invalid("멜론의 전체 앨범 수와 수집한 앨범 수가 다릅니다. 확인한 자료는 유지됩니다.");
-    next.page++; next.phase = next.pending.length ? "tracks" : "done";
+    next.page++; next.phase = next.pending.length ? "tracks" : next.seen.length ? "credits" : "done";
   }
-  return { releases, nextCursor: next.phase === "done" ? null : next, status: next.phase === "done" ? "completed" as const : "collecting" as const, checkedAt, scopeNote };
+  return { releases, trackCredits, nextCursor: next.phase === "done" ? null : next, status: next.phase === "done" ? "completed" as const : "collecting" as const, checkedAt, scopeNote };
 }

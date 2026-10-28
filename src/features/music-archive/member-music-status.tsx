@@ -12,6 +12,7 @@ import { Button, External, Modal, panelClass } from "./ui";
 import { MusicStatusBadge } from "./music-status-badge";
 import { OnsideResultPopup } from "./onside-result-popup";
 import { MemberRecordEditor } from "./member-record-editor";
+import { CopyrightCreditDetails, trackCopyrightCredits } from "./track-credits";
 
 export type MemberMusicTab = "review" | "copyright" | "performer" | "karaoke";
 const labels: Record<MemberMusicTab, string> = { review: "심의", copyright: "저작권 등록", performer: "실연자 등록", karaoke: "노래방" };
@@ -25,22 +26,6 @@ function latestRecords(records: ArchiveTask[]) {
   const latest = new Map<string, ArchiveTask>();
   for (const task of records) latest.set(JSON.stringify([task.trackId, task.kind, task.agency, task.participant || "", task.role || ""]), task);
   return [...latest.values()];
-}
-function trackCopyrightCredits(data: LibraryDetail["library"]["data"], tracks: ArchiveTrack[]) {
-  const recordings = new Map(data.recordings.map(recording => [recording.id, recording]));
-  const worksById = new Map(data.works.map(work => [work.id, work]));
-  return tracks.flatMap(track => {
-    const works = (recordings.get(track.recordingId ?? "")?.workIds ?? []).flatMap(id => {
-      const work = worksById.get(id);
-      return work ? [work] : [];
-    });
-    const contributors = [...new Map(works.flatMap(work => work.contributors ?? [])
-      .map(person => [JSON.stringify([person.name.trim(), person.role]), { ...person, name: person.name.trim() }])).values()];
-    const institutionNumbers = [...new Map(works.flatMap(work => work.institutionNumbers)
-      .map(entry => [JSON.stringify([entry.agency, entry.number]), entry])).values()];
-    const writers = [...new Set(works.filter(work => !work.contributors?.length).map(work => work.writers?.trim()).filter(Boolean))];
-    return contributors.length || institutionNumbers.length || writers.length ? [{ track, contributors, institutionNumbers, writers }] : [];
-  });
 }
 function taskLabel(task: ArchiveTask, tab: MemberMusicTab) {
   if (tab === "review") {
@@ -84,7 +69,8 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   onRefreshMetadata: () => Promise<void>;
 }) {
   const data = detail.library.data;
-  const tracks = (track ? [track] : data.tracks.filter((item) => item.releaseId === release.id)).filter((item) => item.managed && !item.excluded && !item.mergedInto);
+  const visibleTracks = (track ? [track] : data.tracks.filter((item) => item.releaseId === release.id)).filter((item) => !item.excluded && !item.mergedInto);
+  const tracks = visibleTracks.filter((item) => item.managed);
   const trackIds = new Set(tracks.map((item) => item.id));
   const records = latestRecords(data.tasks.filter((item) => trackIds.has(item.trackId) && matchesTab(item, tab)));
   const onside = (detail.onsideReviews ?? []).filter((item) => item.releaseId === release.id && (!track || !item.trackIds.length || item.trackIds.includes(track.id)));
@@ -94,7 +80,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   const [showResult, setShowResult] = useState(false);
   const idsKey = submissionIds.join(",");
   useEffect(() => { if (tab === "review" && reviewOpenRequest > 0 && idsKey) { const handle = setTimeout(() => setShowResult(true), 0); return () => clearTimeout(handle); } }, [tab, reviewOpenRequest, idsKey]);
-  const credits = tab === "copyright" ? trackCopyrightCredits(data, tracks) : [];
+  const credits = tab === "copyright" ? trackCopyrightCredits(data, visibleTracks) : [];
   const localePrefix = typeof window !== "undefined" && window.location.pathname.startsWith("/en/") ? "/en" : "";
   const registered = records.some((item) => ["approved", "information_found", "listed"].includes(item.result)) || credits.some(group => group.institutionNumbers.length);
   const finishedReviewIds = new Set(records.filter((item) => item.status === "completed" || ["eligible", "ineligible", "rejected"].includes(item.result)).map((item) => item.trackId));
@@ -122,12 +108,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
     </> : <>
       {credits.length > 0 && <div className="space-y-3">{credits.map(group => <article key={group.track.id} aria-label={`${group.track.title}${group.track.version ? ` (${group.track.version})` : ""} 저작자 정보`} className="space-y-1 rounded-lg border border-border p-3 text-sm">
         {!track && <p className="font-bold">{group.track.trackNumber}. {group.track.title}{group.track.version ? ` (${group.track.version})` : ""}</p>}
-        {(["lyrics", "composition", "arrangement"] as const).map(role => {
-          const people = group.contributors.filter(person => person.role === role);
-          return people.length ? <p key={role}><span className="mr-2 font-semibold">{{ lyrics: "작사", composition: "작곡", arrangement: "편곡" }[role]}</span>{people.map(person => person.name).join(", ")}</p> : null;
-        })}
-        {group.writers.map(writers => <p key={writers}>{writers}</p>)}
-        {group.institutionNumbers.map(entry => <p key={JSON.stringify([entry.agency, entry.number])} className="text-muted-foreground">{entry.agency} · {entry.number}</p>)}
+        <CopyrightCreditDetails credits={group} />
       </article>)}</div>}
       {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
       {!registered && <div className="flex flex-wrap justify-end gap-2">{institutions[tab].map((institution) => {

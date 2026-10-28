@@ -19,7 +19,7 @@ const OTHER_ATTACHMENT = "50000000-0000-4000-8000-000000000002";
 
 type FixtureRow = Record<string, unknown>;
 type FixtureCall = { method: string; table?: string; name?: string; args?: FixtureRow; input?: unknown; operations?: { method: string; args: unknown[] }[] };
-type FixtureState = { user: { id: string } | null; authError: unknown; isAdmin: boolean; limited: boolean; allowProviderRequests: boolean; tables: Record<string, FixtureRow[]>; databaseError: { code: string; message: string } | null };
+type FixtureState = { user: { id: string } | null; authError: unknown; isAdmin: boolean; limited: boolean; allowProviderRequests: boolean; tables: Record<string, FixtureRow[]>; databaseError: { code: string; message: string } | null; jobCancellationFailure: "database" | "network" | null; afterArchive: (() => void) | null };
 type Harness = typeof import("../src/lib/music-archive/service") & typeof import("../src/lib/music-archive/evidence") & typeof import("../src/lib/music-archive/http") & {
   state: FixtureState; calls: FixtureCall[];
   apiGET: (request: Request) => Promise<Response>; apiPOST: (request: Request) => Promise<Response>;
@@ -39,24 +39,30 @@ const bundle = build({
       const shared = `import {state,calls,client} from 'archive-service-fixture';`;
       const files: Record<string, string> = {
         "archive-service-fixture": `
-          export const state={user:{id:'${OWNER}'},authError:null,isAdmin:false,limited:false,allowProviderRequests:false,tables:{},databaseError:null};
+          export const state={user:{id:'${OWNER}'},authError:null,isAdmin:false,limited:false,allowProviderRequests:false,tables:{},databaseError:null,jobCancellationFailure:null,afterArchive:null};
           export const calls=[];
           function query(table){
             const operations=[]; const q={};
-            for(const method of ['select','eq','is','in','not','or','order','range','limit','insert','update','delete']) q[method]=(...args)=>{operations.push({method,args});return q;};
+            for(const method of ['select','eq','is','in','lte','not','or','order','range','limit','insert','update','delete']) q[method]=(...args)=>{operations.push({method,args});return q;};
             function run(single=false){
               calls.push({method:'query',table,operations:structuredClone(operations)});
               if(state.databaseError)return {data:null,error:state.databaseError,count:0};
+              if(table==='music_archive_jobs'&&operations.some(op=>op.method==='update')){
+                if(state.jobCancellationFailure==='network')throw new Error('private network token=do-not-leak');
+                if(state.jobCancellationFailure==='database')return {data:null,error:{code:'XX000',message:'private queue token=do-not-leak'},count:0};
+              }
               let rows=[...(state.tables[table]??[])];
               for(const op of operations){
                 const [key,value]=op.args;
                 if(op.method==='eq')rows=rows.filter(row=>row[key]===value);
                 if(op.method==='is')rows=rows.filter(row=>value===null?row[key]==null:row[key]===value);
                 if(op.method==='in')rows=rows.filter(row=>value.includes(row[key]));
+                if(op.method==='lte')rows=rows.filter(row=>row[key]<=value);
                 if(op.method==='not'&&value==='in'){const excluded=op.args[2].slice(1,-1).split(',');rows=rows.filter(row=>!excluded.includes(row[key]));}
               }
               const count=rows.length;
               for(const op of operations){if(op.method==='range')rows=rows.slice(op.args[0],op.args[1]+1);if(op.method==='limit')rows=rows.slice(0,op.args[0]);}
+              for(const op of operations)if(op.method==='update')for(const row of rows)Object.assign(row,structuredClone(op.args[0]));
               return {data:single?(rows[0]??null):structuredClone(rows),error:null,count};
             }
             q.maybeSingle=()=>Promise.resolve(run(true));q.single=()=>Promise.resolve(run(true));q.then=(ok,fail)=>Promise.resolve(run()).then(ok,fail);
@@ -73,7 +79,12 @@ const bundle = build({
               const row=(state.tables.music_archive_libraries??[]).find(r=>r.id===args.p_id&&r.owner_id===args.p_owner);
               if(!row)return {data:null,error:{message:'OWNER_NOT_FOUND'}};
               if(row.version!==args.p_version)return {data:null,error:{code:'40001',message:'VERSION_CONFLICT'}};
-              row.data=args.p_data;row.version++;return {data:structuredClone(row),error:null};
+              row.data=args.p_data;row.version++;row.updated_at=new Date().toISOString();
+              if(args.p_action==='archive')row.archived_at=args.p_archived_at;
+              if(args.p_action==='restore')row.archived_at=null;
+              const saved=structuredClone(row);
+              if(args.p_action==='archive')state.afterArchive?.();
+              return {data:saved,error:null};
             }
             if(name==='save_music_archive_guide')return {data:null,error:null};
             throw new Error('Unexpected database mutation '+name);
@@ -124,6 +135,86 @@ test("library service and real detail route hide another owner's same-artist arc
   assert.equal(response.headers.get("vary"), "Cookie");
   assert.doesNotMatch(await response.text(), new RegExp(OTHER_OWNER));
   assert.equal(mutations(h).length, 0);
+});
+
+test("artist deletion and restoration reject foreign ownership and stale versions before any write", async () => {
+  for (const action of ["archive", "restore"]) {
+    const h = await harness();
+    h.state.tables.music_archive_libraries = [libraryRow(OTHER_OWNER)];
+    await assert.rejects(() => h.mutateArchive(OWNER, { action, libraryId: LIBRARY, version: 1 }), status(404));
+    assert.equal(mutations(h).length, 0);
+    h.state.tables.music_archive_libraries = [{ ...libraryRow(), version: 2 }];
+    await assert.rejects(() => h.mutateArchive(OWNER, { action, libraryId: LIBRARY, version: 1 }), status(409));
+    assert.equal(mutations(h).length, 0);
+  }
+});
+
+test("artist deletion preserves saved music and reviews while cancelling only this owner's active library jobs", async () => {
+  const h = await harness();
+  const row = libraryRow(); const originalData = structuredClone(row.data);
+  h.state.tables.music_archive_libraries = [row, libraryRow(OTHER_OWNER, OTHER_LIBRARY)];
+  h.state.tables.submissions = [submissionRow()];
+  const originalSubmissions = structuredClone(h.state.tables.submissions);
+  h.state.tables.music_archive_jobs = ["queued", "running", "partial", "blocked", "failed", "completed", "cancelled"].map((jobStatus, index) => ({ id: `job-${index}`, owner_id: OWNER, library_id: LIBRARY, status: jobStatus, lease_token: "old-lease", lease_until: "2099-01-01T00:00:00Z", updated_at: "2020-01-01T00:00:00Z" }));
+  h.state.tables.music_archive_jobs.push(
+    { id: "other-owner", owner_id: OTHER_OWNER, library_id: LIBRARY, status: "running", updated_at: "2020-01-01T00:00:00Z" },
+    { id: "other-library", owner_id: OWNER, library_id: OTHER_LIBRARY, status: "queued", updated_at: "2020-01-01T00:00:00Z" },
+  );
+  const result = await h.mutateArchive(OWNER, { action: "archive", libraryId: LIBRARY, version: 1 });
+  assert.ok("library" in result && result.library?.archived_at);
+  assert.equal(row.version, 2); assert.deepEqual(row.data, originalData);
+  assert.deepEqual(h.state.tables.submissions, originalSubmissions);
+  assert.deepEqual(h.state.tables.music_archive_jobs.map(job => job.status), ["cancelled", "cancelled", "cancelled", "cancelled", "cancelled", "completed", "cancelled", "running", "queued"]);
+  assert.ok(h.state.tables.music_archive_jobs.slice(0, 5).every(job => job.lease_token === null && job.lease_until === null));
+  const cancellation = h.calls.find(call => call.table === "music_archive_jobs" && call.operations?.some(op => op.method === "update"))!;
+  assert.ok(hasFilter(cancellation, "owner_id", OWNER)); assert.ok(hasFilter(cancellation, "library_id", LIBRARY));
+  assert.ok(cancellation.operations?.some(op => op.method === "lte" && op.args[0] === "updated_at" && op.args[1] === row.updated_at));
+  assert.equal(h.calls.filter(call => call.method === "after").length, 0);
+  assert.deepEqual(h.calls.filter(call => call.name === "save_music_archive_library").map(call => call.args?.p_action), ["archive"]);
+});
+
+for (const failure of ["database", "network"] as const) test(`saved artist deletion remains successful when queue cancellation has a ${failure} failure`, async () => {
+  const h = await harness();
+  h.state.tables.music_archive_libraries = [libraryRow()];
+  h.state.tables.music_archive_jobs = [{ id: "running-job", owner_id: OWNER, library_id: LIBRARY, status: "running", updated_at: "2020-01-01T00:00:00Z" }];
+  h.state.jobCancellationFailure = failure;
+  const response = await h.apiPOST(jsonRequest({ action: "archive", libraryId: LIBRARY, version: 1 }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.ok(body.library.archived_at); assert.equal(body.library.version, 2);
+  assert.match(body.syncNotice, /아티스트를 삭제했습니다/);
+  assert.doesNotMatch(JSON.stringify(body), /private|token=|do-not-leak/);
+  assert.ok(h.state.tables.music_archive_libraries[0].archived_at);
+  assert.equal(h.state.tables.music_archive_jobs[0].status, "running");
+  assert.equal(h.calls.filter(call => call.name === "save_music_archive_library").length, 1);
+});
+
+test("restoring an owned artist preserves its music without automatically restarting cancelled jobs", async () => {
+  const h = await harness(); const row = libraryRow(); row.archived_at = "2026-10-01T00:00:00Z";
+  const originalData = structuredClone(row.data);
+  h.state.tables.music_archive_libraries = [row];
+  h.state.tables.music_archive_jobs = [{ id: "cancelled-job", owner_id: OWNER, library_id: LIBRARY, status: "cancelled", updated_at: "2020-01-01T00:00:00Z" }];
+  const result = await h.mutateArchive(OWNER, { action: "restore", libraryId: LIBRARY, version: 1 });
+  assert.ok("library" in result); assert.equal(result.library?.archived_at, null);
+  assert.deepEqual(row.data, originalData); assert.equal(row.version, 2);
+  assert.equal(h.state.tables.music_archive_jobs[0].status, "cancelled");
+  assert.equal(h.calls.filter(call => call.table === "music_archive_jobs" || call.method === "after").length, 0);
+});
+
+test("late deletion cancellation leaves jobs updated by a subsequent restore and sync untouched", async () => {
+  const h = await harness(); const row = libraryRow();
+  h.state.tables.music_archive_libraries = [row];
+  h.state.tables.music_archive_jobs = [{ id: "old-job", owner_id: OWNER, library_id: LIBRARY, status: "queued", updated_at: "2020-01-01T00:00:00Z" }];
+  h.state.afterArchive = () => {
+    const later = new Date(Date.now() + 1_000).toISOString();
+    row.archived_at = null; row.version = 3; row.updated_at = later;
+    Object.assign(h.state.tables.music_archive_jobs[0], { status: "running", updated_at: later, lease_token: "restored-lease" });
+    h.state.tables.music_archive_jobs.push({ id: "new-job", owner_id: OWNER, library_id: LIBRARY, status: "queued", updated_at: later });
+  };
+  await h.mutateArchive(OWNER, { action: "archive", libraryId: LIBRARY, version: 1 });
+  assert.equal(row.archived_at, null);
+  assert.deepEqual(h.state.tables.music_archive_jobs.map(job => job.status), ["running", "queued"]);
+  assert.equal(h.state.tables.music_archive_jobs[0].lease_token, "restored-lease");
 });
 
 test("member detail redacts provenance and audit records while admin detail retains them behind a role check", async () => {

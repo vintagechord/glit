@@ -261,8 +261,16 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
   if (body.action === "archive" || body.action === "restore") {
     const saved = await saveArchiveLibrary(owner, library, library.data, body.action, owner, body.action === "archive" ? new Date().toISOString() : null);
     if (body.action === "archive") {
-      const { error } = await createAdminClient().from("music_archive_jobs").update({ status: "cancelled", lease_token: null, lease_until: null, updated_at: new Date().toISOString() }).eq("owner_id", owner).eq("library_id", library.id).in("status", ["queued", "running", "partial", "blocked", "failed"]);
-      archiveDatabaseError(error);
+      try {
+        // Leave jobs updated by a later restore/resume alone. The worker lease
+        // and atomic commit independently reject an archived library.
+        const { error } = await createAdminClient().from("music_archive_jobs").update({ status: "cancelled", lease_token: null, lease_until: null, updated_at: new Date().toISOString() }).eq("owner_id", owner).eq("library_id", library.id).lte("updated_at", saved.updated_at).in("status", ["queued", "running", "partial", "blocked", "failed"]);
+        archiveDatabaseError(error);
+      } catch {
+        // The owner-scoped archive save already succeeded. A queue outage
+        // must not present a completed deletion as a failed operation.
+        return { library: saved, syncNotice: "아티스트를 삭제했습니다. 불러오기 작업의 중단 상태를 갱신하지 못했지만, 삭제된 아티스트에는 새 앨범이 저장되지 않습니다." };
+      }
     }
     return { library: saved };
   }
@@ -285,7 +293,7 @@ export async function mutateArchive(owner: string, raw: unknown, isAdmin = false
       const domesticUrl = linkedDomesticAlbumUrl(updated, release.id, creditSubmissions, library.id);
       if (domesticUrl) {
         try {
-          const fetched = await fetchDomesticAlbumCredits(domesticUrl, { signal: refreshDeadline });
+          const fetched = await fetchDomesticAlbumCredits(domesticUrl, { signal: refreshDeadline, acquirePermit: acquireArchiveProviderPermit });
           updated = mergeDomesticAlbumCredits(updated, release.id, fetched.album, fetched.provider, new Date().toISOString(), fetched.imageUrl);
           checked = true;
           if (fetched.partial) notices.push(`${release.title}: 일부 곡의 정보를 조회하지 못했습니다. 가져온 정보는 저장했습니다.`);

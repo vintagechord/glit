@@ -4,7 +4,7 @@ import type { ProviderSupport } from "@/lib/music-archive/providers";
 import type { AgencyGuide } from "@/lib/music-archive/guides";
 
 export type Library = { id: string; version: number; data: ArchiveData; archived_at?: string | null; updated_at?: string; summary?: { releaseCount: number; trackCount: number; needsCheck: number; inProgress: number; needsChanges: number; awaitingResult: number } };
-export type SyncJob = { id: string; library_id: string; provider: string; external_artist_id?: string; status: string; cursor?: { providerCursor?: { phase?: string; offset?: number; pending?: string[]; total?: number }; releaseIds?: string[]; scopeNote?: string }; counts?: Record<string, number>; error_code?: string | null; error_message?: string | null; checked_at?: string | null; updated_at?: string; scope_note?: string };
+export type SyncJob = { id: string; library_id: string; provider: string; external_artist_id?: string; status: string; stage?: "credits"; cursor?: { providerCursor?: { phase?: string; offset?: number; pending?: string[]; total?: number }; releaseIds?: string[]; scopeNote?: string }; counts?: Record<string, number>; error_code?: string | null; error_message?: string | null; checked_at?: string | null; updated_at?: string; scope_note?: string };
 export type SyncResponse = { job?: SyncJob; jobs?: SyncJob[]; runLibraryId?: string; syncNotice?: string };
 export const responseSyncJobs = (response: SyncResponse) => response.jobs ?? (response.job ? [response.job] : []);
 export const mergeSyncJobs = (current: SyncJob[], incoming: SyncJob[]) => [...incoming, ...current.filter((job) => !incoming.some((item) => item.id === job.id))];

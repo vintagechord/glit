@@ -14,7 +14,7 @@ type Row = Record<string, unknown>;
 type Operation = { method: string; args: unknown[] };
 type Call = { kind: string; table?: string; name?: string; operations?: Operation[]; args?: Row; url?: string };
 type Harness = typeof import("../src/lib/music-archive/sync") & {
-  state: { libraries: ArchiveLibrary[]; jobs: ArchiveSyncJob[]; submissions: Row[]; sources: Row[]; pages: Record<string, string>; failSourceId: string | null };
+  state: { libraries: ArchiveLibrary[]; jobs: ArchiveSyncJob[]; submissions: Row[]; sources: Row[]; pages: Record<string, string>; failSourceId: string | null; archiveOnFetch: boolean };
   calls: Call[];
   fetcher: typeof fetch;
 };
@@ -30,7 +30,7 @@ const bundle = build({
     plugin.onLoad({ filter: /.*/, namespace: "sync-fixture" }, ({ path }) => {
       const files: Record<string, string> = {
         "archive-sync-fixture": `
-          export const state={libraries:[],jobs:[],submissions:[],sources:[],pages:{},failSourceId:null};
+          export const state={libraries:[],jobs:[],submissions:[],sources:[],pages:{},failSourceId:null,archiveOnFetch:false};
           export const calls=[];
           const submissionStatuses=new Set(['DRAFT','SUBMITTED','PRE_REVIEW','WAITING_PAYMENT','IN_PROGRESS','RESULT_READY','COMPLETED']);
           const storage=table=>({music_archive_libraries:state.libraries,music_archive_jobs:state.jobs,submissions:state.submissions,music_archive_sources:state.sources})[table];
@@ -96,8 +96,9 @@ const bundle = build({
           export async function fetcher(input,init){
             const url=new URL(String(input));calls.push({kind:'fetch',url:url.toString()});
             if(!['https://www.melon.com','https://www.genie.co.kr'].includes(url.origin)||init?.method&&init.method!=='GET')throw new Error('Unexpected external request');
-            const key=url.pathname+'?'+(url.searchParams.get('albumId')??url.searchParams.get('axnm')??url.searchParams.get('artistId')??url.searchParams.get('xxnm'));
+            const key=url.pathname+'?'+(url.searchParams.get('albumId')??url.searchParams.get('axnm')??url.searchParams.get('artistId')??url.searchParams.get('xxnm')??url.searchParams.get('songId')??url.searchParams.get('xgnm'));
             if(!(key in state.pages))throw new Error('Missing fixture public page '+key);
+            if(state.archiveOnFetch)state.libraries[0].archived_at=new Date().toISOString();
             return new Response(state.pages[key]);
           }
         `,
@@ -126,6 +127,11 @@ async function harness(provider: "melon" | "genie" = "melon", ids = ["100"]) {
     h.state.pages["/detail/artistAlbum?12"] = `<div class="artist-album-list"><ul>${ids.map(id => `<li><a onclick="fnViewAlbumLayer('${id}');">앨범</a></li>`).join("")}</ul></div>`;
     for (const id of ids) h.state.pages[`/detail/albumInfo?${id}`] = `<div class="album-detail-infos"><h2 class="name">앨범 ${id}</h2><a onclick="fnGoMore('artistInfo','12');">우리 가수</a><!-- E. 앨범 기본 정보 --></div><table><tr class="list" songId="5${id}"><td class="number">1</td><td><a class="title" title="노래 ${id}">노래 ${id}</a><a class="artist" onclick="fnViewArtist(12);">우리 가수</a></td></tr></table>`;
   }
+  for (const id of ids) {
+    h.state.pages[provider === "melon" ? `/song/detail.htm?5${id}` : `/detail/songInfo?5${id}`] = provider === "melon"
+      ? `<div class="song_name"><strong>곡명</strong>노래 ${id}</div><ul class="list_person clfix"><li><a class="artist_name">공개 작곡가</a><span class="type">작곡</span></li><li><a class="artist_name">공개 편곡자</a><span class="type">편곡</span></li></ul><div class="lyric" id="d_video_summary">비저장 가사</div>`
+      : `<div class="song-header"><h2 class="name">노래 ${id}</h2></div><ul class="info-data"><li><span class="attr"><img alt="작곡가" /></span><span class="value"><a>공개 작곡가</a></span></li><li><span class="attr"><img alt="편곡자" /></span><span class="value"><a>공개 편곡자</a></span></li></ul><pre id="pLyrics">비저장 가사</pre>`;
+  }
   return h;
 }
 
@@ -136,7 +142,7 @@ for (const provider of ["melon", "genie"] as const) test(`${provider} worker per
   assert.equal(h.state.libraries[0].data.releases.length, 0);
   assert.equal(await h.runArchiveJob(LIBRARY), true);
   const job = h.state.jobs[0];
-  assert.equal(job.status, "completed", job.error_message ?? undefined);
+  assert.equal(job.status, "queued", job.error_message ?? undefined);
   assert.equal(job.counts.steps, 2);
   assert.deepEqual([job.counts.releases, job.counts.tracks, job.counts.managedTracks], [1, 1, 1]);
   assert.equal(job.error_code, null);
@@ -148,6 +154,13 @@ for (const provider of ["melon", "genie"] as const) test(`${provider} worker per
   assert.equal((payload.tracks as Row[])[0].managedByArtist, undefined);
   const creditLookup = h.calls.find(call => call.table === "submissions");
   assert.ok(creditLookup?.operations?.some(op => op.method === "eq" && op.args[0] === "user_id" && op.args[1] === OWNER));
+  await h.runArchiveJob(LIBRARY); await h.runArchiveJob(LIBRARY);
+  assert.equal(job.status, "completed", job.error_message ?? undefined);
+  assert.equal(job.counts.creditTracks, 1);
+  assert.equal(job.counts.creditTracksChecked, 1);
+  assert.deepEqual(h.state.libraries[0].data.works[0].contributors, [{ name: "공개 작곡가", role: "composition" }, { name: "공개 편곡자", role: "arrangement" }]);
+  assert.doesNotMatch(JSON.stringify([h.state.libraries, h.state.sources]), /비저장 가사/);
+  assert.equal(h.state.sources.filter(source => source.kind === "work").length, 1);
   assert.equal(await h.runArchiveJob(LIBRARY), false, "completed jobs cannot be claimed again");
 });
 
@@ -158,7 +171,8 @@ test("worker copies only the owning member's matched credits and leaves another 
   h.state.jobs.push({ ...structuredClone(h.state.jobs[0]), id: "30000000-0000-4000-8000-000000000002", library_id: OTHER_LIBRARY, owner_id: OTHER_OWNER });
   h.state.submissions.push(...[OWNER, OTHER_OWNER].map((owner, index) => ({ id: `40000000-0000-4000-8000-00000000000${index + 1}`, user_id: owner, type: "ALBUM", status: "COMPLETED", user_deleted_at: null, melon_url: "https://www.melon.com/album/detail.htm?albumId=100", album_tracks: [{ id: `50000000-0000-4000-8000-00000000000${index + 1}`, track_no: 1, track_title: "노래 100", composer: index ? "다른 회원 비공개 작곡가" : "내 작곡가" }] })));
   await h.runArchiveJob(LIBRARY); await h.runArchiveJob(LIBRARY);
-  assert.equal(h.state.jobs[0].status, "completed");
+  await h.runArchiveJob(LIBRARY); await h.runArchiveJob(LIBRARY);
+  assert.equal(h.state.jobs[0].status, "completed", h.state.jobs[0].error_message ?? undefined);
   assert.equal(h.state.jobs[1].status, "queued");
   assert.equal(h.state.libraries[1].data.releases.length, 0);
   assert.equal(h.state.libraries[0].data.works[0].contributors?.[0].name, "내 작곡가");
@@ -187,7 +201,7 @@ test("a mid-import storage failure preserves the checkpoint, redacts diagnostics
   await assert.rejects(h.resumeArchiveSync(OTHER_OWNER, JOB), /찾을 수 없습니다/);
   await h.resumeArchiveSync(OWNER, JOB);
   await h.runArchiveJob(LIBRARY);
-  assert.equal(h.state.jobs[0].status, "completed");
+  assert.equal(h.state.jobs[0].status, "queued");
   assert.equal(h.state.jobs[0].counts.steps, 3);
   assert.equal(h.state.jobs[0].counts.consecutiveErrors, 0);
   assert.deepEqual(h.state.jobs[0].cursor.releaseIds, ["100", "101"]);
@@ -196,4 +210,42 @@ test("a mid-import storage failure preserves the checkpoint, redacts diagnostics
   assert.equal(library.data.tracks.length, 2);
   assert.equal(h.state.sources.length, 2);
   assert.deepEqual(h.calls.filter(call => call.kind === "fetch").map(call => new URL(call.url!).searchParams.get("albumId")).filter(Boolean), ["100", "101", "101"]);
+});
+
+
+test("credit persistence failure resumes the same song after all albums are saved and preserves member corrections", async () => {
+  const h = await harness("melon", ["100", "101"]);
+  for (let step = 0; step < 4; step++) await h.runArchiveJob(LIBRARY);
+  const library = h.state.libraries[0];
+  assert.equal(library.data.releases.length, 2);
+  const cursor = structuredClone(h.state.jobs[0].cursor);
+  h.state.failSourceId = "5100";
+  await h.runArchiveJob(LIBRARY);
+  assert.equal(h.state.jobs[0].status, "partial");
+  assert.deepEqual(h.state.jobs[0].cursor, cursor);
+  assert.equal(library.data.works.length, 0, "failed credit source write cannot commit member data");
+  library.data = applyArchiveCommand(library.data, { type: "save_work", work: { id: "member-work", title: "노래 100", contributors: [{ name: "회원 수정 작곡가", role: "composition" }], institutionNumbers: [] } });
+  library.data = applyArchiveCommand(library.data, { type: "save_recording", recording: { id: "member-recording", title: "노래 100", workIds: ["member-work"] } });
+  library.data = applyArchiveCommand(library.data, { type: "update_track", trackId: "melon-track:100:5100", patch: { recordingId: "member-recording" } });
+  library.version++;
+  h.state.jobs[0].available_at = checked;
+  await h.resumeArchiveSync(OWNER, JOB);
+  for (let step = 0; step < 3; step++) await h.runArchiveJob(LIBRARY);
+  assert.equal(h.state.jobs[0].status, "completed", h.state.jobs[0].error_message ?? undefined);
+  assert.equal(h.state.jobs[0].counts.creditTracksChecked, 2);
+  assert.equal(library.data.works.find(work => work.id === "member-work")?.contributors?.[0].name, "회원 수정 작곡가");
+  assert.equal(library.data.tracks.find(track => track.id === "melon-track:100:5100")?.recordingId, "member-recording");
+  assert.equal(library.data.works.find(work => work.id === "melon-work:5101")?.contributors?.length, 2);
+  assert.doesNotMatch(JSON.stringify(h.state.sources), /회원 수정|비저장 가사/);
+  assert.deepEqual(h.calls.filter(call => call.kind === "fetch").map(call => new URL(call.url!).searchParams.get("songId")).filter(Boolean), ["5100", "5100", "5101"]);
+});
+
+test("deleting an artist during the external request prevents album and public source writes", async () => {
+  const h = await harness();
+  await h.runArchiveJob(LIBRARY);
+  h.state.archiveOnFetch = true;
+  await h.runArchiveJob(LIBRARY);
+  assert.equal(h.state.jobs[0].status, "cancelled");
+  assert.equal(h.state.libraries[0].data.releases.length, 0);
+  assert.equal(h.state.sources.length, 0);
 });
