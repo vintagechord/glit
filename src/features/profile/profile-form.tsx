@@ -10,6 +10,7 @@ import {
 } from "@/features/auth/actions";
 
 type ProfileFormProps = {
+  canChangePassword?: boolean;
   defaultValues: {
     name: string;
     company: string;
@@ -19,7 +20,7 @@ type ProfileFormProps = {
 
 const initialState: ActionState = {};
 
-export function ProfileForm({ defaultValues }: ProfileFormProps) {
+export function ProfileForm({ defaultValues, canChangePassword = true }: ProfileFormProps) {
   const [state, formAction, profilePending] = useActionState(updateProfileAction, initialState);
   const [values, setValues] = useState(defaultValues);
   const [passwordState, passwordFormAction, passwordPending] = useActionState(
@@ -115,7 +116,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
           {profilePending ? "저장 중..." : "프로필 저장"}
         </button>
       </form>
-      <div className="mt-8 rounded-[8px] border-2 border-border bg-background/70 p-4">
+      {canChangePassword && <div className="mt-8 rounded-[8px] border-2 border-border bg-background/70 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           비밀번호 변경
         </p>
@@ -187,7 +188,7 @@ export function ProfileForm({ defaultValues }: ProfileFormProps) {
             {passwordPending ? "변경 중..." : "비밀번호 변경"}
           </button>
         </form>
-      </div>
+      </div>}
     </>
   );
 }

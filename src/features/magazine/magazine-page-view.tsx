@@ -362,6 +362,7 @@ export async function MagazinePageView({
               <div>
                 <MagazineRequestForm
                   isAuthenticated={Boolean(user)}
+                  requiresContactEmail={Boolean(user && !user.email?.trim())}
                   requesterPhone={profile?.phone}
                   availableCredits={creditSummary.available}
                   magazineRequestsReady={creditSummary.magazineRequestsReady}

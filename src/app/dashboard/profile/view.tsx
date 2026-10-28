@@ -9,6 +9,8 @@ import {
 } from "@/components/dashboard/dashboard-shell";
 
 import { ProfileForm } from "@/features/profile/profile-form";
+import { ProfileSocialAccountsView } from "@/features/profile/profile-social-accounts-view";
+import { getProfileAuthDetails } from "@/features/profile/profile-auth";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -28,6 +30,8 @@ export async function ProfilePageView(config?: ShellConfig) {
     redirect(config?.loginPath ?? "/login");
   }
 
+  const english = config?.loginPath?.startsWith("/en/") ?? false;
+  const auth = getProfileAuthDetails(user);
   const { data: profile } = await supabase
     .from("profiles")
     .select("name, company, phone")
@@ -49,6 +53,7 @@ export async function ProfilePageView(config?: ShellConfig) {
           </h2>
           <div className="mt-5">
             <ProfileForm
+              canChangePassword={auth.canChangePassword}
               defaultValues={{
                 name: profile?.name ?? user.user_metadata?.name ?? "",
                 company: profile?.company ?? user.user_metadata?.company ?? "",
@@ -64,12 +69,14 @@ export async function ProfilePageView(config?: ShellConfig) {
               <Mail className="h-5 w-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] font-black text-muted-foreground">로그인 이메일</p>
+              <p className="text-[11px] font-black text-muted-foreground">{auth.hasEmailIdentity ? (english ? "Login email" : "로그인 이메일") : (english ? "Account email" : "계정 이메일")}</p>
               <p className="mt-1 break-all text-sm font-semibold text-foreground">
-                {user.email}
+                {auth.email ?? (english ? "Email not provided" : "제공된 이메일 없음")}
               </p>
             </div>
           </div>
+          {!auth.email && <p className="mt-4 text-xs leading-5 text-muted-foreground">{english ? "This social account does not provide an email address. Enter your contact email when submitting a review application." : "이 소셜 계정은 이메일을 제공하지 않습니다. 심의 안내를 받을 이메일은 접수 시 입력해주세요."}</p>}
+          <ProfileSocialAccountsView linkedProviders={auth.linkedProviders} english={english} />
         </div>
       </div>
     </DashboardShell>

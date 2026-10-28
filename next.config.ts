@@ -63,6 +63,12 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // OAuth callback queries must never become a subsequent Referer.
+        // This must follow the general site policy above.
+        source: "/auth/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
     ];
   },
 };

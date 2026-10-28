@@ -3085,6 +3085,7 @@ function englishPathFor(pathname: string) {
     "/submissions",
     "/login",
     "/signup",
+    "/complete-signup",
     "/forgot-password",
     "/reset-password",
     "/find-id",
@@ -3095,6 +3096,8 @@ function englishPathFor(pathname: string) {
     "/support",
     "/forms",
     "/about",
+    "/privacy",
+    "/terms",
     "/apply",
   ];
   const match = prefixes.find(

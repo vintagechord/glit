@@ -78,7 +78,7 @@ test("lookup and auth pages remove repeated headers while retaining required con
   const trackPage = readSource("src/features/track/track-page-view.tsx");
   const trackDetail = readSource("src/app/track/[token]/page.tsx");
   const trackForm = readSource("src/features/track/track-lookup-form.tsx");
-  const loginPage = readSource("src/app/login/page.tsx");
+  const loginPage = readSource("src/features/auth/login-page-view.tsx");
   const loginForm = readSource("src/features/auth/login-form.tsx");
   const forgotPassword = readSource("src/app/forgot-password/page.tsx");
 
@@ -91,7 +91,8 @@ test("lookup and auth pages remove repeated headers while retaining required con
   assert.match(trackForm, /조회 코드를 이메일로 받기/);
 
   assert.doesNotMatch(loginPage, /bauhaus-kicker mx-auto/);
-  assert.match(loginPage, /<h1[^>]*>로그인<\/h1>/);
+  assert.equal((loginPage.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(loginPage, /<h1[^>]*>[\s\S]*?"로그인"[\s\S]*?<\/h1>/);
   assert.match(loginForm, /htmlFor="login-email"/);
   assert.match(loginForm, /htmlFor="login-password"/);
   assert.doesNotMatch(forgotPassword, /bauhaus-kicker mx-auto/);

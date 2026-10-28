@@ -284,7 +284,7 @@ export async function createMagazineRequestAction(
       : "";
   const requesterName =
     (parsed.data.requesterName ?? profileName) || metadataName || "회원";
-  const requesterEmail = parsed.data.requesterEmail ?? user.email?.trim();
+  const requesterEmail = user.email?.trim() || parsed.data.requesterEmail;
   const requesterPhone = (parsed.data.requesterPhone ?? profilePhone) || null;
 
   if (!requesterEmail) {

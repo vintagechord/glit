@@ -14,8 +14,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,messages,receipts} from 'paid-notice-fixture';";
         const files: Record<string, string> = {
-          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000,current_order_id:null},order:null,orderItems:[],orderFlags:[],event:null,eventLookupError:false,email:'Owner@example.invalid',lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
-          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:{email:state.email}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},in(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null}:table==='submission_orders'?state.order:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null}),then(resolve,reject){return Promise.resolve({data:table==='submission_order_items'?state.orderItems:table==='submissions'?state.orderFlags:[],error:null}).then(resolve,reject)}};return q;}});`,
+          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000,current_order_id:null},order:null,orderItems:[],orderFlags:[],event:null,eventLookupError:false,email:'Owner@example.invalid',providers:[],userMissing:false,lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
+          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:state.userMissing?null:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},in(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null}:table==='submission_orders'?state.order:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null}),then(resolve,reject){return Promise.resolve({data:table==='submission_order_items'?state.orderItems:table==='submissions'?state.orderFlags:[],error:null}).then(resolve,reject)}};return q;}});`,
           "@/lib/email-transport": `${shared} export const sendTransactionalEmail=async message=>{messages.push(message);if(state.throwOperation===message.operation)throw Error('fixture failure');if(state.failedOperation===message.operation)return {ok:false};const key=message.operation+':'+message.to+':'+message.idempotencyKey;if(!receipts.has(key))receipts.set(key,{ok:state.queuedOperation!==message.operation,status:state.queuedOperation===message.operation?'retry':'accepted',queued:state.queuedOperation===message.operation,outboxId:'receipt-'+receipts.size});return receipts.get(key);};`,
           "@/lib/kakao": "export const sendKakaoOfficialNotification=async()=>({ok:true});",
         };
@@ -24,7 +24,7 @@ async function fixture() {
     } }],
   });
   const loaded = { exports: {} as Pick<typeof import("../src/lib/payments/notifications"), "sendPaidSubmissionNotificationsById"> & Pick<typeof import("../src/lib/email"), "sendAdminSubmissionReceiptEmail"> & {
-    state: { submission: Record<string, unknown> | null; order: Record<string, unknown> | null; orderItems: Record<string, unknown>[]; orderFlags: Record<string, unknown>[]; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
+    state: { submission: Record<string, unknown> | null; order: Record<string, unknown> | null; orderItems: Record<string, unknown>[]; orderFlags: Record<string, unknown>[]; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; providers: string[]; userMissing: boolean; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
     messages: EmailMessage[]; receipts: Map<string, EmailSendResult>;
   } };
   new Function("require", "module", "exports", built.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
@@ -224,4 +224,49 @@ test("an unreadable order falls back to the per-application notice instead of bl
   assert.equal(result.recorded, true);
   const customer = h.messages.find(message => message.operation === "submission update")!;
   assert.equal(customer.idempotencyKey, `payment-approved:SUBP-fixture-order:${submissionId}:owner@example.invalid`);
+});
+
+test("different no-email social contacts receive only their own paid application, even within one order", async () => {
+  const h = await orderFixture();
+  h.state.email = null;
+  h.state.providers = ["custom:naver"];
+  const applications = [
+    { id: submissionId, title: "First private title", artist: "First private artist", email: "first@example.invalid" },
+    { id: "22222222-2222-4222-8222-222222222222", title: "Second private title", artist: "Second private artist", email: "second@example.invalid" },
+  ];
+  h.state.orderItems = applications.map((application, index) => ({ submission_ref: application.id, title: application.title, artist_name: application.artist, type: "ALBUM", amount_krw: index ? 30000 : 50000 }));
+  for (const application of applications) {
+    Object.assign(h.state.submission!, { id: application.id, title: application.title, artist_name: application.artist, applicant_email: application.email });
+    assert.equal((await h.sendPaidSubmissionNotificationsById({ ...input, submissionId: application.id })).recorded, true);
+  }
+  assert.equal(h.messages.some(message => message.operation === "payment completed"), false);
+  const notices = h.messages.filter(message => message.operation === "submission update");
+  assert.equal(notices.length, 2);
+  for (const [index, notice] of notices.entries()) {
+    const own = applications[index], other = applications[1 - index];
+    assert.equal(notice.to, own.email);
+    assert.match(notice.html, new RegExp(own.title));
+    assert.match(notice.html, new RegExp(own.artist));
+    assert.doesNotMatch(notice.html, new RegExp(`${other.title}|${other.artist}|${other.id}|80,000|50,000|30,000|legacy-private`));
+    assert.equal(notice.idempotencyKey, `payment-approved:SUBP-fixture-order:${own.id}:${own.email}`);
+  }
+});
+
+test("social accounts retain Auth email priority and unavailable member lookups cannot use contacts", async () => {
+  const owner = await orderFixture();
+  owner.state.providers = ["custom:naver"];
+  await owner.sendPaidSubmissionNotificationsById(input);
+  const receipt = owner.messages.find(message => message.operation === "payment completed")!;
+  assert.equal(receipt.to, "owner@example.invalid");
+  assert.match(receipt.html, /Second title/);
+  for (const failure of ["error", "throw", "deleted"]) {
+    const h = await orderFixture();
+    h.state.email = null;
+    h.state.providers = ["custom:naver"];
+    h.state.lookupError = failure === "error";
+    h.state.lookupThrow = failure === "throw";
+    h.state.userMissing = failure === "deleted";
+    await h.sendPaidSubmissionNotificationsById(input);
+    assert.deepEqual(h.messages.map(message => message.operation), ["admin submission receipt"], failure);
+  }
 });

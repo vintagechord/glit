@@ -65,6 +65,8 @@ const englishRoutePrefixes = [
   "/support",
   "/forms",
   "/about",
+  "/privacy",
+  "/terms",
   "/apply",
 ];
 

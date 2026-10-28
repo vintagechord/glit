@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const basePath = pathname.replace(/^\/en(?=\/|$)/, "") || "/";
   const isArchiveResultRoute = /^\/mypage\/music\/results\/[0-9a-f-]+$/i.test(basePath);
   const isAdminRoute = basePath.startsWith("/admin");
-  const isAuthRoute = ["/login", "/signup", "/forgot-password", "/reset-password"].includes(basePath);
+  const isAuthRoute = ["/login", "/signup", "/complete-signup", "/confirm-email", "/forgot-password", "/reset-password"].includes(basePath);
   const isSubmissionFlow = /^\/(?:dashboard|mypage)\/(?:new|pay|cart)(?:\/|$)/.test(basePath) || basePath.startsWith("/apply");
   const shouldLoadChatbot = !isPaymentPopupRoute && !isArchiveResultRoute && !isAdminRoute && !isAuthRoute && !isSubmissionFlow;
 
