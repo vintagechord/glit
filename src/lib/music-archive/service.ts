@@ -10,6 +10,7 @@ import { lookupAppleArtist, lookupAppleAlbumMetadata } from "./apple";
 import { searchCatalogArtists, indexCatalogArtists } from "./catalog-search";
 import { searchDomesticArtists, lookupDomesticArtist } from "./domestic-catalog";
 import { searchStreamingArtists, lookupStreamingArtist } from "./streaming";
+import { searchAutomaticArtists } from "./automatic-artist-search";
 import { agencyGuides } from "./guides";
 import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
@@ -99,12 +100,18 @@ export async function searchOwnedSubmissions(owner: string, query: string, page 
 }
 
 export async function searchArchiveArtists(owner: string, params: URLSearchParams) {
-  const provider = params.get("provider") ?? "apple";
-  if (!["apple", "musicbrainz", "melon", "genie", "spotify", "youtube"].includes(provider)) return { items: [], total: 0, nextOffset: null, queryStatus: "unsupported", message: "아티스트 이름으로 앨범을 찾아주세요." };
+  const provider = params.get("provider") ?? "auto";
+  if (!["auto", "apple", "musicbrainz", "melon", "genie", "spotify", "youtube"].includes(provider)) return { items: [], total: 0, nextOffset: null, queryStatus: "unsupported", message: "아티스트 이름으로 앨범을 찾아주세요." };
   const rate = consumeRateLimit({ namespace: "archive-provider-search", identifier: owner, limit: 40, windowMs: 60000 });
   if (!rate.allowed) throw new ArchiveError("검색 요청이 많습니다. 잠시 후 다시 검색해주세요.", 429);
   const query = z.string().trim().min(1).max(200).parse(params.get("q") ?? "");
   const offset = Math.min(180, paging(Number(params.get("offset") ?? 0)));
+  if (provider === "auto") return searchAutomaticArtists(query, offset, getMusicProviderStatuses(), (source, text, signal) => {
+    const acquirePermit = async () => { signal.throwIfAborted(); await acquireArchiveProviderPermit(source); signal.throwIfAborted(); };
+    if (source === "apple") return searchCatalogArtists(text, 0, acquirePermit, { signal, includePreviews: false });
+    if (source === "melon" || source === "genie") return searchDomesticArtists(source, text, { acquirePermit, signal });
+    return searchStreamingArtists(source, text, { acquirePermit, signal });
+  }, params.get("searchId"));
   try {
     const result = provider === "apple"
       ? await searchCatalogArtists(query, offset, () => acquireArchiveProviderPermit("apple"))

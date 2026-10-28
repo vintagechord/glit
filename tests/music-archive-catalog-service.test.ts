@@ -3,6 +3,7 @@ import test from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
 import { createArchiveData, type ArchiveLibrary } from "../src/lib/music-archive/model";
+import type { ArtistCandidate } from "../src/lib/music-archive/providers";
 
 const OWNER = "10000000-0000-4000-8000-000000000001";
 const OTHER_OWNER = "10000000-0000-4000-8000-000000000002";
@@ -39,8 +40,8 @@ const bundle = build({
             return value.startsWith(pattern.slice(0,-1));
           }
           function query(table){
-            const operations=[]; const q={};
-            for(const method of ['select','eq','is','in','gt','lt','like','or','order','limit','upsert','insert','update','delete'])q[method]=(...args)=>{operations.push({method,args});return q;};
+            const operations=[]; const q={}; let singular=false;
+            for(const method of ['select','eq','is','in','gt','lt','like','or','order','limit','upsert','insert','update','delete','abortSignal'])q[method]=(...args)=>{operations.push({method,args});return q;};
             function run(single=false){
               calls.push({method:'query',table,operations:structuredClone(operations)});
               if(state.failure?.table===table&&operations.some(op=>op.method===state.failure.operation))return {data:null,error:state.failure};
@@ -78,7 +79,7 @@ const bundle = build({
               }
               return {data:structuredClone(single?(rows[0]??null):rows),error:null};
             }
-            q.maybeSingle=()=>Promise.resolve(run(true));q.single=()=>Promise.resolve(run(true));q.then=(ok,fail)=>Promise.resolve(run()).then(ok,fail);
+            q.maybeSingle=()=>{singular=true;return q;};q.single=()=>{singular=true;return q;};q.then=(ok,fail)=>Promise.resolve(run(singular)).then(ok,fail);
             return q;
           }
           export const client={from:query,rpc:async(name,args)=>{
@@ -126,12 +127,28 @@ function album(id: number, artistId: number): Row {
 function library(): Row {
   return { id: LIBRARY, owner_id: OWNER, version: 1, data: createArchiveData("Member private working name"), archived_at: null, created_at: "2026-09-08T00:00:00Z", updated_at: "2026-09-08T00:00:00Z" };
 }
-const search = (q: string, offset = 0) => new URLSearchParams({ q, offset: String(offset) });
+const search = (q: string, offset = 0) => new URLSearchParams({ provider: "apple", q, offset: String(offset) });
 const fetches = (h: Harness) => h.calls.filter(call => call.method === "fetch");
 const permits = (h: Harness) => h.calls.filter(call => call.name === "reserve_music_archive_provider_slot");
 const operation = (call: Call, name: string) => call.operations?.some(op => op.method === name);
 const post = (body: unknown) => new Request("https://onside.test/api/music-archive", { method: "POST", headers: { origin: "https://onside.test", "content-type": "application/json" }, body: JSON.stringify(body) });
 const connect = { action: "connect", libraryId: LIBRARY, version: 1, provider: "apple", url: "https://music.apple.com/kr/artist/100" };
+
+test("the authenticated default search aggregates once per owner request and preserves a working catalog on domestic failures", async () => {
+  const h = await harness();
+  h.state.appleSearchRows = [artist(100, "통합 테스트 아티스트")];
+  const response = await h.apiGET(new Request("https://onside.test/api/music-archive?action=search&q=통합 테스트 아티스트"));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.queryStatus, "success");
+  assert.deepEqual(body.items.map((item: ArtistCandidate) => item.provider), ["apple"]);
+  assert.ok(body.searchId);
+  assert.equal(body.providerResults.find((item: { provider: string }) => item.provider === "melon").status, "temporary_error");
+  assert.equal(h.calls.filter(call => call.method === "rate" && call.args?.namespace === "archive-provider-search").length, 1);
+  assert.equal(fetches(h).filter(call => new URL(call.url!).origin === "https://itunes.apple.com").length, 1, "automatic search does not issue optional image lookups");
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.doesNotMatch(JSON.stringify(body), /Unexpected external request|password/);
+});
 
 test("cached artist search serves disjoint pages with one search and one batched preview per page", async () => {
   const h = await harness();

@@ -12,6 +12,9 @@ const cursorSchema = z.object({
   provider: z.enum(["melon", "genie"]), version: z.literal(1), artistId: digits,
   page: z.number().int().min(1).max(501), pending: z.array(digits).max(30),
   seen: z.array(digits).max(5000), more: z.boolean(), phase: z.enum(["albums", "tracks", "done"]),
+  // Optional for existing v1 jobs. New Melon jobs retain the catalog total so a
+  // changed/missing pagination widget cannot silently finish a partial import.
+  total: z.number().int().min(0).max(5000).optional(),
 });
 export type DomesticCursor = z.infer<typeof cursorSchema>;
 const origin = (provider: DomesticProvider) => provider === "melon" ? "https://www.melon.com" : "https://www.genie.co.kr";
@@ -106,21 +109,45 @@ export async function lookupDomesticArtist(provider: DomesticProvider, id: strin
 }
 
 export function parseDomesticAlbumIds(provider: DomesticProvider, html: string) {
-  // Artist lists contain nested artist popovers (<ul>), so the first closing
-  // </ul> is not the end of the album list. Stop at its following script instead.
-  const start = provider === "melon" ? html.search(/<div class="list_album/) : html.search(/<div class="artist-album-list"/);
-  if (start < 0) return invalid("아티스트 앨범 목록 영역을 확인하지 못했습니다. 기존 자료는 유지됩니다.");
-  const source = html.slice(start).split(/<script\b/i)[0];
-  const pattern = provider === "melon" ? /goAlbumDetail\(['"](\d+)['"]\)/g : /fnViewAlbumLayer\(['"](\d+)['"]\)/g;
+  // Bound the exact container (including nested artist popovers), excluding
+  // recommendation widgets after it even when there is no intervening script.
+  const opening = [...html.matchAll(/<div\b[^>]*>/gi)].find(match => {
+    const classes = match[0].match(/\bclass\s*=\s*["']([^"']*)["']/i)?.[1].split(/\s+/) ?? [];
+    return classes.some(value => provider === "melon" ? /^list_album\d*$/.test(value) : value === "artist-album-list");
+  });
+  if (!opening) return invalid("아티스트 앨범 목록 영역을 확인하지 못했습니다. 기존 자료는 유지됩니다.");
+  const tail = html.slice(opening.index! + opening[0].length);
+  let depth = 1;
+  let end = -1;
+  for (const tag of tail.matchAll(/<\/?div\b[^>]*>/gi)) {
+    depth += /^<\//.test(tag[0]) ? -1 : 1;
+    if (!depth) { end = tag.index!; break; }
+  }
+  if (end < 0) return invalid("아티스트 앨범 목록이 완전하지 않습니다. 기존 자료는 유지됩니다.");
+  const source = tail.slice(0, end);
+  const pattern = provider === "melon" ? /goAlbumDetail\(\s*['"](\d+)['"]\s*\)/g : /fnViewAlbumLayer\(\s*['"](\d+)['"]\s*\)/g;
   const ids = [...new Set([...source.matchAll(pattern)].map(match => match[1]))];
-  if (ids.length > 30) return invalid("앨범 목록의 페이지 크기를 확인하지 못했습니다.");
-  if (!ids.length && !/등록된\s*앨범|앨범[\s\S]{0,30}없|발매[\s\S]{0,20}없/.test(plain(html))) return invalid("앨범 목록 구조를 확인하지 못했습니다. 기존 자료는 유지됩니다.");
+  if (ids.some(id => !digits.safeParse(id).success) || ids.length > (provider === "melon" ? 15 : 30)) return invalid("앨범 목록의 페이지 크기를 확인하지 못했습니다.");
+  if (!ids.length && !/등록된\s*앨범|앨범[\s\S]{0,30}없|발매[\s\S]{0,20}없/.test(plain(source))) return invalid("앨범 목록 구조를 확인하지 못했습니다. 기존 자료는 유지됩니다.");
   return ids;
 }
-export function normalizeDomesticAlbum(provider: DomesticProvider, html: string, albumId: string, artistId: string, checkedAt: string): ImportedRelease {
+
+function melonAlbumTotal(html: string) {
+  const all = html.match(/<a\b[^>]*\bradio-value\s*=\s*["']0["'][^>]*>([\s\S]*?)<\/a>/i)?.[1];
+  if (!all) return undefined;
+  const count = plain(all).match(/전체\s*앨범\s*\(([\d,]+)\)/)?.[1];
+  if (!count) return invalid("멜론의 전체 앨범 수를 확인하지 못했습니다.");
+  const total = Number(count.replace(/,/g, ""));
+  if (!Number.isSafeInteger(total) || total > 5000) return invalid("앨범 수집 범위에 도달했습니다. 확인한 자료는 유지됩니다.");
+  return total;
+}
+
+export function normalizeDomesticAlbum(provider: DomesticProvider, html: string, albumId: string, artistId: string, checkedAt: string, context: { listedArtistId?: string } = {}): ImportedRelease {
   requireId(albumId); requireId(artistId);
   const album = (provider === "melon" ? parseMelonAlbumPage : parseGenieAlbumPage)(html, albumId);
   if (!album.albumTitle || !album.tracks.length || album.tracks.length > 500) return invalid("앨범명과 수록곡을 확인하지 못했습니다. 완료 처리하지 않았습니다.");
+  const declaredTracks = provider === "melon" ? html.match(/<h[1-6]\b[^>]*>\s*수록곡\s*<span\b[^>]*>\s*\(([\d,]+)\)/i)?.[1] : undefined;
+  if (declaredTracks && Number(declaredTracks.replace(/,/g, "")) !== album.tracks.length) return invalid("앨범의 전체 수록곡과 조회한 곡 목록이 다릅니다. 누락된 곡을 완료 처리하지 않았습니다.");
   const rows = [...html.matchAll(provider === "melon" ? /<tr data-group-items="cd\d+">[\s\S]*?<\/tr>/g : /<tr class="list"[\s\S]*?<\/tr>/g)].map(match => match[0]);
   const rowById = new Map(rows.map(row => [provider === "melon" ? row.match(/goSongDetail\(['"](\d+)['"]\)/)?.[1] ?? row.match(/name="input_check"\s+value="(\d+)"/)?.[1] : row.match(/songId=["']\s*(\d+)\s*["']/i)?.[1] ?? row.match(/fnViewSongInfo\((\d+)\)/)?.[1], row]));
   if (rows.length !== album.tracks.length || rowById.size !== rows.length || rowById.has(undefined) || album.tracks.some(track => !rowById.has(track.songId))) return invalid("앨범의 전체 수록곡과 조회한 곡 목록이 다릅니다. 누락된 곡을 완료 처리하지 않았습니다.");
@@ -130,7 +157,7 @@ export function normalizeDomesticAlbum(provider: DomesticProvider, html: string,
     const disc = provider === "melon" ? Number(row?.match(/data-group-items="cd(\d+)"/)?.[1] ?? 1) : 1;
     return { externalId: track.songId, recordingId: null, title: track.trackTitle.slice(0, 500), version: "", artistName: track.artistName.slice(0, 500), artistIds: ids, position: track.trackNo, discNumber: Math.max(1, disc), durationMs: null, isrcs: [], managedByArtist: ids.includes(artistId), url: track.songUrl };
   });
-  if (new Set(tracks.map(track => track.externalId)).size !== tracks.length || !tracks.some(track => track.managedByArtist)) return invalid("선택한 아티스트의 수록곡 식별자를 확인하지 못했습니다. 다른 아티스트의 곡은 자동 연결하지 않습니다.");
+  if (new Set(tracks.map(track => track.externalId)).size !== tracks.length || (!tracks.some(track => track.managedByArtist) && context.listedArtistId !== artistId)) return invalid("선택한 아티스트의 수록곡 식별자를 확인하지 못했습니다. 다른 아티스트의 곡은 자동 연결하지 않습니다.");
   const info = provider === "melon" ? html.match(/<div class="section_info">([\s\S]*?)<div class="button d_album_like">/)?.[1] ?? "" : html.match(/<div class="album-detail-infos">([\s\S]*?)<!-- E\. 앨범 기본 정보/)?.[1] ?? "";
   const primaryIds = [...info.matchAll(provider === "melon" ? /goArtistDetail\(['"](\d+)['"]/g : /(?:fnViewArtist\(['"]?|fnGoMore\(['"]artistInfo['"],['"])(\d+)/g)].map(match => match[1]);
   return { provider, externalId: albumId, title: album.albumTitle.slice(0, 500), date: album.releaseDate, type: /싱글|single/i.test(album.albumType) ? "single" : /EP|미니/i.test(album.albumType) ? "ep" : /정규|album/i.test(album.albumType) ? "album" : "other", secondaryTypes: [], participation: !primaryIds.includes(artistId), artistName: album.artistName.slice(0, 500), artistIds: [...new Set(primaryIds)], barcode: null, version: "", country: "KR", tracks, url: albumUrl(provider, albumId), imageUrl: domesticAlbumArtwork(html, albumUrl(provider, albumId)), checkedAt };
@@ -145,26 +172,38 @@ export async function collectDomesticStep(provider: DomesticProvider, artistId: 
   if (new Set([...cursor.pending, ...cursor.seen]).size !== cursor.pending.length + cursor.seen.length || (cursor.phase === "tracks") !== (cursor.pending.length > 0) || (cursor.phase === "albums" && !cursor.more) || (cursor.phase === "done" && cursor.more)) throw new MusicProviderError("invalid_input", "수집 단계와 앨범 목록이 일치하지 않습니다.");
   const next: DomesticCursor = structuredClone(cursor);
   const checkedAt = new Date(options.now?.() ?? Date.now()).toISOString();
-  const scopeNote = `${label(provider)}의 공개 아티스트 앨범 목록과 수록곡 ID로 확인했습니다. 미공개·삭제 자료와 전체 발매 이력은 포함되지 않을 수 있습니다. 크레딧은 앨범의 정보 다시 가져오기에서 보완할 수 있습니다.`;
+  const scopeNote = `${label(provider)}의 공개 아티스트 전체 앨범 목록(참여 앨범 포함)과 수록곡 ID로 확인했습니다. 참여 앨범에서 다른 아티스트가 부른 곡은 관리 대상으로 자동 지정하지 않습니다. 미공개·삭제 자료는 포함되지 않을 수 있습니다. 크레딧은 앨범의 정보 다시 가져오기에서 보완할 수 있습니다.`;
   const releases: ImportedRelease[] = [];
   if (cursor.phase === "done") return { releases, nextCursor: null, status: "completed" as const, checkedAt, scopeNote };
   if (cursor.phase === "tracks" && cursor.pending.length) {
     const id = cursor.pending[0];
     const html = await request(provider, provider === "melon" ? "/album/detail.htm" : "/detail/albumInfo", provider === "melon" ? { albumId: id } : { axnm: id }, options);
-    releases.push(normalizeDomesticAlbum(provider, html, id, artistId, checkedAt));
+    // Only this durable catalog cursor proves that a release belongs to the
+    // chosen artist's list. Participation in writing/production need not give
+    // that artist a performer ID on any track; keep those tracks unmanaged.
+    releases.push(normalizeDomesticAlbum(provider, html, id, artistId, checkedAt, { listedArtistId: artistId }));
     next.pending.shift(); next.seen.push(id);
     if (!next.pending.length) next.phase = cursor.more ? "albums" : "done";
   } else {
     if (cursor.page > 500 || cursor.seen.length >= 5000) throw new MusicProviderError("invalid_response", "앨범 수집 범위에 도달했습니다. 확인한 자료는 유지됩니다.");
     const html = provider === "melon"
-      ? await request(provider, cursor.page === 1 ? "/artist/album.htm" : "/artist/albumPaging.htm", { artistId, ...(cursor.page > 1 ? { startIndex: String((cursor.page - 1) * 15 + 1), pageSize: "15", listType: "0", orderBy: "ISSUE_DATE" } : {}) }, options)
+      ? await request(provider, cursor.page === 1 ? "/artist/album.htm" : "/artist/albumPaging.htm", { artistId, listType: "0", orderBy: "ISSUE_DATE", ...(cursor.page > 1 ? { startIndex: String((cursor.page - 1) * 15 + 1), pageSize: "15" } : {}) }, options)
       : await request(provider, cursor.page === 1 ? "/detail/artistAlbum" : "/detail/bArtistAlbumList", { xxnm: artistId, ...(cursor.page > 1 ? { pg: String(cursor.page), pgsize: "10", otype: "newest", atype: "ALL" } : {}) }, options, cursor.page > 1);
     const ids = parseDomesticAlbumIds(provider, html);
+    if (provider === "melon") {
+      const total = melonAlbumTotal(html);
+      if (total !== undefined) next.total = total;
+      if (next.total !== undefined && ids.length !== Math.min(15, Math.max(0, next.total - (cursor.page - 1) * 15))) return invalid("멜론의 전체 앨범 수와 조회한 목록이 다릅니다. 누락된 앨범을 완료 처리하지 않았습니다.");
+    }
     next.pending = ids.filter(id => !cursor.seen.includes(id));
-    const unescaped = html.replace(/\\'/g, "'");
-    const pages = [...unescaped.matchAll(provider === "melon" ? /sendPage\(['"](\d+)['"]\)/g : /fnGoPage_ArtistAlbum\(['"](\d+)['"]/g)].map(match => Number(match[1]));
-    next.more = pages.some(value => value > (provider === "melon" ? (cursor.page - 1) * 15 + 1 : cursor.page));
+    const unescaped = html.replace(/\\u([\da-f]{4})/gi, (_, value: string) => String.fromCharCode(parseInt(value, 16))).replace(/\\(["'])/g, "$1");
+    const pages = [...unescaped.matchAll(provider === "melon" ? /sendPage\(\s*['"]?(\d+)['"]?\s*\)/g : /fnGoPage_ArtistAlbum\(['"](\d+)['"]/g)].map(match => Number(match[1]));
+    next.more = provider === "melon" && next.total !== undefined ? cursor.page * 15 < next.total : pages.some(value => value > (provider === "melon" ? (cursor.page - 1) * 15 + 1 : cursor.page));
+    // Older v1 cursors have no total. A full page without any recognizable
+    // navigation is ambiguous, so probe the next page instead of claiming done.
+    if (provider === "melon" && next.total === undefined && !pages.length && ids.length === 15) next.more = true;
     if (!next.pending.length && ids.length) return invalid("앨범 목록이 반복되어 수집을 중단했습니다. 같은 곡을 중복 저장하지 않았습니다.");
+    if (provider === "melon" && !next.more && next.total !== undefined && cursor.seen.length + next.pending.length !== next.total) return invalid("멜론의 전체 앨범 수와 수집한 앨범 수가 다릅니다. 확인한 자료는 유지됩니다.");
     next.page++; next.phase = next.pending.length ? "tracks" : "done";
   }
   return { releases, nextCursor: next.phase === "done" ? null : next, status: next.phase === "done" ? "completed" as const : "collecting" as const, checkedAt, scopeNote };

@@ -20,7 +20,7 @@ test.setTimeout(25000);
 let html: string;
 test.beforeAll(async () => { html = await archiveClientDocument("./src/features/music-archive/music-archive-client", "MusicArchiveClient"); });
 
-type Harness = { onsideReviews: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[]; libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; connectFailures: number; jobStatus: string; jobsArrayResponse: boolean };
+type Harness = { onsideReviews: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[]; libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; searchResponse?: Record<string, unknown>; searchDelay?: number; connectFailures: number; jobStatus: string; jobsArrayResponse: boolean };
 async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
   const harness: Harness = { onsideReviews: [], libraries: structuredClone(initial), jobs: [], reviews: [], writes: [], errors: [], searches: [], connectFailures: 0, jobStatus: "partial", jobsArrayResponse: false };
   page.on("pageerror", (error) => harness.errors.push(error.message));
@@ -29,7 +29,12 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
     if (url.pathname === "/mypage/music" && request.resourceType() === "document") { await route.fulfill({ contentType: "text/html", body: html }); return; }
     if (url.pathname === "/api/music-archive") {
       if (request.method() === "GET") {
-        if (url.searchParams.get("action") === "search") { harness.searches.push(request.url()); await route.fulfill({ json: { items: [candidateOne,candidateTwo].map((id,i) => ({ provider:"apple",externalId:id,name:"동명 아티스트",sortName:"Same Name",disambiguation:i ? "서울 인디 밴드" : "부산 재즈 연주자",country:"KR",type:"Group",url:`https://music.apple.com/kr/artist/${id}`,imageUrl:null,representativeRelease:null })), total:2,nextOffset:null,queryStatus:"success" } }); return; }
+        if (url.searchParams.get("action") === "search") {
+          harness.searches.push(request.url());
+          const response = harness.searchResponse ?? { items: [candidateOne,candidateTwo].map((id,i) => ({ provider:"apple",externalId:id,name:"동명 아티스트",sortName:"Same Name",disambiguation:i ? "서울 인디 밴드" : "부산 재즈 연주자",country:"KR",type:"Group",url:`https://music.apple.com/kr/artist/${id}`,imageUrl:null,representativeRelease:null })), total:2,nextOffset:null,queryStatus:"success" };
+          if (harness.searchDelay) await new Promise(resolve => setTimeout(resolve, harness.searchDelay));
+          await route.fulfill({ json: response }); return;
+        }
         if (url.searchParams.get("action") === "submissions") { await route.fulfill({ json:{submissions:[],nextPage:null} }); return; }
         const id = url.searchParams.get("libraryId");
         await route.fulfill({ json: memberArchiveResponse(id ? { library:harness.libraries.find((item) => item.id === id),jobs:harness.jobs,reviews:harness.reviews,onsideReviews:harness.onsideReviews,evidence:[],events:[{action:"admin audit secret"}] } : { libraries:harness.libraries,jobs:harness.jobs,providers,guides:agencyGuides,total:harness.libraries.length,nextPage:null }) }); return;
@@ -404,19 +409,92 @@ test("album editing connects a domestic album URL while preserving its imported 
 });
 
 
-test("provider selection sends the selected catalog and missing API setup offers official search", async ({page}) => {
+test("artist name automatically searches catalogs without asking members to select a service", async ({page}) => {
   const harness = await mount(page);
   await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
-  await page.getByLabel("검색할 음악 서비스").selectOption("genie");
+  await expect(page.getByLabel("검색할 음악 서비스")).toHaveCount(0);
   await page.getByRole("combobox", {name:"아티스트 이름", exact:true}).fill("이름 검색");
   await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(2);
-  expect(new URL(harness.searches.at(-1)!).searchParams.get("provider")).toBe("genie");
-  const prior = harness.searches.length;
-  await page.getByLabel("검색할 음악 서비스").selectOption("youtube");
+  expect(new URL(harness.searches.at(-1)!).searchParams.has("provider")).toBe(false);
+  await page.getByText("검색 서비스 안내 · 공식 사이트에서 찾기", {exact:true}).click();
   await expect(page.getByRole("dialog")).toContainText("YouTube 채널 검색은 서버 API 연결이 필요합니다.");
-  await expect(page.getByRole("button", {name:"아티스트 검색", exact:true})).toBeDisabled();
-  await expect(page.getByRole("link", {name:"공식 사이트에서 같은 이름 검색 ↗"})).toHaveAttribute("href", /youtube\.com\/results\?search_query=/);
-  expect(harness.searches).toHaveLength(prior);
+  await expect(page.getByRole("button", {name:"아티스트 검색", exact:true})).toBeEnabled();
+  await expect(page.getByRole("link", {name:"YouTube에서 검색 ↗"})).toHaveAttribute("href", /youtube\.com\/results\?search_query=/);
+  await expect(page.getByRole("link", {name:"Spotify에서 검색 ↗"})).toHaveAttribute("href", /open\.spotify\.com\/search\//);
+  expect(harness.writes).toHaveLength(0);
+});
+
+for (const width of [360, 1280]) test(`multi-service results preserve selected identity and partial search at ${width}px`, async ({page}, testInfo) => {
+  await page.setViewportSize({width,height:900});
+  const harness = await mount(page);
+  harness.searchResponse = { items: [
+    {provider:"melon",externalId:"882441",name:"빈티지코드",sortName:"빈티지코드",disambiguation:"인디 밴드",country:"KR",type:"Group",url:"https://www.melon.com/artist/timeline.htm?artistId=882441",imageUrl:null,representativeRelease:null},
+    {provider:"genie",externalId:"90001",name:"빈티지코드",sortName:"빈티지코드",disambiguation:"인디 밴드",country:"KR",type:"Group",url:"https://www.genie.co.kr/detail/artistInfo?xxnm=90001",imageUrl:null,representativeRelease:null},
+  ], total:2,nextOffset:null,queryStatus:"partial",message:"Apple Music 검색이 지연되어 확인된 결과를 먼저 표시합니다." };
+  await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
+  await page.getByRole("combobox", {name:"아티스트 이름", exact:true}).fill("빈티지코드");
+  await expect(page.getByRole("option")).toHaveCount(2);
+  await expect(page.getByRole("dialog")).toContainText("확인된 결과를 먼저 표시합니다.");
+  await expect(page.getByRole("option").first()).toContainText("멜론");
+  await expect(page.getByRole("option").last()).toContainText("지니뮤직");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.screenshot({path:testInfo.outputPath(`automatic-artist-search-${width}.png`),fullPage:true});
+  await page.getByRole("option").first().click();
+  await expect(page.getByRole("dialog")).toContainText("멜론에서 확인한 아티스트");
+  await page.getByRole("button", {name:"이 아티스트의 앨범 불러오기", exact:true}).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(harness.libraries[0].data.connections.map(item => [item.provider,item.externalArtistId])).toEqual([["melon","882441"]]);
+  expect(harness.errors).toEqual([]);
+});
+
+test("automatic search respects Korean composition and discards an obsolete response", async ({page}) => {
+  const harness = await mount(page);
+  await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
+  const input = page.getByRole("combobox", {name:"아티스트 이름", exact:true});
+  await input.dispatchEvent("compositionstart");
+  await input.fill("비");
+  await page.waitForTimeout(750);
+  expect(harness.searches).toHaveLength(0);
+  harness.searchDelay = 1000;
+  await input.dispatchEvent("compositionend");
+  await expect.poll(() => harness.searches.length).toBe(1);
+  await input.fill("");
+  await page.waitForTimeout(1100);
+  await expect(page.getByRole("option")).toHaveCount(0);
+  await expect(page.getByText("검색 결과가 없습니다.", {exact:false})).toHaveCount(0);
+  expect(harness.writes).toHaveLength(0);
+  expect(harness.errors).toEqual([]);
+});
+
+test("more automatic results retain the search snapshot and reset it for a new name", async ({page}) => {
+  const harness = await mount(page);
+  const item = (id: string) => ({provider:"melon",externalId:id,name:"이름 검색",sortName:"이름 검색",disambiguation:"",country:"",type:"",url:`https://www.melon.com/artist/timeline.htm?artistId=${id}`,imageUrl:null,representativeRelease:null});
+  harness.searchResponse = {items:[item("101")],nextOffset:20,searchId:"snapshot-one",queryStatus:"success"};
+  await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
+  const input = page.getByRole("combobox", {name:"아티스트 이름", exact:true});
+  await input.fill("이름 검색");
+  await expect(page.getByRole("option")).toHaveCount(1);
+  harness.searchResponse = {items:[item("101"),item("102")],nextOffset:null,searchId:"snapshot-one",queryStatus:"success"};
+  await page.getByRole("button", {name:"검색 결과 더 보기", exact:true}).click();
+  await expect(page.getByRole("option")).toHaveCount(2);
+  const more = new URL(harness.searches.at(-1)!);
+  expect(more.searchParams.get("searchId")).toBe("snapshot-one");
+  expect(more.searchParams.get("offset")).toBe("20");
+  await input.fill("새 이름");
+  await expect.poll(() => new URL(harness.searches.at(-1)!).searchParams.get("q")).toBe("새 이름");
+  expect(new URL(harness.searches.at(-1)!).searchParams.has("searchId")).toBe(false);
+  expect(harness.writes).toHaveLength(0);
+});
+
+test("partial empty search does not claim every service had no matching artist", async ({page}) => {
+  const harness = await mount(page);
+  harness.searchResponse = {items:[],nextOffset:null,queryStatus:"no_results",message:"멜론·지니 검색이 지연되어 확인한 서비스의 결과를 먼저 표시합니다."};
+  await page.getByRole("button", {name:"아티스트 추가", exact:true}).click();
+  await page.getByRole("combobox", {name:"아티스트 이름", exact:true}).fill("활동명");
+  await expect(page.getByRole("dialog")).toContainText("조회가 완료된 음악 서비스에서 결과를 찾지 못했습니다.");
+  await expect(page.getByRole("dialog")).toContainText("멜론·지니 검색이 지연");
+  await expect(page.getByRole("option")).toHaveCount(0);
+  await expect(page.getByRole("button", {name:"아티스트 검색", exact:true})).toBeEnabled();
   expect(harness.writes).toHaveLength(0);
 });
 
