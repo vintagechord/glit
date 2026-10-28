@@ -193,6 +193,34 @@ test("artist autocomplete confirms source identity while keeping private job det
   expect(harness.writes.map(item=>item.action)).toEqual(["create","connect"]); expect(harness.errors).toEqual([]);
 });
 
+for (const status of ["partial", "completed"] as const) test(`queued album import progress follows background ${status} status without a stale banner`, async ({ page }) => {
+  const harness = await mount(page); harness.jobStatus = "queued"; harness.jobsArrayResponse = true;
+  await page.getByRole("button", { name: "아티스트 추가", exact: true }).click();
+  const input = page.getByRole("combobox", { name: "아티스트 이름", exact: true });
+  await input.fill("동명 아티스트");
+  await expect(page.getByRole("listbox").getByRole("option")).toHaveCount(2);
+  await input.press("ArrowDown"); await input.press("Enter");
+  await page.getByRole("button", { name: "이 아티스트의 앨범 불러오기", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("앨범을 불러오고 있습니다.", { exact: true })).toHaveCount(1);
+
+  harness.jobs = harness.jobs.map(job => ({ ...job, status }));
+  if (status === "completed") {
+    const library = harness.libraries[0];
+    library.data = applyArchiveCommand(library.data, { type: "add_release", release: { id: "imported-album", title: "불러온 앨범", links: [] } });
+    library.version += 1;
+  }
+  // The real member client's periodic GET observes the changed worker status.
+  await expect(page.getByText("앨범을 불러오고 있습니다.", { exact: true })).toHaveCount(0);
+  if (status === "partial") await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toBeVisible();
+  else {
+    await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /불러온 앨범/ })).toBeVisible();
+  }
+  expect(harness.writes.map(item => item.action)).toEqual(["create", "connect"]);
+  expect(harness.errors).toEqual([]);
+});
+
 test("manual album and track creation preserves distinct recordings with concise editors",async ({page}) => {
   const harness=await mount(page);
   await page.getByRole("button",{name:"아티스트 추가",exact:true}).click(); await page.getByRole("button",{name:"직접 추가",exact:true}).click();

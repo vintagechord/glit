@@ -101,7 +101,7 @@ export function MusicArchiveClient() {
       }
       navigate(library.id); acceptLibrary(library);
       if (jobs.length) setDetail((previous) => previous?.library.id === library.id ? { ...previous, jobs: mergeSyncJobs(previous.jobs, jobs) } : previous);
-      setDialog(null); connectionDraft.current = null; setMessage(syncNotice || (jobs.some((job) => ["queued", "running"].includes(job.status)) ? "앨범을 불러오고 있습니다." : "아티스트를 저장했습니다."));
+      setDialog(null); connectionDraft.current = null; setMessage(syncNotice || (jobs.some((job) => ["queued", "running"].includes(job.status)) ? "" : "아티스트를 저장했습니다."));
     } catch (error) { setError(failure(error)); throw error; } finally { setBusy(false); }
   }
   const library = current?.library; const data = library?.data;

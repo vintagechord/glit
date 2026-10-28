@@ -45,7 +45,10 @@ export function mergeSubmissionCredits(input: ArchiveData, submissions: CreditSu
 export async function getOwnedCreditSubmissions(owner: string) {
   const submissions: CreditSubmission[] = [];
   for (let offset = 0; ; offset += 1000) {
-    const result = await createAdminClient().from("submissions").select("id,status,melon_url,archive_review_context,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,composer,lyricist,arranger)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).not("status", "in", "(DRAFT,PRE_REVIEW,CANCELLED)").order("updated_at", { ascending: false }).order("id").range(offset, offset + 999);
+    // submission_status is a PostgreSQL enum. CANCELLED is a defensive legacy
+    // value handled by matchArchiveReviews, but is not a value in this DB enum:
+    // including it in the SQL filter rejects the entire query before any rows.
+    const result = await createAdminClient().from("submissions").select("id,status,melon_url,archive_review_context,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,composer,lyricist,arranger)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).not("status", "in", "(DRAFT,PRE_REVIEW)").order("updated_at", { ascending: false }).order("id").range(offset, offset + 999);
     archiveDatabaseError(result.error);
     submissions.push(...(result.data ?? []));
     if (!result.data || result.data.length < 1000) break;
