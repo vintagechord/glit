@@ -291,34 +291,32 @@ html[lang="en"] {
   }
 
   .bauhaus-status-chip--info {
-    background: var(--bauhaus-blue);
+    background: #1556a4;
     color: #ffffff;
   }
 
   .bauhaus-status-chip--progress {
-    background: var(--bauhaus-blue);
+    background: #1556a4;
     color: #ffffff;
   }
 
   .bauhaus-status-chip--success {
-    background: var(--bauhaus-green);
+    background: #1f7a5a;
     color: #ffffff;
   }
 
   .bauhaus-status-chip--danger {
-    background: var(--bauhaus-red);
+    background: #d9362c;
     color: #ffffff;
+  }
+
+  .bauhaus-status-chip--attention {
+    background: #ff6b00;
+    color: #111111;
   }
 
   .dark .bauhaus-status-chip {
     border-color: var(--bauhaus-shadow);
-  }
-
-  .dark .bauhaus-status-chip--info,
-  .dark .bauhaus-status-chip--progress,
-  .dark .bauhaus-status-chip--success,
-  .dark .bauhaus-status-chip--danger {
-    color: #06111f;
   }
 
   .rounded-\[32px\],
