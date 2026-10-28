@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const fixtureEmail = "auth-ui@example.invalid";
 const fixturePassword = "Fixture-pass-123!";
 const connectionError = "인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요. 문제가 계속되면 고객센터에 문의해주세요.";
-type ActionResult = { error?: string; message?: string; retryAfterSeconds?: number; verificationPending?: boolean; fieldErrors?: Record<string,string> };
+type ActionResult = { notice?: "email_already_registered" | "email_not_registered" | "password_reset_sent"; error?: string; message?: string; retryAfterSeconds?: number; verificationPending?: boolean; fieldErrors?: Record<string,string> };
 
 /** UI coverage only: no real login, reset emails, or account changes. */
 async function mockAuth(page: Page, options: {
@@ -110,13 +110,16 @@ for (const error of ["이메일 또는 비밀번호를 확인해주세요.", con
   });
 }
 
-test("reset request displays a generic success without sending email", async ({ page }) => {
-  const message = "가입된 이메일이라면 비밀번호 재설정 메일을 보냈습니다. 메일함을 확인해주세요.";
-  const calls = await mockAuth(page, { actionResult: { message, retryAfterSeconds: 60 } });
+test("reset request displays a sent confirmation popup without sending real email", async ({ page }) => {
+  const message = "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.";
+  const calls = await mockAuth(page, { actionResult: { message, notice: "password_reset_sent", retryAfterSeconds: 60 } });
   await page.goto("/forgot-password");
   await page.getByLabel("이메일", { exact: true }).fill(fixtureEmail);
   await page.getByRole("button", { name: "링크 보내기", exact: true }).click();
-  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  const popup = page.getByRole("dialog", { name: "안내", exact: true });
+  await expect(popup).toContainText(message);
+  await popup.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText(message);
   await expect(page.getByLabel("이메일", { exact: true })).toHaveValue(fixtureEmail);
   await expect(page.getByRole("button", { name: /초 후 다시 보내기$/ })).toBeDisabled();
   await expect(page.getByText(/가장 최근 메일의 링크/)).toBeVisible();

@@ -7,14 +7,14 @@ let documentHtml = "";
 // auth provider, account creation, or session exchange is reachable here.
 test.beforeAll(async () => {
   const bundle = await build({
-    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ConfirmEmailForm} from './src/features/auth/confirm-email-form';import {AccountEmailForm} from './src/features/auth/account-email-form';import {PasswordRecoveryForm} from './src/features/auth/password-recovery-form';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(location.pathname.endsWith('/find-id')?<AccountEmailForm purpose="account" nextPath={nextPath}/>:location.pathname.endsWith('/reset-password')?<PasswordRecoveryForm nextPath={nextPath}/>:<ConfirmEmailForm nextPath={nextPath}/>);`, resolveDir: process.cwd(), loader: "tsx" },
+    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ConfirmEmailForm} from './src/features/auth/confirm-email-form';import {PasswordRecoveryForm} from './src/features/auth/password-recovery-form';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(location.pathname.endsWith('/reset-password')?<PasswordRecoveryForm nextPath={nextPath}/>:<ConfirmEmailForm nextPath={nextPath}/>);`, resolveDir: process.cwd(), loader: "tsx" },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' },
     plugins: [{ name: "confirmation-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(next\/(?:navigation|link)|\.\/actions)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
         "next/navigation": "export const usePathname=()=>location.pathname;",
         "next/link": "import React from 'react';export default function Link({children,...props}){return <a {...props}>{children}</a>}",
-        "./actions": "const call=(kind,form)=>{window.__fixture.calls.push({kind,form:Object.fromEntries(form)});return new Promise(resolve=>window.__fixture.resolve=resolve);};export const completePasswordRecoveryAction=(_,form)=>call('recovery',form);export const confirmSignupAction=(_,form)=>call('confirm',form);export const resendSignupAction=(_,form)=>call('resend',form);export const findAccountIdAction=(_,form)=>call('account',form);",
+        "./actions": "const call=(kind,form)=>{window.__fixture.calls.push({kind,form:Object.fromEntries(form)});return new Promise(resolve=>window.__fixture.resolve=resolve);};export const completePasswordRecoveryAction=(_,form)=>call('recovery',form);export const confirmSignupAction=(_,form)=>call('confirm',form);export const resendSignupAction=(_,form)=>call('resend',form);",
       }[path] }));
     } }],
   });
@@ -51,7 +51,7 @@ for (const english of [false, true]) {
   });
 }
 
-test("failed confirmation stays recoverable and email account lookup shows the generic response", async ({ page }) => {
+test("failed confirmation stays recoverable and verification email can be requested again", async ({ page }) => {
   await page.goto(`http://email-ui.test/confirm-email#token_hash=fixture-signup-token-123456&type=signup&signature=${"a".repeat(64)}`);
   await page.locator("#signup-new-password").fill("Fixture-password-123");
   await page.locator("#signup-confirm-password").fill("Fixture-password-123");
@@ -59,11 +59,11 @@ test("failed confirmation stays recoverable and email account lookup shows the g
   await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ error: "인증 링크가 만료되었습니다." }));
   await expect(page.getByRole("alert")).toHaveText("인증 링크가 만료되었습니다.");
   await expect(page.locator("#signup-email")).toBeVisible();
-  await page.goto("http://email-ui.test/find-id?next=https://evil.invalid");
-  await page.locator("#account-email").fill("owner@example.invalid");
+  await page.goto("http://email-ui.test/confirm-email?next=https://evil.invalid");
+  await page.locator("#signup-email").fill("owner@example.invalid");
   await page.getByRole("button", { name: "이메일로 받기", exact: true }).click();
-  await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ message: "가입된 이메일이라면 아이디 안내를 보내드립니다.", retryAfterSeconds: 60 }));
-  await expect(page.getByRole("status")).toHaveText("가입된 이메일이라면 아이디 안내를 보내드립니다.");
+  await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ message: "입력한 이메일로 인증 메일을 발송했습니다.", retryAfterSeconds: 60 }));
+  await expect(page.getByRole("status")).toHaveText("입력한 이메일로 인증 메일을 발송했습니다.");
   await expect(page.getByRole("button", { name: /초 후 다시 보내기/ })).toBeDisabled();
   await expect(page.getByRole("link", { name: "로그인", exact: true })).toHaveAttribute("href", "/login");
 });

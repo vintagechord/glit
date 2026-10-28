@@ -536,18 +536,6 @@ export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions 
   });
 }
 
-export async function sendAccountIdEmail(payload: EmailDeliveryOptions & LocalizedEmailOptions & { email: string; link?: string }): Promise<EmailSendResult> {
-  const link = normalizeAbsoluteUrl(payload.link);
-  const safeEmail = escapeHtml(payload.email);
-  return sendTransactionalEmail({
-    to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt,
-    subject: payload.english ? "[onside] Your Onside login ID" : "[onside] 가입 아이디 안내", operation: "account lookup",
-    html: payload.english
-      ? `<p>Your Onside login ID is the email address you registered with.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">Log in</a></p>` : ""}<p>If you did not request this, you can ignore this message.</p>`
-      : `<p>온사이드의 로그인 아이디는 가입한 이메일 주소입니다.</p><p><strong>${safeEmail}</strong></p>${link ? `<p><a href="${escapeHtml(link)}">로그인하기</a></p>` : ""}<p>직접 아이디 찾기를 요청하지 않았다면 이 메일을 무시해주세요.</p>`,
-  });
-}
-
 export type ReviewSummaryEmailRow = {
   name: string;
   status: string;

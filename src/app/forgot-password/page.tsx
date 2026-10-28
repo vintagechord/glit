@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 import { getAuthPageHref, getAuthReturnPath } from "@/features/auth/navigation";
 import { ManualEmailSupport } from "@/features/auth/manual-email-support";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
+import { useAuthNotice } from "@/features/auth/use-auth-notice";
 
 import {
   resetPasswordAction,
@@ -54,6 +55,7 @@ function ForgotPasswordContent() {
   );
   const pathname = usePathname();
   const localePrefix = pathname.startsWith("/en/") ? "/en" : "";
+  useAuthNotice(state, Boolean(localePrefix));
   const searchParams = useSearchParams();
   const nextPath = getAuthReturnPath(searchParams.get("next"), Boolean(localePrefix));
   const emailAvailable = getEmailDeliveryMode() === "transactional";
