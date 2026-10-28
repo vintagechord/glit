@@ -5,12 +5,14 @@ import { NavigationLatencyLogger } from "@/components/perf/navigation-latency-lo
 import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CenteredDialogHost } from "@/components/ui/centered-dialog-host";
+import { getBaseUrl } from "@/lib/url";
 
 const enableNavigationLatencyLogger =
   process.env.NODE_ENV !== "production" ||
   process.env.NEXT_PUBLIC_NAV_PERF_DEBUG === "true";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getBaseUrl()),
   title: {
     default: "온사이드",
     template: "%s | 온사이드",
