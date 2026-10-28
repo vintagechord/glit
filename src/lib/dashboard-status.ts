@@ -92,9 +92,16 @@ const dashboardStatusCache = new Map<
   string,
   { expiresAt: number; data: DashboardStatusData }
 >();
+const dashboardStatusCacheMaxUsers = 100;
+const dashboardStatusInflight = new Map<
+  string,
+  { promise: Promise<DashboardStatusResult>; bypassCache: boolean }
+>();
 
 export const clearDashboardStatusCache = (userId: string) => {
   dashboardStatusCache.delete(userId);
+  // Detach older reads so they cannot repopulate the cache after a mutation.
+  dashboardStatusInflight.delete(userId);
 };
 
 export const getDashboardStatusData = async (
@@ -106,8 +113,50 @@ export const getDashboardStatusData = async (
     if (cached && cached.expiresAt > Date.now()) {
       return { data: cached.data };
     }
+    if (cached) dashboardStatusCache.delete(userId);
   }
 
+  const inflight = dashboardStatusInflight.get(userId);
+  // An explicit refresh must not join a read that started before the refresh.
+  if (inflight && (!options.bypassCache || inflight.bypassCache)) {
+    return inflight.promise;
+  }
+
+  const entry = {
+    promise: Promise.resolve({} as DashboardStatusResult),
+    bypassCache: Boolean(options.bypassCache),
+  };
+  entry.promise = loadDashboardStatusData(userId).then((result) => {
+    if (
+      result.data && !result.error && dashboardStatusCacheTtlMs > 0 &&
+      dashboardStatusInflight.get(userId) === entry
+    ) {
+      const now = Date.now();
+      for (const [key, value] of dashboardStatusCache) {
+        if (value.expiresAt <= now) dashboardStatusCache.delete(key);
+      }
+      dashboardStatusCache.delete(userId);
+      dashboardStatusCache.set(userId, {
+        expiresAt: now + dashboardStatusCacheTtlMs,
+        data: result.data,
+      });
+      while (dashboardStatusCache.size > dashboardStatusCacheMaxUsers) {
+        const oldestKey = dashboardStatusCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        dashboardStatusCache.delete(oldestKey);
+      }
+    }
+    return result;
+  }).finally(() => {
+    if (dashboardStatusInflight.get(userId) === entry) {
+      dashboardStatusInflight.delete(userId);
+    }
+  });
+  dashboardStatusInflight.set(userId, entry);
+  return entry.promise;
+};
+
+async function loadDashboardStatusData(userId: string): Promise<DashboardStatusResult> {
   const recentResultCutoff = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -273,13 +322,21 @@ export const getDashboardStatusData = async (
     return pkg ?? null;
   };
 
-  if (packageIds.length) {
+  const missingPackageIds = [...new Set(
+    [...albumSubmissions, ...mvSubmissions]
+      .filter((submission) => !resolvePackage(submission))
+      .map((submission) => submission.package_id)
+      .filter((id): id is string => Boolean(id)),
+  )];
+
+  const loadPackages = async () => {
+    if (!packageIds.length) return;
     const [{ data: packages, error: packageError }, { data: packageStations, error: packageStationsError }] =
       await Promise.all([
-        admin
+        missingPackageIds.length ? admin
           .from("packages")
           .select("id, name, station_count")
-          .in("id", packageIds),
+          .in("id", missingPackageIds) : Promise.resolve({ data: [], error: null }),
         admin
           .from("package_stations")
           .select("package_id, station:stations ( id, code, name )")
@@ -321,12 +378,10 @@ export const getDashboardStatusData = async (
       });
       packageStationsMap.set(pkgId, merged);
     });
-  }
+  };
 
-  const albumStationsMap: Record<string, StationReviewRow[]> = {};
-  const mvStationsMap: Record<string, StationReviewRow[]> = {};
-
-  if (allSubmissionIds.length) {
+  const loadReviews = async (): Promise<StationReviewRow[]> => {
+    if (!allSubmissionIds.length) return [];
     const withoutTracks =
       "id, submission_id, station_id, status, result_note, updated_at, station:stations!station_reviews_station_id_fkey ( id, name, code )";
     const withLegacyTracks =
@@ -383,7 +438,16 @@ export const getDashboardStatusData = async (
       }
       reviewRows = (fallback.data ?? reviewRows) as StationReviewRow[];
     }
+    return reviewRows;
+  };
 
+  // Both sets depend only on the authorized submission IDs. Start them
+  // together instead of waiting for package metadata before review results.
+  const [, reviewRows] = await Promise.all([loadPackages(), loadReviews()]);
+  const albumStationsMap: Record<string, StationReviewRow[]> = {};
+  const mvStationsMap: Record<string, StationReviewRow[]> = {};
+
+  if (allSubmissionIds.length) {
     const reviewMap = new Map<
       string,
       { byId: Map<string, StationReviewRow>; byCode: Map<string, StationReviewRow> }
@@ -540,12 +604,5 @@ export const getDashboardStatusData = async (
     mvStationsMap,
   };
 
-  if (dashboardStatusCacheTtlMs > 0) {
-    dashboardStatusCache.set(userId, {
-      expiresAt: Date.now() + dashboardStatusCacheTtlMs,
-      data,
-    });
-  }
-
   return { data };
-};
+}

@@ -20,6 +20,26 @@ test.setTimeout(25000);
 let html: string;
 test.beforeAll(async () => { html = await archiveClientDocument("./src/features/music-archive/music-archive-client", "MusicArchiveClient"); });
 
+test("English music navigation and login return paths stay in the English site", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.context().route("**/*", async route => {
+    const request = route.request(); const url = new URL(request.url());
+    if (url.pathname === "/en/mypage/music" && request.resourceType() === "document") {
+      await route.fulfill({ contentType: "text/html", body: html }); return;
+    }
+    if (url.pathname === "/api/music-archive") {
+      await route.fulfill({ status: 401, json: { error: "로그인이 필요합니다." } }); return;
+    }
+    await route.fulfill({ status: 404, body: "Unexpected request blocked by the UI test." });
+  });
+  await page.goto("/en/mypage/music");
+  await expect(page.getByRole("link", { name: "로그인하고 내 음악 관리 시작", exact: true })).toHaveAttribute("href", "/en/login?next=%2Fen%2Fmypage%2Fmusic");
+  await expect(page.getByRole("link", { name: "Orders", exact: true })).toHaveAttribute("href", "/en/mypage/orders");
+  await expect(page.getByRole("link", { name: "My Music", exact: true })).toHaveAttribute("href", "/en/mypage/music");
+  expect(errors).toEqual([]);
+});
+
 type Harness = { onsideReviews: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[]; libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; searchResponse?: Record<string, unknown>; searchDelay?: number; connectFailures: number; archiveFailures?: number; archiveResponseLost?: boolean; jobStatus: string; jobsArrayResponse: boolean };
 async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
   const harness: Harness = { onsideReviews: [], libraries: structuredClone(initial), jobs: [], reviews: [], writes: [], errors: [], searches: [], connectFailures: 0, jobStatus: "partial", jobsArrayResponse: false };

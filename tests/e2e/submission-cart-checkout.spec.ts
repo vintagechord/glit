@@ -55,7 +55,7 @@ let isolatedDocument = "";
 async function buildIsolatedDocument() {
   const [bundle, styles] = await Promise.all([
     build({
-      stdin: { contents: `import React from "react"; import {createRoot} from "react-dom/client"; import {usePathname} from "next/navigation"; import {SubmissionCartCheckout} from "./src/components/dashboard/submission-cart-checkout"; import {SubmissionOrdersClient} from "./src/components/dashboard/submission-orders-client"; const f=window.__commerceFixture; function App(){const pathname=usePathname();const [props,setProps]=React.useState({pathname:location.pathname,items:f.initialItems});React.useEffect(()=>{if(pathname.endsWith('/cart')&&props.pathname!==pathname){let active=true;fetch('/__fixture/cart-props').then(r=>r.json()).then(items=>{if(active)setProps({pathname,items})});return()=>{active=false}}},[pathname,props.pathname]);return pathname.endsWith('/orders')?<SubmissionOrdersClient userId={f.userId}/>:props.pathname===pathname?<SubmissionCartCheckout userId={f.userId} initialItems={props.items}/>:<p>Fixture server props loading</p>} createRoot(document.getElementById("commerce-root")).render(<App/>);`, resolveDir: process.cwd(), loader: "tsx" },
+      stdin: { contents: `import React from "react"; import {createRoot} from "react-dom/client"; import {usePathname} from "next/navigation"; import {SubmissionCartCheckout} from "./src/components/dashboard/submission-cart-checkout"; import {SubmissionOrdersClient} from "./src/components/dashboard/submission-orders-client"; const f=window.__commerceFixture; function App(){const pathname=usePathname();const [props,setProps]=React.useState({pathname:location.pathname,items:f.initialItems});React.useEffect(()=>{if(pathname.endsWith('/cart')&&props.pathname!==pathname){let active=true;fetch('/__fixture/cart-props').then(r=>r.json()).then(items=>{if(active)setProps({pathname,items})});return()=>{active=false}}},[pathname,props.pathname]);return pathname.endsWith('/orders')?<SubmissionOrdersClient userId={f.userId} initialPage={f.initialOrders} initialError={f.initialOrdersError} initialFetchedAt={f.initialOrdersFetchedAt}/>:props.pathname===pathname?<SubmissionCartCheckout userId={f.userId} initialItems={props.items}/>:<p>Fixture server props loading</p>} createRoot(document.getElementById("commerce-root")).render(<App/>);`, resolveDir: process.cwd(), loader: "tsx" },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production"}' },
       plugins: [{ name: "test-navigation-only", setup(builder) {
         builder.onResolve({ filter: /^next\/(navigation|link)$/ }, args => ({ path: args.path, namespace: "test-next" }));
@@ -71,7 +71,7 @@ async function buildIsolatedDocument() {
 
 // All writes and gateway calls are intercepted, including on a deployed Next
 // page. No account, order, submission, email, or real payment is changed.
-async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders?: SubmissionOrder[]; identity?: string | null; live?: boolean; view?: "cart" | "orders"; english?: boolean; invalidIds?: string[]; pageSize?: number } = {}): Promise<Harness> {
+async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders?: SubmissionOrder[]; identity?: string | null; live?: boolean; view?: "cart" | "orders"; english?: boolean; invalidIds?: string[]; pageSize?: number; seedOrders?: boolean; initialOrdersError?: string; seedAgeMs?: number } = {}): Promise<Harness> {
   const { items = [], orders = [], identity = null, live = false, view = "cart", english = false } = options;
   const liveOrigin = new URL(process.env.NEXT_E2E_BASE_URL || "http://localhost:3000").origin;
   const harness: Harness = { items: structuredClone(items), orders: structuredClone(orders), writes: [], reads: [], unexpected: [], errors: [], bankError: null, returnError: null, holdReturn: false, invalidIds: options.invalidIds ?? [], pageSize: options.pageSize ?? 30, cardMode: "reject" };
@@ -83,7 +83,7 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
   await page.context().route("**/*", async route => {
     const request = route.request(); const url = new URL(request.url());
     if (!live && request.resourceType() === "document") {
-      const fixture = JSON.stringify({ view, userId: identity, initialItems: identity ? harness.items : [] }).replace(/</g, "\\u003c");
+      const fixture = JSON.stringify({ view, userId: identity, initialItems: identity ? harness.items : [], initialOrders: options.seedOrders ? { orders: harness.orders.slice(0, harness.pageSize), nextOffset: harness.orders.length > harness.pageSize ? harness.pageSize : null } : undefined, initialOrdersError: options.initialOrdersError, initialOrdersFetchedAt: options.seedOrders || options.initialOrdersError ? Date.now() - (options.seedAgeMs ?? 0) : undefined }).replace(/</g, "\\u003c");
       await route.fulfill({ contentType: "text/html", body: isolatedDocument.replace("__FIXTURE_JSON__", fixture) }); return;
     }
     if (!live && url.pathname === "/__fixture/cart-props" && request.method() === "GET") {
@@ -192,15 +192,16 @@ test.describe("isolated commerce account fixtures", () => {
   for (const identity of ["member-a", "member-b", null]) test(`${identity ?? "guest"}: only unpaid items without an order are payable`, async ({ page }) => {
     const harness = await mount(page, { items: mixedItems(), identity }); await verifyMixedCart(page); expect(harness.writes).toHaveLength(0); expectClean(harness);
   });
-  test("order polling does not cancel an ongoing slow refresh and retains the returned update", async ({ page }) => {
-    const harness = await mount(page, { view: "orders", orders: [bankGroup()], identity: "member-a" });
+  for (const seedOrders of [false, true]) test(`order polling does not cancel an ongoing slow refresh and retains the returned update (server seed: ${seedOrders})`, async ({ page }) => {
+    const harness = await mount(page, { view: "orders", orders: [bankGroup()], identity: "member-a", seedOrders });
+    const expectedReads = seedOrders ? 1 : 2;
     await page.clock.install();
     harness.holdOrders = true;
     try {
       await page.getByRole("button", { name: "새로고침", exact: true }).click();
-      await expect.poll(() => harness.reads.length).toBe(2);
+      await expect.poll(() => harness.reads.length).toBe(expectedReads);
       await page.clock.fastForward(15_001);
-      expect(harness.reads).toHaveLength(2);
+      expect(harness.reads).toHaveLength(expectedReads);
       harness.orders[0] = { ...harness.orders[0], status: "PAID", canReturnToCart: false };
       harness.holdOrders = false; harness.releaseOrders?.();
       await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeEnabled();
@@ -336,6 +337,52 @@ test.describe("isolated commerce account fixtures", () => {
     await expect(page.getByRole("article")).toHaveCount(3); await expect(page.getByRole("button", { name: "이전 주문 더 보기", exact: true })).toHaveCount(0);
     expect(harness.reads.map(read => read.offset)).toEqual([0, 2]);
     await page.getByRole("button", { name: "새로고침", exact: true }).click(); await expect(page.getByRole("article")).toHaveCount(2); expectClean(harness);
+  });
+  test("server-seeded orders avoid a duplicate read while pagination and focus refresh stay current", async ({ page }) => {
+    const harness = await mount(page, { view: "orders", orders: [order(0, "CARD_PENDING"), order(1, "CANCELED"), order(2, "REFUNDED")], identity: "member-a", pageSize: 2, seedOrders: true });
+    await expect(page.getByRole("article")).toHaveCount(2);
+    expect(harness.reads).toHaveLength(0);
+    await page.getByRole("button", { name: "이전 주문 더 보기", exact: true }).click();
+    await expect(page.getByRole("article")).toHaveCount(3);
+    expect(harness.reads.map(read => read.offset)).toEqual([2]);
+    harness.orders[0] = { ...harness.orders[0], status: "PAID", canReturnToCart: false };
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(orderRow(page, orderIds[0])).toContainText("결제 완료");
+    await expect(page.getByRole("article")).toHaveCount(3);
+    expect(harness.reads.map(read => read.offset)).toEqual([2, 0]);
+    await page.getByRole("button", { name: "새로고침", exact: true }).click();
+    await expect(page.getByRole("article")).toHaveCount(2);
+    expect(harness.reads.map(read => read.offset)).toEqual([2, 0, 0]);
+    expectClean(harness);
+  });
+  test("a failed server order read remains retryable without an automatic duplicate request", async ({ page }) => {
+    const message = "주문내역을 불러오지 못했습니다. 다시 시도해주세요.";
+    const harness = await mount(page, { view: "orders", orders: [order(0, "PAID")], identity: "member-a", initialOrdersError: message });
+    await expect(page.getByRole("alert")).toHaveText(message);
+    await expect(page.getByText("주문 내역이 없습니다.", { exact: true })).toHaveCount(0);
+    expect(harness.reads).toHaveLength(0);
+    await page.getByRole("button", { name: "새로고침", exact: true }).click();
+    await expect(orderRow(page, orderIds[0])).toContainText("결제 완료");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(harness.reads.map(read => read.offset)).toEqual([0]);
+    expectClean(harness);
+  });
+  test("cached order props revalidate on back navigation and restored browser pages", async ({ page }) => {
+    const harness = await mount(page, { view: "orders", orders: [order(0, "PAID")], identity: "member-a", seedOrders: true });
+    expect(harness.reads).toHaveLength(0);
+    await page.clock.install();
+    await page.evaluate(() => { history.pushState({}, "", "/mypage/cart"); window.dispatchEvent(new Event("popstate")); });
+    await expect(page.getByText("장바구니가 비어 있습니다.", { exact: true })).toBeVisible();
+    harness.orders[0] = { ...harness.orders[0], status: "REFUNDED" };
+    await page.clock.fastForward(6001);
+    await page.goBack();
+    await expect(orderRow(page, orderIds[0])).toContainText("환불 완료");
+    expect(harness.reads.map(read => read.offset)).toEqual([0]);
+    harness.orders[0] = { ...harness.orders[0], status: "REVIEW_REQUIRED" };
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await expect(orderRow(page, orderIds[0])).toContainText("확인 필요");
+    expect(harness.reads.map(read => read.offset)).toEqual([0, 0]);
+    expectClean(harness);
   });
   test("empty guest history requests no private data and exposes no checkout", async ({ page }) => {
     const harness = await mount(page, { view: "orders" });

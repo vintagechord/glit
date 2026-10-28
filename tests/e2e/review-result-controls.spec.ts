@@ -79,7 +79,15 @@ for (const width of [320, 640, 1440]) {
           };
         }));
         if (mode === "detail") reference = styles;
-        else expect(styles).toEqual(reference);
+        else if (mode !== "compact") expect(styles).toEqual(reference);
+        if (mode === "compact") {
+          await expect(page.locator("[data-station-row]")).toHaveCount(4);
+          for (const status of await page.locator("[data-station-status]").all()) {
+            const rect = (await status.boundingBox())!;
+            expect(rect.height).toBeLessThanOrEqual(40);
+            expect(await status.evaluate(element => getComputedStyle(element).boxShadow)).toBe("none");
+          }
+        }
         await expect(controls.nth(2)).toContainText("부분 적격");
         await expect(controls.nth(2)).toContainText("1곡 적격");
         await expect(controls.nth(2)).toContainText("1곡 부적격");

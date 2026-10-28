@@ -13,7 +13,12 @@ export function archiveClientDocument(modulePath: string, exportName: string) {
   const key = `${modulePath}:${exportName}`;
   if (!artifacts.has(key)) artifacts.set(key, (async () => {
     const [bundle, css] = await Promise.all([
-      build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {${exportName}} from '${modulePath}'; createRoot(document.getElementById('root')).render(React.createElement(${exportName}));`, resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production"}' }, minify: true }),
+      build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {${exportName}} from '${modulePath}'; createRoot(document.getElementById('root')).render(React.createElement(${exportName}));`, resolveDir: process.cwd(), loader: "tsx" }, bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production"}' }, minify: true,
+        plugins: [{ name: "archive-test-pathname", setup(builder) {
+          builder.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: "next/navigation", namespace: "archive-navigation" }));
+          builder.onLoad({ filter: /.*/, namespace: "archive-navigation" }, () => ({ loader: "js", resolveDir: process.cwd(), contents: `import {useSyncExternalStore} from 'react';const subscribe=listener=>{window.addEventListener('popstate',listener);return()=>window.removeEventListener('popstate',listener)};export const usePathname=()=>useSyncExternalStore(subscribe,()=>window.location.pathname);` }));
+        } }],
+      }),
       readFile(resolve("src/app/globals.css"), "utf8").then((css) => postcss([tailwind()]).process(css, { from: resolve("src/app/globals.css") })),
     ]);
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css.css}</style></head><body><div id="root"></div><script>${bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;

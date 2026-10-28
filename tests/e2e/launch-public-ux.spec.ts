@@ -26,7 +26,8 @@ for (const width of [360, 390, 430, 768, 1024, 1440]) {
     }
     await page.locator("summary").filter({ hasText: "어떤 심의가 필요한지 모르겠어요" }).click();
     await expect(page.getByRole("main").getByRole("link", { name: "문의하기", exact: true })).toHaveCount(0);
-    const support = page.getByRole("contentinfo").getByRole("link", { name: "문의하기", exact: true });
+    const support = page.getByRole("contentinfo").getByRole("link", { name: "고객센터", exact: true });
+    await expect(page.getByRole("contentinfo").getByRole("link", { name: /^(문의하기|Contact us)$/ })).toHaveCount(0);
     await expect(support).toHaveCount(1);
     await expect(support).toBeVisible();
     await expect(support).toHaveAttribute("href", "/support");
@@ -42,16 +43,18 @@ for (const width of [390, 1024, 1440]) for (const english of [false, true]) test
   await page.goto(english ? "/en" : "/");
   await expect(page.getByRole("complementary", { name: english ? "Email Delivery Notice" : "이메일 발송 안내", exact: true })).toHaveCount(0);
   await expect(page.getByText(english ? /Automated email is being prepared\./ : /이메일 자동 발송을 준비 중입니다\./)).toHaveCount(0);
-  const sample = page.getByText(english ? "Sample Data" : "예시 데이터", { exact: true }).locator("xpath=../..");
+  const sample = page.getByText(english ? "Sample" : "예시", { exact: true }).locator("xpath=../..");
   await expect(sample).toBeVisible();
   await expect(page.getByText(english ? "Fictional Progress Example" : "가상의 진행 예시", { exact: true })).toHaveCount(0);
   await expect(page.getByText("진행 화면 예시 보기", { exact: true })).toHaveCount(0);
-  await expect(sample).toContainText(english ? "Sample Data" : "예시 데이터");
+  await expect(sample).toContainText(english ? "Sample" : "예시");
   if (!english) await expect(sample).toContainText("방송국 6곳 중 1곳 결과 완료");
   await expect(sample).toContainText(english ? "Supplement Requested" : "보완 요청");
   await expect(sample).not.toContainText("Updated");
+  await expect(page.getByText(english ? "Manage your work's review records in one place." : "내 작품의 심의 기록을 한곳에서 관리하세요", { exact: true })).toHaveCount(0);
   const benefits = page.getByRole("region", { name: english ? "Your next steps with Onside" : "온사이드와 함께하는 심의 그 다음", exact: true });
   await expect(benefits.getByRole("button")).toHaveCount(3);
+  await expect(benefits.getByText(english ? "Preview" : "미리보기", { exact: true })).toHaveCount(0);
   const heading = page.getByRole("heading", { level: 1 });
   const apply = page.getByRole("main").getByRole("link", { name: english ? "Apply" : "심의 신청", exact: true });
   const headingBounds = (await heading.boundingBox())!;
@@ -98,11 +101,29 @@ test("English service cards preserve explicit purpose and locale", async ({ page
   }
   await page.locator("summary").filter({ hasText: "Which review do I need?" }).click();
   await expect(page.getByRole("main").getByRole("link", { name: "Contact us", exact: true })).toHaveCount(0);
-  const support = page.getByRole("contentinfo").getByRole("link", { name: "Contact us", exact: true });
+  const support = page.getByRole("contentinfo").getByRole("link", { name: "Support", exact: true });
   await expect(support).toHaveCount(1);
   await expect(support).toBeVisible();
   await expect(support).toHaveAttribute("href", "/en/support");
   await expect(support).toHaveAttribute("target", "_blank");
+});
+
+for (const english of [false, true]) test(`other brands include the Artmelon store (${english ? "en" : "ko"})`, async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto(english ? "/en" : "/");
+  const brands = page.locator("[data-brand-banner]");
+  await brands.scrollIntoViewIfNeeded();
+  const artmelon = brands.locator('a[href="https://artmelon.co.kr/"]');
+  for (let index = 0; index < 20 && !(await artmelon.count()); index++) {
+    await brands.getByRole("button", { name: english ? "Next banner" : "다음 배너", exact: true }).click();
+  }
+  await expect(artmelon).toBeVisible();
+  await expect(artmelon).toHaveAttribute("target", "_blank");
+  await expect(artmelon).toHaveAttribute("rel", "noopener noreferrer");
+  const logo = artmelon.getByRole("img", { name: "아트멜론 Artmelon", exact: true });
+  await expect.poll(() => logo.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(artmelon).toContainText(english ? "LP · CD · Merch · Art" : "LP · CD · 굿즈 · 예술상품");
+  expect(await artmelon.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
 });
 
 test("service choices reflow at 200 percent CSS zoom", async ({ page }, testInfo) => {

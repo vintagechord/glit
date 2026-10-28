@@ -88,7 +88,7 @@ function buildExampleState() {
 }
 
 const panelProps = {
-  stationRowsPerPage: 3,
+  stationRowsPerPage: 6,
   showPartialTrackBreakdown: false,
   showDetailLink: false,
   panelMinHeightClassName: "h-full lg:min-h-0",
@@ -123,6 +123,7 @@ function normalizeStationsMap(
 export function HomeSessionPanelFallback() {
   return (
     <HomeReviewPanel
+      key="loading"
       isLoggedIn={false}
       albumSubmissions={[]}
       mvSubmissions={[]}
@@ -152,6 +153,7 @@ export async function HomeSessionPanel() {
     const exampleState = buildExampleState();
     return (
       <HomeReviewPanel
+        key="guest"
         isLoggedIn={false}
         albumSubmissions={exampleState.albumSubmissions}
         mvSubmissions={exampleState.mvSubmissions}
@@ -173,6 +175,7 @@ export async function HomeSessionPanel() {
 
   return (
     <HomeReviewPanel
+      key={user.id}
       isLoggedIn
       viewerId={user.id}
       albumSubmissions={result.data?.albumSubmissions ?? []}

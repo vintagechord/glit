@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowLeft, ChevronRight, LoaderCircle, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { DashboardShell, englishDefaultDashboardTabs } from "@/components/dashboard/dashboard-shell";
 import type { ArchiveCommand, ArchiveRelease, ArchiveTrack } from "@/lib/music-archive/model";
 import type { ArtistCandidate, MusicProviderLink } from "@/lib/music-archive/providers";
 import { archiveRequest, availableImportProviders, mergeSyncJobs, responseSyncJobs, type ArchiveIndex, type Library, type LibraryDetail, type SyncJob, type SyncResponse } from "./types";
@@ -25,6 +26,9 @@ type Dialog = { type: "add_artist" | "connect" | "artist" | "release" | "track";
 const failure = (error: unknown) => error instanceof Error ? error.message : "요청을 처리하지 못했습니다.";
 
 export function MusicArchiveClient() {
+  const pathname = usePathname();
+  const english = pathname === "/en" || pathname.startsWith("/en/");
+  const localePrefix = english ? "/en" : "";
   const [index, setIndex] = useState<ArchiveIndex | null>(null);
   const [detail, setDetail] = useState<LibraryDetail | null>(null);
   const latest = useRef<Library | null>(null); const activeArtist = useRef(""); const connectionDraft = useRef<Library | null>(null);
@@ -170,10 +174,10 @@ export function MusicArchiveClient() {
     setMessage(notice);
   }
   const panelTitle = dialog?.type === "add_artist" ? "아티스트 추가" : dialog?.type === "connect" ? "앨범 찾아보기" : dialog?.type === "artist" ? "아티스트 수정" : dialog?.type === "release" ? (dialog.release ? "앨범 수정" : "앨범 추가") : dialog?.track ? "트랙 수정" : "트랙 추가";
-  return <DashboardShell title="내 음악 관리" description="내 음악과 심의·등록 정보를 한곳에서 관리하세요." activeTab="music" action={!artistId ? <Button primary disabled={loading || loginRequired} onClick={() => setDialog({ type: "add_artist" })}><Plus className="h-4 w-4" aria-hidden />아티스트 추가</Button> : undefined}>
+  return <DashboardShell title="내 음악 관리" description="내 음악과 심의·등록 정보를 한곳에서 관리하세요." activeTab="music" tabs={english ? englishDefaultDashboardTabs : undefined} contextLabel={english ? "My Page" : "마이페이지"} action={!artistId ? <Button primary disabled={loading || loginRequired} onClick={() => setDialog({ type: "add_artist" })}><Plus className="h-4 w-4" aria-hidden />아티스트 추가</Button> : undefined}>
     <div className="space-y-5" data-testid="music-archive">
       {error && <Notice error>{error}</Notice>}{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
-      {loading ? <p role="status" className="flex items-center justify-center gap-2 py-10"><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />내 음악을 불러오고 있습니다.</p> : loginRequired ? <Notice><Link className="font-bold underline" href="/login?next=%2Fmypage%2Fmusic">로그인하고 내 음악 관리 시작</Link></Notice> : index && <>
+      {loading ? <p role="status" className="flex items-center justify-center gap-2 py-10"><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />내 음악을 불러오고 있습니다.</p> : loginRequired ? <Notice><Link className="font-bold underline" href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/mypage/music`)}`}>로그인하고 내 음악 관리 시작</Link></Notice> : index && <>
         {!artistId ? <>
           {!libraries.length ? <div className={`${panelClass} space-y-3 py-12 text-center`}><Music2 className="mx-auto h-9 w-9" aria-hidden /><h2 className="font-black">내 아티스트를 추가해 주세요</h2><p className="text-sm text-muted-foreground">발매한 음악을 찾아 한곳에 모아드립니다.</p></div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{libraries.map((item) => <article key={item.id} aria-labelledby={`artist-card-${item.id}`} className={`${panelClass} space-y-3`}>
             <button type="button" disabled={busy} onClick={() => navigate(item.id)} className="flex w-full items-center gap-3 rounded-lg text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"><Cover small kind="artist" src={item.data.artist.imageUrl} fallbackSources={item.data.releases.filter(release => !release.excluded && !release.mergedInto).map(release => release.imageUrl)} title={item.data.artist.name} /><span className="min-w-0 flex-1"><strong id={`artist-card-${item.id}`} className="block break-words text-lg">{item.data.artist.name}</strong><span className="mt-1 block text-sm text-muted-foreground">앨범 {libraryDisplayCounts(item).releaseCount}개 · 트랙 {libraryDisplayCounts(item).trackCount}개</span></span><ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></button>

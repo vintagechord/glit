@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { ArrowRight, CreditCard } from "lucide-react";
+import { ArrowRight, ChevronRight, CreditCard } from "lucide-react";
 import { ReviewResultControl } from "@/components/review-result-control";
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { formatDate } from "@/lib/format";
@@ -53,6 +53,42 @@ type SubmissionSummary = {
 
 type TabKey = "album" | "mv";
 
+type ReviewPanelState = {
+  submissions: SubmissionSummary[];
+  stationsById: Record<string, StationItem[]>;
+  index: number;
+};
+
+const preferLatestReviewRow = <T extends { updated_at: string }>(incoming: T, existing?: T): T =>
+  existing && Date.parse(existing.updated_at) > Date.parse(incoming.updated_at) ? existing : incoming;
+
+function reconcileStationRows(previous: StationItem[], incoming: StationItem[]) {
+  const previousRows = new Map(previous.map((row) => [row.id, row]));
+  const byStationId = new Map(previous.filter((row) => row.station?.id).map((row) => [row.station!.id, row]));
+  const byStationCode = new Map(previous.filter((row) => row.station?.code).map((row) => [row.station!.code, row]));
+  return incoming.map((row) => preferLatestReviewRow(row,
+    previousRows.get(row.id) ?? byStationId.get(row.station?.id) ?? byStationCode.get(row.station?.code),
+  ));
+}
+
+function reconcileReviewState(
+  previous: ReviewPanelState,
+  submissions: SubmissionSummary[],
+  stationsById: Record<string, StationItem[]>,
+  resetSelection: boolean,
+): ReviewPanelState {
+  const selectedId = resetSelection ? null : previous.submissions[previous.index]?.id;
+  const previousSubmissions = new Map(previous.submissions.map((item) => [item.id, item]));
+  const selectedIndex = selectedId ? submissions.findIndex((item) => item.id === selectedId) : -1;
+  return {
+    submissions: submissions.map((item) => preferLatestReviewRow(item, resetSelection ? undefined : previousSubmissions.get(item.id))),
+    stationsById: Object.fromEntries(Object.entries(stationsById).map(([id, rows]) => [
+      id, resetSelection ? rows : reconcileStationRows(previous.stationsById[id] ?? [], rows),
+    ])),
+    index: selectedIndex >= 0 ? selectedIndex : resetSelection ? 0 : Math.max(0, Math.min(previous.index, submissions.length - 1)),
+  };
+}
+
 const getSubmissionTimestamp = (submission?: SubmissionSummary | null) => {
   if (!submission) return 0;
   const parsed = Date.parse(submission.created_at ?? submission.updated_at);
@@ -81,6 +117,7 @@ const getPreferredReviewTab = (
 };
 
 type DashboardStatusResponse = {
+  viewerId?: string;
   albumSubmissions: SubmissionSummary[];
   mvSubmissions: SubmissionSummary[];
   albumStationsMap: Record<string, StationItem[]>;
@@ -398,10 +435,10 @@ function StationLogo({
   const key = (station?.name ?? station?.code ?? "").trim().toUpperCase();
   const visibilityClass = hideOnMobile ? "hidden sm:inline-flex" : "inline-flex";
   const logoFrameClass = compact
-    ? "h-10 w-[96px]"
+    ? "h-8 w-[76px]"
     : "h-11 w-[112px] sm:h-12 sm:w-[132px]";
   const fallbackFrameClass = compact
-    ? "min-h-10 w-[96px]"
+    ? "min-h-8 w-[76px]"
     : "min-h-11 w-[112px] sm:min-h-12 sm:w-[132px]";
   const mappedLogo = getLocalStationLogoSource(station);
 
@@ -420,7 +457,7 @@ function StationLogo({
   if (src) {
     return (
       <span
-        className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-white p-1.5 shadow-sm`}
+        className={`${visibilityClass} ${logoFrameClass} shrink-0 items-center justify-center overflow-hidden bg-white p-1.5 ${compact ? "rounded-[6px]" : "rounded-[8px] border border-border/60 shadow-sm"}`}
       >
         <Image
           src={src}
@@ -445,6 +482,50 @@ function StationLogo({
     >
       {getStationName(station)}
     </span>
+  );
+}
+
+function CompactStationRow({
+  station,
+  status,
+  onClick,
+}: {
+  station: StationItem["station"];
+  status: ReturnType<typeof getDisplayStatusForReview>;
+  onClick?: () => void;
+}) {
+  const stationName = getStationName(station);
+  const statusClass = status.tone.includes("--danger")
+    ? "bg-rose-50 text-rose-700 dark:bg-rose-400/15 dark:text-rose-200"
+    : status.tone.includes("--success")
+      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-200"
+      : status.needsAttention
+        ? "bg-orange-50 text-orange-700 dark:bg-orange-400/15 dark:text-orange-200"
+        : status.key === "WAITING_SUBMISSION"
+          ? "bg-foreground/5 text-muted-foreground"
+          : "bg-blue-50 text-blue-700 dark:bg-blue-400/15 dark:text-blue-200";
+  const content = <>
+    <StationLogo station={station} compact />
+    <span className="flex min-w-0 flex-1 flex-col items-end gap-1">
+      <span data-station-status className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-4 ${statusClass}`}>
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+        <span>{status.label}</span>
+      </span>
+      {status.summaryText ? <span className="max-w-full text-right text-[10px] leading-4 text-muted-foreground">{status.summaryText}</span> : null}
+    </span>
+    <span className="flex w-3 shrink-0 justify-end" aria-hidden="true">
+      {onClick ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+    </span>
+  </>;
+  const className = "flex min-h-[50px] w-full items-center gap-2.5 px-3 py-2 text-left";
+  return onClick ? (
+    <button type="button" data-review-result-control data-station-row onClick={onClick}
+      aria-label={`${stationName} ${status.label} 결과 보기`}
+      className={`${className} cursor-pointer transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary`}>
+      {content}
+    </button>
+  ) : (
+    <span data-review-result-control data-station-row className={className}>{content}</span>
   );
 }
 
@@ -486,6 +567,7 @@ export function HomeReviewPanel({
   guestToken?: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const supabase = React.useMemo(
@@ -514,6 +596,17 @@ export function HomeReviewPanel({
     stationsById: mvStationsMap,
     index: 0,
   }));
+  const previousViewer = React.useRef(viewerId);
+  React.useEffect(() => {
+    const resetSelection = previousViewer.current !== viewerId;
+    previousViewer.current = viewerId;
+    setAlbumState((previous) => reconcileReviewState(previous, albumSubmissions, albumStationsMap, resetSelection));
+    setMvState((previous) => reconcileReviewState(previous, mvSubmissions, mvStationsMap, resetSelection));
+    if (resetSelection) {
+      hasManualTabSelection.current = Boolean(initialTab);
+      setTab(getPreferredReviewTab(albumSubmissions, mvSubmissions, initialTab));
+    }
+  }, [albumStationsMap, albumSubmissions, initialTab, mvStationsMap, mvSubmissions, viewerId]);
   const [remoteStatus, setRemoteStatus] = React.useState<
     "idle" | "loading" | "loaded" | "error"
   >("idle");
@@ -576,6 +669,12 @@ export function HomeReviewPanel({
           );
           return;
         }
+        if (json.viewerId !== viewerId) {
+          setRemoteStatus("error");
+          setRemoteErrorMessage("로그인 정보가 변경되어 다시 확인하고 있습니다.");
+          router.refresh();
+          return;
+        }
         const normalizeMap = (map: Record<string, StationItem[]>) =>
           Object.fromEntries(
             Object.entries(map ?? {}).map(([key, value]) => [
@@ -583,16 +682,8 @@ export function HomeReviewPanel({
               normalizeStations(value),
             ]),
           );
-        setAlbumState({
-          submissions: json.albumSubmissions ?? [],
-          stationsById: normalizeMap(json.albumStationsMap ?? {}),
-          index: 0,
-        });
-        setMvState({
-          submissions: json.mvSubmissions ?? [],
-          stationsById: normalizeMap(json.mvStationsMap ?? {}),
-          index: 0,
-        });
+        setAlbumState((previous) => reconcileReviewState(previous, json.albumSubmissions ?? [], normalizeMap(json.albumStationsMap ?? {}), false));
+        setMvState((previous) => reconcileReviewState(previous, json.mvSubmissions ?? [], normalizeMap(json.mvStationsMap ?? {}), false));
         setRemoteStatus("loaded");
       } catch {
         if (!cancelled) {
@@ -613,7 +704,7 @@ export function HomeReviewPanel({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [enableRemoteSync, isLoggedIn, normalizeStations, remoteReloadSeq]);
+  }, [enableRemoteSync, isLoggedIn, normalizeStations, remoteReloadSeq, router, viewerId]);
 
   const activeList = tab === "album" ? albumState.submissions : mvState.submissions;
   const activeIndex = tab === "album" ? albumState.index : mvState.index;
@@ -644,6 +735,7 @@ export function HomeReviewPanel({
 
   React.useEffect(() => {
     if (!supabase || !activeSubmissionId) return;
+    let active = true;
     const channel = supabase
       .channel(`home-submission-${activeSubmissionId}`)
       .on(
@@ -662,18 +754,20 @@ export function HomeReviewPanel({
             )
             .eq("id", activeSubmissionId)
             .maybeSingle();
-          if (!data) return;
+          if (!active || !data) return;
           if (tab === "album") {
             setAlbumState((prev) => {
-              const submissions = prev.submissions.map((item, idx) =>
-                idx === prev.index ? { ...item, ...data } : item,
+              const submissions = prev.submissions.map((item) =>
+                item.id === activeSubmissionId && Date.parse(data.updated_at) >= Date.parse(item.updated_at)
+                  ? { ...item, ...data } : item,
               );
               return { ...prev, submissions };
             });
           } else {
             setMvState((prev) => {
-              const submissions = prev.submissions.map((item, idx) =>
-                idx === prev.index ? { ...item, ...data } : item,
+              const submissions = prev.submissions.map((item) =>
+                item.id === activeSubmissionId && Date.parse(data.updated_at) >= Date.parse(item.updated_at)
+                  ? { ...item, ...data } : item,
               );
               return { ...prev, submissions };
             });
@@ -707,13 +801,13 @@ export function HomeReviewPanel({
               .order("updated_at", { ascending: false });
             resolvedData = fallback.data ?? resolvedData;
           }
-          if (!resolvedData) return;
+          if (!active || !resolvedData) return;
           if (tab === "album") {
             setAlbumState((prev) => ({
               ...prev,
               stationsById: {
                 ...prev.stationsById,
-                [activeSubmissionId]: normalizeStations(resolvedData as StationItem[]),
+                [activeSubmissionId]: reconcileStationRows(prev.stationsById[activeSubmissionId] ?? [], normalizeStations(resolvedData as StationItem[])),
               },
             }));
           } else {
@@ -721,7 +815,7 @@ export function HomeReviewPanel({
               ...prev,
               stationsById: {
                 ...prev.stationsById,
-                [activeSubmissionId]: normalizeStations(resolvedData as StationItem[]),
+                [activeSubmissionId]: reconcileStationRows(prev.stationsById[activeSubmissionId] ?? [], normalizeStations(resolvedData as StationItem[])),
               },
             }));
           }
@@ -730,6 +824,7 @@ export function HomeReviewPanel({
       .subscribe();
 
     return () => {
+      active = false;
       supabase.removeChannel(channel);
     };
   }, [activeSubmissionId, normalizeStations, supabase, tab]);
@@ -841,10 +936,10 @@ export function HomeReviewPanel({
 
   const rowsPerPage = Math.max(1, Math.floor(stationRowsPerPage));
   const latestStationUpdatedAt = getLatestStationUpdatedAt(activeStations);
-  const stationGridRowsPerPage = Math.max(1, Math.ceil(rowsPerPage / 2));
-  const stationCardHeight = compact ? 112 : 86;
-  const stationCardGap = compact ? 8 : 10;
-  const listPadding = compact ? 8 : 12;
+  const stationGridRowsPerPage = compact ? rowsPerPage : Math.max(1, Math.ceil(rowsPerPage / 2));
+  const stationCardHeight = compact ? 50 : 86;
+  const stationCardGap = compact ? 1 : 10;
+  const listPadding = compact ? 0 : 12;
   const listViewportHeight =
     stationGridRowsPerPage * stationCardHeight +
     (stationGridRowsPerPage - 1) * stationCardGap +
@@ -861,7 +956,7 @@ export function HomeReviewPanel({
   const sectionPaddingClass = compact ? "p-3" : "p-4";
   const stationSectionClass = compact ? "flex flex-1 flex-col" : "";
   const stationTableShellClass = compact
-    ? "mt-3 flex flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/70"
+    ? "mt-2 overflow-hidden rounded-lg border border-border/60 bg-background/70"
     : "mt-3 overflow-hidden rounded-2xl border border-border/60 bg-background/70";
   const stationEmptyClass = compact
     ? "flex flex-1 items-center justify-center px-3 py-5 text-center text-xs text-muted-foreground"
@@ -874,17 +969,13 @@ export function HomeReviewPanel({
     ? "h-7 w-7 text-[11px]"
     : "h-8 w-8 text-xs";
   const listPaddingClass = compact
-    ? "px-2 py-2"
+    ? ""
     : "px-2.5 py-2.5 sm:px-3 sm:py-3";
   const stationGridClass = compact
-    ? "grid grid-cols-1 gap-2 sm:grid-cols-2"
+    ? "divide-y divide-border/60"
     : "grid grid-cols-1 gap-2.5 sm:grid-cols-2";
-  const stationCardClass = compact
-    ? "flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl border border-border/50 bg-background/85 px-2.5 py-2 text-xs shadow-sm"
-    : "flex min-h-[112px] flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm md:min-h-[86px] md:flex-row md:justify-between";
-  const stationInfoClass = compact
-    ? "flex min-w-0 flex-col items-center gap-1 text-center"
-    : "flex min-w-0 flex-1 items-center gap-3";
+  const stationCardClass = "flex min-h-[112px] flex-col items-center justify-center gap-3 rounded-xl border border-border/50 bg-background/85 px-3 py-2.5 text-sm shadow-sm md:min-h-[86px] md:flex-row md:justify-between";
+  const stationInfoClass = "flex min-w-0 flex-1 items-center gap-3";
   const stationListRef = React.useRef<HTMLDivElement | null>(null);
   const mouseDragPointerId = React.useRef<number | null>(null);
   const mouseDragStartY = React.useRef(0);
@@ -1067,7 +1158,7 @@ export function HomeReviewPanel({
               실시간
             </>
           ) : (
-            "예시 데이터"
+            "예시"
           )}
         </span>
       </div>
@@ -1246,7 +1337,7 @@ export function HomeReviewPanel({
                   </p>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-2 ${compact && !canScrollUp && !canScrollDown ? "hidden" : ""}`}>
                 <button
                   type="button"
                   onClick={handlePrev}
@@ -1274,9 +1365,9 @@ export function HomeReviewPanel({
                   className={`overflow-y-auto overscroll-contain ${listPaddingClass} touch-pan-y ${
                     isMouseDraggingList
                       ? "cursor-grabbing select-none"
-                      : "cursor-auto sm:cursor-grab"
+                      : canScrollUp || canScrollDown ? "cursor-auto sm:cursor-grab" : "cursor-auto"
                   }`}
-                  style={{ maxHeight: `${listViewportHeight}px` }}
+                  style={{ maxHeight: compact && activeStations.length <= rowsPerPage ? undefined : `${listViewportHeight}px` }}
                   onScroll={handleStationListScroll}
                   onPointerDown={handleStationListPointerDown}
                   onPointerMove={handleStationListPointerMove}
@@ -1301,6 +1392,14 @@ export function HomeReviewPanel({
                         activeSubmission,
                       );
                       const stationName = getStationName(station.station);
+                      if (compact) {
+                        return <CompactStationRow
+                          key={`${station.id}-${index}`}
+                          station={station.station}
+                          status={displayStatus}
+                          onClick={canOpenResultModal ? () => setTrackResultModal(buildResultModalState(station, summary, displayStatus, activeSubmission)) : undefined}
+                        />;
+                      }
                       return (
                         <div
                           key={`${station.id}-${index}`}
