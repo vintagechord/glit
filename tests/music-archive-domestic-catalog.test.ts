@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { collectDomesticStep, normalizeDomesticAlbum, parseDomesticAlbumIds, parseDomesticArtistSearch, searchDomesticArtists, type DomesticCursor } from "../src/lib/music-archive/domestic-catalog";
 import { MusicProviderError } from "../src/lib/music-archive/musicbrainz";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
@@ -187,6 +188,27 @@ test("invalid or aborted credit cursors cannot issue provider requests", async (
   }
   await assert.rejects(collectDomesticStep("melon", "12", base, { ...options, signal: AbortSignal.abort() }));
   assert.equal(requests, 0);
+});
+
+test("Genie album credit fallback persists before empty song details without inflating checked-song progress", async () => {
+  const html = readFileSync(new URL("./fixtures/music-archive-domestic/genie-album-80816955-credits.html", import.meta.url), "utf8");
+  const album = normalizeDomesticAlbum("genie", html, "80816955", "80520775", checked);
+  let data = mergeArchiveImports(createArchiveData("빈티지코드"), [album]);
+  const cursor: DomesticCursor = { provider: "genie", version: 1, artistId: "80520775", phase: "credits", page: 2, pending: [], seen: ["80816955"], more: false };
+  const fetcher: typeof fetch = async input => new Response(String(input).includes("albumInfo") ? html : `<script>var _rfr = "/detail/songInfo?xgnm=86230547";</script><div class="song-infos"><h2 class="name">OUR (Intro)</h2></div>`);
+  const albumStep = await collectDomesticStep("genie", "80520775", cursor, { fetcher });
+  assert.equal(albumStep.creditTracksCheckedDelta, 0);
+  assert.equal(albumStep.trackCredits.length, 10);
+  assert.equal(albumStep.nextCursor?.creditPending?.length, 11);
+  assert.equal(albumStep.nextCursor?.creditPending?.[10], "86230546");
+  data = mergeDomesticTrackCredits(data, albumStep.trackCredits);
+  assert.equal(data.works.length, 10);
+  const songStep = await collectDomesticStep("genie", "80520775", albumStep.nextCursor, { fetcher });
+  assert.equal(songStep.creditTracksCheckedDelta, 1);
+  assert.deepEqual(songStep.trackCredits[0].contributors, []);
+  assert.deepEqual(mergeDomesticTrackCredits(data, songStep.trackCredits), data);
+  const done = await collectDomesticStep("genie", "80520775", { ...cursor, phase: "done" }, { fetcher: async () => { throw new Error("completed cursor must not request"); } });
+  assert.equal(done.creditTracksCheckedDelta, 0);
 });
 
 test("Melon never completes a shortened or duplicate final page below the catalog total", async () => {

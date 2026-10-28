@@ -131,6 +131,9 @@ export async function runArchiveJob(libraryId?: string) {
       archiveDatabaseError(sourceError);
     }
     for (const credit of trackCredits) {
+      // Keep the shared work snapshot for direct song responses. Album notes
+      // supplement the member work without replacing an existing direct source.
+      if (!credit.contributors.length || credit.fallback) continue;
       // Cache only the public response, never the merged member work/edits.
       const { error: sourceError } = await admin.from("music_archive_sources").upsert({ provider: credit.provider, external_id: credit.songId, kind: "work", payload: { songId: credit.songId, contributors: credit.contributors }, checked_at: credit.checkedAt }, { onConflict: "provider,external_id,kind" });
       archiveDatabaseError(sourceError);
@@ -139,7 +142,8 @@ export async function runArchiveJob(libraryId?: string) {
     const managedReleaseIds = new Set(merged.releases.filter(item => item.source?.provider === job.provider && releaseIds.has(item.source.externalId)).map(item => item.id));
     const creditedWorks = new Set(merged.works.filter(work => work.contributors?.length).map(work => work.id));
     const creditedRecordings = new Set(merged.recordings.filter(recording => recording.workIds.some(id => creditedWorks.has(id))).map(recording => recording.id));
-    const counts = { releases: releaseIds.size, tracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId)).length, managedTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && item.managed && !item.excluded).length, creditTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && creditedRecordings.has(item.recordingId ?? "")).length, creditTracksChecked: (job.counts.creditTracksChecked ?? 0) + trackCredits.length, steps: (job.counts.steps ?? 0) + 1, consecutiveErrors: 0 };
+    const checkedCreditTracks = "creditTracksCheckedDelta" in step ? step.creditTracksCheckedDelta : trackCredits.length;
+    const counts = { releases: releaseIds.size, tracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId)).length, managedTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && item.managed && !item.excluded).length, creditTracks: merged.tracks.filter(item => managedReleaseIds.has(item.releaseId) && creditedRecordings.has(item.recordingId ?? "")).length, creditTracksChecked: (job.counts.creditTracksChecked ?? 0) + checkedCreditTracks, steps: (job.counts.steps ?? 0) + 1, consecutiveErrors: 0 };
     const { error: commitError } = await admin.rpc("commit_music_archive_step", { p_job: job.id, p_token: token, p_version: library.version, p_data: merged, p_cursor: { providerCursor: step.nextCursor, releaseIds: [...releaseIds], scopeNote: [step.scopeNote, ...metadataNotices].join("\n") }, p_counts: counts, p_status: step.status === "completed" ? "completed" : "queued", p_checked_at: step.checkedAt });
     archiveDatabaseError(commitError);
     return true;

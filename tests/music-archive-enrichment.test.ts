@@ -6,7 +6,9 @@ import { normalizeMusicBrainzRelease } from "../src/lib/music-archive/musicbrain
 import { mergeArchiveImports } from "../src/lib/music-archive/import";
 import { mergeSubmissionCredits, type CreditSubmission } from "../src/lib/music-archive/credits";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
-import { domesticAlbumArtwork, enrichLinkedDomesticAlbums, fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits, mergeDomesticTrackCredits, parseDomesticTrackCredits, type DomesticTrackCredits } from "../src/lib/music-archive/domestic-credits";
+import { domesticAlbumArtwork, enrichLinkedDomesticAlbums, fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits, mergeDomesticTrackCredits, parseDomesticTrackCredits, parseGenieAlbumCreditFallbacks, type DomesticTrackCredits } from "../src/lib/music-archive/domestic-credits";
+import { parseGenieAlbumPage } from "../src/lib/genie";
+import { normalizeDomesticAlbum } from "../src/lib/music-archive/domestic-catalog";
 import { memberLibrary } from "../src/lib/music-archive/member-view";
 
 const imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music/cover/100x100bb.jpg";
@@ -237,4 +239,84 @@ test("manual credit refresh reserves a provider permit for each bounded network 
   assert.equal(permits, 2); assert.equal(requests, 2);
   await assert.rejects(fetchDomesticAlbumCredits("https://www.melon.com/album/detail.htm?albumId=12476612", { ...options, signal: AbortSignal.abort() }));
   assert.equal(permits, 2); assert.equal(requests, 2);
+});
+
+const genieCreditAlbumFixture = (id: string) => readFileSync(new URL(`./fixtures/music-archive-domestic/genie-album-${id}-credits.html`, import.meta.url), "utf8");
+test("official numbered Genie album credits match ten exact tracks and reject album-wide or unavailable tracks", () => {
+  const html = genieCreditAlbumFixture("80816955");
+  const album = parseGenieAlbumPage(html, "80816955");
+  const credits = parseGenieAlbumCreditFallbacks(html, album, date);
+  assert.deepEqual(credits.map(update => update.songId), album.tracks.slice(0, 10).map(track => track.songId));
+  assert.equal(credits.flatMap(update => update.contributors).length, 33);
+  assert.ok(credits.every(update => update.fallback && update.albumId === "80816955" && update.provider === "genie"));
+  assert.deepEqual(credits[2].contributors.filter(person => person.role === "lyrics").map(person => person.name), ["그루브찬스", "화나"]);
+  assert.deepEqual(credits[8].contributors.filter(person => person.role === "composition").map(person => person.name), ["빈티지코드", "그루브찬스"]);
+  assert.ok(!credits.some(update => update.songId === "86230546"));
+  const moon = genieCreditAlbumFixture("80937505");
+  assert.deepEqual(parseGenieAlbumCreditFallbacks(moon, parseGenieAlbumPage(moon, "80937505"), date), [], "an album-wide roster cannot be assigned to every song");
+  assert.deepEqual(parseGenieAlbumCreditFallbacks(html, { ...album, albumId: "999" }, date), []);
+  assert.deepEqual(parseGenieAlbumCreditFallbacks(html.replace("[CREDIT]", "Credits elsewhere"), album, date), []);
+  assert.deepEqual(parseGenieAlbumCreditFallbacks(html.replace("[CREDIT]", "[CREDIT]</div><div>[CREDIT]"), album, date), []);
+});
+
+test("Genie credit fallback rejects ambiguous numbers, titles, IDs and credits outside the album introduction", () => {
+  const html = genieCreditAlbumFixture("80816955");
+  const album = parseGenieAlbumPage(html, "80816955");
+  for (const mutation of [
+    { ...album, tracks: album.tracks.map((track, index) => index === 1 ? { ...track, trackNo: 1 } : track) },
+    { ...album, tracks: album.tracks.map((track, index) => index === 1 ? { ...track, trackTitle: "OUR intro" } : track) },
+    { ...album, tracks: album.tracks.map((track, index) => index === 1 ? { ...track, songId: "86230547" } : track) },
+    { ...album, tracks: album.tracks.map((track, index) => index === 0 ? { ...track, trackNo: 20 } : track) },
+  ]) assert.ok(!parseGenieAlbumCreditFallbacks(html, mutation, date).some(update => update.songId === "86230547"));
+  const duplicated = html.replace("<div>02. PAPER rapper</div>", "<div>01. OUR intro</div>");
+  assert.ok(!parseGenieAlbumCreditFallbacks(duplicated, album, date).some(update => update.songId === "86230547"));
+  const outside = html.replace("<!-- S. 앨범 DESC albumDesc-->", "<!-- unrelated page section -->");
+  assert.deepEqual(parseGenieAlbumCreditFallbacks(outside, album, date), []);
+  for (const heading of ["All Track Credits", "[Album Credits]", "Production credits", "Other unknown section"]) {
+    const footer = html.replace("<div>10. COCKTAIL</div>", `<div>10. COCKTAIL</div><div>${heading}</div>`);
+    assert.ok(!parseGenieAlbumCreditFallbacks(footer, album, date).some(update => update.songId === "86230545"));
+  }
+});
+
+test("album credit fallback fills only missing roles and later direct metadata wins without widening ownership", () => {
+  const input = exactDomesticTrack();
+  const direct = { ...exactCredits, contributors: [{ name: "직접 확인 작곡가", role: "composition" as const }] };
+  const fallback = { ...exactCredits, fallback: true as const, contributors: [{ name: "앨범 소개 작곡가", role: "composition" as const }, { name: "앨범 소개 작사가", role: "lyrics" as const }, { name: "앨범 소개 편곡가", role: "arrangement" as const }] };
+  const enriched = mergeDomesticTrackCredits(mergeDomesticTrackCredits(input, [direct]), [fallback]);
+  assert.deepEqual(enriched.works[0].contributors, [fallback.contributors[1], fallback.contributors[2], direct.contributors[0]]);
+  assert.equal(enriched.tracks[0].managed, false);
+  assert.deepEqual(mergeDomesticTrackCredits(enriched, [{ ...direct, contributors: [] }]), enriched);
+  const corrected = mergeDomesticTrackCredits(enriched, [{ ...exactCredits, contributors: [{ name: "직접 확인 작사가", role: "lyrics" }] }]);
+  assert.equal(corrected.works[0].contributors?.find(person => person.role === "lyrics")?.name, "직접 확인 작사가");
+  assert.deepEqual(mergeDomesticTrackCredits(corrected, [fallback]), corrected);
+  corrected.works[0].userEdited = true;
+  assert.deepEqual(mergeDomesticTrackCredits(corrected, [fallback]), corrected);
+});
+
+test("manual Genie refresh uses exact album credits after empty or failed song responses with direct-role precedence", async () => {
+  const html = genieCreditAlbumFixture("80816955");
+  const parsed = parseGenieAlbumPage(html, "80816955");
+  const fetched = await fetchDomesticAlbumCredits(parsed.albumUrl, { fetcher: async input => {
+    const url = new URL(String(input));
+    if (url.pathname.includes("albumInfo")) return new Response(html);
+    const id = url.searchParams.get("xgnm")!;
+    if (id === "86230548") return new Response("Unavailable", { status: 404 });
+    const title = parsed.tracks.find(track => track.songId === id)!.trackTitle;
+    return new Response(`<div class="song-infos"><h2 class="name">${title}</h2>${id === "86230547" ? '<li><span class="attr"><img alt="작곡가"></span><span class="value">직접 확인 작곡가</span></li>' : ""}</div><pre id="pLyrics">DO NOT STORE LYRICS</pre>`);
+  } });
+  assert.equal(fetched.partial, true, "failed direct requests remain visible even when fallback is available");
+  assert.equal(fetched.album.tracks[0].composer, "직접 확인 작곡가");
+  assert.equal(fetched.album.tracks[0].lyricist, "그루브찬스");
+  assert.deepEqual(new Set(fetched.album.tracks[0].creditFallbackRoles), new Set(["lyrics", "arrangement"]));
+  assert.equal(fetched.album.tracks[1].composer, "빈티지코드");
+  assert.equal(fetched.album.tracks[10].composer, "");
+  assert.ok(fetched.album.tracks.every(track => track.lyrics === ""));
+  const imported = normalizeDomesticAlbum("genie", html, "80816955", "80520775", date);
+  let data = mergeArchiveImports(createArchiveData("빈티지코드"), [imported]);
+  data = mergeDomesticTrackCredits(data, [{ provider: "genie", albumId: "80816955", songId: "86230548", checkedAt: date, contributors: [{ name: "이전 직접 작곡가", role: "composition" }] }]);
+  const updated = mergeDomesticAlbumCredits(data, data.releases[0].id, fetched.album, "genie", date);
+  assert.equal(updated.works.length, 10);
+  assert.equal(updated.works.find(work => work.id === "genie-work:86230548")?.contributors?.find(person => person.role === "composition")?.name, "이전 직접 작곡가");
+  assert.equal(updated.works.find(work => work.id === "genie-work:86230547")?.contributors?.find(person => person.role === "composition")?.name, "직접 확인 작곡가");
+  assert.doesNotMatch(JSON.stringify(updated), /DO NOT STORE LYRICS/);
 });
