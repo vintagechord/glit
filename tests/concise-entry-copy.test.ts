@@ -5,15 +5,17 @@ import test from "node:test";
 const readSource = (relativePath: string) =>
   readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("the home hero restores the original review record message", () => {
+test("the home hero keeps the primary heading without repeated supporting copy", () => {
   const homePage = readSource("src/app/page.tsx");
   const translations = readSource(
     "src/components/i18n/english-language-pack.tsx",
   );
 
-  assert.match(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
+  assert.match(homePage, /심의 신청부터/);
+  assert.match(homePage, /결과 확인까지/);
+  assert.doesNotMatch(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
   assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
-  assert.match(
+  assert.doesNotMatch(
     translations,
     /"내 작품의 심의 기록을 한곳에서 관리하세요":/,
   );

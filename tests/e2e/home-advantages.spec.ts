@@ -91,6 +91,7 @@ for (const width of [320, 390, 1280]) {
         await expect(benefits.getByRole("button", { name, exact: true })).toBeVisible();
       }
       await expect(benefits.getByRole("link")).toHaveCount(0);
+      await expect(benefits.getByText(english ? "Preview" : "미리보기", { exact: true })).toHaveCount(0);
       await expect(benefits).not.toContainText(/30%|50%|할인|Discount/);
       const sectionHeight = (await benefits.boundingBox())!.height;
       expect(sectionHeight).toBeLessThanOrEqual(160);

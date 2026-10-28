@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 type AdBanner = {
   id: string;
   title: string;
   image_url: string;
   link_url: string | null;
+  kind?: "artmelon";
 };
 
 const ROTATE_MS = 4500;
@@ -45,7 +47,7 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
   const banner = safeBanners[index] ?? safeBanners[0];
 
   return (
-    <div className="overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
+    <div data-brand-banner className="overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
       <div className="relative">
         <BannerLinkWrap banner={banner}>
           <BannerContent banner={banner} eager={index === 0} />
@@ -79,6 +81,8 @@ function BannerNavButton({
   direction: "previous" | "next";
   onClick: () => void;
 }) {
+  const pathname = usePathname();
+  const english = pathname === "/en" || pathname.startsWith("/en/");
   const isPrevious = direction === "previous";
   const Icon = isPrevious ? ChevronLeft : ChevronRight;
 
@@ -86,7 +90,7 @@ function BannerNavButton({
     <button
       type="button"
       onClick={onClick}
-      aria-label={isPrevious ? "이전 배너" : "다음 배너"}
+      aria-label={english ? (isPrevious ? "Previous banner" : "Next banner") : (isPrevious ? "이전 배너" : "다음 배너")}
       className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27] sm:h-16 sm:w-9 sm:hover:w-11 ${
         isPrevious
           ? "left-0 rounded-r-full border-l-0 pl-0.5"
@@ -165,10 +169,24 @@ function BannerLinkWrap({
 }
 
 function BannerContent({ banner, eager }: { banner: AdBanner; eager: boolean }) {
+  const pathname = usePathname();
+  const english = pathname === "/en" || pathname.startsWith("/en/");
   return (
     <div className="px-2 pb-2 pt-5 sm:px-3 sm:pb-3 sm:pt-6">
       <div className="group/banner relative flex h-20 overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white transition duration-300 dark:border-[#f2cf27] sm:h-24">
-        <Image
+        {banner.kind === "artmelon" ? (
+          <div className="flex w-full items-center justify-between gap-3 bg-[#f7f5ed] px-9 text-[#141619] sm:px-12">
+            <div className="min-w-0 space-y-2">
+              <Image src={banner.image_url} alt={banner.title} width={1851} height={224} className="h-auto w-[140px] max-w-full sm:w-[220px]" />
+              <p className="text-[10px] font-semibold leading-4 sm:text-xs">
+                {english ? "LP · CD · Merch · Art" : "LP · CD · 굿즈 · 예술상품"}
+              </p>
+            </div>
+            <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#f2cc0c] transition group-hover/banner:bg-[#f20a22] group-hover/banner:text-white sm:size-9">
+              <ArrowUpRight className="size-4 sm:size-5" />
+            </span>
+          </div>
+        ) : <><Image
           src={banner.image_url}
           alt={banner.title}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-out group-hover/banner:scale-[1.03]"
@@ -177,7 +195,7 @@ function BannerContent({ banner, eager }: { banner: AdBanner; eager: boolean }) 
           loading={eager ? "eager" : "lazy"}
           fetchPriority={eager ? "high" : "auto"}
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/10 via-white/0 to-white/80 dark:from-black/12 dark:via-black/4 dark:to-black/72" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/10 via-white/0 to-white/80 dark:from-black/12 dark:via-black/4 dark:to-black/72" /></>}
       </div>
     </div>
   );

@@ -56,17 +56,23 @@ const mergeOrders = (previous: SubmissionOrder[], incoming: SubmissionOrder[]) =
   [...new Map([...previous, ...incoming].map((order) => [order.id, order])).values()]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
+export function SubmissionOrdersClient({ userId, initialPage, initialError = null, initialFetchedAt }: {
+  userId: string | null;
+  initialPage?: SubmissionOrdersPage;
+  initialError?: string | null;
+  initialFetchedAt?: number;
+}) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams();
   const prefix = pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const cartHref = `${prefix}/mypage/cart`;
   const focus = params.get("focus");
-  const [orders, setOrders] = React.useState<SubmissionOrder[]>([]);
-  const [nextOffset, setNextOffset] = React.useState<number | null>(null);
+  const hasInitialResult = Boolean(userId && (initialPage || initialError));
+  const [orders, setOrders] = React.useState<SubmissionOrder[]>(() => userId ? initialPage?.orders ?? [] : []);
+  const [nextOffset, setNextOffset] = React.useState<number | null>(() => userId ? initialPage?.nextOffset ?? null : null);
   const [filter, setFilter] = React.useState<FilterId>("all");
-  const [loading, setLoading] = React.useState(true);
-  const [loaded, setLoaded] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(!hasInitialResult);
+  const [loaded, setLoaded] = React.useState(hasInitialResult);
+  const [error, setError] = React.useState<string | null>(userId ? initialError : null);
   const [returnOrder, setReturnOrder] = React.useState<SubmissionOrder | null>(null);
   const [returningId, setReturningId] = React.useState<string | null>(null);
   const checkoutInFlight = React.useRef(false);
@@ -91,7 +97,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
       });
       const payload = (await response.json().catch(() => ({}))) as Partial<SubmissionOrdersPage> & { error?: string };
       if (!response.ok || !Array.isArray(payload.orders)) throw new Error(payload.error ?? "주문내역을 불러오지 못했습니다. 다시 시도해주세요.");
-      if (sequence !== requestSequence.current) return;
+      if (controller.signal.aborted || sequence !== requestSequence.current) return;
       setOrders((previous) => append ? mergeOrders(previous, payload.orders!) : payload.orders!);
       setNextOffset((previous) => append && offset === 0 ? previous : payload.nextOffset ?? null);
     } catch (failure) {
@@ -105,13 +111,27 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
   }, [userId]);
 
   React.useEffect(() => {
-    setOrders([]); setLoaded(false); focusedId.current = null;
-    void loadOrders();
+    ++requestSequence.current;
+    activeRequest.current?.abort(); activeRequest.current = null;
+    focusedId.current = null;
+    setOrders(userId ? initialPage?.orders ?? [] : []);
+    setNextOffset(userId ? initialPage?.nextOffset ?? null : null);
+    if (userId && (initialPage || initialError)) {
+      setError(initialError); setLoading(false); setLoaded(true);
+      // Back navigation can restore old RSC props. Keep that content visible
+      // while revalidating, but avoid a duplicate read after a fresh render.
+      if (initialFetchedAt !== undefined && Date.now() - initialFetchedAt > 5000) void loadOrders();
+    } else {
+      setLoaded(false);
+      void loadOrders();
+    }
     const refresh = () => { void loadOrders(0, true); };
+    const restore = (event: PageTransitionEvent) => { if (event.persisted) void loadOrders(); };
     window.addEventListener(SUBMISSION_ORDERS_UPDATED_EVENT, refresh);
     window.addEventListener("focus", refresh);
-    return () => { activeRequest.current?.abort(); window.removeEventListener(SUBMISSION_ORDERS_UPDATED_EVENT, refresh); window.removeEventListener("focus", refresh); };
-  }, [loadOrders]);
+    window.addEventListener("pageshow", restore);
+    return () => { activeRequest.current?.abort(); activeRequest.current = null; window.removeEventListener(SUBMISSION_ORDERS_UPDATED_EVENT, refresh); window.removeEventListener("focus", refresh); window.removeEventListener("pageshow", restore); };
+  }, [initialError, initialFetchedAt, initialPage, loadOrders, userId]);
   const hasPendingOrder = orders.some((order) => ["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING"].includes(order.status));
   React.useEffect(() => {
     if (!hasPendingOrder || returningId) return;
@@ -164,7 +184,7 @@ export function SubmissionOrdersClient({ userId }: { userId: string | null }) {
       {error && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>{error}</div>}
       {!loaded && loading ? <div className={panelClass}>주문내역을 불러오는 중입니다...</div> : visibleOrders.length === 0 ? (
         <div className={`${panelClass} space-y-3`}>
-          <p className="text-sm text-muted-foreground">{orders.length === 0 ? "주문 내역이 없습니다." : "해당 상태의 주문이 없습니다."}</p>
+          <p className="text-sm text-muted-foreground">{orders.length === 0 ? error ? "새로고침을 눌러 주문내역을 다시 확인해주세요." : "주문 내역이 없습니다." : "해당 상태의 주문이 없습니다."}</p>
           {!userId && <Link href={`${prefix}/track?mode=guest`} className={buttonClass}>비회원 조회 코드로 확인</Link>}
           {nextOffset !== null && <p className="text-xs text-muted-foreground">이전 주문을 더 불러와 확인할 수 있습니다.</p>}
         </div>

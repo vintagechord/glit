@@ -101,13 +101,29 @@ export async function DashboardArtistDetailPageView({
     );
   }
 
-  // Fetch artist via admin client to avoid permission gaps
+  const runSubmissionQuery = (includeUserVisibility = true) => {
+    let query = supabase
+      .from("submissions")
+      .select(
+        "id, title, artist_name, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
+      )
+      .eq("user_id", user.id)
+      .eq("artist_id", artistId)
+      .eq("payment_status", "PAID");
+    if (includeUserVisibility) {
+      query = query.is("user_deleted_at", null);
+    }
+    return query.order("created_at", { ascending: false });
+  };
+
+  // Both reads are scoped before they start; artist metadata does not need to
+  // finish before the member's own submission history can load.
   const admin = createAdminClient();
-  const { data: artist } = await admin
-    .from("artists")
-    .select("id, name, thumbnail_url")
-    .eq("id", artistId)
-    .maybeSingle();
+  const [{ data: artist }, { data: submissionData, error: submissionError }] =
+    await Promise.all([
+      admin.from("artists").select("id, name, thumbnail_url").eq("id", artistId).maybeSingle(),
+      runSubmissionQuery(),
+    ]);
 
   if (!artist) {
     return (
@@ -124,24 +140,6 @@ export async function DashboardArtistDetailPageView({
       </div>
     );
   }
-
-  const runSubmissionQuery = (includeUserVisibility = true) => {
-    let query = supabase
-      .from("submissions")
-      .select(
-        "id, title, artist_name, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
-      )
-      .eq("user_id", user.id)
-      .eq("artist_id", artistId)
-      .eq("payment_status", "PAID");
-    if (includeUserVisibility) {
-      query = query.is("user_deleted_at", null);
-    }
-    return query.order("created_at", { ascending: false });
-  };
-
-  const { data: submissionData, error: submissionError } =
-    await runSubmissionQuery();
   let submissions: unknown[] | null = submissionData;
   if (submissionError && isMissingUserDeletedAt(submissionError)) {
     const { data: legacyData, error: legacyError } = await supabase

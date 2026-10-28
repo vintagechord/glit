@@ -2,156 +2,14 @@
 
 import * as React from "react";
 import { LoaderCircle, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
+import type { DashboardStatusData } from "@/lib/dashboard-status";
+import { dashboardStatusResource } from "./dashboard-status-resource";
 
-type StationItem = {
-  id: string;
-  status: string;
-  updated_at: string;
-  track_results?: unknown;
-  result_note?: string | null;
-  station?: {
-    name?: string | null;
-  } | null;
-};
-
-type StatusResponse = {
-  albumSubmissions: Array<{
-    id: string;
-    title: string | null;
-    artist_name?: string | null;
-    status: string;
-    created_at?: string | null;
-    updated_at: string;
-    payment_status?: string | null;
-    result_status?: string | null;
-    result_notified_at?: string | null;
-    mv_desired_rating?: string | null;
-    certificate_b2_path?: string | null;
-    certificate_original_name?: string | null;
-    package?: { name?: string | null; station_count?: number | null }[];
-  }>;
-  mvSubmissions: Array<{
-    id: string;
-    title: string | null;
-    artist_name?: string | null;
-    status: string;
-    created_at?: string | null;
-    updated_at: string;
-    payment_status?: string | null;
-    result_status?: string | null;
-    result_notified_at?: string | null;
-    mv_desired_rating?: string | null;
-    certificate_b2_path?: string | null;
-    certificate_original_name?: string | null;
-    type: string;
-  }>;
-  albumStationsMap: Record<string, StationItem[]>;
-  mvStationsMap: Record<string, StationItem[]>;
-};
-
-const STATUS_CLIENT_CACHE_TTL_MS = 0;
-const DASHBOARD_STATUS_FETCH_TIMEOUT_MS = 12_000;
-
-const cachedStatusByUser = new Map<
-  string,
-  { expiresAt: number; data: StatusResponse }
->();
-const inflightStatusRequestByUser = new Map<string, Promise<StatusResponse>>();
-
-function readCachedStatus(viewerId: string) {
-  const cached = cachedStatusByUser.get(viewerId);
-  if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    cachedStatusByUser.delete(viewerId);
-    return null;
-  }
-  return cached.data;
-}
-
-function writeCachedStatus(viewerId: string, data: StatusResponse) {
-  cachedStatusByUser.set(viewerId, {
-    data,
-    expiresAt: Date.now() + STATUS_CLIENT_CACHE_TTL_MS,
-  });
-
-  if (cachedStatusByUser.size <= 20) return;
-  const now = Date.now();
-  for (const [key, value] of cachedStatusByUser.entries()) {
-    if (value.expiresAt <= now) {
-      cachedStatusByUser.delete(key);
-    }
-  }
-}
-
-async function fetchDashboardStatus(
-  viewerId: string,
-  options: { bypassCache?: boolean } = {},
-) {
-  const cached = options.bypassCache ? null : readCachedStatus(viewerId);
-  if (cached) {
-    return cached;
-  }
-
-  const inflightKey = options.bypassCache ? `${viewerId}:refresh` : viewerId;
-  const inflight = inflightStatusRequestByUser.get(inflightKey);
-  if (inflight) {
-    return inflight;
-  }
-
-  const requestPromise = (async () => {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
-      controller.abort();
-    }, DASHBOARD_STATUS_FETCH_TIMEOUT_MS);
-
-    try {
-      const statusUrl = options.bypassCache
-        ? "/api/dashboard/status?refresh=1"
-        : "/api/dashboard/status";
-      const res = await fetch(statusUrl, {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const json = (await res.json().catch(() => null)) as
-        | (StatusResponse & { error?: string })
-        | null;
-      if (!res.ok || !json || json.error) {
-        throw new Error(json?.error || "진행 현황을 불러오지 못했습니다.");
-      }
-
-      writeCachedStatus(viewerId, json);
-      return json;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error("진행 현황 응답이 지연되고 있습니다. 다시 시도해주세요.");
-      }
-      throw error;
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
-  })();
-  inflightStatusRequestByUser.set(inflightKey, requestPromise);
-
-  try {
-    return await requestPromise;
-  } finally {
-    inflightStatusRequestByUser.delete(inflightKey);
-  }
-}
-
-export function DashboardStatusClient({
-  viewerId,
-  title,
-  description,
-  tabs,
-  contextLabel,
-  activeTab,
-  initialReviewTab,
-  forceStatusRefresh,
-}: {
+type Props = {
   viewerId: string;
   title: string;
   description?: string;
@@ -160,70 +18,107 @@ export function DashboardStatusClient({
   activeTab?: string;
   initialReviewTab?: "album" | "mv";
   forceStatusRefresh?: boolean;
-}) {
-  const initialData = React.useMemo(() => readCachedStatus(viewerId), [viewerId]);
-  const [data, setData] = React.useState<StatusResponse | null>(initialData);
+  initialData?: DashboardStatusData | null;
+  initialDataAt?: number;
+};
+
+function normalizeStations(map: DashboardStatusData["albumStationsMap"]) {
+  return Object.fromEntries(Object.entries(map).map(([id, rows]) => [
+    id,
+    rows.map((row) => ({
+      ...row,
+      station: Array.isArray(row.station) ? row.station[0] ?? null : row.station,
+    })),
+  ]));
+}
+
+export function DashboardStatusClient(props: Props) {
+  // Never retain another account's visible data while a new request starts.
+  return <DashboardStatusView key={props.viewerId} {...props} />;
+}
+
+function DashboardStatusView({
+  viewerId, title, description, tabs, contextLabel, activeTab,
+  initialReviewTab, forceStatusRefresh, initialData, initialDataAt,
+}: Props) {
+  const router = useRouter();
+  const [data, setData] = React.useState<DashboardStatusData | null>(() =>
+    initialData ?? (typeof window !== "undefined" && !forceStatusRefresh
+      ? dashboardStatusResource.peek(viewerId) : null),
+  );
+  const dataRef = React.useRef(data);
   const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(initialData == null);
+  const [loading, setLoading] = React.useState(data == null);
   const [reloadSeq, setReloadSeq] = React.useState(0);
 
   React.useEffect(() => {
-    setData(initialData);
-    setError(null);
-    setLoading(initialData == null);
-  }, [initialData, reloadSeq, viewerId]);
-
-  React.useEffect(() => {
-    let aborted = false;
-    const load = async () => {
-      const showBlockingLoading = initialData == null;
-      if (showBlockingLoading) {
-        setLoading(true);
-      }
-
+    const controller = new AbortController();
+    let pending = false;
+    let authorizationChanged = false;
+    let needsFreshRead = Boolean(forceStatusRefresh || reloadSeq);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const accept = (next: DashboardStatusData) => {
+      dataRef.current = next;
+      setData(next);
+      setError(null);
+      setLoading(false);
+    };
+    const schedule = () => {
+      if (!controller.signal.aborted && !authorizationChanged) timer = setTimeout(() => void refresh(), 15_000);
+    };
+    const refresh = async (bypassCache = false) => {
+      if (controller.signal.aborted || pending || authorizationChanged) return;
+      if (timer) clearTimeout(timer);
+      if (document.visibilityState !== "visible") { schedule(); return; }
+      pending = true;
+      if (!dataRef.current) setLoading(true);
       try {
-        const nextData = await fetchDashboardStatus(viewerId, {
-          bypassCache: forceStatusRefresh,
+        const next = await dashboardStatusResource.read(viewerId, {
+          signal: controller.signal, bypassCache: bypassCache || needsFreshRead,
         });
-        if (aborted) return;
-        setData(nextData);
-        setError(null);
-      } catch (err) {
-        if (!aborted && showBlockingLoading) {
-          setError(err instanceof Error ? err.message : "불러오기 실패");
+        if (!controller.signal.aborted) { needsFreshRead = false; accept(next); }
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        if ((failure as { status?: number }).status === 401) {
+          authorizationChanged = true;
+          dataRef.current = null;
+          setData(null);
+          router.refresh();
         }
+        if (!dataRef.current) setError(failure instanceof Error ? failure.message : "불러오기 실패");
       } finally {
-        if (!aborted && showBlockingLoading) {
-          setLoading(false);
-        }
+        pending = false;
+        if (!controller.signal.aborted) { setLoading(false); schedule(); }
       }
     };
-    load();
-    return () => {
-      aborted = true;
+    const visible = () => {
+      if (document.visibilityState === "visible") void refresh();
     };
-  }, [forceStatusRefresh, initialData, reloadSeq, viewerId]);
 
-  React.useEffect(() => {
-    let aborted = false;
-    const refresh = async () => {
-      try {
-        const nextData = await fetchDashboardStatus(viewerId);
-        if (aborted) return;
-        setData(nextData);
-        setError(null);
-      } catch {
-        // Keep the last visible data during background refresh failures.
-      }
-    };
-    const intervalId = window.setInterval(refresh, 15_000);
-    window.addEventListener("focus", refresh);
+    // The server has already authenticated and fetched this snapshot. Avoid a
+    // second auth/DB round trip immediately after hydration.
+    if (initialData && reloadSeq === 0) {
+      needsFreshRead = false;
+      dashboardStatusResource.seed(viewerId, initialData, initialDataAt);
+      const freshData = dashboardStatusResource.peek(viewerId);
+      accept(freshData ?? initialData);
+      if (freshData) schedule();
+      else void refresh(Boolean(forceStatusRefresh));
+    } else {
+      void refresh(Boolean(forceStatusRefresh || reloadSeq));
+    }
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("focus", visible);
     return () => {
-      aborted = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refresh);
+      controller.abort();
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("focus", visible);
     };
-  }, [viewerId]);
+  }, [forceStatusRefresh, initialData, initialDataAt, reloadSeq, router, viewerId]);
+
+  const albumStations = React.useMemo(() => normalizeStations(data?.albumStationsMap ?? {}), [data?.albumStationsMap]);
+  const mvStations = React.useMemo(() => normalizeStations(data?.mvStationsMap ?? {}), [data?.mvStationsMap]);
 
   return (
     <DashboardShell
@@ -233,12 +128,12 @@ export function DashboardStatusClient({
       tabs={tabs}
       contextLabel={contextLabel}
     >
-      {loading ? (
+      {loading && !data ? (
         <div className="flex min-h-40 items-center justify-center rounded-[10px] border-2 border-[#111111] bg-card p-8 text-muted-foreground shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
           <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden="true" />
           <span className="sr-only">진행 현황을 불러오는 중</span>
         </div>
-      ) : error ? (
+      ) : error && !data ? (
         <div className="rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 p-8 text-sm font-semibold text-[#d9362c]">
           <p>{error}</p>
           <button
@@ -256,8 +151,8 @@ export function DashboardStatusClient({
           viewerId={viewerId}
           albumSubmissions={data.albumSubmissions}
           mvSubmissions={data.mvSubmissions}
-          albumStationsMap={data.albumStationsMap}
-          mvStationsMap={data.mvStationsMap}
+          albumStationsMap={albumStations}
+          mvStationsMap={mvStations}
           hideEmptyTabs={false}
           forceLiveBadge
           initialTab={initialReviewTab}

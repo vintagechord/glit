@@ -22,13 +22,10 @@ export function HomeHeroAdBanner() {
         aria-label={isEnglish ? "Your next steps with Onside" : "온사이드와 함께하는 심의 그 다음"}
         className="w-full max-w-[540px] rounded-[10px] border-2 border-[#111111] bg-white p-3 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[4px_4px_0_#f2cf27]"
       >
-        <div className="mb-2.5 flex items-center justify-between gap-2">
+        <div className="mb-2.5">
           <p className="text-xs font-black text-foreground sm:text-[13px]">
             {isEnglish ? "Beyond review, with Onside" : "심의 그 다음까지, 온사이드"}
           </p>
-          <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
-            {isEnglish ? "Preview" : "미리보기"}
-          </span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {services.map(service => {

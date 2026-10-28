@@ -46,9 +46,9 @@ test("the chat launcher stays mounted when moving between public pages", async (
   await launcher.evaluate((element) => { element.setAttribute("data-qa-existing-launcher", "true"); });
   const footer=page.locator('footer');
   await footer.locator('summary').filter({hasText:'사이트 링크'}).click();
-  await footer.getByRole('link',{name:'고객센터',exact:true}).click();
-  await expect(page).toHaveURL(/\/support$/);
-  await expect(page.getByRole("heading", { name: "어떻게 도와드릴까요?", exact: true })).toBeVisible();
+  await footer.getByRole('link',{name:'심의 안내',exact:true}).click();
+  await expect(page).toHaveURL(/\/guide$/);
+  await expect(page.getByRole("heading", { name: "심의 안내", exact: true })).toBeVisible();
   await expect(launcher).toHaveAttribute("data-qa-existing-launcher", "true");
 });
 

@@ -120,9 +120,6 @@ export default function Home() {
                   <br className="hidden sm:block" />
                   결과 확인까지
                 </h1>
-                <p className="max-w-xl break-keep text-base font-semibold leading-7 text-foreground/74 dark:text-white/76">
-                  내 작품의 심의 기록을 한곳에서 관리하세요
-                </p>
               </div>
               <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px] lg:flex-1">
