@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 import { TrackLookupModalTrigger } from "@/features/track/track-lookup-modal";
@@ -13,7 +13,7 @@ import { PasswordInput } from "./password-input";
 
 const initialState: ActionState = {};
 
-export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
+export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; socialSlot?: ReactNode } = {}) {
   const [state, formAction] = useActionState(loginAction, initialState);
   const [emailValue, setEmailValue] = useState("");
   const pathname = usePathname();
@@ -45,6 +45,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null } = {}) {
 
   return (
     <div className="space-y-5">
+      {socialSlot}
       <form action={formAction} className="space-y-5">
         <input type="hidden" name="locale" value={isEnglishRoute ? "en" : "ko"} />
         {effectiveNextPath ? (

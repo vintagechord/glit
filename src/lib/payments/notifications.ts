@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getMemberNotificationEmail } from "@/lib/member-notification-email";
 import { sendAdminSubmissionReceiptEmail, sendPaymentCompletedEmail, sendSubmissionUpdateEmail, type OrderEmailItem } from "@/lib/email";
 import type { EmailSendResult } from "@/lib/email-transport";
 import { isEmailRecipient } from "@/lib/email-config";
@@ -105,14 +106,19 @@ export async function sendPaidSubmissionNotificationsById(input: {
     }).catch(failure);
     const customerPromise = (async () => {
       let email: string | null = null;
+      let usesApplicationContact = false;
       if (submission.user_id) {
         const member = await db.auth.admin.getUserById(submission.user_id);
         if (member.error) customerLookupFailed = true;
-        else email = member.data.user?.email ?? null;
+        else {
+          email = getMemberNotificationEmail(member.data.user, submission.applicant_email);
+          usesApplicationContact = Boolean(email && !member.data.user?.email?.trim());
+        }
       } else email = submission.guest_email || submission.applicant_email || null;
       const recipient = email?.trim().toLowerCase() ?? "";
       if (!isEmailRecipient(recipient)) return null;
-      if (order) {
+      // A declared application contact may only see that application's details.
+      if (order && !usesApplicationContact) {
         // One receipt per order: every application in the same order shares
         // this key, so the outbox stores the summary message exactly once.
         return sendPaymentCompletedEmail({

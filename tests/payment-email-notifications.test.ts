@@ -10,7 +10,7 @@ type Row = Record<string, unknown>;
 type Fixture = {
   markPaymentSuccess: (orderId: string, payload: object) => Promise<{ ok: boolean }>;
   POST: (request: NextRequest) => Promise<Response>;
-  state: { rows: Row[]; orders: Row[]; orderItems: Row[]; nextOrderId: string; paymentStatus: string; user: { id: string; email: string } | null; memberEmail: string | null; mailOk: boolean; userError: unknown };
+  state: { rows: Row[]; orders: Row[]; orderItems: Row[]; nextOrderId: string; paymentStatus: string; user: { id: string; email?: string | null; identities?: { provider: string }[] } | null; memberEmail: string | null; mailOk: boolean; userError: unknown };
   calls: Array<{ method: string; input?: Row }>;
 };
 
@@ -143,6 +143,52 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
     if (guest) assert.ok(String(email?.link).endsWith("/track/legacy-private-guest-token"));
     else assert.doesNotMatch(String(email?.link), /track|legacy-private/);
   }
+});
+
+test("bank requests keep no-email social application contacts separate and direct totals behind login", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };
+  h.state.rows = [
+    { ...row(), title: "First private title", artist_name: "First private artist", applicant_email: "first@example.invalid" },
+    { ...row(), id: otherId, title: "Second private title", artist_name: "Second private artist", applicant_email: "second@example.invalid", amount_krw: 2500 },
+  ];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.equal((await h.POST(bankRequest(false, [submissionId, otherId]))).status, 200);
+  }
+  assert.equal(h.calls.some(call => call.method === "bank-email"), false);
+  const notices = h.calls.filter(call => call.method === "payment-email");
+  assert.equal(notices.length, 4);
+  for (const [index, call] of notices.entries()) {
+    const own = h.state.rows[index % 2], other = h.state.rows[1 - (index % 2)];
+    const notice = call.input!;
+    assert.equal(notice.email, own.applicant_email);
+    assert.equal(notice.title, own.title);
+    assert.equal(notice.artist, own.artist_name);
+    assert.equal(notice.submissionId, own.id);
+    assert.equal(notice.idempotencyKey, `bank-request:${h.state.nextOrderId}:${own.applicant_email}:${own.id}`);
+    assert.ok(String(notice.link).endsWith(`/mypage/orders?focus=${own.id}`));
+    assert.equal(notice.items, undefined);
+    assert.equal(notice.totalAmountKrw, undefined);
+    assert.equal(notice.amountKrw, undefined);
+    assert.match(String(notice.summary), /입금 계좌와 주문 전체 금액은 로그인 후/);
+    assert.doesNotMatch(JSON.stringify(notice), new RegExp(`${other.title}|${other.artist_name}|${other.id}|2500|3500|legacy-private`));
+  }
+  assert.equal(h.calls.filter(call => call.method === "rpc").length, 1, "notification replay retains the existing order");
+});
+
+test("a social member with an Auth email keeps the bank order summary, while missing authentication cannot use applicant contacts", async () => {
+  const h = await fixture();
+  h.state.rows = [row()];
+  h.state.user!.identities = [{ provider: "custom:naver" }];
+  assert.equal((await h.POST(bankRequest())).status, 200);
+  assert.equal(h.calls.find(call => call.method === "bank-email")?.input?.email, "member@example.invalid");
+  assert.equal(h.calls.some(call => call.method === "payment-email"), false);
+  const absent = await fixture();
+  absent.state.rows = [row()];
+  absent.state.user = null;
+  assert.equal((await absent.POST(bankRequest())).status, 403);
+  assert.equal(absent.calls.some(call => ["bank-email", "payment-email"].includes(call.method)), false);
 });
 
 test("payment email template includes escaped submission/code details and omits guest codes for a member payload", async () => {

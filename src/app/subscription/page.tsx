@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
@@ -33,6 +34,31 @@ export default async function SubscriptionPage() {
   }
 
   const { subscription } = await getActiveSubscription(user.id);
+  const buyerEmail = user.email?.trim();
+
+  if (!subscription && !buyerEmail) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-6 py-12">
+        <p className="bauhaus-kicker">Subscription</p>
+        <h1 className="font-display mt-4 text-2xl font-black text-foreground">
+          정기결제 안내를 받을 이메일이 필요합니다.
+        </h1>
+        <p className="mt-4 text-sm font-semibold leading-6 text-muted-foreground">
+          현재 계정에는 이메일이 등록되어 있지 않습니다. 이메일이 등록된 계정으로
+          로그인하거나 고객센터에 문의해주세요.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/login?next=%2Fsubscription" className="bauhaus-button min-h-11 px-4 py-3 text-sm">
+            다른 계정으로 로그인
+          </Link>
+          <Link href="/support" className="inline-flex min-h-11 items-center rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1556a4]">
+            고객센터
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const amountKrw = resolveSubscriptionPrice();
 
   if (!amountKrw || amountKrw <= 0) {
@@ -128,8 +154,8 @@ export default async function SubscriptionPage() {
       orderId,
       amountKrw,
       productName,
-      buyerName: user.email ?? "회원",
-      buyerEmail: user.email ?? "",
+      buyerName: buyerEmail ?? "회원",
+      buyerEmail,
       buyerTel: "",
       returnUrl,
       closeUrl: buildUrl(
@@ -146,8 +172,8 @@ export default async function SubscriptionPage() {
       orderId,
       amountKrw,
       productName,
-      buyerName: user.email ?? "회원",
-      buyerEmail: user.email ?? "",
+      buyerName: buyerEmail ?? "회원",
+      buyerEmail,
       returnUrl: mobileReturnUrl,
       buyerTel: "",
       callbackState: orderCreate.callbackState,

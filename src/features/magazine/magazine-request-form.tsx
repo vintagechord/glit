@@ -29,11 +29,13 @@ const labelClass =
 
 export function MagazineRequestForm({
   isAuthenticated,
+  requiresContactEmail = false,
   requesterPhone,
   availableCredits,
   magazineRequestsReady = true,
 }: {
   isAuthenticated: boolean;
+  requiresContactEmail?: boolean;
   requesterPhone?: string | null;
   availableCredits: number;
   magazineRequestsReady?: boolean;
@@ -170,6 +172,25 @@ export function MagazineRequestForm({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
+            {isAuthenticated && requiresContactEmail && (
+              <label className="grid gap-2 sm:col-span-2">
+                <span className={labelClass}>
+                  {localePrefix ? "Contact email (required)" : "안내받을 이메일 (필수)"}
+                </span>
+                <input
+                  name="requesterEmail"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className={fieldClass}
+                />
+                <span className="text-xs leading-5 text-muted-foreground">
+                  {localePrefix
+                    ? "Enter an email for updates about this request."
+                    : "매거진 발행 요청 안내를 받을 이메일을 입력해주세요."}
+                </span>
+              </label>
+            )}
             <label className="grid gap-2">
               <span className={labelClass}>연락처</span>
               <input

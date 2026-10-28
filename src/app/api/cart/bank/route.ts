@@ -1,9 +1,10 @@
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
+import { getMemberNotificationEmail } from "@/lib/member-notification-email";
 import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
-import { sendOrderBankTransferEmail } from "@/lib/email";
+import { sendOrderBankTransferEmail, sendSubmissionUpdateEmail } from "@/lib/email";
 import { runAfterResponse } from "@/lib/next/after-response";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -300,21 +301,41 @@ export async function POST(req: NextRequest) {
   }
 
   const baseUrl = getBaseUrl(req);
-  const memberEmail = user?.email ?? null;
   const submissionsByOrder = new Map<string, CartBankSubmission[]>();
   for (const submission of submissions) {
     const orderId = submission.current_order_id as string;
     submissionsByOrder.set(orderId, [...(submissionsByOrder.get(orderId) ?? []), submission]);
   }
-  // The order is stored; account details and the order summary go out as one
-  // message per order after the response, so a slow mail relay never holds
-  // the customer on the checkout screen. Unsent rows stay in the durable
-  // outbox for the scheduled worker.
+  // Send after the stored order's response. Application contacts receive only
+  // their own details; account and guest recipients retain the order summary.
+  // Unsent rows stay in the durable outbox for the scheduled worker.
   await runAfterResponse(async () => {
     await Promise.all(Array.from(submissionsByOrder, async ([orderId, orderSubmissions]) => {
+      if (user && !user.email?.trim()) {
+        await Promise.all(orderSubmissions.map(async (submission) => {
+          const email = getMemberNotificationEmail(user, submission.applicant_email);
+          if (!email) return;
+          const result = await sendSubmissionUpdateEmail({
+            email,
+            title: submission.title ?? "제목 미입력",
+            artist: submission.artist_name,
+            kind: getKind(submission.type),
+            headline: "입금 요청이 접수되었습니다.",
+            summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
+            subject: "[onside] 무통장 입금 요청 접수 안내",
+            link: buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
+            idempotencyKey: `bank-request:${orderId}:${email}:${submission.id}`,
+            submissionId: submission.id,
+          });
+          if (!result.ok && !result.skipped) {
+            console.warn("[CartBank] bank email failed", { orderId, submissionId: submission.id, message: result.message });
+          }
+        }));
+        return;
+      }
       const recipients = collectEmails(
         ...orderSubmissions.map((submission) =>
-          submission.user_id ? memberEmail : submission.guest_email || submission.applicant_email),
+          submission.user_id ? getMemberNotificationEmail(user, submission.applicant_email) : submission.guest_email || submission.applicant_email),
       );
       if (recipients.length === 0) return;
       const first = orderSubmissions[0];

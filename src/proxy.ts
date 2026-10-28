@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getAuthReturnPath } from "@/features/auth/navigation";
+import { requiresSocialSignupCompletion } from "@/features/auth/social-contract";
 import { PAYMENT_RESULT_GRANT_COOKIE } from "@/lib/payment-result-grant-cookie";
 import { middleware as updateSession } from "@/lib/supabase/middleware";
 
@@ -39,6 +41,36 @@ function hasSupabaseAuthCookie(request: NextRequest) {
     .some((cookie) => supabaseAuthCookiePattern.test(cookie.name));
 }
 
+function signupCompletionResponse(request: NextRequest, response: NextResponse) {
+  const isApi = request.nextUrl.pathname.startsWith("/api/");
+  let english = request.nextUrl.pathname === "/en" || request.nextUrl.pathname.startsWith("/en/");
+  let returnPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  if (isApi) {
+    returnPath = "/mypage";
+    try {
+      const referrer = new URL(request.headers.get("referer") ?? "");
+      if (referrer.origin === request.nextUrl.origin) {
+        english = referrer.pathname === "/en" || referrer.pathname.startsWith("/en/");
+        returnPath = `${referrer.pathname}${referrer.search}`;
+      }
+    } catch { /* API requests without a page return to My Page. */ }
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = english ? "/en/complete-signup" : "/complete-signup";
+  url.search = "";
+  url.searchParams.set("next", getAuthReturnPath(returnPath, english) ?? `${english ? "/en" : ""}/mypage`);
+  const blocked = isApi
+    ? NextResponse.json({
+      error: "회원가입 동의를 완료해주세요.",
+      code: "SOCIAL_SIGNUP_INCOMPLETE",
+      redirectTo: `${url.pathname}${url.search}`,
+    }, { status: 403 })
+    : NextResponse.redirect(url);
+  const result = withCookies(blocked, response);
+  result.headers.set("Cache-Control", "private, no-store");
+  return result;
+}
+
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -46,6 +78,12 @@ export default async function proxy(request: NextRequest) {
     isEnglishRoute && pathname !== "/en"
       ? pathname.replace(/^\/en(?=\/)/, "")
       : pathname;
+  // Consent, identity callbacks and recovery must remain reachable. These
+  // handlers perform their own verification; callbacks also own PKCE cookies.
+  if (/^\/(?:login|signup|forgot-password|reset-password|find-id|confirm-email|complete-signup|privacy|terms|logout|auth)(?:\/|$)/.test(authPathname) ||
+      /^\/api\/auth(?:\/|$)/.test(authPathname)) {
+    return NextResponse.next();
+  }
   const isDev = process.env.NODE_ENV !== "production";
   const isDevStdPayPath =
     pathname === "/dev/inicis-stdpay" ||
@@ -77,14 +115,19 @@ export default async function proxy(request: NextRequest) {
     isUserProtectedRoute || isAdminRoute;
 
   if (!requiresSessionCookie) {
-    // Public dashboard/cart pages still read the member session in Server
-    // Components, which cannot persist a rotated refresh token. Refresh it
-    // here so the browser keeps the current token; never redirect guests.
-    if (!isAdminRoute && (isDashboardRoute || isMypageRoute) && hasSupabaseAuthCookie(request)) {
+    // Reading the local session is only an optimistic redirect check. The
+    // server client's verified getUser guard is authoritative for data access.
+    // This also persists rotated cookies on public pages without an extra
+    // remote user lookup or any auth work for cookie-free visitors.
+    if (hasSupabaseAuthCookie(request)) {
       const refreshed = await updateSession(request);
       const refreshedResponse =
         refreshed instanceof NextResponse ? refreshed : (refreshed?.response as NextResponse | undefined);
       if (refreshedResponse) {
+        const refreshedUser = refreshed instanceof NextResponse ? null : refreshed?.user;
+        if (refreshedUser && requiresSocialSignupCompletion(refreshedUser)) {
+          return signupCompletionResponse(request, refreshedResponse);
+        }
         if (isDev && isDevStdPayPath) {
           refreshedResponse.headers.set("Content-Security-Policy", devStdPayCsp);
         }
@@ -118,6 +161,9 @@ export default async function proxy(request: NextRequest) {
   const supabase = session instanceof NextResponse ? null : session?.supabase ?? null;
   if (!response) {
     return NextResponse.next();
+  }
+  if (user && requiresSocialSignupCompletion(user)) {
+    return signupCompletionResponse(request, response);
   }
 
   // Ensure submission detail carries ?id=<uuid> for downstream usage
@@ -196,13 +242,6 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin/:path*",
-    "/dashboard/:path*",
-    "/mypage/:path*",
-    "/en/dashboard/:path*",
-    "/en/mypage/:path*",
-    "/dev/inicis-stdpay",
-    "/api/dev/inicis/stdpay/:path*",
-    "/api/dev/inicis/stdpay-return/:path*",
+    "/((?!_next/|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf|map)$).*)",
   ],
 };
