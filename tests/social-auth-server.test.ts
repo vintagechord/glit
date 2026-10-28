@@ -99,6 +99,63 @@ test("native social launch uses per-flow PKCE and minimal Kakao nickname consent
   assert.equal(callback.origin, appOrigin); assert.equal(callback.searchParams.get("next"), "/en/dashboard/new?draft=1"); assert.equal(callback.searchParams.get("flow"), "social");
 });
 
+test("Render's internal HTTP origin starts OAuth once on the configured HTTPS host", async () => {
+  for (const internalOrigin of ["http://onside.example", "http://localhost:10000", "http://10.0.0.9:10000"]) {
+    const f = await fixture(); f.state.oauthUrl = providerUrl("google");
+    const request = new Request(`${internalOrigin}/auth/social/google?next=%2Fen%2Fmypage&locale=en`, {
+      headers: { host: "onside.example", "x-forwarded-proto": "https", "x-forwarded-host": "onside.example" },
+    });
+    const response = await f.start(request, context("google"));
+    assert.equal(location(response).origin, authOrigin, "must leave the app instead of redirecting to its own launch URL");
+    assert.equal(f.calls.filter(call => call.method === "oauth").length, 1);
+    const input = f.calls.find(call => call.method === "oauth")?.input as { options: { redirectTo: string } };
+    const callback = new URL(input.options.redirectTo);
+    assert.equal(callback.origin, appOrigin);
+    assert.equal(callback.searchParams.get("next"), "/en/mypage");
+    assert.equal(callback.searchParams.get("locale"), "en");
+  }
+});
+
+test("Host and forwarded-header injection cannot change OAuth origins or bypass canonical aliases", async () => {
+  const rejectedHeaders: Record<string, string>[] = [
+    { host: "alias.example", "x-forwarded-host": "onside.example", "x-forwarded-proto": "https" },
+    { host: "onside.example.evil", "x-forwarded-host": "onside.example", "x-forwarded-proto": "https" },
+    { host: "onside.example@evil.example", "x-forwarded-proto": "https" },
+    { host: "onside.example,evil.example", "x-forwarded-proto": "https" },
+    { host: "onside.example", "x-forwarded-proto": "https,http" },
+    { host: "onside.example", "x-forwarded-proto": "http" },
+    { "x-forwarded-host": "onside.example", "x-forwarded-proto": "https" },
+  ];
+  for (const headers of rejectedHeaders) {
+    const f = await fixture(); f.state.oauthUrl = providerUrl("google");
+    const response = await f.start(new Request("http://internal:10000/auth/social/google?next=https%3A%2F%2Fevil.example", { headers }), context("google"));
+    assert.equal(location(response).origin, appOrigin);
+    assert.equal(location(response).pathname, "/auth/social/google");
+    assert.equal(location(response).searchParams.get("next"), "/mypage");
+    assert.deepEqual(f.calls, [], "canonical redirect must happen before provider lookup or PKCE mutation");
+  }
+  const f = await fixture(); f.state.oauthUrl = providerUrl("google");
+  const response = await f.start(new Request("http://internal:10000/auth/social/google", {
+    headers: { host: "onside.example", "x-forwarded-proto": "https", "x-forwarded-host": "evil.example" },
+  }), context("google"));
+  assert.equal(location(response).origin, authOrigin);
+  const input = f.calls.find(call => call.method === "oauth")?.input as { options: { redirectTo: string } };
+  assert.equal(new URL(input.options.redirectTo).origin, appOrigin, "untrusted forwarded host is ignored");
+});
+
+test("proxied identity linking still checks browser Origin independently of the internal request URL", async () => {
+  const f = await fixture(); f.state.user = user("email"); f.state.linkUrl = linkUrl();
+  const request = (origin: string) => new Request("http://localhost:10000/auth/link/naver", {
+    method: "POST", headers: { origin, host: "onside.example", "x-forwarded-host": "onside.example", "x-forwarded-proto": "https", "content-type": "application/x-www-form-urlencoded" }, body: "locale=en",
+  });
+  assert.equal((await f.link(request("https://evil.example"), context())).status, 403);
+  assert.equal(f.calls.length, 0);
+  const response = await f.link(request(appOrigin), context());
+  assert.equal(location(response).origin, "https://nid.naver.com");
+  const input = f.calls.find(call => call.method === "link")?.input as { options: { redirectTo: string } };
+  assert.equal(new URL(input.options.redirectTo).origin, appOrigin);
+});
+
 test("cancelled, absent, malformed and unknown callback flows preserve existing sessions", async () => {
   const f = await fixture(); f.jar.set("session", {name:"session",value:"existing-session"});
   for (const query of ["flow=social&error=access_denied&error_description=secret", "flow=social", "flow=social&code=bad%20code&sb_flow_id=good", "flow=social&code=good&sb_flow_id=bad%20id", "code=good&sb_flow_id=fixture-flow", "flow=social&code=good"]) {
