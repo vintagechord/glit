@@ -18,8 +18,8 @@ test.beforeAll(async () => {
         import {ProfileSocialAccounts} from './src/features/profile/profile-social-accounts';
         import {ProfileForm} from './src/features/profile/profile-form';
         const params=new URLSearchParams(location.search),nextPath=params.get('next'),english=location.pathname.startsWith('/en/');
-        const availability={google:true,naver:true,kakao:false};
-        const content=location.pathname.endsWith('/complete-signup')?<CompleteSignupForm nextPath={nextPath} english={english} consentAlreadySaved={params.get("saved")==="yes"}/>:location.pathname.endsWith('/profile')?<><ProfileForm defaultValues={{name:'Member',company:'',phone:'01012345678'}} canChangePassword={params.get('password')==='yes'}/><ProfileSocialAccounts availability={availability} linkedProviders={['naver']} english={english}/></>:location.pathname.endsWith('/signup')?<><SocialAuthButtons availability={availability} mode='signup' nextPath={nextPath}/><SignupForm nextPath={nextPath}/></>:<LoginForm nextPath={nextPath} socialSlot={<SocialAuthButtons availability={availability} nextPath={nextPath} errorCode={params.get('social_error')}/>}/>;
+        const availability={google:true,naver:params.get('naver')!=='off',kakao:false},naverReviewPending=params.get('review')==='yes';
+        const content=location.pathname.endsWith('/complete-signup')?<CompleteSignupForm nextPath={nextPath} english={english} consentAlreadySaved={params.get("saved")==="yes"}/>:location.pathname.endsWith('/profile')?<><ProfileForm defaultValues={{name:'Member',company:'',phone:'01012345678'}} canChangePassword={params.get('password')==='yes'}/><ProfileSocialAccounts availability={availability} linkedProviders={params.has('unlinked')?[]:['naver']} english={english} naverReviewPending={naverReviewPending}/></>:location.pathname.endsWith('/signup')?<><SocialAuthButtons availability={availability} mode='signup' nextPath={nextPath} naverReviewPending={naverReviewPending}/><SignupForm nextPath={nextPath}/></>:<LoginForm nextPath={nextPath} socialSlot={<SocialAuthButtons availability={availability} nextPath={nextPath} errorCode={params.get('social_error')} naverReviewPending={naverReviewPending}/>}/>;
         createRoot(document.getElementById('root')).render(<main className='mx-auto w-full max-w-lg space-y-6 p-5'>{content}</main>);
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production","NEXT_PUBLIC_EMAIL_DELIVERY_MODE":"transactional"}' },
@@ -48,6 +48,37 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const english of [false, true]) {
+  test(`${english ? "English" : "Korean"} Naver review notice explains restrictions without changing login or linking controls`, async ({ page }) => {
+    const prefix = english ? "/en" : "";
+    const reviewText = english ? "Under review" : "검수 중";
+    const restriction = english ? /only app administrators and registered testers/ : /네이버 앱 관리자와 등록된 테스터만/;
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const mode of ["login", "signup"]) {
+      await page.goto(`http://social-ui.test${prefix}/${mode}?review=yes&next=%2Fmypage`);
+      const naver = page.getByRole("link", { name: english ? "Continue with Naver" : `네이버로 ${mode === "signup" ? "시작하기" : "로그인"}`, exact: true });
+      await expect(naver).toBeVisible();
+      await expect(naver).toHaveAttribute("href", `/auth/social/naver?locale=${english ? "en" : "ko"}&next=${encodeURIComponent(`${prefix}/mypage`)}`);
+      await expect(naver).toHaveAccessibleDescription(restriction);
+      await expect(page.getByText(reviewText, { exact: true })).toBeVisible();
+      const google = page.getByRole("link", { name: english ? "Continue with Google" : `Google로 ${mode === "signup" ? "시작하기" : "로그인"}`, exact: true });
+      await expect(google).not.toHaveAttribute("aria-describedby");
+      await expect(page.getByRole("button", { name: english ? /Continue with Kakao.*Setup pending/ : /카카오.*준비 중/ })).toBeDisabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    }
+    await page.goto(`http://social-ui.test${prefix}/login`);
+    await expect(page.getByText(reviewText, { exact: true })).toHaveCount(0);
+    await page.goto(`http://social-ui.test${prefix}/login?review=yes&naver=off`);
+    await expect(page.getByText(reviewText, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: english ? /Continue with Naver.*Setup pending/ : /네이버.*준비 중/ })).toBeDisabled();
+    await page.goto(`http://social-ui.test${prefix}/profile?review=yes&unlinked=yes`);
+    const linkForm = page.locator('form[action="/auth/link/naver"]');
+    await expect(linkForm).toHaveAttribute("method", "post");
+    await expect(linkForm.getByRole("button")).toBeEnabled();
+    await expect(linkForm.getByRole("button")).toHaveAccessibleDescription(restriction);
+    await page.goto(`http://social-ui.test${prefix}/profile?review=yes`);
+    await expect(page.getByText(reviewText, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(english ? "Linked" : "연결됨", { exact: true })).toBeVisible();
+  });
   for (const mode of ["login", "signup"]) {
     test(`${english ? "English" : "Korean"} ${mode}: native social links preserve draft destination, with disabled setup state at 320px`, async ({ page }, testInfo) => {
       const requests: string[] = [];

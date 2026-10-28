@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SocialAuthNotice } from "@/features/auth/social-auth-buttons";
+import { NaverReviewNotice, SocialAuthNotice } from "@/features/auth/social-auth-buttons";
 import { socialProviders, type SocialAvailability, type SocialProviderId } from "@/features/auth/social-contract";
 import { SocialProviderMark, socialProviderStyles } from "@/features/auth/social-provider-mark";
 
@@ -16,10 +16,12 @@ export type ProfileSocialAccountsProps = {
   linkedProviders: SocialProviderId[];
   english?: boolean;
   loading?: boolean;
+  naverReviewPending?: boolean;
 };
 
-export function ProfileSocialAccounts({ availability, linkedProviders, english = false, loading = false }: ProfileSocialAccountsProps) {
+export function ProfileSocialAccounts({ availability, linkedProviders, english = false, loading = false, naverReviewPending = false }: ProfileSocialAccountsProps) {
   const [pendingProvider, setPendingProvider] = useState<SocialProviderId | null>(null);
+  const naverReviewNoticeId = useId();
   return (
     <div className="mt-5 space-y-4 border-t-2 border-border pt-5">
       <h3 className="text-sm font-black">{english ? "Linked social accounts" : "소셜 계정 연결"}</h3>
@@ -31,13 +33,15 @@ export function ProfileSocialAccounts({ availability, linkedProviders, english =
           if (linkedProviders.includes(id)) return (
             <div key={id} className={`flex min-h-12 items-center justify-between gap-3 rounded-[8px] border-2 border-[#111111] px-3 py-2 text-sm font-bold ${socialProviderStyles[id]}`}><span className="inline-flex items-center gap-2"><SocialProviderMark provider={id} />{name}</span><span className="text-xs">{english ? "Linked" : "연결됨"}</span></div>
           );
+          const showReviewNotice = id === "naver" && availability.naver && naverReviewPending;
           return (
-            <form key={id} method="post" action={`/auth/link/${id}`} onSubmit={() => setPendingProvider(id)}>
+            <form key={id} method="post" action={`/auth/link/${id}`} onSubmit={() => setPendingProvider(id)} className="space-y-2">
               <input type="hidden" name="locale" value={english ? "en" : "ko"} />
               <input type="hidden" name="next" value={`${english ? "/en" : ""}/mypage/profile`} />
-              <button type="submit" disabled={!availability[id] || Boolean(pendingProvider)} className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-[8px] border-2 border-[#111111] px-3 py-2 text-left text-sm font-bold disabled:cursor-not-allowed ${socialProviderStyles[id]}`}>
+              <button type="submit" aria-describedby={showReviewNotice ? naverReviewNoticeId : undefined} disabled={!availability[id] || Boolean(pendingProvider)} className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-[8px] border-2 border-[#111111] px-3 py-2 text-left text-sm font-bold disabled:cursor-not-allowed ${socialProviderStyles[id]}`}>
                 <span className="inline-flex items-center gap-2"><SocialProviderMark provider={id} />{name}</span><span className="text-xs">{loading ? (english ? "Checking..." : "확인 중...") : !availability[id] ? (english ? "Setup pending" : "준비 중") : pendingProvider === id ? (english ? "Connecting..." : "연결 중...") : (english ? "Link account" : "연결하기")}</span>
               </button>
+              {showReviewNotice && <NaverReviewNotice id={naverReviewNoticeId} english={english} />}
             </form>
           );
         })}

@@ -56,6 +56,22 @@ async function mount(page: Page, options: {holdRequest?: number;path?:string;gue
 const metrics=(page:Page)=>page.evaluate(()=>(window as unknown as {__headerMetrics:Record<string,number>}).__headerMetrics);
 const changePath=(page:Page,path:string)=>page.evaluate(next=>(window as unknown as {__changePath:(path:string)=>void}).__changePath(next),path);
 
+test('social signup language switching stays on completion and preserves its return query and fragment',async({page})=>{
+  const next='/dashboard/new/album?draft=fixture-id#upload';
+  const suffix=`?next=${encodeURIComponent(next)}#agreements`;
+  await mount(page,{path:`/complete-signup${suffix}`});
+  const english=page.getByRole('link',{name:'EN',exact:true});
+  await expect(english).toHaveAttribute('href',`/en/complete-signup${suffix}`);
+  await english.click();
+  await expect(page).toHaveURL(`http://header.fixture.invalid/en/complete-signup${suffix}`);
+  const korean=page.getByRole('link',{name:'KR',exact:true});
+  await expect(korean).toHaveAttribute('href',`/complete-signup${suffix}`);
+  await korean.click();
+  await expect(page).toHaveURL(`http://header.fixture.invalid/complete-signup${suffix}`);
+  expect(new URL(page.url()).searchParams.get('next')).toBe(next);
+  expect(new URL(page.url()).hash).toBe('#agreements');
+});
+
 test('normal client navigation keeps one auth subscription and avoids repeated cart/auth requests',async({page},testInfo)=>{
   const {requests}=await mount(page);
   for(const path of ['/track','/dashboard/new','/mypage/music']){
