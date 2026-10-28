@@ -1,7 +1,7 @@
 import { getSocialProvider } from "@/features/auth/social-contract";
 import { getSocialAvailability } from "@/features/auth/social";
 import { prepareSocialSignIn } from "@/features/auth/social-launch";
-import { isSocialPrefetch, socialLoginError, socialNavigation, socialNoContent, socialRedirect } from "@/features/auth/social-http";
+import { isCanonicalSocialRequest, isSocialPrefetch, socialLoginError, socialNavigation, socialNoContent, socialRedirect } from "@/features/auth/social-http";
 import { getBaseUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(request: Request, context: { params: Promise<{ provide
   const provider = getSocialProvider((await context.params).provider);
   if (!provider) return socialLoginError("unavailable", english, next);
   const origin = getBaseUrl();
-  if (url.origin !== origin) {
+  if (!isCanonicalSocialRequest(request, origin)) {
     const canonical = new URL(`/auth/social/${provider.id}`, origin);
     canonical.searchParams.set("next", next);
     if (english) canonical.searchParams.set("locale", "en");
