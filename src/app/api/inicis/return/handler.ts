@@ -37,7 +37,7 @@ import {
   createPaymentResultGrant,
   setPaymentResultGrantCookie,
 } from "@/lib/payment-result-grant";
-import { getBaseUrl } from "@/lib/url";
+import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
 import { isInicisSuccessCode } from "@/lib/inicis/api";
 
 type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
@@ -100,7 +100,7 @@ const buildBridgeRedirect = (baseUrl: string, payload: BridgePayload) => {
 
 // Parses STDPay callback payloads (form POST or query) for downstream approval handling.
 const parseParams = async (req: NextRequest): Promise<ParsedReturn> => {
-  const baseUrl = getBaseUrl(req);
+  const baseUrl = getInicisCallbackBaseUrl(req);
   const contentType = req.headers.get("content-type") ?? "";
   const method = req.method;
   let params: Record<string, string> = {};
@@ -868,7 +868,7 @@ export async function handleInicisReturn(req: NextRequest) {
       }).catch(() => false);
     }
     console.error("[INICIS][final][error]", error);
-    const fallbackBase = parsed?.baseUrl ?? getBaseUrl();
+    const fallbackBase = parsed?.baseUrl ?? getInicisCallbackBaseUrl(req);
     return buildBridgeRedirect(fallbackBase, {
       status: "ERROR",
       submissionId: approvalClaim?.submissionId,

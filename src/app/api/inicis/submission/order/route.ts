@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isInicisMobileRequest, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../../../lib/payments/submission";
-import { getBaseUrl } from "../../../../../lib/url";
+import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
 import { parseInicisContext } from "@/lib/inicis/context";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = getInicisCallbackBaseUrl(req);
     const { error, result } = await createSubmissionPaymentOrder(
       submissionId,
       baseUrl,

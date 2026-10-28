@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getAuthReturnPath } from "@/features/auth/navigation";
 import { requiresSocialSignupCompletion } from "@/features/auth/social-contract";
+import { getCanonicalPageRedirect } from "@/lib/canonical-page-redirect";
 import { PAYMENT_RESULT_GRANT_COOKIE } from "@/lib/payment-result-grant-cookie";
 import { middleware as updateSession } from "@/lib/supabase/middleware";
+import { getBaseUrl } from "@/lib/url";
 
 const devStdPayCsp =
   "default-src 'self'; " +
@@ -72,6 +74,18 @@ function signupCompletionResponse(request: NextRequest, response: NextResponse) 
 }
 
 export default async function proxy(request: NextRequest) {
+  const canonicalPage = getCanonicalPageRedirect({
+    method: request.method,
+    host: request.headers.get("host"),
+    pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
+  }, getBaseUrl());
+  if (canonicalPage) {
+    const response = NextResponse.redirect(canonicalPage, 307);
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
   const { pathname } = request.nextUrl;
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
   const authPathname =

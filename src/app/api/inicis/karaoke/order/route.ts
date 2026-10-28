@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isInicisMobileRequest, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 
 import { createKaraokePaymentOrder, ensureKaraokeRequestOwner } from "@/lib/payments/karaoke";
-import { getBaseUrl } from "@/lib/url";
+import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
 import { parseInicisContext } from "@/lib/inicis/context";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "요청 소유자가 아닙니다." }, { status: 403 });
     }
 
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = getInicisCallbackBaseUrl(req);
     const { error, result } = await createKaraokePaymentOrder(requestId, baseUrl);
     if (error || !result) {
       console.error("[Karaoke][Inicis][STDPay][init][order-error]", {

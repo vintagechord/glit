@@ -18,7 +18,8 @@ import {
   claimSubscriptionBillingCallback,
   failSubscriptionBillingCallback,
 } from "@/lib/subscriptions/service";
-import { getBaseUrl, getClientIp } from "../../../../lib/url";
+import { getClientIp } from "../../../../lib/url";
+import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ const formExactString = (form: FormData, ...keys: string[]) => {
 };
 
 export async function POST(req: NextRequest) {
-  const baseUrl = getBaseUrl(req);
+  const baseUrl = getInicisCallbackBaseUrl(req);
   const formResult = await readBoundedInicisCallbackForm(req);
   if (!formResult.ok) {
     return NextResponse.json(
