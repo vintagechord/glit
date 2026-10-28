@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, LoaderCircle, Music2, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, LoaderCircle, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import type { ArchiveCommand, ArchiveRelease, ArchiveTrack } from "@/lib/music-archive/model";
 import type { ArtistCandidate, MusicProviderLink } from "@/lib/music-archive/providers";
@@ -13,6 +13,7 @@ import { ArtistConnect } from "./artist-connect";
 import { EntityEditor } from "./entity-editors";
 import { SyncStatus } from "./sync-status";
 import { MemberMusicStatus, memberReviewStatus, type MemberMusicTab } from "./member-music-status";
+import { CopyrightCreditDetails, trackCopyrightCredits } from "./track-credits";
 
 const tabs: { key: MemberMusicTab; label: string }[] = [
   { key: "review", label: "심의" }, { key: "copyright", label: "저작권 등록" },
@@ -29,6 +30,7 @@ export function MusicArchiveClient() {
   const [tab, setTab] = useState<MemberMusicTab>("review"); const [reviewOpenRequest, setReviewOpenRequest] = useState(0);
   const [loading, setLoading] = useState(true); const [detailLoading, setDetailLoading] = useState(false); const [loginRequired, setLoginRequired] = useState(false);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [dialog, setDialog] = useState<Dialog>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<Library | null>(null); const [removalError, setRemovalError] = useState("");
   const [search, setSearch] = useState(""); const [page, setPage] = useState(1);
   const refreshIndex = useCallback(async () => { const result = await archiveRequest<ArchiveIndex>(); setIndex(result); setLoginRequired(false); return result; }, []);
   const refreshDetail = useCallback(async (id: string, signal?: AbortSignal) => {
@@ -104,9 +106,32 @@ export function MusicArchiveClient() {
       setDialog(null); connectionDraft.current = null; setMessage(syncNotice || (jobs.some((job) => ["queued", "running"].includes(job.status)) ? "" : "아티스트를 저장했습니다."));
     } catch (error) { setError(failure(error)); throw error; } finally { setBusy(false); }
   }
+  async function removeArtist() {
+    if (busy || !pendingRemoval) return;
+    const target = pendingRemoval;
+    setBusy(true); setRemovalError(""); setError(""); setMessage("");
+    function finish(saved: Library) {
+      acceptLibrary(saved); setPendingRemoval(null); setMessage("아티스트를 내 목록에서 삭제했습니다.");
+    }
+    try {
+      const result = await archiveRequest<{ library: Library }>("", { action: "archive", libraryId: target.id, version: target.version });
+      finish(result.library);
+    } catch (error) {
+      // A failed response may follow a successful archive. Reconcile the saved
+      // state, or refresh a conflicting version before the member confirms again.
+      try {
+        const refreshed = await archiveRequest<LibraryDetail>(`?libraryId=${encodeURIComponent(target.id)}`);
+        acceptLibrary(refreshed.library);
+        if (refreshed.library.archived_at) { finish(refreshed.library); return; }
+        setPendingRemoval(refreshed.library);
+      } catch { /* Keep the original item and error when confirmation is unavailable. */ }
+      setRemovalError(failure(error));
+    } finally { setBusy(false); }
+  }
   const library = current?.library; const data = library?.data;
   const release = data?.releases.find((item) => item.id === releaseId && !item.excluded && !item.mergedInto);
   const albumTracks = data?.tracks.filter((item) => item.releaseId === releaseId && !item.excluded && !item.mergedInto).sort((a, b) => a.discNumber - b.discNumber || a.trackNumber - b.trackNumber) ?? [];
+  const albumCredits = new Map(data ? trackCopyrightCredits(data, albumTracks).map(credits => [credits.track.id, credits]) : []);
   const releaseTracks = albumTracks.filter((item) => item.managed);
   const track = releaseTracks.find((item) => item.id === trackId);
   const libraries = index?.libraries.filter((item) => !item.archived_at) ?? [];
@@ -139,7 +164,10 @@ export function MusicArchiveClient() {
       {error && <Notice error>{error}</Notice>}{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
       {loading ? <p role="status" className="flex items-center justify-center gap-2 py-10"><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />내 음악을 불러오고 있습니다.</p> : loginRequired ? <Notice><Link className="font-bold underline" href="/login?next=%2Fmypage%2Fmusic">로그인하고 내 음악 관리 시작</Link></Notice> : index && <>
         {!artistId ? <>
-          {!libraries.length ? <div className={`${panelClass} space-y-3 py-12 text-center`}><Music2 className="mx-auto h-9 w-9" aria-hidden /><h2 className="font-black">내 아티스트를 추가해 주세요</h2><p className="text-sm text-muted-foreground">발매한 음악을 찾아 한곳에 모아드립니다.</p></div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{libraries.map((item) => <button type="button" key={item.id} onClick={() => navigate(item.id)} className={`${panelClass} flex items-center gap-3 text-left transition hover:border-foreground`}><Cover small kind="artist" src={item.data.artist.imageUrl} fallbackSources={item.data.releases.filter(release => !release.excluded && !release.mergedInto).map(release => release.imageUrl)} title={item.data.artist.name} /><span className="min-w-0 flex-1"><strong className="block break-words text-lg">{item.data.artist.name}</strong><span className="mt-1 block text-sm text-muted-foreground">앨범 {item.summary?.releaseCount ?? item.data.releases.filter((release) => !release.excluded && !release.mergedInto).length}개 · 트랙 {item.summary?.trackCount ?? item.data.tracks.filter((track) => !track.excluded && !track.mergedInto).length}개</span></span><ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></button>)}</div>}
+          {!libraries.length ? <div className={`${panelClass} space-y-3 py-12 text-center`}><Music2 className="mx-auto h-9 w-9" aria-hidden /><h2 className="font-black">내 아티스트를 추가해 주세요</h2><p className="text-sm text-muted-foreground">발매한 음악을 찾아 한곳에 모아드립니다.</p></div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{libraries.map((item) => <article key={item.id} aria-labelledby={`artist-card-${item.id}`} className={`${panelClass} space-y-3`}>
+            <button type="button" disabled={busy} onClick={() => navigate(item.id)} className="flex w-full items-center gap-3 rounded-lg text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"><Cover small kind="artist" src={item.data.artist.imageUrl} fallbackSources={item.data.releases.filter(release => !release.excluded && !release.mergedInto).map(release => release.imageUrl)} title={item.data.artist.name} /><span className="min-w-0 flex-1"><strong id={`artist-card-${item.id}`} className="block break-words text-lg">{item.data.artist.name}</strong><span className="mt-1 block text-sm text-muted-foreground">앨범 {item.summary?.releaseCount ?? item.data.releases.filter((release) => !release.excluded && !release.mergedInto).length}개 · 트랙 {item.summary?.trackCount ?? item.data.tracks.filter((track) => !track.excluded && !track.mergedInto).length}개</span></span><ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></button>
+            <div className="flex justify-end border-t border-border pt-2"><button type="button" disabled={busy} aria-label="아티스트 삭제" aria-describedby={`artist-card-${item.id}`} onClick={() => { setRemovalError(""); setPendingRemoval(item); }} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden />삭제</button></div>
+          </article>)}</div>}
           {index.nextPage != null && <div className="flex justify-center"><Button disabled={busy} onClick={() => act(async () => { const result = await archiveRequest<ArchiveIndex>(`?page=${index.nextPage}`); setIndex((previous) => previous ? { ...result, libraries: [...previous.libraries, ...result.libraries.filter((item) => !previous.libraries.some((saved) => saved.id === item.id))] } : result); })}>아티스트 더 보기</Button></div>}
         </> : detailLoading && !current ? <p role="status" className="py-10 text-center">음악을 불러오고 있습니다.</p> : data && library && current ? <>
           <nav aria-label="내 음악 경로" className="flex flex-wrap items-center gap-2 text-sm"><Button onClick={() => navigate(release ? artistId : "")}><ArrowLeft className="h-4 w-4" aria-hidden />{release ? "앨범 목록" : "아티스트 목록"}</Button>{release && <span className="min-w-0 break-words text-muted-foreground">{data.artist.name}</span>}</nav>
@@ -154,8 +182,11 @@ export function MusicArchiveClient() {
             <section className={`${panelClass} flex flex-wrap items-center gap-4`}><Cover src={release.imageUrl} title={release.title} /><div className="min-w-0 flex-1"><h2 className="break-words text-xl font-black">{release.title}</h2><p className="mt-1 text-sm text-muted-foreground">{[release.releaseDate, `${albumTracks.length}곡`].filter(Boolean).join(" · ")}</p></div><div className="ml-auto flex flex-wrap justify-end gap-2"><Button disabled={busy || !!activeJobs} onClick={() => { void refreshMetadata().catch(() => {}); }}><RefreshCw className="h-4 w-4" aria-hidden />앨범 정보 다시 가져오기</Button><Button onClick={() => setDialog({ type: "release", release })}>수정</Button></div></section>
             {albumTracks.some((item) => !item.managed) && <details key={release.id} open={!releaseTracks.length} className={panelClass}>
               <summary className="cursor-pointer text-sm font-bold">전체 수록곡 {albumTracks.length}곡</summary>
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">앨범의 전체 수록곡을 함께 불러왔습니다. 선택한 아티스트와 연결이 확인된 곡은 아래에서 관리할 수 있습니다.</p>
-              <ol aria-label="앨범 전체 수록곡" className="mt-3 divide-y divide-border">{albumTracks.map((item) => <li key={item.id} className="flex items-start gap-3 py-3 text-sm"><span className="shrink-0 text-muted-foreground">{item.discNumber > 1 ? `${item.discNumber}-` : ""}{item.trackNumber}.</span><div className="min-w-0 flex-1"><p className="break-words font-semibold">{item.title}{item.version ? ` (${item.version})` : ""}</p>{item.artistName && <p className="mt-1 break-words text-xs text-muted-foreground">{item.artistName}</p>}</div><span className="shrink-0 text-xs text-muted-foreground">{item.managed ? "관리 중" : "참여 정보 확인 필요"}</span></li>)}</ol>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">앨범의 전체 수록곡과 확인된 저작자 정보입니다. 아래 관리 목록에는 이 아티스트의 곡으로 연결된 항목만 표시됩니다.</p>
+              <ol aria-label="앨범 전체 수록곡" className="mt-3 divide-y divide-border">{albumTracks.map((item) => {
+                const credits = albumCredits.get(item.id);
+                return <li key={item.id} className="flex items-start gap-3 py-3 text-sm"><span className="shrink-0 text-muted-foreground">{item.discNumber > 1 ? `${item.discNumber}-` : ""}{item.trackNumber}.</span><div className="min-w-0 flex-1"><p className="break-words font-semibold">{item.title}{item.version ? ` (${item.version})` : ""}</p>{item.artistName && <p className="mt-1 break-words text-xs text-muted-foreground">{item.artistName}</p>}{credits && <div className="mt-2 text-xs leading-5"><CopyrightCreditDetails credits={credits} /></div>}<p className="mt-2 text-xs text-muted-foreground">{credits ? "저작자 정보 있음" : "저작자 정보 확인 필요"}</p></div>{item.managed && <span className="shrink-0 text-xs text-muted-foreground">관리 중</span>}</li>;
+              })}</ol>
             </details>}
             <div className="flex flex-wrap items-center gap-2"><div className="min-w-0 flex-1"><select className={inputClass} aria-label="관리할 음악" value={track?.id ?? ""} onChange={(event) => navigate(artistId, release.id, event.target.value, tab)}><option value="">앨범 전체</option>{releaseTracks.map((item) => <option key={item.id} value={item.id}>{item.trackNumber}. {item.title}{item.version ? ` (${item.version})` : ""}</option>)}</select></div>{track ? <Button onClick={() => setDialog({ type: "track", track, release })}>트랙 수정</Button> : <Button onClick={() => setDialog({ type: "track", release })}><Plus className="h-4 w-4" aria-hidden />트랙 추가</Button>}</div>
             <nav aria-label="음악 관리 탭" className="grid grid-cols-4 gap-1 border-b border-border">{tabs.map((item) => <button type="button" key={item.key} aria-current={tab === item.key ? "page" : undefined} className={`min-h-12 border-b-2 px-1 text-xs font-bold transition sm:text-sm ${tab === item.key ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => { navigate(artistId, release.id, track?.id, item.key); if (item.key === "review") setReviewOpenRequest((value) => value + 1); }}>{item.label}</button>)}</nav>
@@ -167,6 +198,13 @@ export function MusicArchiveClient() {
     {dialog && <Modal title={panelTitle} onClose={() => { if (!busy) setDialog(null); }}>
       {(dialog.type === "add_artist" || dialog.type === "connect") && <ArtistConnect providers={index?.providers || []} existingName={dialog.type === "connect" ? data?.artist.name : undefined} busy={busy} onChoose={(name, candidate) => addArtist(name, candidate)} onLink={(name, link) => addArtist(name, undefined, link)} />}
       {data && ["artist", "release", "track"].includes(dialog.type) && <EntityEditor data={data} kind={dialog.type as "artist" | "release" | "track"} release={dialog.release} track={dialog.track} busy={busy} onSave={(values) => run(() => commands(values), true)} />}
+    </Modal>}
+    {pendingRemoval && <Modal title="아티스트 삭제" onClose={() => { if (!busy) setPendingRemoval(null); }}>
+      <p className="break-words text-lg font-black">{pendingRemoval.data.artist.name}</p>
+      <p className="text-sm leading-6">이 아티스트와 앨범 {pendingRemoval.summary?.releaseCount ?? pendingRemoval.data.releases.filter(item => !item.excluded && !item.mergedInto).length}개를 내 음악 관리 목록에서 숨깁니다. 진행 중인 앨범 불러오기도 중단됩니다.</p>
+      <p className="text-sm leading-6 text-muted-foreground">저장된 음악 자료와 심의 신청·결과는 삭제되지 않습니다.</p>
+      {removalError && <Notice error>{removalError}</Notice>}
+      <div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => setPendingRemoval(null)}>취소</Button><Button primary disabled={busy} onClick={() => void removeArtist()}><Trash2 className="h-4 w-4" aria-hidden />{busy ? "삭제 중…" : "삭제"}</Button></div>
     </Modal>}
   </DashboardShell>;
 }

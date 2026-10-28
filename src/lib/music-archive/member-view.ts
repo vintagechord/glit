@@ -1,13 +1,17 @@
 /** Explicit member response projection. Full provenance and audit data stay in admin responses. */
 const keep = (row: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => key in row).map(key => [key, row[key]]));
 const rows = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value : [];
+const memberJob = (row: Record<string, unknown>) => {
+  const cursor = row.cursor as { providerCursor?: { phase?: string } } | undefined;
+  return { ...keep(row, ["id", "library_id", "status"]), ...(cursor?.providerCursor?.phase === "credits" ? { stage: "credits" } : {}) };
+};
 const currentJobs = (value: unknown) => {
   const latest = new Map<string, Record<string, unknown>>();
   for (const row of rows(value).sort((a, b) => String(b.created_at ?? b.updated_at ?? "").localeCompare(String(a.created_at ?? a.updated_at ?? "")))) {
     const key = `${row.library_id}:${row.provider}:${row.external_artist_id}`;
     if (!latest.has(key)) latest.set(key, row);
   }
-  return [...latest.values()].map(row => keep(row, ["id", "library_id", "status"]));
+  return [...latest.values()].map(memberJob);
 };
 
 export function memberLibrary(value: unknown) {
@@ -37,7 +41,7 @@ export function memberArchiveResponse(value: unknown): Record<string, unknown> {
   if (response.library) result.library = memberLibrary(response.library);
   if (response.libraries) result.libraries = rows(response.libraries).map(memberLibrary);
   if (response.jobs) result.jobs = currentJobs(response.jobs);
-  if (response.job) result.job = keep(response.job as Record<string, unknown>, ["id", "library_id", "status"]);
+  if (response.job) result.job = memberJob(response.job as Record<string, unknown>);
   if (response.guides) result.guides = rows(response.guides).filter(guide => ["komca", "koscap", "fkmp", "tj", "ky"].includes(String(guide.id))).map(row => keep(row, ["id", "name", "kind", "introduction", "preparation", "steps", "url", "searchUrl", "applyUrl", "visible"]));
   if (response.providers) result.providers = rows(response.providers).map(row => keep(row, ["id", "name", "message", "status", "automaticImplemented"]));
   if (response.reviews) result.reviews = rows(response.reviews).map(row => keep(row, ["id", "title", "artist_name", "release_date", "status", "album_tracks", "station_reviews"]));

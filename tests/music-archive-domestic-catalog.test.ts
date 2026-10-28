@@ -5,6 +5,7 @@ import { MusicProviderError } from "../src/lib/music-archive/musicbrainz";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
 import { additionalStationReviewTracks, unreviewedArchiveTracks } from "../src/lib/music-archive/reviews";
 import { mergeArchiveImports } from "../src/lib/music-archive/import";
+import { mergeDomesticTrackCredits } from "../src/lib/music-archive/domestic-credits";
 
 const checked = "2026-10-27T00:00:00Z";
 const melonSearch = `<div class="list_atist12 d_artist_list"><ul><li><a class="thumb" href="javascript:melon.link.goArtistDetail('12');"><img src="https://cdnimg.melon.co.kr/artist.jpg"></a><dt><a href="javascript:melon.link.goArtistDetail('12');" class="ellipsis"><b>우리</b> 가수</a></dt><dd class="gubun">대한민국/솔로</dd></li><li><a href="javascript:melon.link.goArtistDetail('13');" class="ellipsis">우리 가수</a></li></ul></div><a href="javascript:melon.link.goArtistDetail('999');">추천</a>`;
@@ -13,6 +14,7 @@ const melonList = (ids: string[], more = false) => `<div class="list_album11 d_a
 const genieList = (ids: string[], more = false) => `<div class="artist-album-list"><ul>${ids.map(id => `<li class="list-album"><a onclick="fnViewAlbumLayer('${id}');">앨범 ${id}</a></li>`).join("")}</ul>${more ? "<a onclick=\"fnGoPage_ArtistAlbum('2','10');\">2</a>" : ""}</div>`;
 const melonTrack = (id: string, artistId: string, title = "노래", disc = 1, number = 1) => `<tr data-group-items="cd${disc}"><td><span class="rank">${number}</span><a href="javascript:melon.link.goSongDetail('${id}');">정보</a><a href="javascript:melon.play.playSong('1', ${id});">${title}</a><a href="javascript:melon.link.goArtistDetail('${artistId}');">가수</a></td></tr>`;
 const melonAlbum = (rows: string) => `<div class="section_info"><div class="song_name"><strong>앨범명</strong>테스트 앨범</div><a class="artist_name"><span>가수</span></a><a href="javascript:melon.link.goArtistDetail('12');">가수</a><span class="gubun">[싱글]</span><dl><dt>발매일</dt><dd>2026.10.01</dd></dl><div class="button d_album_like"></div></div><table>${rows}</table>`;
+const melonSong = (id: string) => `<meta property="og:url" content="https://www.melon.com/song/detail.htm?songId=${id}"><div class="song_name"><strong>곡명</strong>노래</div><ul class="list_person clfix"><li><a class="artist_name">작곡가 A</a><span class="type">작곡</span></li><li><a class="artist_name">작곡가 B</a><span class="type">작곡</span></li></ul><div class="lyric" id="d_video_summary">DO NOT STORE LYRICS</div>`;
 const genieAlbum = `<div class="album-detail-infos"><h2 class="name">앨범</h2><li><span class="attr"><img alt="아티스트"></span><span class="value"><a onclick="fnGoMore('artistInfo','12');">가수</a></span></li><!-- E. 앨범 기본 정보 --></div><table><tr class="list" songId="123"><td class="number">1</td><td><a class="title" title="곡">곡</a><a class="artist" onclick="fnViewArtist(12);">가수</a></td></tr></table>`;
 
 for (const [provider, html] of [["melon", melonSearch], ["genie", genieSearch]] as const) test(`${provider} search preserves actual artist IDs and excludes recommendation widgets`, () => {
@@ -91,6 +93,8 @@ test("Melon imports every primary and participation album across all pages using
   let permits = 0;
   const fetcher: typeof fetch = async input => {
     const url = new URL(String(input));
+    const songId = url.searchParams.get("songId");
+    if (songId) return new Response(melonSong(songId));
     const albumId = url.searchParams.get("albumId");
     if (albumId) {
       const artistId = Number(albumId) % 2 ? "99" : "12";
@@ -104,11 +108,17 @@ test("Melon imports every primary and participation album across all pages using
   };
   let cursor: DomesticCursor | null = null;
   const releases = [];
-  for (let i = 0; i < 40; i++) {
+  let credits = 0;
+  for (let i = 0; i < 100; i++) {
     const before: DomesticCursor | null = structuredClone(cursor);
     const step = await collectDomesticStep("melon", "12", cursor, { fetcher, acquirePermit: async () => { permits++; } });
     assert.deepEqual(cursor, before);
     releases.push(...step.releases);
+    if (step.trackCredits.length) {
+      assert.equal(releases.length, 31, "all albums must be stored before any song credit request");
+      credits += step.trackCredits.length;
+      assert.doesNotMatch(JSON.stringify(step.trackCredits), /DO NOT STORE LYRICS|lyrics.*DO NOT/);
+    }
     cursor = step.nextCursor;
     if (step.status === "completed") break;
   }
@@ -117,7 +127,8 @@ test("Melon imports every primary and participation album across all pages using
   assert.deepEqual(releases.map(release => release.externalId), ids);
   assert.equal(releases.filter(release => release.participation).length, 15);
   assert.equal(releases.flatMap(release => release.tracks).filter(track => track.managedByArtist).length, 16);
-  assert.equal(permits, 34);
+  assert.equal(credits, 31);
+  assert.equal(permits, 96);
 });
 
 test("an existing v1 job resumes past the participation album that previously halted it", async () => {
@@ -132,8 +143,50 @@ test("an existing v1 job resumes past the participation album that previously ha
   assert.deepEqual(first.nextCursor?.seen, ["100", "101"]);
   assert.deepEqual(cursor.seen, ["100"]);
   const last = await collectDomesticStep("melon", "12", first.nextCursor, { fetcher });
-  assert.equal(last.status, "completed"); assert.equal(last.nextCursor, null);
+  assert.equal(last.status, "collecting"); assert.equal(last.nextCursor?.phase, "credits");
+  assert.deepEqual(last.nextCursor?.seen, ["100", "101", "102"], "older persisted albums also enter credit backfill");
   assert.equal(last.releases[0].externalId, "102");
+});
+
+test("credit checkpoints fetch one exact song per step and preserve completed albums on failure/retry", async () => {
+  let data = createArchiveData("가수");
+  let cursor: DomesticCursor | null = null;
+  let failed = false;
+  const calls: string[] = [];
+  const fetcher: typeof fetch = async input => {
+    const url = new URL(String(input)); calls.push(url.pathname);
+    if (url.pathname === "/artist/album.htm") return new Response(melonTotal(1) + melonList(["100"]));
+    if (url.pathname === "/album/detail.htm") return new Response(melonAlbum(melonTrack("123", "12") + melonTrack("456", "99", "참여 곡", 1, 2)));
+    if (url.searchParams.get("songId") === "456" && !failed) { failed = true; return new Response("", { status: 503 }); }
+    return new Response(melonSong(url.searchParams.get("songId")!));
+  };
+  for (let step = 0; step < 4; step++) {
+    const result = await collectDomesticStep("melon", "12", cursor, { fetcher });
+    data = mergeDomesticTrackCredits(mergeArchiveImports(data, result.releases), result.trackCredits);
+    cursor = result.nextCursor;
+  }
+  assert.equal(data.releases.length, 1); assert.equal(data.tracks.length, 2); assert.equal(data.works.length, 1);
+  assert.deepEqual(cursor?.creditPending, ["456"]);
+  const before = structuredClone(cursor);
+  await assert.rejects(collectDomesticStep("melon", "12", cursor, { fetcher }), error => error instanceof MusicProviderError && error.code === "temporary_error");
+  assert.deepEqual(cursor, before);
+  const resumed = await collectDomesticStep("melon", "12", cursor, { fetcher });
+  data = mergeDomesticTrackCredits(data, resumed.trackCredits);
+  assert.equal(resumed.status, "completed"); assert.equal(resumed.nextCursor, null);
+  assert.equal(data.works.length, 2); assert.equal(data.tracks[1].managed, false);
+  assert.doesNotMatch(JSON.stringify(data), /DO NOT STORE LYRICS/);
+  assert.deepEqual(calls, ["/artist/album.htm", "/album/detail.htm", "/album/detail.htm", "/song/detail.htm", "/song/detail.htm", "/song/detail.htm"]);
+});
+
+test("invalid or aborted credit cursors cannot issue provider requests", async () => {
+  const base: DomesticCursor = { provider: "melon", version: 1, artistId: "12", phase: "credits", page: 2, pending: [], seen: ["100"], more: false, creditAlbumIndex: 0, creditPending: ["123"] };
+  let requests = 0;
+  const options = { acquirePermit: async () => { requests++; }, fetcher: async () => { requests++; return new Response(""); } };
+  for (const cursor of [{ ...base, creditAlbumIndex: 1 }, { ...base, creditPending: ["123", "123"] }, { ...base, phase: "albums", more: true }, { ...base, more: true }]) {
+    await assert.rejects(collectDomesticStep("melon", "12", cursor as DomesticCursor, options), error => error instanceof MusicProviderError && error.code === "invalid_input");
+  }
+  await assert.rejects(collectDomesticStep("melon", "12", base, { ...options, signal: AbortSignal.abort() }));
+  assert.equal(requests, 0);
 });
 
 test("Melon never completes a shortened or duplicate final page below the catalog total", async () => {

@@ -31,6 +31,15 @@ test("auto review matches canonical exact album identities and never matching ti
   assert.deepEqual(results[0].trackIds, []);
 });
 
+test("credit progress exposes only a safe stage on both job response shapes", () => {
+  const job = { id: "job", library_id: "library", status: "partial", provider: "melon", external_artist_id: "secret-id", cursor: { providerCursor: { phase: "credits", creditPending: ["private-cursor-id"] } }, error_message: "private-diagnostic" };
+  const projected = memberArchiveResponse({ job, jobs: [job] });
+  const safe = { id: "job", library_id: "library", status: "partial", stage: "credits" };
+  assert.deepEqual(projected.job, safe);
+  assert.deepEqual(projected.jobs, [safe]);
+  assert.doesNotMatch(JSON.stringify(projected), /private-|secret-id|cursor|provider/);
+});
+
 test("explicit and persisted selection scopes never become whole-album results", () => {
   const data = catalog();
   data.reviewLinks.push({ id: "link", submissionId: "10000000-0000-4000-8000-000000000001", releaseId: "album", trackId: "track-1", submissionTrackId: "20000000-0000-4000-8000-000000000001" });

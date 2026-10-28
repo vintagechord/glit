@@ -6,7 +6,7 @@ import { normalizeMusicBrainzRelease } from "../src/lib/music-archive/musicbrain
 import { mergeArchiveImports } from "../src/lib/music-archive/import";
 import { mergeSubmissionCredits, type CreditSubmission } from "../src/lib/music-archive/credits";
 import { createArchiveData, applyArchiveCommand } from "../src/lib/music-archive/model";
-import { domesticAlbumArtwork, enrichLinkedDomesticAlbums, fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits } from "../src/lib/music-archive/domestic-credits";
+import { domesticAlbumArtwork, enrichLinkedDomesticAlbums, fetchDomesticAlbumCredits, linkedDomesticAlbumUrl, mergeDomesticAlbumCredits, mergeDomesticTrackCredits, parseDomesticTrackCredits, type DomesticTrackCredits } from "../src/lib/music-archive/domestic-credits";
 import { memberLibrary } from "../src/lib/music-archive/member-view";
 
 const imageUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music/cover/100x100bb.jpg";
@@ -109,6 +109,7 @@ test("explicit domestic album refresh imports multiple creators and its thumbnai
     return new Response(String(input).includes("song/detail") ? songHtml : albumHtml);
   }) as typeof fetch });
   assert.equal(fetched.partial, false);
+  assert.equal(fetched.album.tracks[0].lyrics, "", "archive fetching must not return full lyrics even transiently");
   const input = archive();
   input.releases[0].links.push({ provider: "melon", url: albumUrl });
   assert.equal(linkedDomesticAlbumUrl(input, "release", [], "library"), albumUrl);
@@ -161,4 +162,79 @@ test("explicit domestic album refresh imports multiple creators and its thumbnai
   const withExistingCredits = await enrichLinkedDomesticAlbums(submissionCredits, ["release"], [], "library", { fetcher: (async value => { requests++; return new Response(String(value).includes("song/detail") ? songHtml : albumHtml); }) as typeof fetch });
   assert.ok(requests > 0, "submission credits alone must not skip available domestic creators");
   assert.ok(withExistingCredits.data.works.some(work => work.source?.provider === "melon"));
+});
+
+const domesticSongFixture = (provider: string, songId: string) => readFileSync(new URL(`./fixtures/music-archive-domestic/${provider}-song-${songId}.html`, import.meta.url), "utf8");
+test("official Melon and Genie metadata excerpts expose the same role-specific multiple creators without lyrics", () => {
+  const expected = [
+    { name: "이윤정", role: "lyrics" }, { name: "이윤정", role: "composition" }, { name: "빈티지코드", role: "composition" },
+    { name: "빈티지코드", role: "arrangement" }, { name: "이윤정", role: "arrangement" },
+  ];
+  for (const [provider, albumId, songId] of [["melon", "12476612", "600865299"], ["genie", "87126182", "113373802"]] as const) {
+    const update = parseDomesticTrackCredits(provider, domesticSongFixture(provider, songId), albumId, songId, date);
+    assert.deepEqual(update.contributors, expected);
+    assert.deepEqual(Object.keys(update).sort(), ["albumId", "checkedAt", "contributors", "provider", "songId"]);
+    assert.throws(() => parseDomesticTrackCredits(provider, domesticSongFixture(provider, songId), albumId, "999", date), /식별자/);
+    assert.throws(() => parseDomesticTrackCredits(provider, "<html>changed page</html>", albumId, songId, date), /확인하지 못/);
+  }
+  const participation = parseDomesticTrackCredits("melon", domesticSongFixture("melon", "600186810"), "12137192", "600186810", date);
+  assert.equal(participation.contributors.length, 16);
+  assert.deepEqual(participation.contributors.filter(person => person.name === "빈티지코드").map(person => person.role), ["lyrics", "composition", "arrangement"]);
+});
+
+function exactDomesticTrack() {
+  const input = archive();
+  input.releases[0].source = { provider: "melon", externalId: "123", checkedAt: date };
+  input.tracks[0].source = { provider: "melon", externalId: "111", checkedAt: date };
+  input.tracks[0].managed = false;
+  input.tracks[0].userEdited = false;
+  return input;
+}
+const exactCredits: DomesticTrackCredits = { provider: "melon", albumId: "123", songId: "111", checkedAt: date, contributors: [{ name: "빈티지코드", role: "composition" }, { name: "다른 작곡가", role: "composition" }, { name: "작사가", role: "lyrics" }] };
+
+test("automatic credits need exact album and song IDs, survive renamed titles and never change managed scope", () => {
+  const input = applyArchiveCommand(exactDomesticTrack(), { type: "update_track", trackId: "track", patch: { title: "회원이 수정한 표시 제목" } });
+  const updated = mergeDomesticTrackCredits(input, [exactCredits]);
+  assert.deepEqual(updated.works[0].contributors, exactCredits.contributors);
+  assert.equal(updated.tracks[0].title, "회원이 수정한 표시 제목");
+  assert.equal(updated.tracks[0].managed, false);
+  assert.equal(updated.tasks.length, 0);
+  assert.equal(updated.works[0].institutionNumbers.length, 0);
+  assert.equal(mergeDomesticTrackCredits(updated, [exactCredits]).works.length, 1);
+  assert.equal(input.recordings.length, 0, "input snapshots stay immutable");
+  for (const mismatch of [{ ...exactCredits, albumId: "999" }, { ...exactCredits, songId: "999" }, { ...exactCredits, provider: "genie" as const }]) assert.deepEqual(mergeDomesticTrackCredits(input, [mismatch]), input);
+  const onlyNames = archive();
+  assert.deepEqual(mergeDomesticTrackCredits(onlyNames, [exactCredits]), onlyNames);
+  const linked = archive();
+  linked.releases[0].links.push({ provider: "melon", url: "https://www.melon.com/album/detail.htm?albumId=123" });
+  linked.tracks[0].links.push({ provider: "melon", url: "https://www.melon.com/song/detail.htm?songId=111" });
+  linked.tracks[0].userEdited = false;
+  assert.equal(mergeDomesticTrackCredits(linked, [exactCredits]).works.length, 1);
+});
+
+test("credit retries preserve manual work edits, prior missing roles, registration tasks and ambiguous/excluded identities", () => {
+  const input = exactDomesticTrack();
+  const updated = mergeDomesticTrackCredits(input, [exactCredits]);
+  const partial = mergeDomesticTrackCredits(updated, [{ ...exactCredits, contributors: [{ name: "정정 작곡가", role: "composition" }] }]);
+  assert.deepEqual(partial.works[0].contributors, [{ name: "정정 작곡가", role: "composition" }, { name: "작사가", role: "lyrics" }]);
+  updated.works[0].userEdited = true;
+  assert.deepEqual(mergeDomesticTrackCredits(updated, [{ ...exactCredits, contributors: [{ name: "자동 변경 금지", role: "composition" }] }]), updated);
+  const excluded = exactDomesticTrack(); excluded.tracks[0].excluded = true;
+  assert.deepEqual(mergeDomesticTrackCredits(excluded, [exactCredits]), excluded);
+  const ambiguous = exactDomesticTrack(); ambiguous.tracks.push({ ...ambiguous.tracks[0], id: "duplicate" });
+  assert.deepEqual(mergeDomesticTrackCredits(ambiguous, [exactCredits]), ambiguous);
+  const sourceMismatch = exactDomesticTrack(); sourceMismatch.tracks[0].source!.externalId = "999";
+  const album = { albumId: "123", albumUrl: "https://www.melon.com/album/detail.htm?albumId=123", albumTitle: "앨범", albumType: "", artistName: "가수", releaseDate: "", genre: "", distributor: "", productionCompany: "", tracks: [{ songId: "111", songUrl: "https://www.melon.com/song/detail.htm?songId=111", trackNo: 1, trackTitle: "같은 곡명", artistName: "", isTitle: false, composer: "자동 연결 금지", lyricist: "", arranger: "", lyrics: "" }] };
+  assert.equal(mergeDomesticAlbumCredits(sourceMismatch, "release", album, "melon", date).works.length, 0, "manual album refresh cannot fall back to same title when source song IDs disagree");
+});
+
+test("manual credit refresh reserves a provider permit for each bounded network request and stops on abort", async () => {
+  let permits = 0; let requests = 0;
+  const song = domesticSongFixture("melon", "600865299");
+  const album = `<div class="song_name"><strong>앨범명</strong>앨범</div><tr data-group-items="cd1"><td><a href="javascript:melon.link.goSongDetail('600865299');">정보</a><a href="javascript:melon.play.playSong('1',600865299);">Whispers in the Dark</a></td></tr>`;
+  const options = { acquirePermit: async (provider: string) => { assert.equal(provider, "melon"); permits++; }, fetcher: async (input: Parameters<typeof fetch>[0]) => { requests++; return new Response(String(input).includes("/song/") ? song : album); } };
+  await fetchDomesticAlbumCredits("https://www.melon.com/album/detail.htm?albumId=12476612", options);
+  assert.equal(permits, 2); assert.equal(requests, 2);
+  await assert.rejects(fetchDomesticAlbumCredits("https://www.melon.com/album/detail.htm?albumId=12476612", { ...options, signal: AbortSignal.abort() }));
+  assert.equal(permits, 2); assert.equal(requests, 2);
 });

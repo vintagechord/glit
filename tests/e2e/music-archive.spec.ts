@@ -20,7 +20,7 @@ test.setTimeout(25000);
 let html: string;
 test.beforeAll(async () => { html = await archiveClientDocument("./src/features/music-archive/music-archive-client", "MusicArchiveClient"); });
 
-type Harness = { onsideReviews: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[]; libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; searchResponse?: Record<string, unknown>; searchDelay?: number; connectFailures: number; jobStatus: string; jobsArrayResponse: boolean };
+type Harness = { onsideReviews: { submissionId: string; releaseId: string; trackIds: string[]; status: string }[]; libraries: Library[]; jobs: SyncJob[]; reviews: Submission[]; writes: Record<string, unknown>[]; errors: string[]; searches: string[]; searchResponse?: Record<string, unknown>; searchDelay?: number; connectFailures: number; archiveFailures?: number; archiveResponseLost?: boolean; jobStatus: string; jobsArrayResponse: boolean };
 async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
   const harness: Harness = { onsideReviews: [], libraries: structuredClone(initial), jobs: [], reviews: [], writes: [], errors: [], searches: [], connectFailures: 0, jobStatus: "partial", jobsArrayResponse: false };
   page.on("pageerror", (error) => harness.errors.push(error.message));
@@ -46,6 +46,7 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
       if (body.action === "resume") { harness.jobs = [{id:"sync-one",library_id:artistOne,provider:"apple",status:"partial",counts:{releases:23,tracks:126},cursor:{providerCursor:{phase:"artist",offset:25,total:68,pending:["next-release"]}},checked_at:"2026-09-08T00:00:00Z",error_message:"일부 페이지를 처리했습니다. 다음 위치에서 계속 수집할 수 있습니다."}]; await route.fulfill({json:{job:harness.jobs[0]}}); return; }
       if (!library) { await route.fulfill({status:404,json:{error:"라이브러리 없음"}}); return; }
       if (body.version !== library.version) { await route.fulfill({status:409,json:{error:"동시에 변경된 자료입니다."}}); return; }
+      if (body.action === "archive" && harness.archiveFailures) { harness.archiveFailures -= 1; await route.fulfill({status:503,json:{error:"삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."}}); return; }
       let data = library.data;
       if (body.action === "command") data = applyArchiveCommand(data,body.command);
       if (body.action === "commands") for (const command of body.commands as ArchiveCommand[]) data = applyArchiveCommand(data,command);
@@ -61,6 +62,7 @@ async function mount(page: Page, initial: Library[] = []): Promise<Harness> {
         if (body.provider === "apple") harness.jobs = [{id:`sync-${body.externalId}`,library_id:artistOne,provider:"apple",external_artist_id:String(body.externalId),status:harness.jobStatus,counts:{releases:23,tracks:126},cursor:{providerCursor:{offset:25,total:68,pending:["next"]}},updated_at:"2026-09-08T00:00:00Z",error_code:"PERMISSION_REQUIRED",error_message:"서버 이용 허가 확인 필요"},...harness.jobs.filter((job) => job.external_artist_id !== body.externalId)];
       }
       const next = {...library,data,version:library.version+1,...(body.action === "archive" ? {archived_at:"2026-09-08T00:00:00Z"} : body.action === "restore" ? {archived_at:null} : {})}; harness.libraries[index] = next;
+      if (body.action === "archive" && harness.archiveResponseLost) { harness.archiveResponseLost = false; await route.fulfill({status:503,json:{error:"응답을 받지 못했습니다."}}); return; }
       await route.fulfill({json:memberArchiveResponse({library:next,...(body.action === "connect" && body.provider === "apple" && harness.jobs.length ? {...(harness.jobsArrayResponse ? {jobs:[harness.jobs[0]]} : {job:harness.jobs[0]}),runLibraryId:next.id} : {})})}); return;
     }
     if (url.pathname.startsWith("/mypage/music/results/")) { await route.fulfill({contentType:"text/html",body:"<!doctype html><h1>온사이드 심의 결과</h1><p>KBS 적격</p>"}); return; }
@@ -95,6 +97,85 @@ async function tab(page: Page, name: string) {
   await expect(selected).toHaveCSS("border-bottom-color", "rgb(17, 17, 17)");
 }
 const forbiddenMemberCopy = /메타데이터 출처|업무 기록|업무 이력|변경 이력|이용 허가|아티스트 ID|공식 조회 미확인|사용자 입력|공식 출처 확인일/;
+
+test("artist deletion confirmation uses the full album count and cancelling leaves the library intact", async ({ page }) => {
+  const original: Library = { ...fixture(), summary: { releaseCount: 14, trackCount: 55, needsCheck: 0, inProgress: 0, needsChanges: 0, awaitingResult: 0 } };
+  const harness = await mount(page, [original]);
+  await page.getByRole("article", { name: "테스트 뮤지션", exact: true }).getByRole("button", { name: "아티스트 삭제", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "아티스트 삭제", exact: true });
+  await expect(dialog).toContainText("테스트 뮤지션");
+  await expect(dialog).toContainText("앨범 14개");
+  await expect(dialog).toContainText("심의 신청·결과는 삭제되지 않습니다.");
+  expect(harness.writes).toEqual([]);
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toBeVisible();
+  expect(harness.libraries).toEqual([original]); expect(harness.writes).toEqual([]); expect(harness.errors).toEqual([]);
+});
+
+test("artist deletion hides only the confirmed artist and preserves its music and review records after reload", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const original = fixture();
+  original.data = applyArchiveCommand(original.data, { type: "link_review", link: { id: "review-link", submissionId: "30000000-0000-4000-8000-000000000001", releaseId: "album" } });
+  const other = fixture(); other.id = "11111111-1111-4111-8111-111111111112"; other.data.artist.name = "남겨둘 아티스트";
+  const harness = await mount(page, [original, other]);
+  await page.getByRole("article", { name: "테스트 뮤지션", exact: true }).getByRole("button", { name: "아티스트 삭제", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "아티스트 삭제", exact: true });
+  await page.screenshot({ path: testInfo.outputPath("artist-deletion-mobile.png"), fullPage: true });
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "남겨둘 아티스트", exact: true })).toBeVisible();
+  expect(harness.writes).toEqual([{ action: "archive", libraryId: artistOne, version: 1 }]);
+  expect(harness.libraries[0].archived_at).toBeTruthy();
+  expect(harness.libraries[0].data).toEqual(original.data);
+  expect(harness.libraries[1]).toEqual(other);
+  await page.reload();
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "남겨둘 아티스트", exact: true })).toBeVisible();
+  expect(harness.errors).toEqual([]);
+});
+
+test("artist deletion failure keeps the artist visible and supports an explicit retry", async ({ page }) => {
+  const original = fixture(); const harness = await mount(page, [original]); harness.archiveFailures = 1;
+  await page.getByRole("button", { name: "아티스트 삭제", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "아티스트 삭제", exact: true });
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("삭제하지 못했습니다");
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toBeVisible();
+  expect(harness.libraries[0]).toEqual(original);
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toHaveCount(0);
+  expect(harness.writes.map(item => item.action)).toEqual(["archive", "archive"]); expect(harness.errors).toEqual([]);
+});
+
+test("artist deletion refreshes a changed album count and requires confirmation again after a version conflict", async ({ page }) => {
+  const harness = await mount(page, [fixture()]);
+  await page.getByRole("button", { name: "아티스트 삭제", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "아티스트 삭제", exact: true });
+  harness.libraries[0].data = applyArchiveCommand(harness.libraries[0].data, { type: "add_release", release: { id: "new-album", title: "동기화된 앨범", links: [] } });
+  harness.libraries[0].version = 2;
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("동시에 변경된 자료");
+  await expect(dialog).toContainText("앨범 2개");
+  expect(harness.libraries[0].archived_at).toBeUndefined(); expect(harness.writes).toHaveLength(1);
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(harness.writes.map(item => item.version)).toEqual([1, 2]);
+  expect(harness.libraries[0].data.releases).toHaveLength(2); expect(harness.errors).toEqual([]);
+});
+
+test("artist deletion reconciles a saved archive when its response fails without deleting twice", async ({ page }) => {
+  const harness = await mount(page, [fixture()]); harness.archiveResponseLost = true;
+  await page.getByRole("button", { name: "아티스트 삭제", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "아티스트 삭제", exact: true });
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "테스트 뮤지션", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("내 목록에서 삭제했습니다.");
+  expect(harness.writes).toHaveLength(1); expect(harness.libraries[0].data.releases).toHaveLength(1); expect(harness.errors).toEqual([]);
+});
 
 for (const width of [390, 1440]) {
   test(`member keeps four simple tabs and per-recording registration at ${width}px`, async ({page}, testInfo) => {
@@ -193,7 +274,7 @@ test("artist autocomplete confirms source identity while keeping private job det
   expect(harness.writes.map(item=>item.action)).toEqual(["create","connect"]); expect(harness.errors).toEqual([]);
 });
 
-for (const status of ["partial", "completed"] as const) test(`queued album import progress follows background ${status} status without a stale banner`, async ({ page }) => {
+for (const stage of ["albums", "credits"] as const) for (const status of ["partial", "completed"] as const) test(`queued ${stage} import progress follows background ${status} status without a stale banner`, async ({ page }) => {
   const harness = await mount(page); harness.jobStatus = "queued"; harness.jobsArrayResponse = true;
   await page.getByRole("button", { name: "아티스트 추가", exact: true }).click();
   const input = page.getByRole("combobox", { name: "아티스트 이름", exact: true });
@@ -204,19 +285,30 @@ for (const status of ["partial", "completed"] as const) test(`queued album impor
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText("앨범을 불러오고 있습니다.", { exact: true })).toHaveCount(1);
 
-  harness.jobs = harness.jobs.map(job => ({ ...job, status }));
-  if (status === "completed") {
+  if (stage === "credits" || status === "completed") {
     const library = harness.libraries[0];
     library.data = applyArchiveCommand(library.data, { type: "add_release", release: { id: "imported-album", title: "불러온 앨범", links: [] } });
     library.version += 1;
   }
+  if (stage === "credits") {
+    harness.jobs = harness.jobs.map(job => ({ ...job, status: "running", cursor: { providerCursor: { phase: "credits" } } }));
+    await expect(page.getByText("곡별 저작자 정보를 불러오고 있습니다.", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("앨범을 불러오고 있습니다.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /불러온 앨범/ })).toBeVisible();
+  }
+  harness.jobs = harness.jobs.map(job => ({ ...job, status }));
   // The real member client's periodic GET observes the changed worker status.
-  await expect(page.getByText("앨범을 불러오고 있습니다.", { exact: true })).toHaveCount(0);
-  if (status === "partial") await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toBeVisible();
+  await expect(page.getByText(/^(앨범을|곡별 저작자 정보를) 불러오고 있습니다\.$/)).toHaveCount(0, { timeout: 7000 });
+  if (status === "partial") {
+    await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toBeVisible();
+    await expect(page.getByText(stage === "credits" ? "앨범은 저장했습니다. 아직 불러오지 못한 저작자 정보가 있습니다." : "아직 불러오지 못한 앨범이 있습니다.", { exact: true })).toBeVisible();
+  }
   else {
     await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /불러온 앨범/ })).toBeVisible();
+    await expect(page.getByText(/아직 불러오지 못한/)).toHaveCount(0);
   }
+  if (stage === "credits") await expect(page.getByRole("button", { name: /불러온 앨범/ })).toBeVisible();
   expect(harness.writes.map(item => item.action)).toEqual(["create", "connect"]);
   expect(harness.errors).toEqual([]);
 });
