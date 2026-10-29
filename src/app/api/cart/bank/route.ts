@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
-import { getMemberNotificationEmail } from "@/lib/member-notification-email";
+import { resolveMemberNotificationEmail } from "@/lib/member-notification-email";
 import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
@@ -313,7 +313,7 @@ export async function POST(req: NextRequest) {
     await Promise.all(Array.from(submissionsByOrder, async ([orderId, orderSubmissions]) => {
       if (user && !user.email?.trim()) {
         await Promise.all(orderSubmissions.map(async (submission) => {
-          const email = getMemberNotificationEmail(user, submission.applicant_email);
+          const email = await resolveMemberNotificationEmail(admin, user, submission.applicant_email);
           if (!email) return;
           const result = await sendSubmissionUpdateEmail({
             email,
@@ -333,10 +333,8 @@ export async function POST(req: NextRequest) {
         }));
         return;
       }
-      const recipients = collectEmails(
-        ...orderSubmissions.map((submission) =>
-          submission.user_id ? getMemberNotificationEmail(user, submission.applicant_email) : submission.guest_email || submission.applicant_email),
-      );
+      const recipients = collectEmails(...await Promise.all(orderSubmissions.map((submission) =>
+        submission.user_id ? resolveMemberNotificationEmail(admin, user, submission.applicant_email) : submission.guest_email || submission.applicant_email)));
       if (recipients.length === 0) return;
       const first = orderSubmissions[0];
       const link = buildUrl(

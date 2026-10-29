@@ -10,7 +10,7 @@ type Row = Record<string, unknown>;
 type Fixture = {
   markPaymentSuccess: (orderId: string, payload: object) => Promise<{ ok: boolean }>;
   POST: (request: NextRequest) => Promise<Response>;
-  state: { rows: Row[]; orders: Row[]; orderItems: Row[]; nextOrderId: string; paymentStatus: string; user: { id: string; email?: string | null; identities?: { provider: string }[] } | null; memberEmail: string | null; mailOk: boolean; userError: unknown };
+  state: { rows: Row[]; orders: Row[]; orderItems: Row[]; nextOrderId: string; paymentStatus: string; user: { id: string; email?: string | null; identities?: { provider: string }[] } | null; memberEmail: string | null; notificationEmail: string | null; mailOk: boolean; userError: unknown };
   calls: Array<{ method: string; input?: Row }>;
 };
 
@@ -25,13 +25,13 @@ async function fixture(): Promise<Fixture> {
         const modules: Record<string, string> = {
           "payment-email-fixture": `
             export const calls=[];
-            export const state={rows:[],orders:[],orderItems:[],nextOrderId:'30000000-0000-4000-8000-000000000001',paymentStatus:'REQUESTED',user:{id:'${memberId}',email:'member@example.invalid'},memberEmail:'member@example.invalid',mailOk:true,userError:null};
+            export const state={rows:[],orders:[],orderItems:[],nextOrderId:'30000000-0000-4000-8000-000000000001',paymentStatus:'REQUESTED',user:{id:'${memberId}',email:'member@example.invalid'},memberEmail:'member@example.invalid',notificationEmail:null,mailOk:true,userError:null};
             function query(table){
               const filters=[];const q={};
               for(const method of ['select','eq','in','is','or']) q[method]=(...args)=>{filters.push({method,args});return q};
               const result=()=>{
                 if(table==='submission_payments')return {data:{submission_id:'${submissionId}',status:state.paymentStatus,raw_response:null},error:null};
-                if(table==='profiles')return {data:{phone:null},error:null};
+                if(table==='profiles')return {data:{phone:null,notification_email:state.notificationEmail},error:null};
                 if(table==='paid_submission_notification_events')return {data:[],error:null};
                 let rows=(table==='submission_orders'?state.orders:table==='submission_order_items'?state.orderItems:state.rows).filter(row=>filters.every(({method,args:[key,value]})=>method==='eq'||method==='is'?row[key]===value:method==='in'?value.includes(row[key]):method==='or'&&key==='payment_status.is.null,payment_status.eq.UNPAID'?row.payment_status===null||row.payment_status==='UNPAID':true));
                 return {data:structuredClone(rows),error:null};
@@ -143,6 +143,16 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
     if (guest) assert.ok(String(email?.link).endsWith("/track/legacy-private-guest-token"));
     else assert.doesNotMatch(String(email?.link), /track|legacy-private/);
   }
+});
+
+test("bank requests send social members' payment instructions to the saved profile contact", async () => {
+  const h = await fixture(); h.state.rows = [row()];
+  h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };
+  h.state.notificationEmail = "saved@example.invalid";
+  assert.equal((await h.POST(bankRequest(false, [submissionId]))).status, 200);
+  const notices = h.calls.filter(call => call.method === "payment-email");
+  assert.equal(notices.length, 1); assert.equal(notices[0].input?.email, "saved@example.invalid");
+  assert.equal(notices[0].input?.items, undefined);
 });
 
 test("bank requests keep no-email social application contacts separate and direct totals behind login", async () => {

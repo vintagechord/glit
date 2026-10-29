@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMemberNotificationEmail } from "@/lib/member-notification-email";
+import { resolveMemberNotificationEmail } from "@/lib/member-notification-email";
 import { sendAdminSubmissionReceiptEmail, sendPaymentCompletedEmail, sendSubmissionUpdateEmail, type OrderEmailItem } from "@/lib/email";
 import type { EmailSendResult } from "@/lib/email-transport";
 import { isEmailRecipient } from "@/lib/email-config";
@@ -111,7 +111,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
         const member = await db.auth.admin.getUserById(submission.user_id);
         if (member.error) customerLookupFailed = true;
         else {
-          email = getMemberNotificationEmail(member.data.user, submission.applicant_email);
+          email = await resolveMemberNotificationEmail(db, member.data.user, submission.applicant_email);
           usesApplicationContact = Boolean(email && !member.data.user?.email?.trim());
         }
       } else email = submission.guest_email || submission.applicant_email || null;

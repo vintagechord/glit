@@ -14,8 +14,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,messages,receipts} from 'paid-notice-fixture';";
         const files: Record<string, string> = {
-          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000,current_order_id:null},order:null,orderItems:[],orderFlags:[],event:null,eventLookupError:false,email:'Owner@example.invalid',providers:[],userMissing:false,lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
-          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:state.userMissing?null:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},in(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null}:table==='submission_orders'?state.order:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null}),then(resolve,reject){return Promise.resolve({data:table==='submission_order_items'?state.orderItems:table==='submissions'?state.orderFlags:[],error:null}).then(resolve,reject)}};return q;}});`,
+          "paid-notice-fixture": `export const state={submission:{id:'${submissionId}',user_id:'member',guest_token:'legacy-private-token',guest_email:'guest@example.invalid',applicant_email:'wrong@example.invalid',type:'ALBUM',title:'Title<script>',artist_name:'Artist<&',payment_status:'PAID',amount_krw:1000,current_order_id:null},order:null,orderItems:[],orderFlags:[],event:null,eventLookupError:false,email:'Owner@example.invalid',providers:[],notificationEmail:null,userMissing:false,lookupError:false,lookupThrow:false,loadError:false,failedOperation:null,queuedOperation:null,throwOperation:null};export const messages=[];export const receipts=new Map();`,
+          "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({auth:{admin:{getUserById:async()=>{if(state.lookupThrow)throw Error('lookup unavailable');return {data:{user:state.userMissing?null:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:state.lookupError?{}:null}}}},from(table){const q={select(){return q},eq(){return q},in(){return q},maybeSingle:async()=>({data:table==='paid_submission_notification_events'?state.event:table==='profiles'?{phone:null,notification_email:state.notificationEmail}:table==='submission_orders'?state.order:state.submission,error:(table==='paid_submission_notification_events'?state.eventLookupError:state.loadError)?{}:null}),then(resolve,reject){return Promise.resolve({data:table==='submission_order_items'?state.orderItems:table==='submissions'?state.orderFlags:[],error:null}).then(resolve,reject)}};return q;}});`,
           "@/lib/email-transport": `${shared} export const sendTransactionalEmail=async message=>{messages.push(message);if(state.throwOperation===message.operation)throw Error('fixture failure');if(state.failedOperation===message.operation)return {ok:false};const key=message.operation+':'+message.to+':'+message.idempotencyKey;if(!receipts.has(key))receipts.set(key,{ok:state.queuedOperation!==message.operation,status:state.queuedOperation===message.operation?'retry':'accepted',queued:state.queuedOperation===message.operation,outboxId:'receipt-'+receipts.size});return receipts.get(key);};`,
           "@/lib/kakao": "export const sendKakaoOfficialNotification=async()=>({ok:true});",
         };
@@ -24,13 +24,22 @@ async function fixture() {
     } }],
   });
   const loaded = { exports: {} as Pick<typeof import("../src/lib/payments/notifications"), "sendPaidSubmissionNotificationsById"> & Pick<typeof import("../src/lib/email"), "sendAdminSubmissionReceiptEmail"> & {
-    state: { submission: Record<string, unknown> | null; order: Record<string, unknown> | null; orderItems: Record<string, unknown>[]; orderFlags: Record<string, unknown>[]; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; providers: string[]; userMissing: boolean; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
+    state: { submission: Record<string, unknown> | null; order: Record<string, unknown> | null; orderItems: Record<string, unknown>[]; orderFlags: Record<string, unknown>[]; event: { payment_key: string; enqueued_at: string | null } | null; eventLookupError: boolean; email: string | null; providers: string[]; notificationEmail: string | null; userMissing: boolean; lookupError: boolean; lookupThrow: boolean; loadError: boolean; failedOperation: string | null; queuedOperation: string | null; throwOperation: string | null };
     messages: EmailMessage[]; receipts: Map<string, EmailSendResult>;
   } };
   new Function("require", "module", "exports", built.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
   return loaded.exports;
 }
 const input = { submissionId, paymentKey: "SUBP-fixture-order" };
+
+test("social payment notices use the saved profile contact and retain per-application privacy", async () => {
+  const h = await fixture(); h.state.email = null; h.state.providers = ["kakao"]; h.state.notificationEmail = "saved@example.invalid";
+  assert.equal((await h.sendPaidSubmissionNotificationsById(input)).recorded, true);
+  const notice = h.messages.find(message => message.operation === "submission update")!;
+  assert.equal(notice.to, "saved@example.invalid");
+  assert.doesNotMatch(notice.html, /legacy-private-token|wrong@example/);
+  assert.equal(h.messages.some(message => message.operation === "payment completed"), false);
+});
 
 test("all review types send one customer receipt and one designated administrator receipt with separate access links", async () => {
   for (const [type, label] of [["ALBUM", "음반"], ["MV_DISTRIBUTION", "온라인 뮤직비디오"], ["MV_BROADCAST", "방송용 뮤직비디오"]]) {

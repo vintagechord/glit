@@ -10,6 +10,7 @@ import {
   sendSignupVerificationEmail,
 } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isEmailLessSocialMember } from "@/lib/member-notification-email";
 import { getEmailDeliveryConfiguration } from "@/lib/email-config";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
@@ -502,6 +503,7 @@ export async function updateProfileAction(
     name: formData.get("name"),
     company: formData.get("company") || undefined,
     phone: formData.get("phone"),
+    notificationEmail: formData.get("notificationEmail") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -517,11 +519,16 @@ export async function updateProfileAction(
       return { error: "인증 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요." };
     }
     if (userError || !user) return { error: "로그인이 필요합니다." };
+    const hasNotificationEmail = formData.has("notificationEmail");
+    if (hasNotificationEmail && !isEmailLessSocialMember(user)) {
+      return { error: "이 계정은 계정 이메일로 심의 안내를 받습니다. 프로필을 새로고침해주세요." };
+    }
     const { error } = await supabase.from("profiles").upsert({
       user_id: user.id,
       name: parsed.data.name,
       company: parsed.data.company ?? "",
       phone: parsed.data.phone,
+      ...(hasNotificationEmail ? { notification_email: parsed.data.notificationEmail || null } : {}),
     }, { onConflict: "user_id" });
     if (error) {
       logAuthError("update profile", error);

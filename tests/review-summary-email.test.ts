@@ -12,7 +12,7 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'summary-fixture';";
         const files: Record<string, string> = {
-          "summary-fixture": `export const calls=[];export const state={email:'artist@example.invalid',mode:'transactional',result:{ok:true,status:'accepted'},receipt:null,changeRecipientDuringPrepare:false,submission:{id:'${id}',type:'ALBUM',title:'봄의 기록',artist_name:'예시 아티스트',user_id:'member',guest_token:'fictional-guest-link',guest_email:'guest@example.invalid',status:'IN_PROGRESS',result_status:null,updated_at:'2026-10-25T03:00:00Z',certificate_b2_path:null},stations:[{id:'kbs',code:'KBS',name:'KBS',trackIds:['track1'],review:{status:'APPROVED',track_results:[{track_id:'track1',status:'APPROVED'}],updated_at:'2026-10-25T03:00:00Z',age_rating:null}},{id:'mbc',code:'MBC',name:'MBC',trackIds:['track1'],review:{status:'SENT',track_results:[],updated_at:null,age_rating:null}},{id:'sbs',code:'SBS',name:'SBS',trackIds:['track1'],review:{status:'NOT_SENT',track_results:[],updated_at:null,age_rating:null}}]};export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.email}},error:null})}},from(table){const chain={select(){return chain},eq(){return chain},order(){return chain},async range(){return{data:state.receipt?[state.receipt]:[],error:null}},async maybeSingle(){return{data:table==='profiles'?{phone:null}:structuredClone(state.submission),error:null}}};return chain}};`,
+          "summary-fixture": `export const calls=[];export const state={email:'artist@example.invalid',providers:[],notificationEmail:null,mode:'transactional',result:{ok:true,status:'accepted'},receipt:null,changeRecipientDuringPrepare:false,submission:{id:'${id}',type:'ALBUM',title:'봄의 기록',artist_name:'예시 아티스트',user_id:'member',guest_token:'fictional-guest-link',guest_email:'guest@example.invalid',status:'IN_PROGRESS',result_status:null,updated_at:'2026-10-25T03:00:00Z',certificate_b2_path:null},stations:[{id:'kbs',code:'KBS',name:'KBS',trackIds:['track1'],review:{status:'APPROVED',track_results:[{track_id:'track1',status:'APPROVED'}],updated_at:'2026-10-25T03:00:00Z',age_rating:null}},{id:'mbc',code:'MBC',name:'MBC',trackIds:['track1'],review:{status:'SENT',track_results:[],updated_at:null,age_rating:null}},{id:'sbs',code:'SBS',name:'SBS',trackIds:['track1'],review:{status:'NOT_SENT',track_results:[],updated_at:null,age_rating:null}}]};export const db={auth:{admin:{getUserById:async()=>({data:{user:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:null})}},from(table){const chain={select(){return chain},eq(){return chain},order(){return chain},async range(){return{data:state.receipt?[state.receipt]:[],error:null}},async maybeSingle(){return{data:table==='profiles'?{phone:null,notification_email:state.notificationEmail}:structuredClone(state.submission),error:null}}};return chain}};`,
           "@/lib/supabase/admin": `${shared}export const createAdminClient=()=>db;`,
           "@/lib/email-delivery-mode": `${shared}export const getEmailDeliveryMode=()=>state.mode;`,
           "@/lib/email-transport": `${shared}import{createHash}from'node:crypto';export const sendTransactionalEmail=async mail=>{calls.push({kind:'send',mail});state.receipt={status:state.result.status,idempotency_key:createHash('sha256').update(mail.operation+'\\0'+mail.to.toLowerCase()+'\\0'+mail.idempotencyKey).digest('hex'),recipient_email:mail.to};return state.result;};`,
@@ -25,12 +25,28 @@ async function fixture() {
     } }],
   });
   type Api = Pick<typeof import("../src/lib/admin/submission-notifications"), "getReviewSummaryEmailPreviewById" | "sendReviewSummaryNotificationById"> & Pick<typeof import("../src/lib/email"), "renderReviewSummaryEmail"> & {
-    state: { email: string; mode: string; result: {ok:boolean;status:string;queued?:boolean};receipt:Record<string,unknown>|null;changeRecipientDuringPrepare:boolean;submission:Record<string,unknown>;stations:Array<{id:string;code:string;name:string;trackIds:string[];review:{status:string;track_results:unknown[];updated_at:string|null;age_rating:string|null}}> };
+    state: { email: string | null; providers: string[]; notificationEmail: string | null; mode: string; result: {ok:boolean;status:string;queued?:boolean};receipt:Record<string,unknown>|null;changeRecipientDuringPrepare:boolean;submission:Record<string,unknown>;stations:Array<{id:string;code:string;name:string;trackIds:string[];review:{status:string;track_results:unknown[];updated_at:string|null;age_rating:string|null}}> };
     calls:Array<{kind:string;mail?:{html:string;subject:string;to:string;idempotencyKey:string;markResultNotified:boolean;attachmentRefs?:unknown[]}}>;
   };
   const output = { exports: {} as Api };new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),output,output.exports);return output.exports;
 }
 const previewInput = { submissionId: id };
+
+test("social summary sends use the saved notification contact and require a new preview after it changes", async () => {
+  for (const provider of ["custom:naver", "kakao"]) {
+    const api = await fixture(); api.state.email = null; api.state.providers = [provider];
+    api.state.notificationEmail = "saved@example.invalid"; api.state.submission.applicant_email = "old@example.invalid";
+    let preview = await api.getReviewSummaryEmailPreviewById(previewInput);
+    assert.equal(preview.canSend, true); assert.equal(preview.recipientMasked, "sa***@example.invalid");
+    api.state.notificationEmail = "new@example.invalid";
+    assert.equal((await api.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision })).errorCode, "CONFLICT");
+    assert.equal(api.calls.length, 0);
+    preview = await api.getReviewSummaryEmailPreviewById(previewInput);
+    assert.equal((await api.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision })).deliveredCount, 1);
+    const mail = api.calls.find(call => call.kind === "send")!.mail!;
+    assert.equal(mail.to, "new@example.invalid"); assert.match(mail.html, /\/dashboard\/submissions\//);
+  }
+});
 
 test("preview is read-only, masked, includes all requested stations, and exactly matches the sent HTML", async () => {
   const api = await fixture();const preview = await api.getReviewSummaryEmailPreviewById(previewInput);

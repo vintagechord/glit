@@ -8,6 +8,16 @@ Validation passed: **18 focused unit tests**, **10 Chromium browser cases**, Typ
 
 The deployment records below describe the earlier, pre-approval state. Their pending-review wording is historical.
 
+## Social-member notification email — 2026-10-29
+
+Email-less social members can save **심의 안내 수신 이메일 / Review notification email** in their profile. The Korean/English explanation says that review results, progress, supplement requests and payment notices use that address. An existing Auth account email retains priority; otherwise the saved profile contact takes priority over the individual application's contact. Clearing the profile contact restores the application fallback. The address is a notification contact and does not change Auth email, identities, credentials or account linking.
+
+Migration `20261029072921_social_notification_email` adds a nullable, normalized `profiles.notification_email` with a format/length constraint. Existing owner-only profile RLS remains in force. The server action uses the verified current user's ID, rejects notification-contact changes from Auth-email accounts, and ignores caller-supplied ownership/role fields. Older profile forms preserve a stored notification contact. Profile lookup failure stops notification delivery rather than sending to a stale application contact.
+
+Review summaries, progress/result notices, supplement notices, paid submission notices and bank-transfer instructions share the updated recipient resolution. An address change invalidates an already-open result-email preview. Application-scoped payment privacy is preserved. Previously queued messages keep their recorded recipient; saving a profile does not trigger or resend mail.
+
+Verification: **65 focused unit/integration tests**, **12 Chromium browser cases**, TypeScript, ESLint and the isolated webpack production build (**93/93 static pages**) passed. Release snapshot: `/private/tmp/glit-profile-email-release-20261029`; manifest: `/private/tmp/onside-profile-email-release-files-20261029.json`. Unrelated document-parser and desktop-app work is excluded. No customer email was sent for these checks. Existing profile RLS was checked in the production catalogs; the proposed temporary production-profile write test was rejected and did not run. Docker was unavailable, so no local Postgres execution is claimed.
+
 ## Earlier deployed source and verification
 
 The final review-notice and signup-language correction is deployed as [PR #34](https://github.com/vintagechord/glit/pull/34), commit `4411fddb7a44565005d72d7dae737dbd1c902dae`. [Render deployment `dep-dbh3o4kipgvc73dmqlf0`](https://dashboard.render.com/web/srv-d5bvt5ggjchc73ccaaug/deploys/dep-dbh3o4kipgvc73dmqlf0) started **2026-10-29 03:16:50 KST** and went Live **03:19:18 KST**. The final public smoke passed at **03:20:30 KST**. Naver review submission is complete; **the external review decision remains pending**.

@@ -20,3 +20,15 @@ test("missing users, ordinary email accounts and invalid contacts cannot trigger
   }
   assert.equal(getMemberNotificationEmail({ id: "member", identities: [{ provider: "custom:naver" }] }, "invalid"), null);
 });
+
+test("saved social notification contacts take priority over application contacts, while Auth email stays authoritative", () => {
+  for (const provider of ["google", "kakao", "custom:naver"]) {
+    const user = { id: "member", email: null as string | null, identities: [{ provider }] };
+    assert.equal(getMemberNotificationEmail(user, "old@example.invalid", " Saved@Example.invalid "), "saved@example.invalid");
+    assert.equal(getMemberNotificationEmail(user, "old@example.invalid", ""), "old@example.invalid");
+    assert.equal(getMemberNotificationEmail(user, "old@example.invalid", "invalid"), null);
+    user.email = "account@example.invalid";
+    assert.equal(getMemberNotificationEmail(user, "old@example.invalid", "saved@example.invalid"), "account@example.invalid");
+  }
+  assert.equal(getMemberNotificationEmail(null, "old@example.invalid", "saved@example.invalid"), null);
+});

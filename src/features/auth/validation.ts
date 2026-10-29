@@ -43,6 +43,8 @@ export const profileSchema = z.object({
   company: z.string().trim().max(200, "회사명은 200자 이하로 입력해주세요.").optional(),
   phone: z.string({ error: "연락처를 입력해주세요." }).trim()
     .min(7, "연락처는 7자 이상 입력해주세요.").max(40, "연락처는 40자 이하로 입력해주세요."),
+  notificationEmail: z.string().trim().toLowerCase().max(254, "이메일은 254자 이하로 입력해주세요.")
+    .refine(value => !value || z.string().email().safeParse(value).success, "올바른 안내 수신 이메일을 입력해주세요.").optional(),
 });
 
 export const passwordUpdateSchema = z.object({
