@@ -311,8 +311,8 @@ html[lang="en"] {
   }
 
   .bauhaus-status-chip--attention {
-    background: #ff6b00;
-    color: #111111;
+    background: #111111;
+    color: #f2cf27;
   }
 
   .dark .bauhaus-status-chip {

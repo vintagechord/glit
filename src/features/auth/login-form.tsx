@@ -21,7 +21,6 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
   const effectiveNextPath = getAuthReturnPath(nextPath, isEnglishRoute);
   const signupHref = getAuthPageHref("signup", effectiveNextPath, isEnglishRoute);
   const forgotPasswordHref = getAuthPageHref("forgot-password", effectiveNextPath, isEnglishRoute);
-  const trackHref = isEnglishRoute ? "/en/track" : "/track";
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();
@@ -122,18 +121,12 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
       <Link href={getAuthPageHref("confirm-email", effectiveNextPath, isEnglishRoute)} className="block text-center text-xs font-semibold underline underline-offset-4">
         {isEnglishRoute ? "Resend signup verification email" : "회원가입 인증 메일 다시 받기"}
       </Link>
-      <div className="grid grid-cols-2 gap-2 text-center text-muted-foreground">
+      <div className="grid text-center text-muted-foreground">
         <TrackLookupModalTrigger
           label="비회원 조회"
           modalTitle="비회원 접수 조회"
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
-        <Link
-          href={trackHref}
-          className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
-        >
-          조회 코드를 이메일로 받기
-        </Link>
       </div>
     </div>
   );
