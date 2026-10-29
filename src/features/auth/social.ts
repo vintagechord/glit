@@ -7,10 +7,6 @@ let pending: { key: string; promise: Promise<SocialAvailability> } | undefined;
 
 const asRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
 
-export function isNaverReviewPending() {
-  return process.env.ONSIDE_NAVER_LOGIN_ENABLED === "true" && process.env.ONSIDE_NAVER_REVIEW_PENDING === "true";
-}
-
 export function parseSocialAvailability(settings: unknown, naverEnabled: boolean): SocialAvailability {
   const external = asRecord(asRecord(settings).external);
   return {

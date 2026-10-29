@@ -249,16 +249,13 @@ test("availability shares only boolean public settings for 60 seconds and never 
     plugin.onResolve({filter:/^(server-only|@\/lib\/supabase\/env)$/},args=>({path:args.path,namespace:"fixture"}));
     plugin.onLoad({filter:/.*/,namespace:"fixture"},({path})=>({loader:"js",contents:path==="server-only"?"export {};":`export const getSupabaseEnv=()=>({url:'${authOrigin}',anonKey:'fixture-public'});`}));
   }}]});
-  const availabilityBundle={exports:{} as {getSocialAvailability:()=>Promise<Record<string,boolean>>;parseSocialAvailability:(settings:unknown,naver:boolean)=>Record<string,boolean>;isNaverReviewPending:()=>boolean}};
+  const availabilityBundle={exports:{} as {getSocialAvailability:()=>Promise<Record<string,boolean>>;parseSocialAvailability:(settings:unknown,naver:boolean)=>Record<string,boolean>}};
   new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),availabilityBundle,availabilityBundle.exports);
-  const originalFetch=globalThis.fetch, originalNow=Date.now, previousFlag=process.env.ONSIDE_NAVER_LOGIN_ENABLED, previousReviewFlag=process.env.ONSIDE_NAVER_REVIEW_PENDING;
+  const originalFetch=globalThis.fetch, originalNow=Date.now, previousFlag=process.env.ONSIDE_NAVER_LOGIN_ENABLED;
   let time=100_000; const requests:{url:string;init?:RequestInit}[]=[];
   let settings:unknown={external:{google:true,kakao:"true"},secrets:{client_secret:"must-not-return"}};
   try{
-    Date.now=()=>time;delete process.env.ONSIDE_NAVER_LOGIN_ENABLED;delete process.env.ONSIDE_NAVER_REVIEW_PENDING;
-    assert.equal(availabilityBundle.exports.isNaverReviewPending(),false);
-    process.env.ONSIDE_NAVER_REVIEW_PENDING="true";
-    assert.equal(availabilityBundle.exports.isNaverReviewPending(),false,"review notice cannot enable Naver");
+    Date.now=()=>time;delete process.env.ONSIDE_NAVER_LOGIN_ENABLED;
     globalThis.fetch=async(input,init)=>{requests.push({url:String(input),init});return Response.json(settings);};
     const values=await Promise.all([availabilityBundle.exports.getSocialAvailability(),availabilityBundle.exports.getSocialAvailability(),availabilityBundle.exports.getSocialAvailability()]);
     assert.equal(requests.length,1);assert.deepEqual(values[0],{google:true,kakao:false,naver:false});
@@ -267,9 +264,6 @@ test("availability shares only boolean public settings for 60 seconds and never 
     time+=59_999;await availabilityBundle.exports.getSocialAvailability();assert.equal(requests.length,1);
     time+=2;settings={external:{google:false,kakao:true}};assert.equal((await availabilityBundle.exports.getSocialAvailability()).kakao,true);assert.equal(requests.length,2);
     process.env.ONSIDE_NAVER_LOGIN_ENABLED="true";assert.equal((await availabilityBundle.exports.getSocialAvailability()).naver,true);
-    assert.equal(availabilityBundle.exports.isNaverReviewPending(),true);
-    process.env.ONSIDE_NAVER_REVIEW_PENDING="false";
-    assert.equal(availabilityBundle.exports.isNaverReviewPending(),false,"approval can remove only the review notice without disabling Naver");
     assert.ok(requests.every(request=>request.url===`${authOrigin}/auth/v1/settings`));
     assert.ok(requests.every(request=>!new Headers(request.init?.headers).has("authorization")));
     assert.ok(requests.every(request=>request.init?.cache==="no-store"));
@@ -277,6 +271,5 @@ test("availability shares only boolean public settings for 60 seconds and never 
   }finally{
     globalThis.fetch=originalFetch;Date.now=originalNow;
     if(previousFlag===undefined)delete process.env.ONSIDE_NAVER_LOGIN_ENABLED;else process.env.ONSIDE_NAVER_LOGIN_ENABLED=previousFlag;
-    if(previousReviewFlag===undefined)delete process.env.ONSIDE_NAVER_REVIEW_PENDING;else process.env.ONSIDE_NAVER_REVIEW_PENDING=previousReviewFlag;
   }
 });
