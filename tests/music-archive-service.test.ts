@@ -280,6 +280,23 @@ test("automatic review matching filters the owner before exact URL matching", as
   assert.deepEqual(detail.reviews.map(row => row.id), [SUBMISSION]);
 });
 
+test("archive detail observes administrator station results without changing the library version or manual tasks", async () => {
+  const h = await harness();
+  const data = libraryData();
+  h.state.tables.music_archive_libraries = [libraryRow(OWNER, LIBRARY, data)];
+  const submission = { ...submissionRow(), status: "IN_PROGRESS", archive_review_context: { libraryId: LIBRARY, releaseId: "release-one", trackIds: ["track-one"] }, station_reviews: [{ status: "SENT", track_results_json: [] }] };
+  h.state.tables.submissions = [submission];
+  assert.equal((await h.getArchiveDetail(OWNER, LIBRARY)).onsideReviews[0].status, "IN_PROGRESS");
+  submission.station_reviews = [{ status: "APPROVED", track_results_json: [] }];
+  const completed = await h.getArchiveDetail(OWNER, LIBRARY);
+  assert.equal(completed.onsideReviews[0].status, "COMPLETED");
+  assert.equal(completed.library.version, 1);
+  assert.deepEqual(completed.library.data.tasks, []);
+  submission.station_reviews = [{ status: "NEEDS_FIX", track_results_json: [] }];
+  assert.equal((await h.getArchiveDetail(OWNER, LIBRARY)).onsideReviews[0].status, "IN_PROGRESS");
+  assert.equal(mutations(h).length, 0);
+});
+
 test("saved archive application links exact owned track IDs, is idempotent, and rejects foreign submissions", async () => {
   const h = await harness();
   h.state.tables.music_archive_libraries = [libraryRow()];

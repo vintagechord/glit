@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { linkedTrackResult, matchArchiveReviews } from "../src/lib/music-archive/reviews";
+import { archiveReviewProgress, linkedTrackResult, matchArchiveReviews } from "../src/lib/music-archive/reviews";
 import { resolveArchiveReviewEntry } from "../src/lib/music-archive/review-entry";
 import { groupedAlbumFixture, groupedLibraryId } from "./fixtures/music-archive-grouped-albums";
 
@@ -14,6 +14,17 @@ test("archive reads the latest exact mapped track result without resetting persi
 test("completed submission or album result never approves an unmapped version", () => {
   assert.equal(linkedTrackResult({ status: "APPROVED", track_results_json: [{ track_id: "original", title: "Same", status: "APPROVED" }] }, "clean").result, "unknown");
   assert.equal(linkedTrackResult({ status: "COMPLETED" }, "a").result, "unknown");
+});
+
+test("archive progress follows current station decisions while retaining pending results", () => {
+  const album_tracks = [{ id: "original", track_no: 1, track_title: "Whispers in the Dark" }];
+  const approved = { status: "APPROVED", track_results_json: [{ track_id: "original", status: "APPROVED" }] };
+  const rejected = { status: "REJECTED", track_results_json: [{ track_id: "original", status: "REJECTED" }] };
+  assert.equal(archiveReviewProgress({ status: "IN_PROGRESS", album_tracks, station_reviews: [approved, rejected] }), "COMPLETED");
+  assert.equal(archiveReviewProgress({ status: "RESULT_READY", album_tracks, station_reviews: [approved, { status: "SENT" }] }), "IN_PROGRESS");
+  assert.equal(archiveReviewProgress({ status: "COMPLETED", album_tracks, station_reviews: [{ status: "NEEDS_FIX" }] }), "IN_PROGRESS");
+  assert.equal(archiveReviewProgress({ status: "RESULT_READY", station_reviews: [] }), "COMPLETED");
+  assert.equal(archiveReviewProgress({ status: "SUBMITTED", station_reviews: [] }), "SUBMITTED");
 });
 
 test("a grouped review snapshot reconnects its exact managed provider track before explicit links exist", () => {

@@ -40,7 +40,7 @@ export function archiveError(error: unknown) {
   return archiveJson({ error: "음악 관리 요청을 처리하지 못했습니다. 저장된 자료는 유지됩니다. 잠시 후 다시 시도해주세요.", code: "ARCHIVE_UNAVAILABLE" }, 503);
 }
 
-export function archiveDatabaseError(error: { code?: string; message?: string } | null) {
+export function archiveDatabaseError(error: { code?: string; message?: string } | null, operation = "query") {
   if (!error) return;
   const message = error.message ?? "";
   if (error.code === "40001" || /VERSION|CONFLICT/.test(message)) throw new ArchiveError("다른 창이나 동기화에서 변경되었습니다. 새로고침한 뒤 다시 저장해주세요.", 409, "VERSION_CONFLICT");
@@ -48,5 +48,7 @@ export function archiveDatabaseError(error: { code?: string; message?: string } 
   if (/LIMIT/.test(message)) throw new ArchiveError("관리 한도에 도달했습니다. 항목을 나누어 관리해주세요.", 429, "LIMIT_REACHED");
   if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST202") throw new ArchiveError("음악 관리 DB 준비가 필요합니다. 관리자에게 문의해주세요.", 503, "MIGRATION_REQUIRED");
   if (error.code === "23505") throw new ArchiveError("이미 등록되었거나 진행 중인 항목입니다. 새로고침해주세요.", 409, "DUPLICATE");
+  // Keep credentials, SQL, member IDs and record contents out of production logs.
+  console.error("[MusicArchive] database request failed", { operation, code: /^[A-Z0-9]{5,16}$/.test(error.code ?? "") ? error.code : "UNSPECIFIED", failure: /timeout|abort/i.test(message) ? "timeout" : /fetch|network/i.test(message) ? "network" : "database" });
   throw new ArchiveError("자료를 저장하거나 조회하지 못했습니다. 잠시 후 다시 시도해주세요.", 503, "DATABASE_ERROR");
 }
