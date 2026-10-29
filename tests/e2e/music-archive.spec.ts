@@ -260,7 +260,7 @@ test("Onside review tab opens the live result popup and respects selected track 
   harness.onsideReviews=[{submissionId,releaseId:"album",trackIds:["original"],status:"COMPLETED"}];
   await openAlbum(page);
   await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("일부 심의 완료");
-  await expect(page.getByRole("button",{name:"심의 내역 입력",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"심의 내역 직접 입력",exact:true})).toHaveCount(0);
   await tab(page,"심의");
   await expect(page.getByRole("dialog",{name:"심의 결과",exact:true})).toBeVisible();
   await expect(page.locator('iframe[title="심의 결과 상세"]')).toHaveAttribute("src",`/mypage/music/results/${submissionId}`);
@@ -270,7 +270,7 @@ test("Onside review tab opens the live result popup and respects selected track 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("심의 정보 없음");
   await expect(page.getByRole("link",{name:"온사이드에 심의 신청",exact:true})).toHaveAttribute("href",/archiveTrack=clean/);
-  await page.getByRole("button",{name:"심의 내역 입력",exact:true}).click();
+  await page.getByRole("button",{name:"심의 내역 직접 입력",exact:true}).click();
   await page.getByLabel("심의 결과",{exact:true}).selectOption("eligible");
   await page.getByRole("button",{name:"저장",exact:true}).click();
   expect(harness.libraries[0].data.tasks[0].trackId).toBe("clean");
@@ -424,7 +424,7 @@ test("Apple Music artist links connect using the exact selected identity",async(
 test("manual reviews save selected broadcasters atomically and show ineligibility reasons", async ({page}, testInfo) => {
   await page.setViewportSize({width:390,height:844});
   const harness = await mount(page, [fixture()]); await openAlbum(page);
-  await page.getByRole("button", {name:"심의 내역 입력",exact:true}).click();
+  await page.getByRole("button", {name:"심의 내역 직접 입력",exact:true}).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("확인번호 (선택)",{exact:true})).toHaveCount(0);
   await expect(dialog.getByLabel("심의 결과",{exact:true}).locator("option")).toHaveText(["적격", "부적격"]);

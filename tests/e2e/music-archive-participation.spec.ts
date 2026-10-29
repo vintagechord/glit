@@ -67,7 +67,7 @@ test("participation-only albums show every imported song without enabling unveri
   await expect(songs).toContainText("첫 번째 수록곡");
   await expect(songs).toContainText("함께 부른 수록곡");
   await expect(page.getByLabel("관리할 음악", { exact: true }).locator("option")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "심의 내역 입력", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeDisabled();
   await expect(page.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(harness.writes).toEqual([]); expect(harness.errors).toEqual([]);
@@ -87,7 +87,7 @@ test("mixed albums keep all songs visible in a read-only list and only confirmed
   await expect(selector.locator("option")).toHaveCount(2);
   await expect(selector.locator("option")).toHaveText(["앨범 전체", "1. 첫 번째 수록곡"]);
   await selector.selectOption("melon-track:100:1000");
-  await expect(page.getByRole("button", { name: "심의 내역 입력", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeEnabled();
   await expect(page.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveAttribute("href", /archiveTrack=melon-track%3A100%3A1000/);
   expect(harness.writes).toEqual([]); expect(harness.errors).toEqual([]);
 });
@@ -104,7 +104,7 @@ test("unmanaged participation credits show every role without inferring artist o
   await expect(songs.getByRole("listitem")).toHaveCount(2);
   await expect(songs).not.toContainText("숨긴 저작자");
   await expect(page.getByLabel("관리할 음악", { exact: true }).locator("option")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "심의 내역 입력", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeDisabled();
   await expect(page.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveCount(0);
 
   await page.getByRole("navigation", { name: "음악 관리 탭" }).getByRole("button", { name: "저작권 등록", exact: true }).click();
@@ -130,7 +130,7 @@ test("mixed participation credits remain read-only while review and registration
   await expect(songs.getByRole("listitem").filter({ hasText: "함께 부른 수록곡" })).not.toContainText("관리 중");
   const selector = page.getByLabel("관리할 음악", { exact: true });
   await expect(selector.locator("option")).toHaveText(["앨범 전체", "1. 첫 번째 수록곡"]);
-  await expect(page.getByText("심의 신청 가능한 음원 1곡", { exact: true })).toBeVisible();
+  await expect(page.getByText("음원만 첨부하고 심의를 신청하세요", { exact: true })).toBeVisible();
 
   await page.getByRole("navigation", { name: "음악 관리 탭" }).getByRole("button", { name: "저작권 등록", exact: true }).click();
   const copyright = page.getByRole("region", { name: "저작권 등록 정보" });
