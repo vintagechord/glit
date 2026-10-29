@@ -467,7 +467,7 @@ function CompactStationRow({
     : status.tone.includes("--success")
       ? "bg-[#1f7a5a] text-white"
       : status.needsAttention
-        ? "bg-[#ff6b00] text-[#111111]"
+        ? "bg-[#111111] text-[#f2cf27]"
         : status.key === "WAITING_SUBMISSION"
           ? "bg-[#f2cf27] text-[#111111]"
           : "bg-[#1556a4] text-white";

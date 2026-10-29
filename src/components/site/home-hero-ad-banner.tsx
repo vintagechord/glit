@@ -242,9 +242,13 @@ function ArtmelonExample({ isEnglish }: { isEnglish: boolean }) {
     <div className="p-4">
       <p className="text-[10px] font-black tracking-widest text-[#d9362c] dark:text-red-400">ONSIDE × ARTMELON</p>
       <div className="my-4 grid grid-cols-3 gap-2">
-        {[{ name: "CD", icon: Disc3 }, { name: "LP", icon: Disc3 }, { name: isEnglish ? "Merch" : "굿즈", icon: Package }].map(({ name, icon: Icon }) => (
-          <div key={name} className="flex flex-col items-center gap-2 rounded-md bg-[#d9362c]/5 py-4 dark:bg-white/5">
-            <Icon className={name === "LP" ? "size-9 text-[#d9362c] dark:text-red-400" : "m-1 size-7 text-[#d9362c] dark:text-red-400"} aria-hidden="true" />
+        {[
+          { name: "CD", icon: Disc3, color: "text-[#d9362c] dark:text-[#ff6258]" },
+          { name: "LP", icon: Disc3, color: "text-[#1556a4] dark:text-[#3f8ad8]" },
+          { name: isEnglish ? "Merch" : "굿즈", icon: Package, color: "text-[#1f7a5a] dark:text-[#46b783]" },
+        ].map(({ name, icon: Icon, color }) => (
+          <div key={name} className="flex flex-col items-center gap-2 rounded-md border-2 border-[#111111] bg-background py-4 dark:border-[#f2cf27]">
+            <Icon className={`${name === "LP" ? "size-9" : "m-1 size-7"} ${color}`} aria-hidden="true" />
             <span className="text-xs font-bold">{name}</span>
           </div>
         ))}

@@ -187,23 +187,24 @@ for (const width of [320, 390, 640, 1440]) {
           probe.fillStyle = style.backgroundColor;
           probe.fillRect(0, 0, 1, 1);
           const rgba = Array.from(probe.getImageData(0, 0, 1, 1).data);
-          return { rgba, border: style.borderColor, borderWidth: parseFloat(style.borderWidth), fits: element.scrollWidth <= element.clientWidth };
+          return { rgba, foreground: style.color, border: style.borderColor, borderWidth: parseFloat(style.borderWidth), fits: element.scrollWidth <= element.clientWidth };
         }));
         for (const color of colors) {
           const [red, green, blue, alpha] = color.rgba;
           expect(alpha).toBe(255);
-          expect(Math.max(red, green, blue) - Math.min(red, green, blue)).toBeGreaterThan(75);
+          if (Math.max(red, green, blue) > 17) expect(Math.max(red, green, blue) - Math.min(red, green, blue)).toBeGreaterThan(75);
           expect(Math.min(red, green, blue)).toBeLessThan(150);
           expect(color.border).toBe("rgb(17, 17, 17)");
           expect(color.borderWidth).toBeGreaterThanOrEqual(1);
           expect(color.fits).toBe(true);
         }
-        const [yellow, blue, green, red, orange] = colors.map(color => color.rgba);
+        const [yellow, blue, green, red, attention] = colors.map(color => color.rgba);
         expect(yellow[0]).toBeGreaterThan(180); expect(yellow[1]).toBeGreaterThan(150); expect(yellow[2]).toBeLessThan(100);
         expect(blue[2]).toBeGreaterThan(blue[0] + 60);
         expect(green[1]).toBeGreaterThan(green[0] + 40);
         expect(red[0]).toBeGreaterThan(red[1] + 70);
-        expect(orange[0]).toBeGreaterThan(orange[1] + 60); expect(orange[1]).toBeGreaterThan(orange[2] + 30);
+        expect(attention).toEqual([17, 17, 17, 255]);
+        expect(colors[4].foreground).toBe("rgb(242, 207, 39)");
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         expect(await rows.nth(0).evaluate(element => element.tagName)).toBe("SPAN");
         expect(await rows.nth(1).evaluate(element => element.tagName)).toBe("SPAN");
