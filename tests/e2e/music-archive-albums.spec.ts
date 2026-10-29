@@ -99,8 +99,8 @@ test("same-agency histories stay visible and editing retains the original task I
 
 test("manual review saves only offered stations and survives reloading", async ({ page }) => {
   const harness = await mount(page, albumPath);
-  await page.getByRole("button", { name: "심의 내역 입력", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "심의 내역 입력", exact: true });
+  await page.getByRole("button", { name: "심의 내역 직접 입력", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "심의 내역 직접 입력", exact: true });
   for (const station of ["EBS", "tvN", "JTBC", "G1"]) await expect(dialog.getByRole("checkbox", { name: station, exact: true })).toHaveCount(0);
   await dialog.getByRole("checkbox", { name: "MBC", exact: true }).check();
   await dialog.getByLabel("심의일 (선택)", { exact: true }).fill("2026-10-29");

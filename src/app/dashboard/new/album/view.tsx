@@ -6,6 +6,8 @@ import { AlbumWizard } from "@/features/submissions/album-wizard";
 import { getPublicAlbumCatalog } from "@/lib/public-catalog";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { getMemberNotificationEmail } from "@/lib/member-notification-email";
+import { socialDisplayName } from "@/features/auth/social-contract";
 
 const preparationChecklist = [
   "WAV 음원 또는 전체 음원 ZIP",
@@ -30,7 +32,12 @@ export async function AlbumSubmissionPageView({ searchParams, localePrefix = "" 
   if (archiveContext && !user) redirect(`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/new/album?${new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string"))}`)}`);
   const archiveResult = archiveContext && user ? await getArchiveReviewEntry(user.id, archiveContext).then(entry => ({ entry, error: null })).catch((error: Error) => ({ entry: null, error: error.message })) : null;
   if (archiveResult?.error) return <div className="mx-auto max-w-3xl px-6 py-12"><p>{archiveResult.error}</p><Link href={`${localePrefix}/mypage/music`} className="mt-5 inline-block underline">내 음악 관리로 돌아가기</Link></div>;
-  const profile = archiveContext && user ? (await supabase.from("profiles").select("name,phone").eq("user_id", user.id).maybeSingle()).data : null;
+  const profile = user ? (await supabase.from("profiles").select("name,phone,notification_email").eq("user_id", user.id).maybeSingle()).data : null;
+  const initialApplicant = user ? {
+    name: profile?.name ?? socialDisplayName(user),
+    email: getMemberNotificationEmail(user, undefined, profile?.notification_email) ?? "",
+    phone: profile?.phone ?? (typeof user.user_metadata?.phone === "string" ? user.user_metadata.phone : user.phone ?? ""),
+  } : undefined;
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
       {archiveResult?.entry ? <div><h1 className="text-2xl font-black">심의 신청</h1><p className="mt-2 text-sm text-muted-foreground">음원을 첨부하고 결제를 진행해주세요.</p></div> : <AlbumIntroPanel preparationChecklist={preparationChecklist} />}
@@ -39,7 +46,7 @@ export async function AlbumSubmissionPageView({ searchParams, localePrefix = "" 
         <AlbumWizard
           packages={packages}
           initialArchiveEntry={archiveResult?.entry ?? undefined}
-          initialApplicant={archiveResult?.entry ? { name: profile?.name ?? "", email: user?.email ?? "", phone: profile?.phone ?? "" } : undefined}
+          initialApplicant={initialApplicant}
           userId={user?.id ?? null}
           userEmail={user?.email ?? null}
           profanityTerms={profanityTerms}
