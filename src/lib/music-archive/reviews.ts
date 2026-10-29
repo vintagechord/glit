@@ -2,6 +2,8 @@ import { normalizeTrackResults } from "@/lib/track-results";
 import type { ArchiveData } from "./model";
 import { parseMusicProviderUrl } from "./providers";
 import { groupArchiveAlbums } from "./album-groups";
+import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
+import type { AlbumTrackMeta } from "@/lib/track-results";
 
 type ReviewRow = { status?: string; track_results_json?: unknown; updated_at?: string };
 
@@ -16,7 +18,25 @@ export function linkedTrackResult(review: ReviewRow, submissionTrackId: string) 
   };
 }
 
-export const submissionArchiveColumns = "id,title,artist_name,release_date,status,created_at,updated_at,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,composer,lyricist,featuring),station_reviews(id,station_id,status,result_note,track_results_json,updated_at,station:stations(name)),submission_events(id,event_type,message,created_at)";
+export const submissionArchiveColumns = "id,title,artist_name,release_date,status,created_at,updated_at,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,broadcast_selected,composer,lyricist,featuring),station_reviews(id,station_id,status,result_note,age_rating,track_results_json,updated_at,station:stations(name,code)),submission_events(id,event_type,message,created_at)";
+
+/** Read current broadcaster decisions without copying them into manual records. */
+export function archiveReviewProgress(submission: {
+  status: string;
+  album_tracks?: AlbumTrackMeta[];
+  station_reviews?: { status?: string | null; track_results_json?: unknown; station?: { name?: string; code?: string } | { name?: string; code?: string }[] | null }[];
+}) {
+  const stations = submission.station_reviews ?? [];
+  if (stations.length) {
+    const complete = stations.every(review => getStationReviewDisplayStatus({
+      status: review.status, track_results: review.track_results_json,
+      station: Array.isArray(review.station) ? review.station[0] : review.station,
+    }, { albumTracks: submission.album_tracks }).isComplete);
+    if (complete) return "COMPLETED";
+    if (["RESULT_READY", "COMPLETED", "APPROVED", "REJECTED"].includes(submission.status)) return "IN_PROGRESS";
+  } else if (submission.status === "RESULT_READY") return "COMPLETED";
+  return submission.status;
+}
 
 export function normalizeSubmissionTitles<T extends { album_tracks?: { track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] }>(submission: T) {
   return { ...submission, album_tracks: submission.album_tracks?.map(track => ({ ...track, track_title: track.track_title || track.track_title_kr || track.track_title_en || "제목 정보 없음" })) ?? [] };

@@ -9,6 +9,8 @@ import { Button, Field, Notice, inputClass } from "./ui";
 
 const agencies = { copyright: ["KOMCA", "KOSCAP"], performer: ["한국음악실연자연합회"], karaoke: ["TJ", "금영"] };
 const writerRoles = ["작사", "작곡", "편곡"];
+const unavailableReviewStations = new Set(["EBS", "TVN", "JTBC", "G1", "GFM"]);
+const isAvailableReviewStation = (station: string) => !unavailableReviewStations.has(station.trim().toUpperCase());
 const roleNames: Record<string, string> = { lyrics: "작사", composition: "작곡", arrangement: "편곡" };
 type Participant = { id: string; name: string; role: string };
 const participant = (name = "", role = "") => ({ id: crypto.randomUUID(), name, role });
@@ -30,8 +32,8 @@ export function MemberRecordEditor({ tab, tracks, data, initial, busy, onSave, o
   }
   const [selected, setSelected] = useState(firstTrack);
   const [agency, setAgency] = useState(initial?.agency ?? (tab === "review" ? "KBS" : agencies[tab][0]));
-  const stations = [...new Set([...stationLogoSources.map(item => item.alt), "기타 방송사", ...(initial?.agency ? [initial.agency] : [])])];
-  const [selectedStations, setSelectedStations] = useState([initial?.agency ?? "KBS"]);
+  const stations = [...new Set([...stationLogoSources.map(item => item.alt), "기타 방송사", ...(initial?.agency ? [initial.agency] : [])])].filter(isAvailableReviewStation);
+  const [selectedStations, setSelectedStations] = useState([initial?.agency ?? "KBS"].filter(isAvailableReviewStation));
   const [result, setResult] = useState<"eligible" | "ineligible">(["ineligible", "rejected"].includes(initial?.result ?? "") ? "ineligible" : "eligible");
   const [participants, setParticipants] = useState<Participant[]>(() => initial
     ? [participant(initial.participant ?? "", initial.role ?? (tab === "copyright" ? "작곡" : ""))]

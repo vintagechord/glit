@@ -97,6 +97,22 @@ test("same-agency histories stay visible and editing retains the original task I
   expect(harness.errors).toEqual([]);
 });
 
+test("manual review saves only offered stations and survives reloading", async ({ page }) => {
+  const harness = await mount(page, albumPath);
+  await page.getByRole("button", { name: "심의 내역 입력", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "심의 내역 입력", exact: true });
+  for (const station of ["EBS", "tvN", "JTBC", "G1"]) await expect(dialog.getByRole("checkbox", { name: station, exact: true })).toHaveCount(0);
+  await dialog.getByRole("checkbox", { name: "MBC", exact: true }).check();
+  await dialog.getByLabel("심의일 (선택)", { exact: true }).fill("2026-10-29");
+  await dialog.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const tasks = harness.detail.library.data.tasks.filter(task => task.completedDate === "2026-10-29");
+  expect(tasks.map(task => [task.agency, task.result])).toEqual([["KBS", "eligible"], ["MBC", "eligible"]]);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "심의 정보", exact: true })).toContainText("MBC");
+  expect(harness.errors).toEqual([]);
+});
+
 test("editing and repeated refresh keep one album while preserving each source link and recording", async ({ page }) => {
   const harness = await mount(page, albumPath);
   const originalLinks = structuredClone(harness.detail.library.data.releases.map(release => release.links));

@@ -66,16 +66,16 @@ export function MusicArchiveClient() {
   const current = detail?.library.id === artistId ? detail : null;
   const activeJobs = current?.jobs.some((job) => ["queued", "running"].includes(job.status));
   useEffect(() => {
-    if (!artistId || !activeJobs) return;
+    if (!artistId) return;
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined; let pending = false;
     async function poll() {
       if (controller.signal.aborted || pending) return;
       if (timer) clearTimeout(timer);
       if (document.visibilityState === "visible") { pending = true; try { await refreshDetail(artistId, controller.signal); } catch { /* Retain the saved view while retrying. */ } finally { pending = false; } }
-      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 5000);
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), activeJobs ? 5000 : 30000);
     }
     function visible() { if (document.visibilityState === "visible") void poll(); }
-    timer = setTimeout(() => void poll(), 2500); document.addEventListener("visibilitychange", visible); window.addEventListener("focus", visible);
+    timer = setTimeout(() => void poll(), activeJobs ? 2500 : 30000); document.addEventListener("visibilitychange", visible); window.addEventListener("focus", visible);
     return () => { controller.abort(); if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", visible); window.removeEventListener("focus", visible); };
   }, [artistId, activeJobs, refreshDetail]);
   useEffect(() => { if (dialog?.type !== "add_artist") connectionDraft.current = null; }, [dialog?.type]);

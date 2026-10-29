@@ -12,7 +12,7 @@ import { searchDomesticArtists, lookupDomesticArtist } from "./domestic-catalog"
 import { searchStreamingArtists, lookupStreamingArtist } from "./streaming";
 import { searchAutomaticArtists } from "./automatic-artist-search";
 import { agencyGuides } from "./guides";
-import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews } from "./reviews";
+import { submissionArchiveColumns, normalizeSubmissionTitles, matchArchiveReviews, archiveReviewProgress } from "./reviews";
 import { enqueueArchiveSync, resumeArchiveSync, acquireArchiveProviderPermit } from "./sync";
 import { previewArchiveCsv, importArchiveCsv } from "./csv";
 import { mergeArchiveImports } from "./import";
@@ -29,7 +29,7 @@ type ArchiveOverviewSummary = { releaseCount: number; trackCount: number; needsC
 
 export async function getOwnedLibrary(owner: string, libraryId: string): Promise<ArchiveLibrary> {
   const { data, error } = await createAdminClient().from("music_archive_libraries").select(libraryFields).eq("id", uuid.parse(libraryId)).eq("owner_id", owner).maybeSingle();
-  archiveDatabaseError(error);
+  archiveDatabaseError(error, "load_library");
   if (!data) throw new ArchiveError("관리 항목을 찾을 수 없습니다.", 404, "NOT_FOUND");
   return { ...data, data: validateArchiveData(data.data) } as ArchiveLibrary;
 }
@@ -38,7 +38,7 @@ export async function saveArchiveLibrary(owner: string, library: ArchiveLibrary,
   const validated = validateArchiveData(data);
   if (Buffer.byteLength(JSON.stringify(validated)) > 12_000_000) throw new ArchiveError("아카이브 용량 한도에 도달했습니다. 아티스트별로 나누어 관리해주세요.", 413, "ARCHIVE_SIZE_LIMIT");
   const { data: result, error } = await createAdminClient().rpc("save_music_archive_library", { p_id: library.id, p_owner: owner, p_version: library.version, p_data: validated, p_action: action, p_actor: actor, p_archived_at: archivedAt, p_details: details });
-  archiveDatabaseError(error);
+  archiveDatabaseError(error, "save_library");
   return (Array.isArray(result) ? result[0] : result) as ArchiveLibrary;
 }
 
@@ -104,7 +104,8 @@ export async function getArchiveDetail(owner: string, libraryId: string) {
     archiveDatabaseError(result.error);
     reviews.push(...(result.data ?? []).map(normalizeSubmissionTitles));
   }
-  return { library, jobs: jobs.data ?? [], evidence: evidence.data ?? [], events: events.data ?? [], reviews, onsideReviews };
+  const progress = new Map(reviews.map(review => [review.id, archiveReviewProgress(review)]));
+  return { library, jobs: jobs.data ?? [], evidence: evidence.data ?? [], events: events.data ?? [], reviews, onsideReviews: onsideReviews.map(review => ({ ...review, status: progress.get(review.submissionId) ?? review.status })) };
 }
 
 export async function searchOwnedSubmissions(owner: string, query: string, page = 0) {

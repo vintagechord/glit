@@ -369,6 +369,22 @@ test("album cards share review status including partial and payment pending with
   expect(harness.errors).toEqual([]);
 });
 
+test("review results refresh on focus and periodically after import jobs have finished", async ({ page }) => {
+  await page.clock.install();
+  const harness = await mount(page, [fixture()]);
+  await page.getByRole("button", { name: /테스트 뮤지션/ }).click();
+  const card = page.getByRole("button", { name: /발매 후 첫 앨범/ });
+  await expect(card).toContainText("심의 정보 없음");
+  harness.onsideReviews = [{ submissionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", releaseId: "album", trackIds: [], status: "IN_PROGRESS" }];
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(card).toContainText("심의 진행 중");
+  harness.onsideReviews[0].status = "COMPLETED";
+  await page.clock.runFor(30001);
+  await expect(card).toContainText("심의 완료");
+  expect(harness.writes).toEqual([]);
+  expect(harness.errors).toEqual([]);
+});
+
 for (const width of [320,1280]) test(`artist artwork falls back to a linked album and recovers after metadata refresh at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:900});
   const initial=fixture();
