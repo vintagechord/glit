@@ -11,18 +11,21 @@ import {
 
 type ProfileFormProps = {
   canChangePassword?: boolean;
+  canEditNotificationEmail?: boolean;
+  english?: boolean;
   defaultValues: {
     name: string;
     company: string;
     phone: string;
+    notificationEmail?: string;
   };
 };
 
 const initialState: ActionState = {};
 
-export function ProfileForm({ defaultValues, canChangePassword = true }: ProfileFormProps) {
+export function ProfileForm({ defaultValues, canChangePassword = true, canEditNotificationEmail = false, english = false }: ProfileFormProps) {
   const [state, formAction, profilePending] = useActionState(updateProfileAction, initialState);
-  const [values, setValues] = useState(defaultValues);
+  const [values, setValues] = useState({ ...defaultValues, notificationEmail: defaultValues.notificationEmail ?? "" });
   const [passwordState, passwordFormAction, passwordPending] = useActionState(
     updatePasswordAction,
     initialState,
@@ -97,6 +100,30 @@ export function ProfileForm({ defaultValues, canChangePassword = true }: Profile
               <p className="text-xs text-red-500">{state.fieldErrors.phone}</p>
             )}
           </div>
+          {canEditNotificationEmail && <div className="space-y-2 md:col-span-2">
+            <label htmlFor="profile-notificationEmail" className="text-xs font-semibold text-foreground">
+              {english ? "Review notification email" : "심의 안내 수신 이메일"}
+            </label>
+            <input
+              id="profile-notificationEmail"
+              name="notificationEmail"
+              type="email"
+              autoComplete="email"
+              maxLength={254}
+              disabled={profilePending}
+              value={values.notificationEmail}
+              onChange={event => setValues(current => ({ ...current, notificationEmail: event.target.value }))}
+              aria-invalid={Boolean(state.fieldErrors?.notificationEmail)}
+              aria-describedby={`profile-notificationEmail-help${state.fieldErrors?.notificationEmail ? " profile-notificationEmail-error" : ""}`}
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
+            />
+            <p id="profile-notificationEmail-help" className="text-xs leading-5 text-muted-foreground">
+              {english
+                ? "Review results, progress updates, supplement requests and payment notices will be sent to this email. If left blank, we use the contact email on each application."
+                : "심의 결과, 진행 상황, 보완 요청 및 결제 안내를 이 이메일로 보내드립니다. 등록하지 않으면 신청서에 입력한 연락 이메일로 안내합니다."}
+            </p>
+            {state.fieldErrors?.notificationEmail && <p id="profile-notificationEmail-error" className="text-xs font-semibold text-[#d9362c]" role="alert">{state.fieldErrors.notificationEmail}</p>}
+          </div>}
         </div>
         {state.error && (
           <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">

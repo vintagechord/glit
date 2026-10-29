@@ -6,6 +6,8 @@ import { createRequire } from "node:module";
 type Fixture = {
   submission: Record<string, unknown> | null;
   memberEmail: string | null;
+  memberProviders: string[];
+  notificationEmail: string | null;
   memberError: boolean;
   emailResult: { ok: boolean; skipped?: boolean; queued?: boolean; status?: string };
   mode: string;
@@ -26,8 +28,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'notice-fixture';";
         const files: Record<string, string> = {
-          "notice-fixture": `export const calls=[]; export const state={submission:{id:'11111111-1111-4111-8111-111111111111',user_id:'member',type:'MV_DISTRIBUTION',title:'Fixture',artist_name:'Artist',guest_token:'legacy-secret',guest_email:'legacy@example.invalid',applicant_email:'untrusted@example.invalid',status:'PRE_REVIEW',updated_at:'2026-10-24T00:00:00Z'},memberEmail:'Personal@example.invalid',memberError:false,emailResult:{ok:true},mode:'transactional',isAdmin:true,completionError:null,recordError:false,throwEmail:false,attachmentError:false};
-            export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.memberEmail}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){let update;const chain={select(){return chain},eq(){return chain},update(value){update=value;calls.push({name:'record',input:value});return chain},async maybeSingle(){return {data:table==='profiles'?{phone:null}:state.submission,error:null}},then(resolve){resolve({error:state.recordError?{message:'record failed'}:null,data:update})}};return chain}};`,
+          "notice-fixture": `export const calls=[]; export const state={submission:{id:'11111111-1111-4111-8111-111111111111',user_id:'member',type:'MV_DISTRIBUTION',title:'Fixture',artist_name:'Artist',guest_token:'legacy-secret',guest_email:'legacy@example.invalid',applicant_email:'untrusted@example.invalid',status:'PRE_REVIEW',updated_at:'2026-10-24T00:00:00Z'},memberEmail:'Personal@example.invalid',memberProviders:[],notificationEmail:null,memberError:false,emailResult:{ok:true},mode:'transactional',isAdmin:true,completionError:null,recordError:false,throwEmail:false,attachmentError:false};
+            export const db={auth:{admin:{getUserById:async()=>({data:{user:{id:'member',email:state.memberEmail,identities:state.memberProviders.map(provider=>({provider}))}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){let update;const chain={select(){return chain},eq(){return chain},update(value){update=value;calls.push({name:'record',input:value});return chain},async maybeSingle(){return {data:table==='profiles'?{phone:null,notification_email:state.notificationEmail}:state.submission,error:null}},then(resolve){resolve({error:state.recordError?{message:'record failed'}:null,data:update})}};return chain}};`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:{id:'admin'}}})},rpc:async()=>({data:state.isAdmin})});`,
           "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',input});if(state.throwEmail)throw Error('transport failure');return state.emailResult}; export const sendResultEmail=async input=>{calls.push({name:'result',input});return state.emailResult}; export const sendReviewSummaryEmail=async()=>{throw Error('Unexpected aggregate send')}; export const renderReviewSummaryEmail=()=>{throw Error('Unexpected aggregate preview')};`,
@@ -54,6 +56,19 @@ async function fixture() {
 }
 
 const update = { submissionId: "11111111-1111-4111-8111-111111111111", headline: "심의 변경", summary: "신청 내역을 확인해주세요." };
+
+test("social review results and progress notices use the saved profile contact before the application contact", async () => {
+  for (const provider of ["custom:naver", "kakao"]) {
+    const api = await fixture();
+    api.state.memberEmail = null; api.state.memberProviders = [provider]; api.state.notificationEmail = "saved@example.invalid";
+    assert.equal((await api.sendSubmissionUpdateNotificationById(update)).deliveredCount, 1);
+    assert.equal((await api.sendSubmissionResultNotificationById({ submissionId: update.submissionId, resultStatus: "APPROVED" })).deliveredCount, 1);
+    const notices = api.calls.filter(call => ["email", "result"].includes(call.name));
+    assert.equal(notices.length, 2);
+    assert.ok(notices.every(call => call.input?.email === "saved@example.invalid"));
+    assert.doesNotMatch(JSON.stringify(notices), /legacy-secret|untrusted@example/);
+  }
+});
 
 test("admin notices use the member's personal email and never expose a legacy guest token", async () => {
   const api = await fixture();

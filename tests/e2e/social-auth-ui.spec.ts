@@ -19,7 +19,7 @@ test.beforeAll(async () => {
         import {ProfileForm} from './src/features/profile/profile-form';
         const params=new URLSearchParams(location.search),nextPath=params.get('next'),english=location.pathname.startsWith('/en/');
         const availability={google:true,naver:params.get('naver')!=='off',kakao:false};
-        const content=location.pathname.endsWith('/complete-signup')?<CompleteSignupForm nextPath={nextPath} english={english} consentAlreadySaved={params.get("saved")==="yes"}/>:location.pathname.endsWith('/profile')?<><ProfileForm defaultValues={{name:'Member',company:'',phone:'01012345678'}} canChangePassword={params.get('password')==='yes'}/><ProfileSocialAccounts availability={availability} linkedProviders={params.has('unlinked')?[]:['naver']} english={english}/></>:location.pathname.endsWith('/signup')?<><SocialAuthButtons availability={availability} mode='signup' nextPath={nextPath}/><SignupForm nextPath={nextPath}/></>:<LoginForm nextPath={nextPath} socialSlot={<SocialAuthButtons availability={availability} nextPath={nextPath} errorCode={params.get('social_error')}/>}/>;
+        const content=location.pathname.endsWith('/complete-signup')?<CompleteSignupForm nextPath={nextPath} english={english} consentAlreadySaved={params.get("saved")==="yes"}/>:location.pathname.endsWith('/profile')?<><ProfileForm defaultValues={{name:'Member',company:'',phone:'01012345678',notificationEmail:params.get('notificationEmail')||''}} canChangePassword={params.get('password')==='yes'} canEditNotificationEmail={params.get('password')!=='yes'} english={english}/><ProfileSocialAccounts availability={availability} linkedProviders={params.has('unlinked')?[]:['naver']} english={english}/></>:location.pathname.endsWith('/signup')?<><SocialAuthButtons availability={availability} mode='signup' nextPath={nextPath}/><SignupForm nextPath={nextPath}/></>:<LoginForm nextPath={nextPath} socialSlot={<SocialAuthButtons availability={availability} nextPath={nextPath} errorCode={params.get('social_error')}/>}/>;
         createRoot(document.getElementById('root')).render(<main className='mx-auto w-full max-w-lg space-y-6 p-5'>{content}</main>);
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production","NEXT_PUBLIC_EMAIL_DELIVERY_MODE":"transactional"}' },
@@ -29,7 +29,7 @@ test.beforeAll(async () => {
           "next/navigation": "export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useRouter=()=>({push:href=>window.__fixture.pushes.push(href),refresh(){}});",
           "next/link": "import React from 'react';export default function Link({children,prefetch,...props}){return <a {...props}>{children}</a>}",
           "./actions": "const action=(_,form)=>{window.__fixture.calls.push(Object.fromEntries(form));return new Promise(resolve=>window.__fixture.resolve=resolve)};export const loginAction=action;export const signupAction=action;",
-          "@/features/auth/actions": "export const updateProfileAction=async()=>({});export const updatePasswordAction=async()=>({});",
+          "@/features/auth/actions": "export const updateProfileAction=(_,form)=>{window.__fixture.calls.push(Object.fromEntries(form));return new Promise(resolve=>window.__fixture.resolve=resolve)};export const updatePasswordAction=async()=>({});",
           "./complete-signup-action": "export const completeSignupAction=(_,form)=>{window.__fixture.calls.push(Object.fromEntries(form));return new Promise(resolve=>window.__fixture.resolve=resolve)};",
           "@/features/track/track-lookup-modal": "export const TrackLookupModalTrigger=()=>null;",
           "@/components/site/footer": "export const privacyContent='개인정보 처리 내용';export const termsContent='이용약관 내용';export const refundContent='환불 정책 내용';export const termsContentEn='Terms content';export const privacyContentEn='Privacy content';export const refundContentEn='Refund content';",
@@ -48,6 +48,23 @@ test.beforeEach(async ({ page }) => {
 });
 
 for (const english of [false, true]) {
+  test(`${english ? "English" : "Korean"} social profile edits the saved review notification email with its delivery explanation`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(`http://social-ui.test${english ? "/en" : ""}/profile?notificationEmail=saved%40example.invalid`);
+    const email = page.getByLabel(english ? "Review notification email" : "심의 안내 수신 이메일", { exact: true });
+    await expect(email).toHaveValue("saved@example.invalid");
+    await expect(email).toHaveAccessibleDescription(english ? /Review results, progress updates, supplement requests and payment notices/ : /심의 결과, 진행 상황, 보완 요청 및 결제 안내/);
+    await email.fill("changed@example.invalid");
+    await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
+    await expect(email).toBeDisabled();
+    expect(await page.evaluate(() => (window as unknown as { __fixture: { calls: object[] } }).__fixture.calls)).toEqual([{ name: "Member", company: "", phone: "01012345678", notificationEmail: "changed@example.invalid" }]);
+    await page.evaluate(() => (window as unknown as { __fixture: { resolve: (value: object) => void } }).__fixture.resolve({ message: "프로필이 저장되었습니다." }));
+    await expect(email).toBeEnabled();
+    await expect(email).toHaveValue("changed@example.invalid");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await page.goto(`http://social-ui.test${english ? "/en" : ""}/profile?password=yes`);
+    await expect(page.locator('input[name="notificationEmail"]')).toHaveCount(0);
+  });
   test(`${english ? "English" : "Korean"} approved Naver login and linking controls have no review restriction notice`, async ({ page }) => {
     const prefix = english ? "/en" : "";
     const reviewText = english ? "Under review" : "검수 중";

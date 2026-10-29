@@ -15,6 +15,7 @@ import { getProfileAuthDetails } from "@/features/profile/profile-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { isEmailLessSocialMember } from "@/lib/member-notification-email";
 
 type ShellConfig = {
   contextLabel?: string;
@@ -34,7 +35,7 @@ export async function ProfilePageView(config?: ShellConfig) {
   const auth = getProfileAuthDetails(user);
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, company, phone")
+    .select("name, company, phone, notification_email")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -54,10 +55,13 @@ export async function ProfilePageView(config?: ShellConfig) {
           <div className="mt-5">
             <ProfileForm
               canChangePassword={auth.canChangePassword}
+              canEditNotificationEmail={isEmailLessSocialMember(user)}
+              english={english}
               defaultValues={{
                 name: profile?.name ?? user.user_metadata?.name ?? "",
                 company: profile?.company ?? user.user_metadata?.company ?? "",
                 phone: profile?.phone ?? user.user_metadata?.phone ?? "",
+                notificationEmail: profile?.notification_email ?? "",
               }}
             />
           </div>
@@ -75,7 +79,10 @@ export async function ProfilePageView(config?: ShellConfig) {
               </p>
             </div>
           </div>
-          {!auth.email && <p className="mt-4 text-xs leading-5 text-muted-foreground">{english ? "This social account does not provide an email address. Enter your contact email when submitting a review application." : "이 소셜 계정은 이메일을 제공하지 않습니다. 심의 안내를 받을 이메일은 접수 시 입력해주세요."}</p>}
+          {!auth.email && <div className="mt-4 space-y-2">
+            <p className="text-xs leading-5 text-muted-foreground">{english ? "This social account does not provide an email address. Save your review notification email in your profile to receive results and updates." : "이 소셜 계정은 이메일을 제공하지 않습니다. 프로필에 심의 안내 수신 이메일을 저장하면 결과와 진행 안내를 받을 수 있습니다."}</p>
+            {profile?.notification_email && <p className="break-all text-xs font-semibold text-foreground">{english ? "Notification email: " : "안내 수신 이메일: "}{profile.notification_email}</p>}
+          </div>}
           <ProfileSocialAccountsView linkedProviders={auth.linkedProviders} english={english} />
         </div>
       </div>

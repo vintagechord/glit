@@ -396,6 +396,8 @@ const exactTranslations: Record<string, string> = {
   "저장 중...": "Saving...",
   "변경 중...": "Updating...",
   "프로필이 저장되었습니다.": "Your profile has been saved.",
+  "올바른 안내 수신 이메일을 입력해주세요.": "Enter a valid notification email address.",
+  "이 계정은 계정 이메일로 심의 안내를 받습니다. 프로필을 새로고침해주세요.": "This account receives review notices at its account email. Refresh your profile.",
   "필수 항목에 동의해주세요.": "Please accept the required agreements.",
   "현재 비밀번호와 다른 새 비밀번호를 입력해주세요.": "Choose a new password that differs from your current password.",
   "회사명은 200자 이하로 입력해주세요.": "Use 200 characters or fewer for the company name.",
