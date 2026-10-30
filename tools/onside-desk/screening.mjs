@@ -35,6 +35,33 @@ const excerpt=(input,start)=>{
 };
 const digest=v=>createHash('sha256').update(v).digest('hex');
 
+function fullLineTranslation(line) {
+  const inline=inlineLyricTranslation(line);
+  if(inline&&!line.slice(inline.text.length).trim()) return inline;
+  const value=line.trim();
+  if(!/^[（(]\s*[가-힣]/.test(value)) return null;
+  const closers=[];
+  for(let i=0;i<value.length;i++) {
+    const char=value[i];
+    if(char==='('||char==='（') closers.push(char==='('?')':'）');
+    else if(char===')'||char==='）') {
+      if(closers.pop()!==char||(!closers.length&&i!==value.length-1)) return null;
+    }
+  }
+  return !closers.length?{text:line,translation:value.slice(1,-1).trim()}:null;
+}
+
+function adjacentTranslation(tail,singleSpanLine) {
+  const inline=inlineLyricTranslation(tail);
+  if(inline) return inline;
+  if(!singleSpanLine) return null;
+  const next=tail.match(/^[ \t]*\r?\n([^\n\r]*)/);
+  if(!next) return null;
+  // The entire immediately following line must be a supplied annotation.
+  // Plain Korean lyrics and annotations shared by multiple spans remain uncertain.
+  return fullLineTranslation(next[1]);
+}
+
 /** Source spans that actually lack an adjacent supplied translation. No guessing. */
 export function untranslatedLyricSpans(lyrics) {
   const source=value(lyrics),all=findForeignLyricsSpans(source).filter(span=>!sectionLabel.test(excerpt(source,span.start)));
@@ -42,11 +69,7 @@ export function untranslatedLyricSpans(lyrics) {
   for(const span of all) {const start=source.lastIndexOf('\n',span.start)+1;lineCounts.set(start,(lineCounts.get(start)||0)+1);}
   return all.filter(span=>{
     const tail=source.slice(span.end);
-    if(inlineLyricTranslation(tail)) return false;
-    if(lineCounts.get(source.lastIndexOf('\n',span.start)+1)===1) {
-      const next=tail.match(/^[ \t]*\r?\n([^\n\r]*)/);
-      if(next&&/^[ \t]*(?:[（([{]\s*)?(?:번역|해석)\s*[:：]/.test(next[1])&&inlineLyricTranslation(next[1])) return false;
-    }
+    if(adjacentTranslation(tail,lineCounts.get(source.lastIndexOf('\n',span.start)+1)===1)) return false;
     // Explicit but empty/invalid annotations are supplied content for manual review.
     return !/^[ \t]*(?:[（([{]\s*)?(?:번역|해석)\s*[:：]/.test(tail);
   });
@@ -68,7 +91,7 @@ function reviewTracks(submission,tracks,manual) {
 /** Offline warnings, never a rating decision. Original text is not modified. */
 export function reviewLyrics({submission={},source,tracks=[]}={}) {
   const list=reviewTracks(submission,Array.isArray(tracks)?tracks:[],source==='manual'||submission.source==='manual');
-  const sourceHash=digest(JSON.stringify({version:2,engine:SCREENING_ENGINE_VERSION,type:submission.type,tracks:list.map(t=>({id:t.id,no:t.track_no,title:t.track_title,lyrics:t.lyrics,combined:value(t.lyrics_with_translation),translation:t.translated_lyrics,instrumental:t.is_instrumental,confirmed:t.instrumental_confirmed}))}));
+  const sourceHash=digest(JSON.stringify({version:3,engine:SCREENING_ENGINE_VERSION,type:submission.type,tracks:list.map(t=>({id:t.id,no:t.track_no,title:t.track_title,lyrics:t.lyrics,combined:value(t.lyrics_with_translation),translation:t.translated_lyrics,instrumental:t.is_instrumental,confirmed:t.instrumental_confirmed}))}));
   const findings=[],counts=Object.fromEntries(kinds.map(k=>[k,0]));
   const newlineCache=new Map();
   const linesAt=(input,start)=>{
@@ -113,12 +136,7 @@ export function reviewLyrics({submission={},source,tracks=[]}={}) {
     const warnedLines=new Set();
     for(const span of spans) {
       const tail=limited.slice(span.end);
-      let annotation=inlineLyricTranslation(tail);
-      // A clearly labelled translation on the immediately following line is preserved.
-      if(!annotation&&lineCounts.get(linesAt(limited,span.start))===1) {
-        const next=tail.match(/^[ \t]*\r?\n([^\n\r]*)/);
-        if(next&&/^[ \t]*(?:[（([{]\s*)?(?:번역|해석)\s*[:：]/.test(next[1])) annotation=inlineLyricTranslation(next[1]);
-      }
+      const annotation=adjacentTranslation(tail,lineCounts.get(linesAt(limited,span.start))===1);
       if(annotation&&isUsableLyricsTranslation(annotation.translation,span.source)) continue;
       const line=linesAt(limited,span.start);
       if(warnedLines.has(line)) continue;
@@ -130,7 +148,7 @@ export function reviewLyrics({submission={},source,tracks=[]}={}) {
     if(translation.trim()&&!spans.length&&!source.includes(translation)) add('translation_review',track,'translated_lyrics',translation,0,'별도 번역의 원문 대응을 확인하세요. 제공된 번역을 임의로 삭제하거나 다시 번역하지 않습니다.');
   }
   if(overflow) {const message=`확인사항 ${SCREENING_LIMITS.findings-1}건 이후는 표시를 생략했습니다. 가사 전체를 직접 확인하세요.`;findings.push({id:digest(`${sourceHash}|overflow`).slice(0,24),kind:'incomplete',severity:'warning',trackId:null,trackNo:null,trackTitle:'',field:'lyrics',line:null,excerpt:'',matchedText:'',message});counts.incomplete++;}
-  return {version:2,sourceHash,revision:sourceHash,findings,counts,requiresReview:findings.length>0,incomplete,
+  return {version:3,sourceHash,revision:sourceHash,findings,counts,requiresReview:findings.length>0,incomplete,
     notice:'자동 확인은 규칙 기반 참고 정보이며 심의 적격·등급 판정이나 모든 욕설·미번역의 탐지를 보장하지 않습니다. 원문을 유지하며 자동 검열·임의 번역을 하지 않습니다.'};
 }
 

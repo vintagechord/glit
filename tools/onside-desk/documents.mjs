@@ -7,17 +7,31 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
+import { DOMParser } from '@xmldom/xmldom';
 import { reviewLyrics, screeningReport, hasMeaningfulLyrics, isInstrumentalTrack, currentLyrics, effectiveLyricSource, currentTranslation } from './screening.mjs';
 import { OLE_SIGNATURE, readCompoundStreams } from './manual-ole.mjs';
 
 const run = promisify(execFile);
 const templateDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'templates');
-const text = v => typeof v === 'string' ? v.normalize('NFC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,'').trim() : typeof v === 'number' ? String(v) : '';
+const documentText = value => value.toWellFormed().normalize('NFC').replace(/\r\n?|[\u2028\u2029]/g,'\n').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,'');
+const text = v => typeof v === 'string' ? documentText(v).trim() : typeof v === 'number' ? String(v) : '';
 const first = (...values) => values.map(text).find(Boolean) || '';
 const settingText = (settings,key,fallback) => settings[key] === undefined ? fallback : text(settings[key]);
 const html = v => text(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function safeDocumentName(value, fallback='자료') {
-  return (text(value).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g,'').replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'') || fallback).slice(0,85);
+  return [...(text(value).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g,'').replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'') || fallback)].slice(0,85).join('');
+}
+// ZIP recipients may use a 255-byte filename limit even when this Mac accepts more.
+function portableFilename(value) {
+  if(Buffer.byteLength(value)<=240) return value;
+  const candidate=path.extname(value),extension=Buffer.byteLength(candidate)<=12?candidate:'';
+  const suffix=`_${createHash('sha256').update(value).digest('hex').slice(0,8)}${extension}`;
+  let stem='';
+  for(const character of value.slice(0,value.length-extension.length)) {
+    if(Buffer.byteLength(stem+character+suffix)>240) break;
+    stem+=character;
+  }
+  return stem+suffix;
 }
 function filenamePart(value,fallback,maxBytes) {
   let result='';
@@ -92,17 +106,67 @@ function makeData(submission,tracks,settings,warnings) {
     track_count:tracks.length,track_count_label:`${tracks.length}곡`,tracks:tracks.map(t=>({...t,artist_display:artist,genre:first(t.genre,genre)})),
     title_track_title:titles.map(t=>t.track_title).join(', ')||main?.track_title||'',title_track_title_primary:main?.track_title||'',title_track_title_secondary:titles.slice(1).map(t=>t.track_title).join(', '),review_songs_text:[...new Set(wbsTracks.slice(0,3).map(t=>t.track_title))].join(', '),row_no:1};
 }
-async function renderTemplate(name,data) {
-  const input=await fs.readFile(path.join(templateDir,name));
-  const zip=new PizZip(input,{checkCRC32:true});
+const templateMarkers={
+  'song-review-request.docx':['{#tracks}','{/tracks}','{album_title}','{production_company_for_review}'],
+  'review-form.docx':['{#tracks}','{/tracks}','{album_title}','{company_name}','{lyrics_with_translation}'],
+  'lyrics-all.docx':['{#tracks}','{/tracks}','{manager_name}','{lyrics_with_translation}'],
+  'lyrics-track.docx':['{manager_name}','{track_title_with_title_mark}','{lyrics_with_translation}'],
+  'lyrics-mv.docx':['{artist_display}','{track_title}','{lyrics_with_translation}'],
+  'pbc-integrated.docx':['{#albums}','{/albums}','{company_actual}','{release_date_md}','{title_track_title}'],
+  'tbs-integrated.docx':['{#albums}','{/albums}','{album_title}','{title_track_title_primary}','{title_track_title_secondary}'],
+  'wbs-integrated.docx':['{#albums}','{/albums}','{company_actual}','{review_songs_text}'],
+};
+function sanitizeTemplateData(value) {
+  if(typeof value==='string') return documentText(value);
+  if(Array.isArray(value)) return value.map(sanitizeTemplateData);
+  if(value&&typeof value==='object') return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,sanitizeTemplateData(item)]));
+  return value;
+}
+function validateDocumentPackage(zip,name) {
+  for(const part of ['[Content_Types].xml','_rels/.rels','word/document.xml','word/styles.xml']) {
+    if(!zip.file(part)) throw new Error(`${name}: 문서 구성 파일이 없습니다 (${part}).`);
+  }
+  for(const file of Object.values(zip.files).filter(file=>!file.dir&&/\.(?:xml|rels)$/.test(file.name))) {
+    try {
+      const source=new TextDecoder('utf-8',{fatal:true}).decode(file.asUint8Array());
+      const parsed=new DOMParser({onError:(level,message)=>{
+        // U+FFFD is valid XML, including the explicit repair of a lone surrogate.
+        if(level==='warning'&&message.startsWith('Unicode replacement character detected')) return;
+        throw new Error('Invalid XML');
+      }}).parseFromString(source,'application/xml');
+      if(!parsed.documentElement) throw new Error('Missing XML root');
+    } catch {throw new Error(`${name}: 문서 XML 구성 검사에 실패했습니다 (${file.name}).`);}
+  }
+}
+/** Validate the actual template and generated body before writing any DOCX. */
+export function renderDocumentTemplate({template,templateName:name,data}) {
+  const zip=new PizZip(template,{checkCRC32:true});
+  validateDocumentPackage(zip,name);
   const doc=new Docxtemplater(zip,{paragraphLoop:true,linebreaks:true,nullGetter:()=>''});
-  doc.render(data);
+  const sourceText=doc.getFullText();
+  const missing=(templateMarkers[name]||[]).filter(marker=>!sourceText.includes(marker));
+  if(missing.length) throw new Error(`${name}: 기준 양식의 필수 입력 위치가 없습니다 (${missing.join(', ')}).`);
+  const payload=sanitizeTemplateData(data);
+  doc.render(payload);
   const xml=doc.getZip().file('word/document.xml')?.asText()||'';
   if(!xml||/<w:tblpPr\b|<w:trHeight\b[^>]*w:hRule="exact"/.test(xml)) throw new Error(`${name}: 문서 구조 검사 실패`);
   if(name==='song-review-request.docx' && /<w:tblHeader\b/.test(xml)) throw new Error('요청서의 상단 정보 반복 설정이 남아 있습니다.');
-  return {buffer:doc.getZip().generate({type:'nodebuffer',compression:'DEFLATE'}),templateHash:createHash('sha256').update(input).digest('hex')};
+  validateDocumentPackage(doc.getZip(),name);
+  const comparable=value=>documentText(String(value)).replace(/\s+/g,'');
+  const rendered=comparable(doc.getFullText());
+  if(name.startsWith('lyrics-')||name==='review-form.docx') {
+    const records=name==='lyrics-track.docx'||name==='lyrics-mv.docx'?[payload]:payload.tracks||[];
+    for(const record of records) for(const value of [name==='lyrics-mv.docx'?record.track_title:record.track_title_with_title_mark||record.track_title,record.lyrics_with_translation]) {
+      if(value&&!rendered.includes(comparable(value))) throw new Error(`${name}: 곡명 또는 가사 본문이 완전히 출력되지 않았습니다.`);
+    }
+  }
+  return doc.getZip().generate({type:'nodebuffer',compression:'DEFLATE'});
 }
-async function legacyWordDocument(docx) {
+async function renderTemplate(name,data) {
+  const input=await fs.readFile(path.join(templateDir,name));
+  return {buffer:renderDocumentTemplate({template:input,templateName:name,data}),templateHash:createHash('sha256').update(input).digest('hex')};
+}
+async function legacyWordDocument(docx,expectedValues) {
   if(process.platform!=='darwin') throw new Error('뮤비 가사 DOC 생성에는 이 Mac의 문서 변환기가 필요합니다.');
   const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'onside-mv-doc-'));
   try {
@@ -113,6 +177,10 @@ async function legacyWordDocument(docx) {
     if(!buffer.subarray(0,8).equals(OLE_SIGNATURE)) throw new Error('Word DOC 형식 검증에 실패했습니다.');
     const word=readCompoundStreams(buffer).get('WordDocument')?.();
     if(!word||word.length<32||word.readUInt16LE(0)!==0xa5ec) throw new Error('Word DOC 본문 검증에 실패했습니다.');
+    const {stdout}=await run('/usr/bin/textutil',['-convert','txt','-stdout',output],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
+    const comparable=value=>documentText(value).replace(/\s+/g,'');
+    const roundTrip=comparable(stdout);
+    if(expectedValues.some(value=>value&&!roundTrip.includes(comparable(value)))) throw new Error('Word DOC 변환 과정에서 곡명 또는 가사가 누락되었습니다.');
     return buffer;
   } catch { throw new Error('뮤비 가사를 Word DOC로 변환하지 못했습니다. Mac 문서 변환기와 저장 공간을 확인한 뒤 다시 생성하세요.'); }
   finally {await fs.rm(temporary,{recursive:true,force:true});}
@@ -168,6 +236,7 @@ export async function generateDocuments({submission,source,tracks=[],stations=[]
   const list=normalizedTracks(submission.type==='ALBUM'?tracks:[],warnings,manual),data=makeData(submission,list,settings,warnings),label=safeDocumentName(`${data.artist_display||'가수 미입력'} - ${data.album_title||'제목 미입력'}`);
   const written=new Set();
   async function write(name,buffer,type) {
+    name=name.split('/').map(portableFilename).join('/');
     let rel=name,counter=2;
     while(written.has(rel.normalize('NFC').toLowerCase())) {const ext=path.extname(name);rel=name.slice(0,-ext.length)+`_${counter++}`+ext;}
     written.add(rel.normalize('NFC').toLowerCase());
@@ -204,7 +273,7 @@ export async function generateDocuments({submission,source,tracks=[],stations=[]
     warnings.push(...mvWarnings.map(w=>w.replace(/^1번(?: 트랙)?\s*/,'')));
     const {buffer,templateHash}=await renderTemplate('lyrics-mv.docx',{...data,...mv});templateHashes['lyrics-mv.docx']=templateHash;
     const lyricName=`가사_${filenamePart(data.artist_display,'가수 미입력',100)}_${filenamePart(mv.track_title,'제목 미입력',100)}.doc`;
-    await write(lyricName,await legacyWordDocument(buffer),'doc');
+    await write(lyricName,await legacyWordDocument(buffer,[data.artist_display,mv.track_title,mv.lyrics_with_translation]),'doc');
     const fields=copyFields(submission,data,stations,stationReviews,files),name=submission.type==='MV_DISTRIBUTION'?'영등위_복사붙여넣기':'방송용_복사붙여넣기';
     await write(`${name}_${filenamePart(label,'자료',180)}.html`,`<!doctype html><html lang="ko"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>${html(name)}</title><style>body{font:16px -apple-system,sans-serif;max-width:850px;margin:40px auto;color:#202620}h1{font-size:25px}section{margin:24px 0}label{display:block;font-weight:700;margin-bottom:8px}textarea{width:100%;box-sizing:border-box;padding:12px;font:inherit;border:1px solid #a8b5a9;border-radius:6px;line-height:1.6}p{color:#57625a}</style><h1>${html(name.replaceAll('_',' '))}</h1><p>각 칸을 클릭하고 전체 선택하여 복사하세요. 빈칸은 신청 자료에서 확인되지 않은 항목입니다. 심의기관의 실제 신청 화면에 맞춰 입력하세요.</p>${fields.map(f=>`<section><label>${html(f.label)}</label><textarea readonly rows="${Math.min(15,Math.max(2,f.value.split('\n').length+1))}">${html(f.value)}</textarea></section>`).join('')}</html>`,'html');
     return {artifacts,warnings,screening,summary:{type:submission.type,source:submission.source,caseCount:1,trackCount:0,docCount:1,docxCount:0,applicationDate:data.application_date,templateHashes,screeningCounts:screening.counts,requiresReview:warnings.length>0,visuallyVerified:false}};

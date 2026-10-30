@@ -32,6 +32,8 @@ test('manual intake requires local authentication and retains source without onl
   assert.equal((await s.api(route,{method:'POST',headers:{Origin:'https://foreign.invalid'},body:'fixture'})).status,403);
   const {id,detail}=await s.create();assert.match(id,/^manual-/);assert.equal(detail.source,'manual');assert.match(detail.tracks[0].id,/^local-/);
   assert.equal(detail.importInfo.extractedText,'원문 전체\nhello');assert.equal(detail.importInfo.bytes,14);
+  assert.equal(detail.importInfo.parserVersion,4);
+  assert.ok(detail.warnings.includes('내용 추출 확인'));
   assert.ok(!detail.warnings.some(w=>/결제|서비스에 업로드/.test(w)));
   await s.desk.sync();assert.equal(s.desk.publicState().cases.filter(c=>c.source==='manual').length,1);
   await s.desk.detail(id,true);assert.equal(s.calls.sourceDetail,0);
@@ -69,7 +71,7 @@ test('offline manual MV keeps exactly two output files with warning metadata and
   assert.equal(s.calls.sourceDetail,0);assert.equal(s.calls.download,0);
   const g=s.desk.store.data.cases[id].generations[0];assert.equal(g.artifacts.length,2);
   assert.deepEqual((await fs.readdir(path.join(s.root,'신청별 자료',id,'생성 이력',g.id))).sort(),['가사.doc','복사자료.html'].sort());
-  assert.ok(g.warnings.includes('번역 확인 필요'));assert.ok(g.snapshot);assert.ok(g.screening);
+  assert.ok(g.warnings.includes('번역 확인 필요'));assert.ok(g.warnings.includes('내용 추출 확인'));assert.ok(g.snapshot);assert.ok(g.screening);
   for(const a of g.artifacts)assert.equal(await(await s.api(`/api/artifacts/${id}/${g.id}/${encodeURIComponent(a.name)}`)).text(),'document');
   await s.api(`/api/cases/${id}/attachments?filename=video.mp4`,{method:'POST',body:'video'});
   const backup=await s.desk.backup();const saved=new PizZip(await fs.readFile(backup.path));

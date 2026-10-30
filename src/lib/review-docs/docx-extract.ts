@@ -6,6 +6,7 @@ import type { ExtractedBlocks } from "./extract";
 
 const WORD = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const WORD14 = "http://schemas.microsoft.com/office/word/2010/wordml";
+const COMPATIBILITY = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 const MAX_XML_BYTES = 8 * 1024 * 1024;
 const fail = (code: string, message: string): never => { throw new ReviewExtractionError(code, message); };
 const crcTable = Array.from({ length: 256 }, (_, initial) => {
@@ -68,20 +69,48 @@ function docxParts(buffer: Buffer) {
 function children(element: Element, name?: string) {
   return Array.from(element.childNodes).filter((node): node is Element => node.nodeType === 1 && (!name || (node.namespaceURI === WORD && node.localName === name)));
 }
-function descendants(element: Element) { return Array.from(element.getElementsByTagName("*")); }
+function visibleChildren(element: Element): Element[] {
+  return children(element).flatMap((child) => {
+    // Word stores the same text box in both modern and fallback drawings.
+    // Reading both duplicates lyrics. Deleted/moved-from text is not final text.
+    if (child.namespaceURI === WORD && ["del", "moveFrom"].includes(child.localName!)) return [];
+    if (child.namespaceURI === COMPATIBILITY && child.localName === "AlternateContent") {
+      const alternatives = children(child);
+      const selected = alternatives.find((node) => node.localName === "Choice") ?? alternatives.find((node) => node.localName === "Fallback");
+      return selected ? visibleChildren(selected) : [];
+    }
+    return [child];
+  });
+}
+function contentChildren(element: Element, name: string): Element[] {
+  return visibleChildren(element).flatMap((child) => {
+    if (child.namespaceURI !== WORD) return [];
+    if (child.localName === name) return [child];
+    return ["sdt", "sdtContent", "customXml", "ins", "moveTo"].includes(child.localName!) ? contentChildren(child, name) : [];
+  });
+}
+function contentParagraphs(element: Element): Element[] {
+  return visibleChildren(element).flatMap((child) => child.namespaceURI === WORD && child.localName === "p" ? [child] : contentParagraphs(child));
+}
 function paragraphText(paragraph: Element) {
   const pieces: string[] = [];
-  for (const element of descendants(paragraph)) {
+  const visit = (parent: Element) => { for (const element of visibleChildren(parent)) {
     if (element.namespaceURI === WORD) {
-      if (element.localName === "t") pieces.push(element.textContent ?? "");
-      else if (element.localName === "tab") pieces.push("\t");
-      else if (["br", "cr"].includes(element.localName!)) pieces.push("\n");
+      if (element.localName === "t") { pieces.push(element.textContent ?? ""); continue; }
+      if (element.localName === "tab") { pieces.push("\t"); continue; }
+      if (["br", "cr"].includes(element.localName!)) { pieces.push("\n"); continue; }
       else if (element.localName === "checkBox") {
         const checked = children(element, "checked")[0] ?? children(element, "default")[0];
         pieces.push(checked && ["1", "true"].includes(checked.getAttributeNS(WORD, "val") || "1") ? "☑" : "□");
+        continue;
       }
-    } else if (element.namespaceURI === WORD14 && element.localName === "checked") pieces.push(["1", "true"].includes(element.getAttributeNS(WORD14, "val") || "1") ? "☑" : "□");
-  }
+    } else if (element.namespaceURI === WORD14 && element.localName === "checked") { pieces.push(["1", "true"].includes(element.getAttributeNS(WORD14, "val") || "1") ? "☑" : "□"); continue; }
+    const nestedParagraph = element.namespaceURI === WORD && element.localName === "p";
+    if (nestedParagraph && pieces.length && pieces.at(-1) !== "\n") pieces.push("\n");
+    visit(element);
+    if (nestedParagraph) pieces.push("\n");
+  } };
+  visit(paragraph);
   return pieces.join("").trim();
 }
 
@@ -100,29 +129,36 @@ export function extractDocxBlocks(buffer: Buffer): ExtractedBlocks {
     if (/<!\s*(?:DOCTYPE|ENTITY)/i.test(xml)) return fail("XML_UNSAFE", "외부 엔티티 또는 DTD가 포함된 XML은 처리할 수 없습니다.");
     if ((xml.match(/</g) ?? []).length > 150_000) return fail("ARCHIVE_LIMIT", "문서 구조가 너무 복잡합니다. 문서를 나누어 업로드해주세요.");
     try {
-      return new DOMParser({ onError: () => { throw new Error("invalid XML"); } }).parseFromString(xml, "text/xml");
-    } catch { return fail("CORRUPT", "DOCX XML 구조가 손상되었습니다."); }
+      const document = new DOMParser({ onError: () => { throw new Error("invalid XML"); } }).parseFromString(xml, "text/xml");
+      const pending = [{ element: document.documentElement!, depth: 0 }];
+      while (pending.length) {
+        const { element, depth } = pending.pop()!;
+        if (depth > 100) return fail("ARCHIVE_LIMIT", "문서 구조가 너무 깊습니다. 문서를 단순화해주세요.");
+        for (const child of children(element)) pending.push({ element: child, depth: depth + 1 });
+      }
+      return document;
+    } catch (error) { if (error instanceof ReviewExtractionError) throw error; return fail("CORRUPT", "DOCX XML 구조가 손상되었습니다."); }
   };
   function visit(parent: Element, location: string, depth = 0) {
     if (depth > 100) fail("ARCHIVE_LIMIT", "문서 구조가 너무 깊습니다. 문서를 단순화해주세요.");
-    children(parent).forEach((child, index) => {
+    visibleChildren(parent).forEach((child, index) => {
       const loc = `${location}/${index + 1}`;
       if (child.namespaceURI !== WORD) return;
       if (child.localName === "p") {
         const text = paragraphText(child);
-        if (text) append({ text, location: loc, kind: "paragraph" });
+        append({ text, location: loc, kind: "paragraph" });
       } else if (child.localName === "tbl") {
-        children(child, "tr").forEach((row, rowIndex) => {
-          const cells = children(row, "tc").map((cell, cellIndex) => {
+        contentChildren(child, "tr").forEach((row, rowIndex) => {
+          const cells = contentChildren(row, "tc").map((cell, cellIndex) => {
             const properties = children(cell, "tcPr")[0];
             const span = properties && children(properties, "gridSpan")[0];
             const merge = properties && children(properties, "vMerge")[0];
-            return { text: Array.from(cell.getElementsByTagNameNS(WORD, "p")).map(paragraphText).join("\n").trim(), column: cellIndex + 1,
+            return { text: contentParagraphs(cell).map(paragraphText).join("\n").trim(), column: cellIndex + 1,
               colSpan: Number(span?.getAttributeNS(WORD, "val") || "1"), verticalMerge: merge ? merge.getAttributeNS(WORD, "val") || "continue" : null };
           });
           if (cells.some((cell) => cell.text)) append({ text: cells.map((cell) => cell.text).join("\t"), location: `${loc}/row:${rowIndex + 1}`, kind: "tableRow", cells });
         });
-      } else if (["sdt", "sdtContent", "customXml", "footnote", "endnote"].includes(child.localName!)) visit(child, loc, depth + 1);
+      } else if (["sdt", "sdtContent", "customXml", "ins", "moveTo", "footnote", "endnote"].includes(child.localName!)) visit(child, loc, depth + 1);
     });
   }
   const document = parse("word/document.xml");

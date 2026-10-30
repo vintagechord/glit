@@ -46,6 +46,20 @@ test('MV review uses MV lyrics and translation fields',()=>{
   const result=reviewLyrics({submission:{type:'MV_DISTRIBUTION',source:'manual',mv_song_title:'영상곡',mv_lyrics:'Hello world',korean_lyrics_translation:'안녕 세상아'}});
   assert.equal(result.findings[0].trackTitle,'영상곡');assert.equal(result.counts.translation_review,1);
 });
+test('parenthesized Korean translation on the next line is preserved without translating again',async()=>{
+  const lyrics='I follow the shining light\n(나는 빛나는 빛을 따라가)\n\nWe dance into the night\n（우리는 밤속에서 춤춰）\n\nI love your ways\n(네가 움직이는(작동하는) 방식이 좋아)';
+  const detail={source:'manual',submission:{type:'MV_DISTRIBUTION',mv_song_title:'다음 줄 번역',mv_lyrics:lyrics}};
+  const review=reviewLyrics(detail);
+  assert.equal(review.counts.translation_missing,0);
+  assert.equal(review.counts.translation_review,0);
+  const result=await translateMissingLyrics({detail,serviceUrl:'https://example.invalid',fetchImpl:async()=>{throw new Error('Supplied translations must not trigger a request');}});
+  assert.equal(result.translatedCount,0);
+  assert.equal(result.overrides.submission.mv_lyrics,lyrics);
+});
+test('ordinary Korean lyrics and ambiguous next-line annotations still require review',()=>{
+  const result=reviewLyrics(album([track('Hello world\n다음 가사 원문\nHello 세상 goodbye\n(안녕 세상)\nHello again\n(다시 안녕) 이어지는 별도 가사')]));
+  assert.deepEqual(result.findings.filter(f=>f.kind==='translation_missing').map(f=>f.line),[1,3,5]);
+});
 test('explicit translation only fills missing segments, repeats annotations and preserves source metadata',async()=>{
   const detail=album([track('I love you (번역 : 사랑해)\nHello world\nHello world\nOh, yeah')]);
   const before=structuredClone(detail),calls=[];

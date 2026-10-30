@@ -32,3 +32,21 @@ test("native DOCX rejects invalid CRC, oversized XML and corrupt XML without lea
   malformed.file("word/document.xml", `<w:document xmlns:w="${WORD}"><w:body><w:p>PRIVATE SOURCE</wrong></w:body></w:document>`);
   assert.throws(() => extractDocxBlocks(malformed.generate({ type: "nodebuffer" })), (error: unknown) => error instanceof Error && /XML 구조/.test(error.message) && !error.message.includes("PRIVATE"));
 });
+
+test("native DOCX retains blank lyric paragraphs and reads text box alternatives only once", async () => {
+  const zip = new PizZip(await fixture());
+  const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const textBox = `<w:txbxContent>${p("첫 구절")}${p("둘째 구절")}</w:txbxContent>`;
+  zip.file("word/document.xml", `<w:document xmlns:w="${WORD}" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><w:body>${p("가사: 시작")}<w:p/>${p("다음 연")}<w:p><mc:AlternateContent><mc:Choice Requires="wps">${textBox}</mc:Choice><mc:Fallback>${textBox}</mc:Fallback></mc:AlternateContent></w:p></w:body></w:document>`);
+  const data = extractDocxBlocks(zip.generate({ type: "nodebuffer" }));
+  assert.deepEqual(data.blocks.filter((block) => block.location.startsWith("본문")).map((block) => block.text), ["가사: 시작", "", "다음 연", "첫 구절\n둘째 구절"]);
+});
+
+test("native DOCX keeps content-controlled table rows and excludes moved-from lyrics", async () => {
+  const zip = new PizZip(await fixture());
+  const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  zip.file("word/document.xml", `<w:document xmlns:w="${WORD}"><w:body><w:tbl><w:sdt><w:sdtContent><w:tr><w:tc>${p("곡명")}</w:tc><w:sdt><w:sdtContent><w:tc>${p("보존할 제목")}</w:tc></w:sdtContent></w:sdt></w:tr></w:sdtContent></w:sdt></w:tbl><w:p><w:moveFrom><w:r><w:t>이동 전 중복 가사</w:t></w:r></w:moveFrom><w:moveTo><w:r><w:t>최종 가사</w:t></w:r></w:moveTo></w:p></w:body></w:document>`);
+  const data = extractDocxBlocks(zip.generate({ type: "nodebuffer" }));
+  assert.deepEqual(data.blocks[0].cells?.map((cell) => cell.text), ["곡명", "보존할 제목"]);
+  assert.equal(data.blocks[1].text, "최종 가사");
+});

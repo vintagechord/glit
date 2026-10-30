@@ -99,7 +99,8 @@ export function extractHwpxBlocks(body) {
     }
     if (node.localName === 'p') {
       const text = hwpxParagraph(node).trimEnd();
-      if (text) append({ text, kind: 'paragraph', location });
+      // Empty paragraphs separate lyric stanzas and must survive extraction.
+      append({ text, kind: 'paragraph', location });
       // Tables are embedded inside paragraph runs. The parent paragraph excludes
       // their text so every lyric paragraph is read exactly once.
       for (const table of Array.from(node.getElementsByTagName('*')).filter((el) => el.localName === 'tbl' && !hasAncestor(el, 'tbl', node))) visit(table, location + '/table', depth + 1);
@@ -134,10 +135,13 @@ const row = (label, value, location) => ({ text: `${label}\t${value}`, kind: 'ta
 const canonical = (label) => fields.get(key(label));
 const numbered = (text) => clean(text).match(/^(?:트랙\s*)?(\d{1,3})[.)]\s*(\S.*)$/);
 const creditLine = (text) => /^\s*\(?\s*(?:작사|작곡|편곡|곡)\s*[:：]/.test(text);
-function checkedChoice(label, value) {
+function checkedChoice(label, value, warnings) {
   if (!['장르','앨범형태','그룹솔로'].includes(label) || !/[□■☐☑☒]/.test(value)) return value;
-  const selected = [...value.matchAll(/([^□■☐☑☒]+)([□■☐☑☒])/g)].filter((match) => /[■☑☒]/.test(match[2])).map((match) => match[1].trim()).filter(Boolean);
-  return selected.length ? selected.join(', ') : value;
+  const prefix = /^[□■☐☑☒]/.test(value.trim());
+  const choices = prefix ? [...value.matchAll(/([□■☐☑☒])([^□■☐☑☒]+)/g)] : [...value.matchAll(/([^□■☐☑☒]+)([□■☐☑☒])/g)];
+  const selected = choices.filter(match => /[■☑☒]/.test(match[prefix ? 1 : 2])).map(match => match[prefix ? 2 : 1].trim().replace(/^[,;/|\s]+|[,;/|\s]+$/g,'')).filter(Boolean);
+  if (!selected.length) warnings.push(`${label}: 선택된 항목을 확인할 수 없어 값을 비웠습니다. 기준파일의 체크 표시를 확인해 주세요.`);
+  return selected.join(', ');
 }
 function formValue(label, value, warnings) {
   // Empty-form guidance is not a company, date, contact, or rating supplied by
@@ -146,7 +150,13 @@ function formValue(label, value, warnings) {
     warnings.push(`${extraTitles.get(label)||label}: 기준파일의 입력 안내문만 있어 값을 비웠습니다. 실제 내용을 확인해 주세요.`);
     return '';
   }
-  return checkedChoice(label,value);
+  return checkedChoice(label,value,warnings);
+}
+const multilineExtras = new Set(['mv_storyline', 'mv_memo']);
+function isFieldBlock(block) {
+  if (!block || block.cells) return true;
+  const text = block.text.trim(), label = text.match(/^([^:：\t]{1,30})\s*[:：\t]/)?.[1];
+  return !!(canonical(text) || extraFields.get(key(text)) || (label && (canonical(label) || extraFields.get(key(label)))) || numbered(text) || creditLine(text));
 }
 function normalizeBlocks(result, type, warnings) {
   const input = result.blocks.flatMap((block) => {
@@ -155,8 +165,13 @@ function normalizeBlocks(result, type, warnings) {
     return first && !['가사','번역가사'].includes(first) ? block.text.split('\n').map((text,index) => ({...block,text,location:`${block.location}/line:${index+1}`})) : [block];
   }), output = [], extras = {}, tableArtists = [];
   let artistColumn = -1, artistTable = '';
-  let lyricBuffer, lyricLocation, lyricField = '가사', activeTrack = false, trackTable = '', creditSeen = false, sawNumbered = false;
-  const flush = () => { if (lyricBuffer) output.push(row(lyricField, lyricBuffer.join('\n'), lyricLocation)); lyricBuffer = undefined; };
+  let lyricBuffer, lyricLocation, lyricField = '가사', extraBuffer, bufferedExtraField, activeTrack = false, trackTable = '', creditSeen = false, sawNumbered = false;
+  const flush = () => {
+    if (lyricBuffer) output.push(row(lyricField, lyricBuffer.join('\n'), lyricLocation));
+    lyricBuffer = undefined;
+    if (extraBuffer) extraValue(bufferedExtraField, extraBuffer.join('\n'));
+    extraBuffer = undefined;
+  };
   const extraValue = (field, value) => {
     value=formValue(field,value,warnings);
     if (!value) return;
@@ -210,7 +225,11 @@ function normalizeBlocks(result, type, warnings) {
     const labeled = text.match(/^([^:：\t]{1,30})\s*[:：\t]\s*([\s\S]*)$/), label = labeled && (canonical(labeled[1]) || extraFields.get(key(labeled[1])));
     if (label) {
       flush();
-      if (extraFields.has(key(labeled[1]))) { extraValue(label,labeled[2]); continue; }
+      if (extraFields.has(key(labeled[1]))) {
+        if (multilineExtras.has(label)) { bufferedExtraField = label; extraBuffer = [labeled[2]]; }
+        else extraValue(label,labeled[2]);
+        continue;
+      }
       if (['가사','번역가사'].includes(label)) { lyricField = label; lyricLocation = location; lyricBuffer = [labeled[2]]; activeTrack = true; continue; }
       output.push(row(label,formValue(label,labeled[2],warnings),location));
       if (label === '곡명') { activeTrack = true; creditSeen = false; lyricField = '가사'; }
@@ -219,10 +238,13 @@ function normalizeBlocks(result, type, warnings) {
     }
     const only = canonical(text), extraOnly=extraFields.get(key(text));
     if (only === '가사' || only === '번역가사') { flush(); lyricField = only; lyricLocation = location; lyricBuffer = []; activeTrack = true; continue; }
-    if (only && input[index+1] && !canonical(input[index+1].text) && !input[index+1].cells) {
+    if (only && input[index+1] && !isFieldBlock(input[index+1])) {
       flush(); output.push(row(only,formValue(only,input[++index].text,warnings),location)); if (only === '곡명') activeTrack = true; continue;
     }
-    if(extraOnly && input[index+1] && !canonical(input[index+1].text) && !extraFields.has(key(input[index+1].text)) && !input[index+1].cells) {flush();extraValue(extraOnly,input[++index].text);continue;}
+    if (extraOnly && multilineExtras.has(extraOnly)) { flush(); bufferedExtraField = extraOnly; extraBuffer = []; continue; }
+    if(extraOnly && input[index+1] && !isFieldBlock(input[index+1])) {flush();extraValue(extraOnly,input[++index].text);continue;}
+    if (/^(?:※|참고\s*[:：]|안내\s*[:：]|접수일자\s*[:：])/.test(text)) { flush(); output.push(block); continue; }
+    if (extraBuffer) { extraBuffer.push(block.text); continue; }
     const number = numbered(text);
     if (number && (!lyricBuffer || /^트랙/.test(text) || creditLine(input[index+1]?.text ?? '') || creditLine(input[index+2]?.text ?? ''))) {
       flush(); output.push(row('트랙번호',number[1],location),row('곡명',number[2],location)); activeTrack = true; sawNumbered = true; creditSeen = false; lyricField = '가사'; continue;
@@ -235,7 +257,6 @@ function normalizeBlocks(result, type, warnings) {
       if (type !== 'ALBUM') { activeTrack = true; lyricBuffer = []; lyricLocation = location; lyricField = '가사'; }
       continue;
     }
-    if (/^(?:※|참고\s*[:：]|안내\s*[:：]|접수일자\s*[:：])/.test(text)) { flush(); output.push(block); continue; }
     if (lyricBuffer || (activeTrack && (creditSeen || sawNumbered))) {
       if (!lyricBuffer) { lyricBuffer = []; lyricLocation = location; lyricField = '가사'; } lyricBuffer.push(block.text); continue;
     }
