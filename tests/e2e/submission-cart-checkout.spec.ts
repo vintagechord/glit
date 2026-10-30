@@ -182,7 +182,15 @@ async function confirmReturn(page: Page, id = orderIds[0]) {
   const dialog = page.getByRole("alertdialog", { name: "결제 수단 다시 선택" });
   await expect(dialog).toContainText("기존 입금 신청을 취소하고 카드 결제 또는 무통장 입금을 다시 선택합니다.");
   await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeFocused();
+  // Re-paying a bank order needs an explicit "not deposited yet" acknowledgement.
+  await expect(dialog.getByRole("button", { name: "결제하기", exact: true })).toBeDisabled();
+  await dialog.getByRole("checkbox", { name: "아직 이 주문의 금액을 입금하지 않았습니다." }).check();
+  await expect(dialog.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
   return dialog;
+}
+async function fillBankDetails(page: Page, depositor = "홍길동") {
+  await page.getByLabel("입금자명").fill(depositor);
+  await expect(page.getByLabel("입금 예정일")).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
 }
 
 // These tests render production components with only Next navigation replaced;
@@ -225,13 +233,18 @@ test.describe("isolated commerce account fixtures", () => {
     await select(page, ids[1]).click(); for (const id of ids.slice(0, 2)) await expect(select(page, id)).toHaveAttribute("aria-pressed", "true");
     await payment(page).click();
     await expect(page.getByRole("navigation", { name: "결제 단계" }).locator('[aria-current="step"]')).toHaveText("2. 결제하기");
-    if (!identity) await expect(page.getByRole("button", { name: "카드 결제 · PC에서 이용", exact: true })).toBeDisabled();
+    // Phones now use the INIpayMobile flow; the card choice stays available.
+    if (!identity) await expect(page.getByRole("button", { name: "카드 결제", exact: true })).toBeEnabled();
     await page.screenshot({ path: testInfo.outputPath(`checkout-selection-${width}-light.png`), fullPage: true, animations: "disabled" });
     await page.evaluate(() => document.documentElement.classList.add("dark"));
     await page.screenshot({ path: testInfo.outputPath(`checkout-selection-${width}-dark.png`), fullPage: true, animations: "disabled" });
     await page.evaluate(() => document.documentElement.classList.remove("dark"));
     await page.getByRole("button", { name: "무통장 입금", exact: true }).click();
     await expect(page.locator("aside")).toContainText("입금 신청 후 주문내역에서 계좌와 입금 상태를 확인할 수 있습니다.");
+    await page.getByRole("button", { name: "입금 신청", exact: true }).click();
+    const missingDepositor = page.getByRole("dialog", { name: "확인 필요" }); await expect(missingDepositor).toContainText("입금자명을 입력해주세요."); await missingDepositor.getByRole("button", { name: "확인", exact: true }).click();
+    expect(harness.writes).toHaveLength(0);
+    await fillBankDetails(page);
     harness.bankError = "이미 주문이 생성된 신청서입니다.";
     await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     const error = page.getByRole("dialog", { name: "확인 필요" }); await expect(error).toContainText(harness.bankError); await error.getByRole("button", { name: "확인", exact: true }).click();
@@ -239,7 +252,7 @@ test.describe("isolated commerce account fixtures", () => {
     harness.bankError = null; await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     await expect(orderRow(page, orderIds[0])).toContainText("입금 대기");
     expect(await navigation(page)).toEqual([checkoutHref(ids.slice(0, 2)), `/mypage/orders?focus=${ids[0]}`]);
-    expect(harness.writes.at(-1)).toEqual({ path: "/api/cart/bank", body: { submissionIds: ids.slice(0, 2), guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])) } });
+    expect(harness.writes.at(-1)).toEqual({ path: "/api/cart/bank", body: { submissionIds: ids.slice(0, 2), guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])), depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
     if (!identity) { expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toEqual([]); expect(await stored(page, GUEST_SUBMISSION_ORDERS_STORAGE_KEY)).toHaveLength(2); } expectClean(harness);
   });
   test("card initialization failure retains selection; INIStdPay preserves the card and amount until cancellation", async ({ page }) => {
@@ -291,7 +304,7 @@ test.describe("isolated commerce account fixtures", () => {
   for (const identity of ["member-a", null]) test(`${identity ?? "guest"}: grouped bank return can cancel, reject, then return exactly once`, async ({ page }, testInfo) => {
     const width = identity ? 1280 : 390; await page.setViewportSize({ width, height: 900 });
     const harness = await mount(page, { view: "orders", orders: [bankGroup()], items: [item(2)], identity });
-    let dialog = await confirmReturn(page); await expect(dialog).toContainText("아직 입금하지 않은 경우에만 진행해주세요.");
+    let dialog = await confirmReturn(page); await expect(dialog).toContainText("이미 입금한 주문을 다시 결제하면 이중 납부가 됩니다.");
     await page.screenshot({ path: testInfo.outputPath(`order-return-${width}.png`), fullPage: true, animations: "disabled" });
     await page.keyboard.press("Escape"); expect(harness.writes).toHaveLength(0); await expect(returnButton(page)).toBeFocused();
     harness.returnError = "입금 확인이 완료되어 장바구니로 돌릴 수 없습니다.";
@@ -324,6 +337,7 @@ test.describe("isolated commerce account fixtures", () => {
     expect(harness.items.map(entry => entry.id).sort()).toEqual([ids[0], ids[2]]);
     expect(harness.writes).toEqual([{ path: "/api/orders/return", body: { orderId: orderIds[0], guestTokensBySubmissionId: identity ? {} : { [ids[0]]: tokens[ids[0]] } } }]);
     await page.getByRole("button", { name: "무통장 입금", exact: true }).click();
+    await fillBankDetails(page);
     await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     await expect.poll(() => harness.writes.length).toBe(2);
     expect(harness.writes[1].body.submissionIds).toEqual([ids[0]]);
@@ -402,7 +416,7 @@ test.describe("live commerce routes with mocked data and writes", () => {
     const harness = await mount(page, { items: [item(0, { album_draft_group_id: groupId }), item(1, { album_draft_group_id: groupId, amount_krw: 25000 })], live: true });
     await expect(payment(page)).toBeEnabled(); await payment(page).click();
     await expect(page.getByRole("navigation", { name: "결제 단계" }).locator('[aria-current="step"]')).toHaveText("2. 결제하기");
-    await page.getByRole("button", { name: "무통장 입금", exact: true }).click(); await page.getByRole("button", { name: "입금 신청", exact: true }).click();
+    await page.getByRole("button", { name: "무통장 입금", exact: true }).click(); await fillBankDetails(page); await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/mypage/orders\\?focus=${ids[0]}$`));
     await expect(orderRow(page, orderIds[0])).toContainText("입금 계좌"); expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toEqual([]);
     const dialog = await confirmReturn(page); await dialog.getByRole("button", { name: "결제하기", exact: true }).click();

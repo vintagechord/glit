@@ -33,10 +33,10 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
         {pending ? (
           <span className="inline-flex items-center justify-center gap-2">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-transparent" />
-            <span>로그인 중...</span>
+            <span>{isEnglishRoute ? "Logging in..." : "로그인 중..."}</span>
           </span>
         ) : (
-          "로그인"
+          isEnglishRoute ? "Log in" : "로그인"
         )}
       </button>
     );
@@ -55,7 +55,7 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
             htmlFor="login-email"
             className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
-            이메일
+            {isEnglishRoute ? "Email" : "이메일"}
           </label>
           <input
             id="login-email"
@@ -80,7 +80,7 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
             htmlFor="login-password"
             className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
-            비밀번호
+            {isEnglishRoute ? "Password" : "비밀번호"}
           </label>
           <PasswordInput
             label={isEnglishRoute ? "Password" : "비밀번호"}
@@ -109,13 +109,13 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
           href={forgotPasswordHref}
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-border px-3 py-2 text-xs font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
         >
-          비밀번호 찾기
+          {isEnglishRoute ? "Forgot password" : "비밀번호 찾기"}
         </Link>
         <Link
           href={signupHref}
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-y-0.5"
         >
-          회원가입
+          {isEnglishRoute ? "Sign up" : "회원가입"}
         </Link>
       </div>
       <Link href={getAuthPageHref("confirm-email", effectiveNextPath, isEnglishRoute)} className="block text-center text-xs font-semibold underline underline-offset-4">
@@ -123,8 +123,8 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
       </Link>
       <div className="grid text-center text-muted-foreground">
         <TrackLookupModalTrigger
-          label="비회원 조회"
-          modalTitle="비회원 접수 조회"
+          label={isEnglishRoute ? "Guest lookup" : "비회원 조회"}
+          modalTitle={isEnglishRoute ? "Guest application lookup" : "비회원 접수 조회"}
           className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-foreground/60 px-3 py-2 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
         />
       </div>

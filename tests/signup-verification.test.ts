@@ -83,7 +83,6 @@ test("transactional signup stores unknown temporary credentials and confirms onl
 test("duplicate signup reports an existing email without changing credentials or sending more mail", async () => {
   for (const code of ["email_exists", "user_already_exists"]) {
     for (const account of [
-      { id: "pending", email: signup.email, signupVerificationFlow: "email_password_v1" },
       { id: "confirmed", email: signup.email, email_confirmed_at: "2026-01-01T00:00:00Z" },
       { id: "legacy-pending", email: signup.email },
     ]) {
@@ -95,9 +94,57 @@ test("duplicate signup reports an existing email without changing credentials or
       assert.equal(result.notice, "email_already_registered");
       assert.equal(result.message, undefined);
       assert.equal(result.verificationPending, undefined);
-      assert.deepEqual(auth.calls.map(call => call.method), ["create"]);
+      assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup"], "the read-only lookup must not generate links or mail");
     }
   }
+});
+
+test("duplicate signup for this app's unverified account offers the explicit resend link without sending mail", async () => {
+  for (const [locale, expected] of [["ko", /이미 가입 신청된 이메일.*인증 메일을 다시 요청/], ["en", /pending signup.*request a new verification email/]] as const) {
+    const auth = await fixture();
+    auth.state.signupError = { code: "email_exists" };
+    auth.state.account = { id: "pending", email: signup.email, signupVerificationFlow: "email_password_v1" };
+    const result = await auth.signupAction({}, form({ ...signup, locale }));
+    assert.match(result.error ?? "", expected);
+    if (locale === "en") assert.doesNotMatch(result.error ?? "", /[가-힣]/, "English signup must not show Korean");
+    assert.equal(result.notice, "email_already_registered");
+    assert.equal(result.verificationPending, true);
+    assert.equal(result.message, undefined);
+    assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup"], "verification mail is only sent from the explicit resend screen");
+  }
+  // A failed lookup keeps today's plain duplicate notice instead of guessing.
+  const failed = await fixture();
+  failed.state.signupError = { code: "email_exists" };
+  failed.state.lookupThrows = true;
+  const fallback = await failed.signupAction({}, form(signup));
+  assert.equal(fallback.error, "이미 가입된 이메일입니다.");
+  assert.equal(fallback.notice, "email_already_registered");
+  assert.equal(fallback.verificationPending, undefined);
+  assert.deepEqual(failed.calls.map(call => call.method), ["create", "lookup"]);
+});
+
+test("English auth forms receive English replies for the same outcomes", async () => {
+  const auth = await fixture();
+  const sent = await auth.signupAction({}, form({ ...signup, locale: "en" }));
+  assert.match(sent.message ?? "", /verification email has been sent/);
+  assert.doesNotMatch(JSON.stringify(sent), /[가-힣]/);
+  auth.calls.length = 0;
+  const absent = await auth.resendSignupAction({}, form({ email: signup.email, locale: "en" }));
+  assert.equal(absent.error, "This email has no signup history.");
+  assert.equal(absent.notice, "email_not_registered");
+  const invalid = await auth.resendSignupAction({}, form({ email: "not-an-email", locale: "en" }));
+  assert.doesNotMatch(invalid.fieldErrors?.email ?? "", /[가-힣]/);
+  const badLink = await auth.confirmSignupAction({}, form({ ...confirmation, newPassword: "short", confirmPassword: "short", locale: "en" }));
+  assert.match(badLink.fieldErrors?.newPassword ?? "", /at least 8 characters/);
+  const mismatch = await auth.completePasswordRecoveryAction({}, form({ ...confirmation, type: "recovery", confirmPassword: "different-password", locale: "en" }));
+  assert.equal(mismatch.fieldErrors?.confirmPassword, "The passwords do not match.");
+  auth.state.account = { id: "legacy", email: signup.email };
+  const legacy = await auth.resetPasswordAction({}, form({ resetEmail: signup.email, locale: "en" }));
+  assert.match(legacy.error ?? "", /contact support/);
+  assert.doesNotMatch(legacy.error ?? "", /[가-힣]/);
+  // Korean stays the default when no locale is posted.
+  const korean = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.match(korean.error ?? "", /고객센터/);
 });
 
 test("only explicit verification resend sends mail to safe pending accounts", async () => {

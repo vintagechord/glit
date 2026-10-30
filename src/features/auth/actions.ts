@@ -22,7 +22,7 @@ import { SIGNUP_POLICY_VERSIONS } from "./policy";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { isAuthConnectionError, logAuthError, mapAuthError } from "./errors";
-import { loginSchema, signupSchema, profileSchema, passwordUpdateSchema, resetEmailSchema, toFieldErrors } from "./validation";
+import { getLoginSchema, getSignupSchema, profileSchema, getPasswordUpdateSchema, passwordUpdateSchema, getResetEmailSchema, toFieldErrors } from "./validation";
 import { findAccountByEmail, SIGNUP_VERIFICATION_FLOW } from "./account-lookup";
 import { signSignupToken, verifySignupToken, signRecoveryToken, verifyRecoveryToken } from "./signup-token";
 
@@ -35,14 +35,25 @@ export type ActionState = {
   notice?: "email_already_registered" | "email_not_registered" | "password_reset_sent";
 };
 
-const resetSuccessMessage = "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.";
-const signupPendingMessage = "입력한 이메일로 인증 메일을 발송했습니다. 메일의 버튼에서 비밀번호를 설정하면 가입이 완료됩니다.";
-const duplicateAccountNotice: ActionState = { error: "이미 가입된 이메일입니다.", notice: "email_already_registered" };
-const missingAccountNotice: ActionState = { error: "가입 이력이 없는 이메일입니다.", notice: "email_not_registered" };
-const legacyPendingMessage = "이메일 인증을 완료하지 못한 계정입니다. 고객센터에 문의해주세요.";
-const resetDeliveryError = "비밀번호 재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.";
-const signupDeliveryError = "인증 메일을 보내지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.";
-const mailConfigurationError = "메일 발송 설정에 문제가 있어 메일을 보내지 못했습니다. 고객센터에 문의해주세요.";
+// Forms on /en routes post locale=en; every customer-facing reply follows it.
+const isEnglishLocale = (formData: FormData) => formData.get("locale") === "en";
+const t = (english: boolean, korean: string, englishText: string) => (english ? englishText : korean);
+
+const resetSuccessMessage = (english: boolean) => t(english, "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.", "Password reset instructions have been sent to your registered email. Check your inbox and spam folder.");
+const signupPendingMessage = (english: boolean) => t(english, "입력한 이메일로 인증 메일을 발송했습니다. 메일의 버튼에서 비밀번호를 설정하면 가입이 완료됩니다.", "A verification email has been sent to the email you entered. Use its button to set your password and complete signup.");
+const duplicateAccountNotice = (english: boolean): ActionState => ({ error: t(english, "이미 가입된 이메일입니다.", "This email is already registered."), notice: "email_already_registered" });
+/** Same popup as a duplicate, but the signup form also offers the resend link. */
+const pendingAccountNotice = (english: boolean): ActionState => ({
+  error: t(english, "이미 가입 신청된 이메일입니다. 아직 이메일 인증이 완료되지 않았으니 아래에서 인증 메일을 다시 요청해주세요.", "This email already has a pending signup. Email verification is not complete yet, so request a new verification email below."),
+  notice: "email_already_registered",
+  verificationPending: true,
+});
+const missingAccountNotice = (english: boolean): ActionState => ({ error: t(english, "가입 이력이 없는 이메일입니다.", "This email has no signup history."), notice: "email_not_registered" });
+const legacyPendingMessage = (english: boolean) => t(english, "이메일 인증을 완료하지 못한 계정입니다. 고객센터에 문의해주세요.", "This account has not completed email verification. Please contact support.");
+const resetDeliveryError = (english: boolean) => t(english, "비밀번호 재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.", "We could not send the password reset email. Please try again shortly.");
+const signupDeliveryError = (english: boolean) => t(english, "인증 메일을 보내지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.", "We could not send the verification email. Please request another verification email shortly.");
+const mailConfigurationError = (english: boolean) => t(english, "메일 발송 설정에 문제가 있어 메일을 보내지 못했습니다. 고객센터에 문의해주세요.", "An email configuration issue prevented delivery. Please contact support.");
+const tooManyRequests = (english: boolean) => t(english, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "Too many requests. Please wait and try again.");
 
 const isDuplicateAccount = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
@@ -50,8 +61,22 @@ const isDuplicateAccount = (error: unknown) => {
   return ["email_exists", "user_already_exists"].includes(value.code ?? "") || /already.*registered|already.*exists/i.test(value.message ?? "");
 };
 
+/** A duplicate signup never re-sends mail by itself (docs/auth-email-configuration.md).
+ * Only a pending account from this app's own verification flow is pointed at the
+ * explicit resend screen; a lookup failure keeps the plain duplicate notice. */
+async function describeDuplicateSignup(email: string, english: boolean, needsVerification: boolean): Promise<ActionState> {
+  if (!needsVerification) return duplicateAccountNotice(english);
+  try {
+    const account = await findAccountByEmail(email);
+    if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return pendingAccountNotice(english);
+  } catch (error) {
+    logAuthError("duplicate signup lookup", error);
+  }
+  return duplicateAccountNotice(english);
+}
+
 async function sendSignupConfirmation(email: string, formData: FormData, expectedUserId: string): Promise<ActionState> {
-  const english = formData.get("locale") === "en";
+  const english = isEnglishLocale(formData);
   const redirectTo = buildUrl(getAuthPageHref("confirm-email", String(formData.get("next") ?? ""), english), getBaseUrl());
   const admin = createAdminClient();
   // The account already exists. GoTrue leaves its password unchanged for
@@ -61,14 +86,14 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
     type: "signup", email, password: "", options: { redirectTo },
   });
   if (error) {
-    if (isDuplicateAccount(error)) return duplicateAccountNotice;
+    if (isDuplicateAccount(error)) return duplicateAccountNotice(english);
     logAuthError("generate signup link", error);
-    return { error: mapAuthError(error, "signup"), verificationPending: true };
+    return { error: mapAuthError(error, "signup", english), verificationPending: true };
   }
   if (!data.properties?.hashed_token || data.properties.verification_type !== "signup" ||
       data.user?.id !== expectedUserId || data.user.email?.trim().toLowerCase() !== email.trim().toLowerCase() ||
       data.user.email_confirmed_at || data.user.app_metadata?.signupVerificationFlow !== SIGNUP_VERIFICATION_FLOW) {
-    return { error: "인증 링크를 준비하지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.", verificationPending: true };
+    return { error: t(english, "인증 링크를 준비하지 못했습니다. 잠시 후 인증 메일을 다시 요청해주세요.", "We could not prepare the verification link. Please request another verification email shortly."), verificationPending: true };
   }
   const link = new URL(redirectTo);
   // Fragment credentials stay out of page requests and ordinary access logs.
@@ -81,20 +106,20 @@ async function sendSignupConfirmation(email: string, formData: FormData, expecte
     });
     if (!sent.ok) {
       console.warn("[Auth] signup email not accepted", { reason: sent.reason });
-      return { error: signupDeliveryError, verificationPending: true };
+      return { error: signupDeliveryError(english), verificationPending: true };
     }
   } catch (error) {
     logAuthError("signup email delivery", error);
-    return { error: signupDeliveryError, verificationPending: true };
+    return { error: signupDeliveryError(english), verificationPending: true };
   }
-  return { message: signupPendingMessage, verificationPending: true, retryAfterSeconds: 60 };
+  return { message: signupPendingMessage(english), verificationPending: true, retryAfterSeconds: 60 };
 }
 
 /** A password rule the customer can act on (same or weak password); null for
  * anything else so provider internals never reach the screen. */
-const describePasswordSetupFailure = (error: unknown) => {
-  const mapped = mapAuthError(error, "update");
-  return mapped === mapAuthError({}, "update") ? null : mapped;
+const describePasswordSetupFailure = (error: unknown, english: boolean) => {
+  const mapped = mapAuthError(error, "update", english);
+  return mapped === mapAuthError({}, "update", english) ? null : mapped;
 };
 
 const checkAuthRateLimit = async ({
@@ -138,8 +163,9 @@ export async function loginAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const english = isEnglishLocale(formData);
   const nextRaw = (formData.get("next") || "").toString().trim();
-  const parsed = loginSchema.safeParse({
+  const parsed = getLoginSchema(english).safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     next: nextRaw || undefined,
@@ -162,7 +188,7 @@ export async function loginAction(
   });
   if (!rateLimit.allowed) {
     return {
-      error: "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      error: t(english, "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "Too many login attempts. Please wait and try again."),
       retryAfterSeconds: rateLimit.retryAfterSeconds,
     };
   }
@@ -175,14 +201,13 @@ export async function loginAction(
     });
     if (error) {
       logAuthError("login", error);
-      return { error: mapAuthError(error, "login") };
+      return { error: mapAuthError(error, "login", english) };
     }
   } catch (error) {
     logAuthError("login", error);
-    return { error: mapAuthError(error, "login") };
+    return { error: mapAuthError(error, "login", english) };
   }
 
-  const english = formData.get("locale") === "en";
   const safeNext = getAuthReturnPath(parsed.data.next, english);
   redirect(safeNext ?? (english ? "/en/mypage" : "/mypage"));
 }
@@ -191,14 +216,15 @@ export async function signupAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const english = isEnglishLocale(formData);
   const emailMode = getEmailDeliveryMode();
-  if (emailMode === "invalid") return { error: mailConfigurationError };
+  if (emailMode === "invalid") return { error: mailConfigurationError(english) };
   const needsVerification = emailMode === "transactional";
-  if (needsVerification && !getEmailDeliveryConfiguration().ok) return { error: mailConfigurationError };
+  if (needsVerification && !getEmailDeliveryConfiguration().ok) return { error: mailConfigurationError(english) };
   // Transactional signup sets the real password only after mailbox ownership
   // is proved. A pre-registered account cannot activate a known password.
   const temporaryPassword = needsVerification ? randomBytes(32).toString("base64url") : null;
-  const parsed = signupSchema.safeParse({
+  const parsed = getSignupSchema(english).safeParse({
     name: (formData.get("name") || "").toString().trim() || undefined,
     company: (formData.get("company") || "").toString().trim() || undefined,
     phone: (formData.get("phone") || "").toString().trim() || undefined,
@@ -229,7 +255,7 @@ export async function signupAction(
   });
   if (!rateLimit.allowed) {
     return {
-      error: "회원가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      error: t(english, "회원가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "Too many sign-up requests. Please wait and try again."),
       retryAfterSeconds: rateLimit.retryAfterSeconds,
     };
   }
@@ -262,9 +288,9 @@ export async function signupAction(
     });
 
     if (error || !data.user) {
-      if (isDuplicateAccount(error)) return duplicateAccountNotice;
+      if (isDuplicateAccount(error)) return await describeDuplicateSignup(parsed.data.email, english, needsVerification);
       logAuthError("signup", error);
-      return { error: mapAuthError(error, "signup") };
+      return { error: mapAuthError(error, "signup", english) };
     }
 
     if (needsVerification) return await sendSignupConfirmation(parsed.data.email, formData, data.user.id);
@@ -279,55 +305,58 @@ export async function signupAction(
     }
 
     return {
-      message: "회원가입이 완료되었습니다. 로그인해 주세요.",
+      message: t(english, "회원가입이 완료되었습니다. 로그인해 주세요.", "Your account has been created. Please log in."),
     };
   } catch (error) {
     logAuthError("signup", error);
-    return { error: mapAuthError(error, "signup") };
+    return { error: mapAuthError(error, "signup", english) };
   }
 }
 
 export async function resendSignupAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  if (!getEmailDeliveryConfiguration().ok) return { error: mailConfigurationError };
-  const parsed = resetEmailSchema.safeParse(formData.get("email"));
-  if (!parsed.success) return { fieldErrors: { email: "유효한 이메일을 입력해주세요." } };
+  const english = isEnglishLocale(formData);
+  if (!getEmailDeliveryConfiguration().ok) return { error: mailConfigurationError(english) };
+  const parsed = getResetEmailSchema(english).safeParse(formData.get("email"));
+  if (!parsed.success) return { fieldErrors: { email: t(english, "유효한 이메일을 입력해주세요.", "Enter a valid email address.") } };
   const rateLimit = await checkAuthRateLimit({ namespace: "signup-confirmation", email: parsed.data, ipLimit: 10, emailLimit: 3, windowMs: 60 * 60 * 1000 });
-  if (!rateLimit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: rateLimit.retryAfterSeconds };
+  if (!rateLimit.allowed) return { error: tooManyRequests(english), retryAfterSeconds: rateLimit.retryAfterSeconds };
   try {
     const account = await findAccountByEmail(parsed.data);
     // Only accounts created with an unknowable temporary password may enter
     // this flow. Confirming legacy pending credentials before replacing them
     // could activate a password chosen by someone who did not own the inbox.
     if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(account.email, formData, account.id);
-    if (!account) return missingAccountNotice;
-    if (account.email_confirmed_at) return duplicateAccountNotice;
-    return { error: legacyPendingMessage };
+    if (!account) return missingAccountNotice(english);
+    if (account.email_confirmed_at) return duplicateAccountNotice(english);
+    return { error: legacyPendingMessage(english) };
   } catch (error) {
     logAuthError("resend signup", error);
-    return { error: "인증 메일 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    return { error: t(english, "인증 메일 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.", "We could not process the verification email request. Please try again shortly.") };
   }
 }
 
 export async function confirmSignupAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const english = isEnglishLocale(formData);
+  const invalidLink = t(english, "유효한 가입 인증 링크가 아닙니다. 인증 메일을 다시 요청해주세요.", "This signup verification link is invalid. Please request another verification email.");
   const token = String(formData.get("token_hash") ?? "").trim();
   const signature = String(formData.get("signature") ?? "");
   if (formData.get("type") !== "signup" || !/^[a-zA-Z0-9_-]{16,512}$/.test(token) || !/^[a-f0-9]{64}$/.test(signature)) {
-    return { error: "유효한 가입 인증 링크가 아닙니다. 인증 메일을 다시 요청해주세요." };
+    return { error: invalidLink };
   }
-  const password = passwordUpdateSchema.safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
+  const password = getPasswordUpdateSchema(english).safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
   if (!password.success) return { fieldErrors: toFieldErrors(password.error.flatten().fieldErrors) };
   const requestHeaders = await nextHeaders();
   const limit = await consumePersistentRateLimit({ namespace: "signup-verify-ip", identifier: getRequestIdentifier(requestHeaders), limit: 15, windowMs: 15 * 60 * 1000 });
-  if (!limit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: limit.retryAfterSeconds };
+  if (!limit.allowed) return { error: tooManyRequests(english), retryAfterSeconds: limit.retryAfterSeconds };
   try {
-    if (!verifySignupToken(token, signature)) return { error: "유효한 가입 인증 링크가 아닙니다. 인증 메일을 다시 요청해주세요." };
+    if (!verifySignupToken(token, signature)) return { error: invalidLink };
     // An isolated, nonpersistent client keeps the OTP session off browser
     // cookies. No GET or page render consumes this one-use credential.
     const client = createAdminClient();
     const { data, error } = await client.auth.verifyOtp({ type: "signup", token_hash: token });
     if (error || !data.session) {
       logAuthError("verify signup", error);
-      return { error: "인증 링크가 만료되었거나 이미 사용되었습니다. 인증 메일을 다시 요청해주세요." };
+      return { error: t(english, "인증 링크가 만료되었거나 이미 사용되었습니다. 인증 메일을 다시 요청해주세요.", "This verification link has expired or has already been used. Please request another verification email.") };
     }
     let updateError;
     let signOutError;
@@ -338,23 +367,25 @@ export async function confirmSignupAction(_prevState: ActionState, formData: For
     }
     if (updateError || signOutError) {
       logAuthError("finish signup", updateError ?? signOutError);
-      const reason = updateError ? describePasswordSetupFailure(updateError) : null;
+      const reason = updateError ? describePasswordSetupFailure(updateError, english) : null;
       return { error: reason
-        ? `이메일은 확인했지만 비밀번호를 설정하지 못했습니다. ${reason} 비밀번호 찾기로 새 비밀번호를 설정해주세요.`
-        : "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요." };
+        ? (english
+          ? `Your email was verified, but the password was not set. ${reason} Use password reset to choose a new password.`
+          : `이메일은 확인했지만 비밀번호를 설정하지 못했습니다. ${reason} 비밀번호 찾기로 새 비밀번호를 설정해주세요.`)
+        : t(english, "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요.", "Your email was verified, but password setup could not be completed. Use password reset to choose a new password.") };
     }
     // OTP consumption makes this completion one-use. Delivery failure must not
     // undo a completed account; the shared outbox owns safe delivery retries.
     if (data.user?.id && data.user.email) {
       try {
-        const welcome = await sendWelcomeEmail({ email: data.user.email, idempotencyKey: `welcome:${data.user.id}`, english: formData.get("locale") === "en" });
+        const welcome = await sendWelcomeEmail({ email: data.user.email, idempotencyKey: `welcome:${data.user.id}`, english });
         if (!welcome.ok) console.warn("[Auth] welcome email not accepted", { reason: welcome.reason });
       } catch (error) { logAuthError("welcome delivery", error); }
     }
-    return { message: "이메일 확인과 비밀번호 설정이 완료되었습니다. 새 비밀번호로 로그인해주세요." };
+    return { message: t(english, "이메일 확인과 비밀번호 설정이 완료되었습니다. 새 비밀번호로 로그인해주세요.", "Email verification and password setup are complete. Please log in with your new password.") };
   } catch (error) {
     logAuthError("confirm signup", error);
-    return { error: "가입 확인을 완료하지 못했습니다. 비밀번호 찾기 또는 인증 메일 재요청을 이용해주세요." };
+    return { error: t(english, "가입 확인을 완료하지 못했습니다. 비밀번호 찾기 또는 인증 메일 재요청을 이용해주세요.", "We could not complete signup verification. Use password reset or request another verification email.") };
   }
 }
 
@@ -362,20 +393,22 @@ export async function resetPasswordAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const english = isEnglishLocale(formData);
+  const resetConfigurationError = t(english, "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요.", "An email service configuration issue prevented us from sending the reset email. Please contact support.");
   const emailMode = getEmailDeliveryMode();
   if (emailMode === "manual") {
-    return { error: "현재 이메일 자동 발송을 제공하지 않습니다. 비밀번호 재설정은 고객센터에 문의해주세요." };
+    return { error: t(english, "현재 이메일 자동 발송을 제공하지 않습니다. 비밀번호 재설정은 고객센터에 문의해주세요.", "Automated email is not available yet. Contact support for password reset help.") };
   }
   if (emailMode === "invalid") {
-    return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+    return { error: resetConfigurationError };
   }
   const email = String(formData.get("resetEmail") || "").trim();
   if (!email) {
-    return { fieldErrors: { resetEmail: "이메일을 입력해주세요." } };
+    return { fieldErrors: { resetEmail: t(english, "이메일을 입력해주세요.", "Enter your email address.") } };
   }
-  const parsed = resetEmailSchema.safeParse(email);
+  const parsed = getResetEmailSchema(english).safeParse(email);
   if (!parsed.success) {
-    return { fieldErrors: { resetEmail: "유효한 이메일을 입력해주세요." } };
+    return { fieldErrors: { resetEmail: t(english, "유효한 이메일을 입력해주세요.", "Enter a valid email address.") } };
   }
 
   const rateLimit = await checkAuthRateLimit({
@@ -387,13 +420,12 @@ export async function resetPasswordAction(
   });
   if (!rateLimit.allowed) {
     return {
-      error: "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+      error: t(english, "재설정 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "Too many password reset requests. Please wait and try again."),
       retryAfterSeconds: rateLimit.retryAfterSeconds,
     };
   }
 
   try {
-    const english = formData.get("locale") === "en";
     const redirectTo = buildUrl(getAuthPageHref("reset-password", String(formData.get("next") ?? ""), english), getBaseUrl());
     // A configured sender owns this attempt. Falling back after a failed send
     // generates another token and masks delivery/configuration errors with the
@@ -401,10 +433,10 @@ export async function resetPasswordAction(
     const delivery = getEmailDeliveryConfiguration();
     if (!delivery.ok) {
       console.error("[Email] password reset sender unavailable", { diagnostic: delivery.diagnostic });
-      return { error: "메일 발송 설정에 문제가 있어 재설정 메일을 보내지 못했습니다. 고객센터에 문의해주세요." };
+      return { error: resetConfigurationError };
     }
     const account = await findAccountByEmail(parsed.data);
-    if (!account) return missingAccountNotice;
+    if (!account) return missingAccountNotice(english);
     if (!account.email_confirmed_at) {
       // Recovery verification confirms an unconfirmed GoTrue account before
       // changing its password. Only our unknowable-password signup flow is
@@ -412,7 +444,7 @@ export async function resetPasswordAction(
       if (account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) {
         return await sendSignupConfirmation(account.email, formData, account.id);
       }
-      return { error: legacyPendingMessage };
+      return { error: legacyPendingMessage(english) };
     }
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.generateLink({
@@ -422,14 +454,14 @@ export async function resetPasswordAction(
     });
     if (error) {
       logAuthError("generate recovery link", error);
-      return { error: mapAuthError(error, "reset") };
+      return { error: mapAuthError(error, "reset", english) };
     }
     const tokenHash = data?.properties?.hashed_token;
     if (!tokenHash || data.properties?.verification_type !== "recovery" ||
         data.user?.id !== account.id || !data.user.email_confirmed_at ||
         data.user.email?.trim().toLowerCase() !== account.email.trim().toLowerCase()) {
       logAuthError("generate recovery link", { code: "missing_recovery_token" });
-      return { error: resetDeliveryError };
+      return { error: resetDeliveryError(english) };
     }
     // Sign only confirmed-account tokens. The page collects a new password
     // before any OTP verification; even JavaScript link scanners cannot
@@ -445,27 +477,29 @@ export async function resetPasswordAction(
     });
     if (!emailResult.ok) {
       console.warn("[Auth] recovery email not accepted", { reason: emailResult.reason });
-      return { error: resetDeliveryError };
+      return { error: resetDeliveryError(english) };
     }
-    return { message: resetSuccessMessage, notice: "password_reset_sent", retryAfterSeconds: 60 };
+    return { message: resetSuccessMessage(english), notice: "password_reset_sent", retryAfterSeconds: 60 };
   } catch (error) {
     logAuthError("password reset", error);
     // Account lookup or provider outages are distinct from "no such account":
     // the customer would otherwise wait for mail that was never requested.
-    return { error: "비밀번호 재설정 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
+    return { error: t(english, "비밀번호 재설정 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.", "We could not process your password reset request. Please try again shortly.") };
   }
 }
 
 export async function completePasswordRecoveryAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const english = isEnglishLocale(formData);
   const token = String(formData.get("token_hash") ?? "").trim();
   const signature = String(formData.get("signature") ?? "");
-  const invalidLink = "유효하지 않거나 만료된 재설정 링크입니다. 비밀번호 찾기에서 새 메일을 요청해주세요.";
+  const invalidLink = t(english, "유효하지 않거나 만료된 재설정 링크입니다. 비밀번호 찾기에서 새 메일을 요청해주세요.", "This reset link is invalid or expired. Request a new password reset email.");
+  const incomplete = t(english, "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요.", "We could not update your password. Request a new reset email.");
   if (formData.get("type") !== "recovery" || !/^[a-zA-Z0-9_-]{16,512}$/.test(token) || !/^[a-f0-9]{64}$/.test(signature)) return { error: invalidLink };
-  const password = passwordUpdateSchema.safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
+  const password = getPasswordUpdateSchema(english).safeParse({ newPassword: formData.get("newPassword"), confirmPassword: formData.get("confirmPassword") });
   if (!password.success) return { fieldErrors: toFieldErrors(password.error.flatten().fieldErrors) };
   const requestHeaders = await nextHeaders();
   const limit = await consumePersistentRateLimit({ namespace: "recovery-verify-ip", identifier: getRequestIdentifier(requestHeaders), limit: 15, windowMs: 15 * 60 * 1000 });
-  if (!limit.allowed) return { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfterSeconds: limit.retryAfterSeconds };
+  if (!limit.allowed) return { error: tooManyRequests(english), retryAfterSeconds: limit.retryAfterSeconds };
   try {
     if (!verifyRecoveryToken(token, signature)) return { error: invalidLink };
     const client = createAdminClient();
@@ -483,15 +517,17 @@ export async function completePasswordRecoveryAction(_prevState: ActionState, fo
     }
     if (updateError || signOutError) {
       logAuthError("finish recovery", updateError ?? signOutError);
-      const reason = updateError ? describePasswordSetupFailure(updateError) : null;
+      const reason = updateError ? describePasswordSetupFailure(updateError, english) : null;
       return { error: reason
-        ? `${reason} 이 재설정 링크는 사용되었으므로 비밀번호 찾기에서 새 메일을 요청해주세요.`
-        : "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
+        ? (english
+          ? `${reason} This reset link has been used, so request a new email from password reset.`
+          : `${reason} 이 재설정 링크는 사용되었으므로 비밀번호 찾기에서 새 메일을 요청해주세요.`)
+        : incomplete };
     }
-    return { message: "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요." };
+    return { message: t(english, "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.", "Your password has been updated. Please log in with your new password.") };
   } catch (error) {
     logAuthError("complete recovery", error);
-    return { error: "비밀번호 변경을 완료하지 못했습니다. 새 재설정 메일을 요청해주세요." };
+    return { error: incomplete };
   }
 }
 

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const exactTranslations: Record<string, string> = {
   "이미 가입된 이메일입니다.": "This email is already registered.",
+  "이미 가입 신청된 이메일입니다. 아직 이메일 인증이 완료되지 않았으니 아래에서 인증 메일을 다시 요청해주세요.": "This email already has a pending signup. Email verification is not complete yet, so request a new verification email below.",
   "가입 이력이 없는 이메일입니다.": "This email has no signup history.",
   "가입한 이메일로 비밀번호 재설정 안내가 발송되었습니다. 메일함과 스팸함을 확인해주세요.": "Password reset instructions have been sent to your registered email. Check your inbox and spam folder.",
   "입력한 이메일로 인증 메일을 발송했습니다. 메일의 버튼에서 비밀번호를 설정하면 가입이 완료됩니다.": "A verification email has been sent to the email you entered. Use its button to set your password and complete signup.",

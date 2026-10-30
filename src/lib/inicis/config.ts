@@ -122,6 +122,20 @@ export const getInicisMode = (): InicisMode => {
 export const getStdPayConfig = (): StdPayEnvConfig =>
   loadStdPayConfig(getInicisMode());
 
+/** INIpayMobile anti-tamper key ("모바일 금액위변조 Hash Key" in the merchant
+ * console). Mobile card payment stays disabled until it is configured. */
+export const getInicisMobileHashKey = (): string | null => {
+  const suffix = getInicisMode() === "prod" ? "PROD" : "STG";
+  return clean(process.env[`INICIS_MOBILE_HASH_KEY_${suffix}`]) || null;
+};
+
+export const isInicisMobileCardConfigured = () => Boolean(getInicisMobileHashKey());
+
+export const getInicisMobileRequestUrl = () =>
+  getInicisMode() === "prod"
+    ? "https://mobile.inicis.com/smart/payment/"
+    : "https://stgmobile.inicis.com/smart/payment/";
+
 export const getBillingConfig = (): BillingEnvConfig =>
   loadBillingConfig(getInicisMode());
 

@@ -115,7 +115,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
         className="bauhaus-button w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
         disabled={pending}
       >
-        {pending ? "가입 처리 중..." : "회원가입"}
+        {pending ? (english ? "Creating account..." : "가입 처리 중...") : (english ? "Sign up" : "회원가입")}
       </button>
     );
   };
@@ -129,7 +129,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
           htmlFor="signup-email"
           className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
         >
-          <span>이메일</span>
+          <span>{english ? "Email" : "이메일"}</span>
           <span aria-hidden="true" className="text-rose-500">*</span>
         </label>
         <input
@@ -158,7 +158,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             htmlFor="signup-password"
             className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
-            <span>비밀번호</span>
+            <span>{english ? "Password" : "비밀번호"}</span>
             <span aria-hidden="true" className="text-rose-500">*</span>
           </label>
           <PasswordInput
@@ -184,7 +184,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             htmlFor="signup-confirm-password"
             className="flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
           >
-            <span>비밀번호 확인</span>
+            <span>{english ? "Confirm password" : "비밀번호 확인"}</span>
             <span aria-hidden="true" className="text-rose-500">*</span>
           </label>
           <PasswordInput
@@ -211,7 +211,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
         {english ? `Use ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.` : `비밀번호는 ${PASSWORD_MIN_LENGTH}~${PASSWORD_MAX_LENGTH}자로 입력해주세요.`}
       </p></>}
       <fieldset className="space-y-2 rounded-[8px] border-2 border-border bg-background/70 px-4 py-3 text-sm text-foreground">
-        <legend className="sr-only">약관 동의</legend>
+        <legend className="sr-only">{english ? "Agreements" : "약관 동의"}</legend>
         <label className="flex cursor-pointer items-center gap-2 rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black text-[#111111]">
           <input
             type="checkbox"
@@ -229,7 +229,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             aria-controls="agreeAge agreeTerms agreePrivacy agreeRefund"
             className="h-4 w-4 rounded border-[#111111]"
           />
-          필수 항목 전체 동의
+          {english ? "Accept all required items" : "필수 항목 전체 동의"}
         </label>
         <div className="flex min-h-9 items-center gap-2 text-xs">
           <input
@@ -247,7 +247,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeAge" className="text-foreground">
-            만 14세 이상
+            {english ? "I am at least 14 years old" : "만 14세 이상"}
           </label>
         </div>
         <div className="flex min-h-9 items-center gap-2 text-xs">
@@ -266,7 +266,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeTerms" className="text-foreground">
-            이용약관 <span className="text-muted-foreground">(필수)</span>
+            {english ? "Terms of Use" : "이용약관"} <span className="text-muted-foreground">{english ? "(required)" : "(필수)"}</span>
           </label>
           <button
             type="button"
@@ -274,7 +274,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             onClick={() => setActiveModal("terms")}
             className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
           >
-            보기
+            {english ? "View" : "보기"}
           </button>
         </div>
         <div className="flex min-h-9 items-center gap-2 text-xs">
@@ -293,7 +293,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreePrivacy" className="text-foreground">
-            개인정보 처리 <span className="text-muted-foreground">(필수)</span>
+            {english ? "Privacy Policy" : "개인정보 처리"} <span className="text-muted-foreground">{english ? "(required)" : "(필수)"}</span>
           </label>
           <button
             type="button"
@@ -301,7 +301,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             onClick={() => setActiveModal("privacy")}
             className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
           >
-            보기
+            {english ? "View" : "보기"}
           </button>
         </div>
         <div className="flex min-h-9 items-center gap-2 text-xs">
@@ -320,7 +320,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeRefund" className="text-foreground">
-            결제·환불 정책 <span className="text-muted-foreground">(필수)</span>
+            {english ? "Payment and Refund Policy" : "결제·환불 정책"} <span className="text-muted-foreground">{english ? "(required)" : "(필수)"}</span>
           </label>
           <button
             type="button"
@@ -328,7 +328,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             onClick={() => setActiveModal("refund")}
             className="ml-auto rounded-[6px] border border-border px-2 py-1 font-black text-muted-foreground transition hover:border-foreground hover:text-foreground"
           >
-            보기
+            {english ? "View" : "보기"}
           </button>
         </div>
         <div className="flex min-h-9 items-center gap-2 text-xs">
@@ -343,7 +343,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
             className="h-4 w-4 rounded border-border"
           />
           <label htmlFor="agreeMarketing" className="text-foreground">
-            소식 받기 <span className="text-muted-foreground">(선택)</span>
+            {english ? "Receive news and offers" : "소식 받기"} <span className="text-muted-foreground">{english ? "(optional)" : "(선택)"}</span>
           </label>
         </div>
         {(state.fieldErrors?.agreeAge ||
@@ -351,7 +351,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
           state.fieldErrors?.agreePrivacy ||
           state.fieldErrors?.agreeRefund) && (
           <p id="signup-agreements-error" className="text-xs text-red-500">
-            필수 약관과 정책에 동의해야 가입이 가능합니다.
+            {english ? "You must agree to the required terms and policies to sign up." : "필수 약관과 정책에 동의해야 가입이 가능합니다."}
           </p>
         )}
       </fieldset>
@@ -365,18 +365,24 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
           aria-live="polite"
           className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]"
         >
-          {state.message}{!state.verificationPending ? " 로그인 페이지로 이동합니다." : ""}
+          {state.message}{!state.verificationPending ? (english ? " You will be taken to the login page." : " 로그인 페이지로 이동합니다.") : ""}
         </p>
       )}
       {state.verificationPending && <Link href={getAuthPageHref("confirm-email", effectiveNextPath, english)} className="block text-sm font-semibold underline underline-offset-4">{english ? "Resend verification email" : "인증 메일 다시 받기"}</Link>}
+      {state.notice === "email_already_registered" && !state.verificationPending && (
+        <p className="flex flex-wrap gap-4 text-sm font-semibold underline underline-offset-4">
+          <Link href={loginHref}>{english ? "Log in" : "로그인"}</Link>
+          <Link href={getAuthPageHref("forgot-password", effectiveNextPath, english)}>{english ? "Reset password" : "비밀번호 찾기"}</Link>
+        </p>
+      )}
       <SubmitButton />
       <p className="text-center text-xs text-muted-foreground">
-        이미 계정이 있나요?{" "}
+        {english ? "Already have an account?" : "이미 계정이 있나요?"}{" "}
         <Link
           href={loginHref}
           className="font-semibold text-foreground"
         >
-          로그인
+          {english ? "Log in" : "로그인"}
         </Link>
       </p>
       {activeModal && (
@@ -407,7 +413,7 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
                 onClick={closeModal}
                 className="rounded-[8px] border-2 border-border px-3 py-1 text-xs font-black text-foreground transition hover:bg-foreground hover:text-background"
               >
-                닫기
+                {english ? "Close" : "닫기"}
               </button>
             </div>
             <pre className="mt-4 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">

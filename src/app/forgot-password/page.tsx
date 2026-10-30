@@ -16,7 +16,7 @@ import {
 
 const initialState: ActionState = {};
 
-function SubmitButton({ retrySeconds }: { retrySeconds: number }) {
+function SubmitButton({ retrySeconds, english }: { retrySeconds: number; english: boolean }) {
   const { pending } = useFormStatus();
 
   return (
@@ -28,12 +28,12 @@ function SubmitButton({ retrySeconds }: { retrySeconds: number }) {
       {pending ? (
         <span className="inline-flex items-center justify-center gap-2">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-transparent dark:border-[#00101f]/30" />
-          <span>메일 발송 중...</span>
+          <span>{english ? "Sending email..." : "메일 발송 중..."}</span>
         </span>
       ) : retrySeconds > 0 ? (
-        `${retrySeconds}초 후 다시 보내기`
+        english ? `Resend in ${retrySeconds} seconds` : `${retrySeconds}초 후 다시 보내기`
       ) : (
-        "링크 보내기"
+        english ? "Send link" : "링크 보내기"
       )}
     </button>
   );
@@ -55,9 +55,10 @@ function ForgotPasswordContent() {
   );
   const pathname = usePathname();
   const localePrefix = pathname.startsWith("/en/") ? "/en" : "";
-  useAuthNotice(state, Boolean(localePrefix));
+  const english = Boolean(localePrefix);
+  useAuthNotice(state, english);
   const searchParams = useSearchParams();
-  const nextPath = getAuthReturnPath(searchParams.get("next"), Boolean(localePrefix));
+  const nextPath = getAuthReturnPath(searchParams.get("next"), english);
   const emailAvailable = getEmailDeliveryMode() === "transactional";
 
   useEffect(() => {
@@ -78,19 +79,19 @@ function ForgotPasswordContent() {
       <div className="relative w-full max-w-xl rounded-[10px] border-2 border-[#111111] bg-card p-8 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-10">
         <div className="text-center">
           <h1 className="font-display text-3xl font-black leading-tight tracking-normal text-foreground">
-            {emailAvailable ? "재설정 링크 받기" : localePrefix ? "Password Reset Help" : "비밀번호 재설정 안내"}
+            {emailAvailable ? (english ? "Get a reset link" : "재설정 링크 받기") : english ? "Password Reset Help" : "비밀번호 재설정 안내"}
           </h1>
         </div>
 
         {emailAvailable ? <form action={formAction} className="mt-8 space-y-5">
-          <input type="hidden" name="locale" value={localePrefix ? "en" : "ko"} />
+          <input type="hidden" name="locale" value={english ? "en" : "ko"} />
           <input type="hidden" name="next" value={nextPath ?? ""} />
           <div className="space-y-2">
             <label
               htmlFor="reset-email"
               className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
             >
-              이메일
+              {english ? "Email" : "이메일"}
             </label>
             <input
               id="reset-email"
@@ -121,25 +122,27 @@ function ForgotPasswordContent() {
 
           {state.message && (
             <p className="text-xs leading-5 text-muted-foreground">
-              메일이 보이지 않으면 스팸함을 확인해주세요. 재발송한 경우 가장 최근 메일의 링크를 사용해주세요.
+              {english
+                ? "Check your spam folder if you do not see the email. If you requested another email, use the link in the most recent one."
+                : "메일이 보이지 않으면 스팸함을 확인해주세요. 재발송한 경우 가장 최근 메일의 링크를 사용해주세요."}
             </p>
           )}
-          <SubmitButton retrySeconds={retrySeconds} />
-        </form> : <div className="mt-8"><ManualEmailSupport english={Boolean(localePrefix)} purpose="password" /></div>}
+          <SubmitButton retrySeconds={retrySeconds} english={english} />
+        </form> : <div className="mt-8"><ManualEmailSupport english={english} purpose="password" /></div>}
 
         <div className="mt-6 flex justify-center">
           <div className="flex flex-wrap justify-center gap-2">
             <Link
-              href={getAuthPageHref("login", nextPath, Boolean(localePrefix))}
+              href={getAuthPageHref("login", nextPath, english)}
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
-              로그인
+              {english ? "Log in" : "로그인"}
             </Link>
             <Link
               href={`${localePrefix}/track`}
               className="inline-flex items-center rounded-[8px] border-2 border-border px-4 py-2 text-sm font-black text-foreground transition hover:border-[#111111] hover:bg-[#111111] hover:text-white dark:hover:border-[#f2cf27] dark:hover:bg-[#f2cf27] dark:hover:text-[#111111]"
             >
-              비회원 조회
+              {english ? "Guest lookup" : "비회원 조회"}
             </Link>
           </div>
         </div>

@@ -15,7 +15,10 @@ export function useAuthNotice(state: ActionState, english: boolean) {
 
   useEffect(() => {
     if (!state.notice || displayedState.current === state) return;
-    const message = english ? englishMessages[state.notice] : state.error ?? state.message;
+    const text = state.error ?? state.message;
+    // Server actions reply in the form's language. The map only covers replies
+    // that still arrive in Korean, so an English popup never shows Korean text.
+    const message = english ? (text && !/[가-힣]/.test(text) ? text : englishMessages[state.notice]) : text;
     if (!message) return;
     displayedState.current = state;
     void showCenteredAlert(message, { title: english ? "Notice" : "안내" });

@@ -24,6 +24,7 @@ import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
@@ -551,6 +552,23 @@ export default async function AdminSubmissionDetailPage({
   ]);
   const memberProfile = member.profile;
   const memberEmail = member.email;
+  // Bank-transfer orders carry the depositor name and the promised deposit
+  // day; both help match the incoming transfer before confirming payment.
+  const currentOrderId = (submission as { current_order_id?: string | null }).current_order_id ?? null;
+  const { data: currentOrderRaw } = currentOrderId
+    ? await supabase
+      .from("submission_orders")
+      .select("id, status, payment_method, depositor_name, deposit_due_at, amount_krw")
+      .eq("id", currentOrderId)
+      .maybeSingle()
+    : { data: null };
+  const currentOrder = currentOrderRaw as {
+    id: string; status: string; payment_method: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null;
+  } | null;
+  const depositDueDate = formatDepositDue(currentOrder?.deposit_due_at);
+  const depositDueLabel = depositDueDate
+    ? `${depositDueDate}${currentOrder?.status === "BANK_PENDING" && isDepositOverdue(currentOrder.deposit_due_at) ? " (기한 지남)" : ""}`
+    : null;
 
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
   const albumTracks = submission.album_tracks ?? [];
@@ -1085,13 +1103,25 @@ export default async function AdminSubmissionDetailPage({
                   <input
                     value={
                       submission.payment_method === "BANK"
-                        ? submission.bank_depositor_name ?? "-"
+                        ? currentOrder?.depositor_name ?? submission.bank_depositor_name ?? "-"
                         : "카드 결제"
                     }
                     readOnly
                     className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                   />
                 </div>
+                {submission.payment_method === "BANK" && depositDueLabel ? (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      입금 예정일
+                    </label>
+                    <input
+                      value={depositDueLabel}
+                      readOnly
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                    />
+                  </div>
+                ) : null}
                 {submission.payment_method === "BANK" && (
                   <>
                     <div className="space-y-2">

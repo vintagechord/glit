@@ -10,13 +10,15 @@ import {
 } from "@/lib/inicis/popup-handoff";
 import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { cancelUnopenedInicisOrder, submissionOrderReturnHref } from "@/lib/inicis/popup-recovery";
-import { cleanupInicisPaymentLayer } from "@/lib/inicis/popup";
+import { cleanupInicisPaymentLayer, submitInicisMobileForm } from "@/lib/inicis/popup";
 
 type StdPayInit = {
   ok?: boolean;
   orderId: string;
-  stdParams: Record<string, string>;
-  stdJsUrl: string;
+  channel?: "pc" | "mobile";
+  stdParams?: Record<string, string>;
+  stdJsUrl?: string;
+  mobile?: { actionUrl: string; params: Record<string, string> };
   amount?: number;
   returnUrl?: string;
   closeUrl?: string;
@@ -233,7 +235,8 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
       return;
     }
 
-    if (getInicisMobileBrowser()) {
+    const isMobileBrowser = getInicisMobileBrowser();
+    if (isMobileBrowser && (isKaraoke || context === "test1000")) {
       setError(INICIS_MOBILE_UNAVAILABLE_MESSAGE);
       setLoadingBarVisible(false);
       return;
@@ -267,6 +270,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
                 guestToken,
                 guestTokensBySubmissionId,
                 context,
+                channel: isMobileBrowser ? "mobile" : "pc",
               }),
             });
           }
@@ -300,6 +304,12 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
             ...(guestToken ? { [submissionId]: guestToken } : {}),
             ...guestTokensBySubmissionId,
           }).map(([id, token]) => ({ submissionId: id, guestToken: token })));
+        }
+        if (json.channel === "mobile" && json.mobile) {
+          // INIpayMobile is a top-level navigation; the gateway returns to the
+          // order list through the mobile return route.
+          submitInicisMobileForm(json.mobile);
+          return;
         }
         setInitData(json);
         window.setTimeout(() => setLoadingBarVisible(false), 1200);

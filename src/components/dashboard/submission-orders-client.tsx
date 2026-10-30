@@ -16,6 +16,7 @@ import {
   SUBMISSION_ORDERS_UPDATED_EVENT, toGuestTokensBySubmissionId,
 } from "@/lib/guest-submission-cart";
 import type { SubmissionOrder, SubmissionOrderItem, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
+import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 
 const statusLabels: Record<SubmissionOrderStatus, string> = {
   BANK_PENDING: "입금 대기", CARD_PENDING: "결제 확인 대기", PAYPAL_PENDING: "결제 확인 대기",
@@ -227,8 +228,12 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                 <dt className="text-muted-foreground">계좌</dt><dd className="break-all font-semibold">{APP_CONFIG.bankAccount}</dd>
                 <dt className="text-muted-foreground">예금주</dt><dd className="[overflow-wrap:anywhere]">{APP_CONFIG.bankHolder}</dd>
                 <dt className="text-muted-foreground">입금액</dt><dd className="font-black">{displayAmount(order.amountKrw, order.amount, order.currency)}</dd>
+                {order.depositorName && <><dt className="text-muted-foreground">입금자</dt><dd className="[overflow-wrap:anywhere]" data-no-translate>{order.depositorName}</dd></>}
+                {formatDepositDue(order.depositDueAt) && <><dt className="text-muted-foreground">예정일</dt><dd className={isDepositOverdue(order.depositDueAt) ? "font-black text-[var(--bauhaus-red)]" : ""}>{formatDepositDue(order.depositDueAt)}{isDepositOverdue(order.depositDueAt) ? " · 기한 지남" : ""}</dd></>}
               </dl>
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">이미 입금했다면 입금 확인을 기다려주세요.</p>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">{isDepositOverdue(order.depositDueAt)
+                ? "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 입금하거나 결제하기에서 다시 신청해주세요."
+                : "입금자명이 다르면 입금 확인이 늦어질 수 있습니다. 이미 입금했다면 입금 확인을 기다려주세요."}</p>
             </div>}
             {order.note && <p className="mt-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs leading-6 text-muted-foreground">{order.note}</p>}
             {order.returnedAt && <p className="mt-3 text-xs leading-5 text-muted-foreground">장바구니로 돌린 주문입니다. 기존 주문 이력은 보관됩니다.</p>}
@@ -236,7 +241,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
         </div>
       )}
       {nextOffset !== null && <div className="flex justify-center"><button type="button" className={buttonClass} disabled={loading || Boolean(returningId)} onClick={() => void loadOrders(nextOffset, true)}>{loading ? "불러오는 중..." : "이전 주문 더 보기"}</button></div>}
-      {returnOrder && <CommerceConfirmDialog title="결제 수단 다시 선택" confirmLabel="결제하기" message="아직 입금하지 않은 경우에만 진행해주세요. 기존 입금 신청을 취소하고 카드 결제 또는 무통장 입금을 다시 선택합니다. 이미 입금했다면 입금 확인을 기다려주세요." onCancel={() => setReturnOrder(null)} onConfirm={() => { const order = returnOrder; setReturnOrder(null); void returnToCheckout(order); }} />}
+      {returnOrder && <CommerceConfirmDialog title="결제 수단 다시 선택" confirmLabel="결제하기" message="기존 입금 신청을 취소하고 카드 결제 또는 무통장 입금을 다시 선택합니다. 이미 입금한 주문을 다시 결제하면 이중 납부가 됩니다. 입금했다면 취소하고 입금 확인을 기다려주세요." acknowledgement="아직 이 주문의 금액을 입금하지 않았습니다." onCancel={() => setReturnOrder(null)} onConfirm={() => { const order = returnOrder; setReturnOrder(null); void returnToCheckout(order); }} />}
     </div>
   );
 }

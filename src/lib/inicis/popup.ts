@@ -12,8 +12,10 @@ export type InicisPopupContext = InicisPaymentContext;
 type StdPayInit = {
   ok?: boolean;
   orderId: string;
-  stdParams: Record<string, string>;
-  stdJsUrl: string;
+  channel?: "pc" | "mobile";
+  stdParams?: Record<string, string>;
+  stdJsUrl?: string;
+  mobile?: { actionUrl: string; params: Record<string, string> };
   amount?: number;
   returnUrl?: string;
   closeUrl?: string;
@@ -171,8 +173,11 @@ export const cleanupInicisPaymentLayer = () => {
   document.body.style.removeProperty("position");
 };
 
+const MOBILE_FORM_ID = "SendMobilePayForm";
+
 const fetchStdPayInit = async (
   options: OpenPopupOptions,
+  channel: "pc" | "mobile" = "pc",
 ): Promise<StdPayInit> => {
   let response: Response;
 
@@ -203,6 +208,8 @@ const fetchStdPayInit = async (
         guestToken: options.guestToken,
         guestTokensBySubmissionId: options.guestTokensBySubmissionId,
         context: options.context,
+        channel,
+        locale: window.location.pathname.startsWith("/en/") || window.location.pathname === "/en" ? "en" : "ko",
       }),
     });
   }
@@ -213,11 +220,42 @@ const fetchStdPayInit = async (
   if (!response.ok || !json || json.error) {
     throw new Error(json?.error ?? `결제 초기화 실패 (status ${response.status})`);
   }
+  if (channel === "mobile") {
+    if (!json.mobile?.actionUrl || !json.mobile.params) {
+      throw new Error("모바일 결제 초기화 정보가 올바르지 않습니다.");
+    }
+    return json;
+  }
   if (!json.stdJsUrl || !json.stdParams) {
     throw new Error("결제 모듈 초기화 정보가 올바르지 않습니다.");
   }
 
   return json;
+};
+
+/** INIpayMobile is a top-level navigation (never an iframe or popup). The
+ * gateway documents an EUC-KR request form and returns to P_NEXT_URL. */
+export const submitInicisMobileForm = (request: { actionUrl: string; params: Record<string, string> }) => {
+  if (!/^https:\/\/(?:stg)?mobile\.inicis\.com\/smart\/payment\/$/.test(request.actionUrl)) {
+    throw new Error("모바일 결제 요청 주소가 유효하지 않습니다.");
+  }
+  document.getElementById(MOBILE_FORM_ID)?.remove();
+  const form = document.createElement("form");
+  form.id = MOBILE_FORM_ID;
+  form.method = "post";
+  form.action = request.actionUrl;
+  form.acceptCharset = "EUC-KR";
+  form.target = "_self";
+  form.style.display = "none";
+  Object.entries(request.params).forEach(([name, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
 };
 
 export const ensureStdPayScript = async (src: string) =>
@@ -303,13 +341,13 @@ export const openInicisCardPopup = async (
     return { ok: false, error: "window is not available" };
   }
 
-  // INIStdPay is the PC protocol. Do not reserve an order or load that SDK
-  // on mobile until an independently configured INIpayMobile flow is ready.
-  if (getInicisMobileBrowser()) {
+  const isSubmission = options.context !== "karaoke" && options.context !== "test1000";
+  const isMobile = getInicisMobileBrowser();
+  // INIStdPay is the PC protocol. Submission checkouts on mobile use the
+  // INIpayMobile top-level flow; other contexts have no mobile flow yet.
+  if (isMobile && !isSubmission) {
     return { ok: false, error: INICIS_MOBILE_UNAVAILABLE_MESSAGE };
   }
-
-  const isSubmission = options.context !== "karaoke" && options.context !== "test1000";
   if (isSubmission && options.submissionId) {
     rememberPaymentReturnLocale(options.submissionId);
     rememberGuestSubmissionOrderEntries(Object.entries({
@@ -321,9 +359,14 @@ export const openInicisCardPopup = async (
   let initData: StdPayInit | null = null;
   try {
     cleanupInicisPaymentLayer();
+    if (isMobile) {
+      initData = await fetchStdPayInit(options, "mobile");
+      submitInicisMobileForm(initData.mobile!);
+      return { ok: true, orderId: initData.orderId, redirected: true };
+    }
     initData = await fetchStdPayInit(options);
-    await ensureStdPayScript(initData.stdJsUrl);
-    const formId = mountStdPayForm(initData.stdParams);
+    await ensureStdPayScript(initData.stdJsUrl!);
+    const formId = mountStdPayForm(initData.stdParams!);
     window.INIStdPay?.pay(formId);
     return { ok: true, orderId: initData.orderId };
   } catch (error) {

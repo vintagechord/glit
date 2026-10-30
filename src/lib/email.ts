@@ -65,6 +65,8 @@ type OrderBankTransferEmailPayload = EmailDeliveryOptions & {
   orderId: string;
   items: OrderEmailItem[];
   totalAmountKrw: number;
+  depositorName?: string | null;
+  depositDueAt?: string | null;
   link?: string;
   siteLink?: string;
 };
@@ -334,6 +336,12 @@ export async function sendOrderBankTransferEmail(
   const progressLink = normalizeAbsoluteUrl(payload.link) || siteLink;
   const safeOrderId = escapeHtml(payload.orderId);
   const safeSupport = escapeHtml(APP_CONFIG.supportEmail);
+  const depositDueLabel = (() => {
+    if (!payload.depositDueAt) return null;
+    const due = new Date(payload.depositDueAt);
+    if (!Number.isFinite(due.valueOf())) return null;
+    return `${new Date(due.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)}까지`;
+  })();
 
   const html = `
     <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
@@ -360,6 +368,14 @@ export async function sendOrderBankTransferEmail(
                 <p style="margin:0;font-size:12px;color:#64748b;">계좌번호</p>
                 <p style="margin:6px 0 0;font-size:16px;font-weight:800;color:#0f172a;letter-spacing:0.01em;">${escapeHtml(APP_CONFIG.bankAccount)}</p>
               </div>
+              ${payload.depositorName ? `<div>
+                <p style="margin:0;font-size:12px;color:#64748b;">입금자명</p>
+                <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(payload.depositorName)}</p>
+              </div>` : ""}
+              ${depositDueLabel ? `<div>
+                <p style="margin:0;font-size:12px;color:#64748b;">입금 예정일</p>
+                <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(depositDueLabel)}</p>
+              </div>` : ""}
             </div>
           </div>
           <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">

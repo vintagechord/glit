@@ -259,6 +259,26 @@ export async function POST(request: Request) {
   );
 
   const admin = createAdminClient();
+  // A member who presents the guest tokens kept by this browser adopts the
+  // drafts written before login. Only unpaid, unordered DRAFT/PRE_REVIEW rows
+  // move; the exact-token rule is enforced by the service-role RPC.
+  let claimedIds: string[] = [];
+  const presentedGuestTokens = Array.from(
+    new Set([...guestTokens, ...(parsed.data.guestToken ? [parsed.data.guestToken] : [])]),
+  );
+  if (user?.id && presentedGuestTokens.length > 0) {
+    const { data: claimedRows, error: claimError } = await admin.rpc(
+      "claim_guest_draft_submissions",
+      { p_user_id: user.id, p_guest_tokens: presentedGuestTokens },
+    );
+    if (claimError) {
+      console.warn("[Drafts] guest draft claim failed", { code: claimError.code, message: claimError.message });
+    } else {
+      claimedIds = ((claimedRows ?? []) as Array<{ submission_id?: string | null }>)
+        .map((row) => String(row.submission_id ?? ""))
+        .filter(Boolean);
+    }
+  }
   let selectClause =
     parsed.data.type === "ALBUM" ? selectAlbumColumns : selectMvColumns;
   let submissionResult: {
@@ -394,7 +414,7 @@ export async function POST(request: Request) {
     .map((row) => String(row.id ?? ""))
     .filter(Boolean);
   if (submissionIds.length === 0) {
-    return NextResponse.json({ ok: true, drafts: [] });
+    return NextResponse.json({ ok: true, drafts: [], claimedIds });
   }
 
   const drafts = submissions ?? [];

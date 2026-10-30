@@ -13,6 +13,7 @@ import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
   sendOrderBankTransferEmail,
   sendSubmissionReceiptEmail,
+  sendSubmissionUpdateEmail,
 } from "@/lib/email";
 import { ensureArtistByName } from "@/lib/artist";
 import { APP_CONFIG } from "@/lib/config";
@@ -356,6 +357,45 @@ const recordEmailDeliveryIssue = async ({
       label,
       skipped,
       error,
+    });
+  }
+};
+
+/** A guest's cart entry lives only in this browser's storage. Send the
+ * lookup link once when the application first lands in the cart so the
+ * applicant can return from another device or after clearing the browser. */
+const sendGuestCartSavedEmail = async (input: {
+  submissionId: string;
+  guestToken: string | undefined;
+  recipient: string;
+  title: string;
+  artist: string | null;
+  kind: "ALBUM" | "MV";
+}) => {
+  const recipient = input.recipient.trim().toLowerCase();
+  if (!input.guestToken || input.guestToken.length < 8 || !recipient) return;
+  const baseUrl = getBaseUrl();
+  try {
+    const result = await sendSubmissionUpdateEmail({
+      email: recipient,
+      title: input.title,
+      artist: input.artist,
+      kind: input.kind,
+      headline: "신청서가 장바구니에 보관되었습니다.",
+      summary: "비회원 신청서는 조회 코드로 확인합니다. 아래 링크에서 신청서를 다시 열고 결제를 진행할 수 있습니다. 브라우저를 닫거나 다른 기기에서 접속할 때도 같은 링크를 사용해주세요.",
+      subject: "[onside] 신청서 보관 및 조회 코드 안내",
+      link: buildUrl(`/track/${encodeURIComponent(input.guestToken)}`, baseUrl),
+      idempotencyKey: `cart-saved:${input.submissionId}:${recipient}`,
+      submissionId: input.submissionId,
+      guestToken: input.guestToken,
+    });
+    if (!result.ok && !result.skipped) {
+      console.warn("[Submission] guest cart-saved email not accepted", { submissionId: input.submissionId, message: result.message });
+    }
+  } catch (error) {
+    console.warn("[Submission] guest cart-saved email failed", {
+      submissionId: input.submissionId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
     });
   }
 };
@@ -1438,6 +1478,16 @@ export async function saveAlbumSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
+  if (parsed.data.status === "SUBMITTED" && deferPayment && isGuest && !wasPreviouslySubmitted) {
+    await sendGuestCartSavedEmail({
+      submissionId: parsed.data.submissionId,
+      guestToken: parsed.data.guestToken ?? undefined,
+      recipient: guestEmailValue || applicantEmailValue,
+      title: titleValue || (isOneClick ? "발매된 음반 · URL 접수" : "제목 미입력"),
+      artist: artistNameValue || null,
+      kind: "ALBUM",
+    });
+  }
   if (parsed.data.status === "SUBMITTED" && !deferPayment && !wasPreviouslySubmitted) {
     const notificationTitle =
       titleValue || (isOneClick ? "발매된 음반 · URL 접수" : "제목 미입력");
@@ -2033,6 +2083,16 @@ export async function saveMvSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
+  if (parsed.data.status === "SUBMITTED" && deferPayment && isGuest && !wasPreviouslySubmitted) {
+    await sendGuestCartSavedEmail({
+      submissionId: parsed.data.submissionId,
+      guestToken: parsed.data.guestToken ?? undefined,
+      recipient: guestEmailValue || applicantEmailValue,
+      title: titleValue || "제목 미입력",
+      artist: artistNameValue || null,
+      kind: "MV",
+    });
+  }
   if (parsed.data.status === "SUBMITTED" && !deferPayment && !wasPreviouslySubmitted) {
     const recipientEmails = collectRecipientEmails(
       applicantEmailValue,
