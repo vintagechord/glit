@@ -10,7 +10,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        // The application entry pages are public and listed in the sitemap;
+        // the more specific Allow wins over the /dashboard/ Disallow.
+        allow: ["/", "/dashboard/new", "/en/dashboard/new"],
         disallow: [
           "/admin", "/api/", "/auth/", "/dashboard/", "/mypage/", "/pay/", "/dev/",
           "/track/", "/submissions/", "/complete-signup", "/confirm-email", "/reset-password",
