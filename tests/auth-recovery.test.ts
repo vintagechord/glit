@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loginSchema, signupSchema, passwordUpdateSchema, toFieldErrors } from "../src/features/auth/validation";
+import { loginSchema, signupSchema, passwordUpdateSchema, getLoginSchema, getSignupSchema, getPasswordUpdateSchema, toFieldErrors } from "../src/features/auth/validation";
 import { isAuthConnectionError, mapAuthError } from "../src/features/auth/errors";
 
 const signup = { email: "user@example.com", password: "safe-pass-123", confirmPassword: "safe-pass-123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" };
@@ -22,6 +22,47 @@ test("Korean signup validation covers short/missing passwords, bad emails and ag
         assert.doesNotMatch(message, /Too small|expected|Invalid input/);
       }
     }
+  }
+});
+
+test("English schemas report the same failures without Korean text and leave the Korean defaults untouched", () => {
+  const english = getSignupSchema(true).safeParse({ ...signup, password: "short", confirmPassword: "mismatch", email: "invalid", agreeAge: null });
+  assert.equal(english.success, false);
+  if (!english.success) {
+    const errors = toFieldErrors(english.error.flatten().fieldErrors);
+    assert.deepEqual(Object.keys(errors).sort(), ["agreeAge", "email", "password"]);
+    for (const message of Object.values(errors)) {
+      assert.doesNotMatch(message, /[가-힣]/);
+      assert.doesNotMatch(message, /Too small|expected|Invalid input/);
+    }
+    assert.equal(errors.email, "Enter a valid email address.");
+    assert.equal(errors.agreeAge, "Please accept the required agreements.");
+  }
+  const mismatch = getPasswordUpdateSchema(true).safeParse({ newPassword: "safe-pass-123", confirmPassword: "other-pass-123" });
+  assert.equal(mismatch.success, false);
+  if (!mismatch.success) assert.equal(toFieldErrors(mismatch.error.flatten().fieldErrors).confirmPassword, "The passwords do not match.");
+  assert.equal(getSignupSchema(), signupSchema);
+  assert.equal(getLoginSchema(false), loginSchema);
+  const korean = loginSchema.safeParse({ email: signup.email, password: "" });
+  if (!korean.success) assert.equal(toFieldErrors(korean.error.flatten().fieldErrors).password, "비밀번호를 입력해주세요.");
+});
+
+test("English error mapping mirrors every Korean branch", () => {
+  for (const [error, operation, korean, english] of [
+    [new TypeError("fetch failed"), "login", /인증 서버에 연결/, /could not connect to the authentication service/],
+    [{ code: "invalid_credentials" }, "login", /이메일 또는 비밀번호/, /Check your email or password/],
+    [{ code: "email_not_confirmed" }, "login", /이메일 인증/, /Verify your email before logging in/],
+    [{ status: 429 }, "reset", /요청이 너무 많/, /Too many requests/],
+    [{ code: "over_email_send_rate_limit", message: "email rate limit exceeded" }, "reset", /전송 한도/, /sending limit/],
+    [{ code: "email_exists" }, "signup", /이미 가입된/, /already registered/],
+    [{ code: "same_password" }, "update", /현재 비밀번호와 다른/, /differs from your current password/],
+    [{ code: "weak_password" }, "update", /너무 단순한/, /too simple/],
+    [{ message: "secret raw provider payload" }, "signup", /회원가입을 완료할 수 없습니다/, /could not complete your sign-up/],
+  ] as const) {
+    assert.match(mapAuthError(error, operation), korean);
+    const mapped = mapAuthError(error, operation, true);
+    assert.match(mapped, english);
+    assert.doesNotMatch(mapped, /[가-힣]|secret|raw|provider|fetch/);
   }
 });
 

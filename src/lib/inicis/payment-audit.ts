@@ -59,6 +59,21 @@ const allowedKeys = new Set([
   "skipped",
   "at",
   "closecallback",
+  // INIpayMobile reconciliation fields (never card numbers or buyer identity).
+  "channel",
+  "pstatus",
+  "prmesg1",
+  "poid",
+  "pmid",
+  "ptype",
+  "pauthdt",
+  "pauthno",
+  "pfncd1",
+  "pfnnm",
+  "idcname",
+  "staleclaim",
+  "expiredat",
+  "claimedat",
 ]);
 
 const scrubValue = (value: unknown, depth: number): unknown => {

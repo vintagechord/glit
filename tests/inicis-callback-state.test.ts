@@ -57,7 +57,7 @@ test("submission and karaoke STDPay requests send their stored close state as me
   assert.match(stdPay, /\.\.\.\(merchantData \? \{ merchantData \} : \{\}\)/);
   assert.match(
     submissionPayment,
-    /const closeState = randomUUID\(\)[\s\S]*buildStdPayRequest\(\{[\s\S]*merchantData: closeState[\s\S]*p_raw_response: \{ paymentGroup, closeState \}/,
+    /const closeState = randomUUID\(\)[\s\S]*buildStdPayRequest\(\{[\s\S]*merchantData: closeState[\s\S]*p_raw_response: \{ paymentGroup, closeState, channel \}/,
   );
   assert.match(
     karaokePayment,

@@ -15,7 +15,7 @@ type RawOrder = {
   id: string; user_id: string | null; payment_method: SubmissionOrder["paymentMethod"];
   status: SubmissionOrderStatus; amount_krw: number | null; amount: number | null;
   currency: string; source: string; note: string | null; created_at: string; updated_at: string;
-  paid_at: string | null; returned_at: string | null; items: RawItem[];
+  paid_at: string | null; returned_at: string | null; depositor_name?: string | null; deposit_due_at?: string | null; items: RawItem[];
   payments: { status: string; result_code: string | null } | Array<{ status: string; result_code: string | null }> | null;
 };
 type Parent = {
@@ -24,7 +24,7 @@ type Parent = {
   user_deleted_at: string | null; reviews: Array<{ status: string }>;
 };
 
-const orderSelect = "id,user_id,payment_method,status,amount_krw,amount,currency,source,note,created_at,updated_at,paid_at,returned_at,items:submission_order_items(id,submission_id,submission_ref,type,title,artist_name,package_name,amount_krw,amount,is_oneclick,guest_token_hash),payments:submission_payments!checkout_order_id(status,result_code)";
+const orderSelect = "id,user_id,payment_method,status,amount_krw,amount,currency,source,note,created_at,updated_at,paid_at,returned_at,depositor_name,deposit_due_at,items:submission_order_items(id,submission_id,submission_ref,type,title,artist_name,package_name,amount_krw,amount,is_oneclick,guest_token_hash),payments:submission_payments!checkout_order_id(status,result_code)";
 const pageSize = 30;
 const returnableStatuses = new Set(["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED"]);
 const finiteAmount = (value: number | null) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
@@ -78,6 +78,7 @@ function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Paren
     currency: order.currency, source: order.source, note: order.note,
     createdAt: order.created_at, updatedAt: order.updated_at, paidAt: order.paid_at,
     returnedAt: order.returned_at, canReturnToCart: Boolean(canReturnToCart),
+    depositorName: order.depositor_name ?? null, depositDueAt: order.deposit_due_at ?? null,
     items: order.items.map(item => ({
       id: item.id, submissionId: item.submission_id, submissionRef: item.submission_ref,
       type: item.type ?? "REVIEW", title: item.title, artistName: item.artist_name, packageName: item.package_name,

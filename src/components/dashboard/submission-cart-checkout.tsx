@@ -36,8 +36,16 @@ import {
   expandSubmissionCartGroupIds,
   getSubmissionCartGroupKey,
 } from "@/lib/submission-cart-group";
-import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
+import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_REDIRECT_MESSAGE, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 import type { SubmissionCartItem } from "@/lib/submission-cart";
+import {
+  BANK_DEPOSITOR_NAME_MAX,
+  getBankDepositDateRange,
+  isValidDepositorName,
+  normalizeDepositorName,
+  parseDepositDueAt,
+} from "@/lib/bank-transfer-details";
+import { GuestCartRecoveryNotice } from "@/features/submissions/guest-cart-recovery-notice";
 
 type CartItem = {
   id: string;
@@ -135,12 +143,16 @@ const normalizeInicisStatus = (type: string) => {
 export function SubmissionCartCheckout({
   userId,
   initialItems,
+  mobileCardEnabled = true,
 }: {
   userId: string | null;
   initialItems: SubmissionCartItem[];
+  /** False until the INIpayMobile hash key is configured on the server. */
+  mobileCardEnabled?: boolean;
 }) {
   const router = useRouter();
   const isMobileDevice = React.useSyncExternalStore(subscribeToInicisDevice, getInicisMobileBrowser, getInicisServerDevice);
+  const mobileCardBlocked = isMobileDevice && !mobileCardEnabled;
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -183,8 +195,11 @@ export function SubmissionCartCheckout({
   const [selectedMethod, setSelectedMethod] =
     React.useState<PaymentMethod>("CARD");
   React.useEffect(() => {
-    if (isMobileDevice) setSelectedMethod("BANK");
-  }, [isMobileDevice]);
+    if (mobileCardBlocked) setSelectedMethod("BANK");
+  }, [mobileCardBlocked]);
+  const [depositorName, setDepositorName] = React.useState("");
+  const [depositDate, setDepositDate] = React.useState(() => getBankDepositDateRange().suggested);
+  const depositRange = React.useMemo(() => getBankDepositDateRange(), []);
   const [isOpening, setIsOpening] = React.useState(false);
   const [paymentWindowOpen, setPaymentWindowOpen] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -577,6 +592,8 @@ export function SubmissionCartCheckout({
       body: JSON.stringify({
         submissionIds: orderedItems.map((item) => item.id),
         guestTokensBySubmissionId: getGuestTokensForItems(orderedItems),
+        depositorName: normalizeDepositorName(depositorName),
+        depositDate,
       }),
     });
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -617,6 +634,19 @@ export function SubmissionCartCheckout({
     setNotice(null);
 
     if (selectedMethod === "BANK") {
+      const normalizedDepositor = normalizeDepositorName(depositorName);
+      if (!isValidDepositorName(normalizedDepositor)) {
+        checkoutItemsRef.current = [];
+        setIsOpening(false);
+        setNotice({ type: "error", message: "입금자명을 입력해주세요. 실제 송금할 때 표시되는 이름과 같아야 입금 확인이 빠릅니다." });
+        return;
+      }
+      if (!parseDepositDueAt(depositDate)) {
+        checkoutItemsRef.current = [];
+        setIsOpening(false);
+        setNotice({ type: "error", message: `입금 예정일은 오늘부터 ${depositRange.max}까지 선택할 수 있습니다.` });
+        return;
+      }
       try {
         await handleBankTransfer(orderedItems);
       } catch (error) {
@@ -668,6 +698,15 @@ export function SubmissionCartCheckout({
       removeGuestSubmissionCartEntries(orderedItems.map((item) => item.id));
       window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
       setPaymentWindowOpen(true);
+    } else {
+      // The mobile gateway form has been submitted; this page is leaving. If
+      // the navigation is blocked, release the overlay with a way forward.
+      removeGuestSubmissionCartEntries(orderedItems.map((item) => item.id));
+      window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
+      window.setTimeout(() => {
+        setIsOpening(false);
+        setNotice({ type: "info", message: "결제 페이지로 이동하지 못했다면 주문내역에서 결제하기를 다시 눌러주세요." });
+      }, 12_000);
     }
     setNotice(null);
   };
@@ -761,6 +800,13 @@ export function SubmissionCartCheckout({
         />
       ) : null}
       <div className="min-w-0 space-y-4">
+        {!isPaymentStep && !userId && items.some((item) => item.guestToken) ? (
+          <GuestCartRecoveryNotice
+            variant="cart"
+            localePrefix={localePrefix}
+            entries={items.flatMap((item) => item.guestToken ? [{ submissionId: item.id, guestToken: item.guestToken }] : [])}
+          />
+        ) : null}
         {isPaymentStep ? <div><h2 className="text-lg font-black">결제할 신청서</h2><p className="mt-1 text-sm text-muted-foreground">신청 내용과 금액을 확인한 뒤 결제 수단을 선택해주세요.</p></div> : (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] px-3 py-2 text-xs font-black text-foreground shadow-[2px_2px_0_var(--bauhaus-shadow)]">
@@ -905,7 +951,7 @@ export function SubmissionCartCheckout({
           <button
             type="button"
             onClick={() => setSelectedMethod("CARD")}
-            disabled={isOpening || isDeleting || isMobileDevice}
+            disabled={isOpening || isDeleting || mobileCardBlocked}
             aria-pressed={selectedMethod === "CARD"}
             className={`flex min-h-12 min-w-0 items-center gap-3 rounded-[8px] border-2 px-3 py-2 text-left text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
               selectedMethod === "CARD"
@@ -914,7 +960,7 @@ export function SubmissionCartCheckout({
             }`}
           >
             <CreditCard className="shrink-0" size={17} strokeWidth={2.6} />
-            <span>{isMobileDevice ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
+            <span>{mobileCardBlocked ? "카드 결제 · PC에서 이용" : "카드 결제"}</span>
           </button>
           <button
             type="button"
@@ -931,7 +977,39 @@ export function SubmissionCartCheckout({
             <span>무통장 입금</span>
           </button>
         </div> : null}
-        {isPaymentStep && isMobileDevice ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
+        {isPaymentStep && isMobileDevice ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{mobileCardBlocked ? INICIS_MOBILE_UNAVAILABLE_MESSAGE : INICIS_MOBILE_REDIRECT_MESSAGE}</p> : null}
+        {isPaymentStep && selectedMethod === "BANK" ? (
+          <div className="mt-4 grid gap-3 rounded-[8px] border-2 border-[var(--bauhaus-blue)] bg-[var(--background)] p-3">
+            <label className="grid gap-1 text-xs font-black text-foreground">
+              입금자명
+              <input
+                type="text"
+                name="depositorName"
+                value={depositorName}
+                maxLength={BANK_DEPOSITOR_NAME_MAX}
+                autoComplete="name"
+                placeholder="송금 시 표시되는 이름"
+                onChange={(event) => setDepositorName(event.target.value)}
+                disabled={isOpening || isDeleting}
+                className="min-h-11 rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-white px-3 text-sm font-semibold text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-[var(--bauhaus-blue)]"
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-black text-foreground">
+              입금 예정일
+              <input
+                type="date"
+                name="depositDate"
+                value={depositDate}
+                min={depositRange.min}
+                max={depositRange.max}
+                onChange={(event) => setDepositDate(event.target.value)}
+                disabled={isOpening || isDeleting}
+                className="min-h-11 rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-white px-3 text-sm font-semibold text-[#111111] outline-none focus-visible:ring-2 focus-visible:ring-[var(--bauhaus-blue)]"
+              />
+            </label>
+            <p className="text-[11px] leading-5 text-muted-foreground">입금자명과 입금 예정일은 입금 확인에 사용합니다. 예정일이 지나도 신청서는 보관되며, 주문내역에서 다시 결제할 수 있습니다.</p>
+          </div>
+        ) : null}
         <div className="mt-4 space-y-3 text-sm font-semibold text-foreground">
           <div className="flex items-center justify-between gap-3">
             <span>선택</span>

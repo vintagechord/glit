@@ -42,6 +42,7 @@ export function PasswordRecoveryForm({ nextPath }: { nextPath?: string | null })
       <input type="hidden" name="token_hash" value={token} />
       <input type="hidden" name="type" value="recovery" />
       <input type="hidden" name="signature" value={signature} />
+      <input type="hidden" name="locale" value={english ? "en" : "ko"} />
       <p className="text-sm text-muted-foreground">{english ? "Enter your new password, then confirm below. Opening this page does not use your reset link." : "새 비밀번호를 입력한 뒤 변경 버튼을 눌러주세요. 이 페이지를 열기만 해서는 재설정 링크가 사용되지 않습니다."}</p>
       <label htmlFor="reset-new-password" className="block text-sm font-semibold">{english ? "New password" : "새 비밀번호"}</label>
       <PasswordInput id="reset-new-password" name="newPassword" label={english ? "New password" : "새 비밀번호"} english={english} autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} required className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3" />

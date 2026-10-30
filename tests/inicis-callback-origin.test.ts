@@ -40,7 +40,7 @@ async function callbacks() {
     plugins: [{ name: "no-payment-side-effects", setup(plugin) {
       plugin.onResolve({ filter: /(?:inicis\/config|payments\/(?:submission|karaoke)|subscriptions\/service)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
-        if (path.endsWith("/config")) return { loader: "js", contents: `export const getStdPayConfig=()=>({env:'prod',mid:'fixture-mid',signKey:'fixture-only',stdJsUrl:'https://stdpay.inicis.com/stdjs/INIStdPay.js'});export const getBillingConfig=()=>({mid:'fixture-mid'});` };
+        if (path.endsWith("/config")) return { loader: "js", contents: `export const getStdPayConfig=()=>({env:'prod',mid:'fixture-mid',signKey:'fixture-only',stdJsUrl:'https://stdpay.inicis.com/stdjs/INIStdPay.js'});export const getBillingConfig=()=>({mid:'fixture-mid'});export const getInicisMode=()=> 'prod';export const getInicisMobileHashKey=()=>null;export const isInicisMobileCardConfigured=()=>false;export const getInicisMobileRequestUrl=()=> 'https://mobile.inicis.com/smart/payment/';` };
         const exports = path.endsWith("/submission") ? ["getPaymentByOrderId", "markPaymentFailure", "markPaymentSuccess"]
           : path.endsWith("/karaoke") ? ["getKaraokePaymentByOrderId", "markKaraokePaymentFailure", "markKaraokePaymentSuccess"]
             : ["claimSubscriptionBillingCallback", "failSubscriptionBillingCallback", "finalizeSubscriptionBillingCallback", "recordSubscriptionBillingUncertain", "recordSubscriptionBillKeyForCallback"];

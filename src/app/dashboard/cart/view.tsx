@@ -7,6 +7,7 @@ import {
 import { SubmissionCartCheckout } from "@/components/dashboard/submission-cart-checkout";
 
 import { getSubmissionCartItems } from "@/lib/submission-cart";
+import { isInicisMobileCardConfigured } from "@/lib/inicis/config";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -36,7 +37,11 @@ export async function SubmissionCartPageView(config?: ShellConfig) {
       tabs={config?.tabs ?? defaultDashboardTabs}
       contextLabel={config?.contextLabel ?? "마이페이지"}
     >
-      <SubmissionCartCheckout userId={user?.id ?? null} initialItems={items} />
+      <SubmissionCartCheckout
+        userId={user?.id ?? null}
+        initialItems={items}
+        mobileCardEnabled={isInicisMobileCardConfigured()}
+      />
     </DashboardShell>
   );
 }

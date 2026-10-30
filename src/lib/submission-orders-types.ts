@@ -34,6 +34,8 @@ export type SubmissionOrder = {
   updatedAt: string;
   paidAt: string | null;
   returnedAt: string | null;
+  depositorName?: string | null;
+  depositDueAt?: string | null;
   items: SubmissionOrderItem[];
   canReturnToCart: boolean;
 };

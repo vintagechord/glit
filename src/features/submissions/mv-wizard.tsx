@@ -955,9 +955,12 @@ export function MvWizard({
 
   React.useEffect(() => {
     if (!resumeChecked) return;
+    // Visiting the purpose and authoring-method steps must not create a server
+    // row; the draft is reserved when the application form itself opens.
+    if (step < 3) return;
     if (submissionIdRef.current || isPreparingDraft) return;
     void createDraft();
-  }, [createDraft, isPreparingDraft, resumeChecked]);
+  }, [createDraft, isPreparingDraft, resumeChecked, step]);
 
   const guestToken = guestTokenRef.current;
   const shouldShowGuestLookup = isGuest || Boolean(completionGuestToken);
@@ -2236,28 +2239,54 @@ export function MvWizard({
       return;
     }
     let cancelled = false;
+    // Drafts written as a guest in this browser are adopted by the account
+    // after login; otherwise they would stay invisible until logout.
+    const readGuestLeftovers = () => {
+      if (isGuest || typeof window === "undefined") return null;
+      try {
+        const raw = window.localStorage.getItem("onside:draft:mv:guest");
+        const parsedRaw = raw ? JSON.parse(raw) as { id?: string; guestToken?: string } : null;
+        const token = window.localStorage.getItem("onside:guest-token:mv:guest") ?? parsedRaw?.guestToken ?? undefined;
+        if (!token) return null;
+        return { id: parsedRaw?.id, guestToken: token };
+      } catch {
+        return null;
+      }
+    };
+    const clearGuestLeftovers = () => {
+      try {
+        window.localStorage.removeItem("onside:draft:mv:guest");
+        window.localStorage.removeItem("onside:guest-token:mv:guest");
+      } catch {
+        // ignore storage errors
+      }
+    };
     const run = async () => {
       const stored = readDraftStorage();
-      if (!isFromDraftsTab && !stored?.id) {
+      const guestLeftovers = readGuestLeftovers();
+      if (!isFromDraftsTab && !stored?.id && !guestLeftovers) {
         setResumeChecked(true);
         return;
       }
       const storedGuestToken =
         stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
+      const requestedIds = [stored?.id, guestLeftovers?.id].filter((id): id is string => Boolean(id));
       try {
         const res = await fetchWithTimeout("/api/submissions/drafts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "MV",
-            ids: stored?.id ? [stored.id] : undefined,
-            guestToken: isGuest ? storedGuestToken : undefined,
+            ids: requestedIds.length > 0 ? Array.from(new Set(requestedIds)) : undefined,
+            guestToken: isGuest ? storedGuestToken : guestLeftovers?.guestToken,
           }),
         });
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
+          claimedIds?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
+        if (guestLeftovers && res.ok) clearGuestLeftovers();
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);

@@ -6,13 +6,26 @@ import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
-import { getInicisMode, getStdPayConfig } from "@/lib/inicis/config";
+import {
+  getInicisMobileHashKey,
+  getInicisMobileRequestUrl,
+  getInicisMode,
+  getStdPayConfig,
+} from "@/lib/inicis/config";
+import { buildInicisMobileRequest, encodeInicisMobileMerchantData, type InicisMobileRequest } from "@/lib/inicis/mobile";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
+
+export type InicisPaymentChannel = "pc" | "mobile";
 
 export type StdPayInitResult = {
   orderId: string;
-  stdParams: Record<string, string>;
-  stdJsUrl: string;
+  channel: InicisPaymentChannel;
+  /** PC INIStdPay form fields; absent for the mobile channel. */
+  stdParams?: Record<string, string>;
+  stdJsUrl?: string;
+  /** INIpayMobile top-level form; absent for the PC channel. */
+  mobile?: InicisMobileRequest;
+  closeUrl: string;
 };
 
 type SubmissionRecord = {
@@ -223,8 +236,13 @@ export const ensureSubmissionOwner = async (
 export const createSubmissionPaymentOrder = async (
   submissionId: string,
   baseUrl: string,
-  options?: { submissionIds?: string[] },
+  options?: { submissionIds?: string[]; channel?: InicisPaymentChannel; locale?: "ko" | "en" },
 ): Promise<{ error?: string; result?: StdPayInitResult }> => {
+  const channel: InicisPaymentChannel = options?.channel ?? "pc";
+  const mobileHashKey = channel === "mobile" ? getInicisMobileHashKey() : null;
+  if (channel === "mobile" && !mobileHashKey) {
+    return { error: "모바일 카드 결제가 아직 준비되지 않았습니다. 무통장 입금을 선택하거나 PC에서 카드 결제를 이용해주세요." };
+  }
   const submissionIds = normalizeSubmissionIds(
     submissionId,
     options?.submissionIds,
@@ -340,32 +358,59 @@ export const createSubmissionPaymentOrder = async (
   const maskMid = (mid: string) =>
     mid.length <= 4 ? `${mid.slice(0, 2)}**` : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 
-  const returnUrl = new URL("/api/inicis/return", baseUrl).toString();
+  const returnUrl = new URL(
+    channel === "mobile" ? "/api/inicis/mobile/return" : "/api/inicis/return",
+    baseUrl,
+  ).toString();
   const closeUrl = new URL(
     `/api/inicis/close?oid=${encodeURIComponent(orderId)}&state=${encodeURIComponent(closeState)}&cancel=1`,
     baseUrl,
   ).toString();
-  const stdParams = buildStdPayRequest({
-    orderId,
-    amountKrw,
-    productName,
-    buyerName,
-    buyerEmail,
-    buyerTel,
-    returnUrl,
-    closeUrl,
-    merchantData: closeState,
-  }, orderTimestamp);
+  let stdParams: Record<string, string> | undefined;
+  let mobile: InicisMobileRequest | undefined;
+  if (channel === "mobile") {
+    try {
+      mobile = buildInicisMobileRequest({
+        actionUrl: getInicisMobileRequestUrl(),
+        mid: config.mid,
+        hashKey: mobileHashKey as string,
+        orderId,
+        amountKrw,
+        productName,
+        buyerName,
+        buyerEmail,
+        buyerTel,
+        nextUrl: returnUrl,
+        merchantData: encodeInicisMobileMerchantData(orderId, closeState),
+        language: options?.locale ?? "ko",
+      }, orderTimestamp);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "모바일 결제 요청을 준비하지 못했습니다." };
+    }
+  } else {
+    stdParams = buildStdPayRequest({
+      orderId,
+      amountKrw,
+      productName,
+      buyerName,
+      buyerEmail,
+      buyerTel,
+      returnUrl,
+      closeUrl,
+      merchantData: closeState,
+    }, orderTimestamp);
+  }
 
   console.info("[Inicis][STDPay][init]", {
     mode: getInicisMode(),
+    channel,
     mid: maskMid(config.mid),
     orderId,
     amountKrw,
     returnUrl,
-    closeUrlConfigured: Boolean(stdParams.closeUrl),
-    stdJsUrl: config.stdJsUrl,
-    timestamp: stdParams.timestamp,
+    closeUrlConfigured: true,
+    stdJsUrl: channel === "mobile" ? null : config.stdJsUrl,
+    timestamp: orderTimestamp,
     baseUrl,
     guest: Boolean(submission.guest_token),
     submissionCount: submissions.length,
@@ -391,7 +436,7 @@ export const createSubmissionPaymentOrder = async (
       p_order_id: orderId,
       p_amount_krw: amountKrw,
       p_user_id: submission.user_id ?? null,
-      p_raw_response: { paymentGroup, closeState },
+      p_raw_response: { paymentGroup, closeState, channel },
     },
   );
 
@@ -449,7 +494,9 @@ export const createSubmissionPaymentOrder = async (
   }
 
   return {
-    result: { orderId, stdParams, stdJsUrl: config.stdJsUrl },
+    result: channel === "mobile"
+      ? { orderId, channel, mobile, closeUrl }
+      : { orderId, channel, stdParams, stdJsUrl: config.stdJsUrl, closeUrl },
   };
 };
 

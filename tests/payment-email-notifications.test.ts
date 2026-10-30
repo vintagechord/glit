@@ -29,6 +29,7 @@ async function fixture(): Promise<Fixture> {
             function query(table){
               const filters=[];const q={};
               for(const method of ['select','eq','in','is','or']) q[method]=(...args)=>{filters.push({method,args});return q};
+              q.update=(values)=>{calls.push({method:'update',input:{table,values}});const chain={in:()=>chain,eq:()=>chain,then:(resolve,reject)=>Promise.resolve({error:null}).then(resolve,reject)};return chain;};
               const result=()=>{
                 if(table==='submission_payments')return {data:{submission_id:'${submissionId}',status:state.paymentStatus,raw_response:null},error:null};
                 if(table==='profiles')return {data:{phone:null,notification_email:state.notificationEmail},error:null};
@@ -63,7 +64,7 @@ async function fixture(): Promise<Fixture> {
           "@/lib/submission-payment-stations": "export const validateMvPaymentStations=async()=>null;",
           "@/lib/submission-payment-pricing": "export const validateAlbumPaymentPricing=async()=>null;",
           "@/lib/inicis/stdpay": "export const buildStdPayRequest=()=>{throw Error('Unexpected payment init')};",
-          "@/lib/inicis/config": "export const getInicisMode=()=> 'test';export const getStdPayConfig=()=>({});",
+          "@/lib/inicis/config": "export const getInicisMode=()=> 'test';export const getStdPayConfig=()=>({});export const getInicisMobileHashKey=()=>null;export const isInicisMobileCardConfigured=()=>false;export const getInicisMobileRequestUrl=()=> 'https://stgmobile.inicis.com/smart/payment/';",
           "next/cache": "export const revalidatePath=()=>{};",
         };
         return { contents: modules[path], loader: "js" };
@@ -82,7 +83,7 @@ const row = (userId: string | null = memberId): Row => ({
 });
 const bankRequest = (guest = false, ids = [submissionId]) => new Request("https://app.example.invalid/api/cart/bank", {
   method: "POST", headers: { "Content-Type": "application/json", Origin: "https://app.example.invalid" },
-  body: JSON.stringify({ submissionIds: ids, ...(guest ? { guestTokensBySubmissionId: Object.fromEntries(ids.map(id => [id, "legacy-private-guest-token"])) } : {}) }),
+  body: JSON.stringify({ submissionIds: ids, depositorName: "홍길동", depositDate: new Date(Date.now() + 9 * 60 * 60 * 1000 + 3 * 86_400_000).toISOString().slice(0, 10), ...(guest ? { guestTokensBySubmissionId: Object.fromEntries(ids.map(id => [id, "legacy-private-guest-token"])) } : {}) }),
 }) as unknown as NextRequest;
 
 test("payment approval retries email registration with the same key and never repeats Kakao or exposes legacy guest credentials to members", async () => {

@@ -2684,9 +2684,35 @@ export function AlbumWizard({
       return;
     }
     let cancelled = false;
+    // Drafts written as a guest in this browser are adopted by the account
+    // after login; otherwise they would stay invisible until logout.
+    const readGuestLeftovers = () => {
+      if (isGuest || typeof window === "undefined") return null;
+      try {
+        const raw = window.localStorage.getItem("onside:draft:album:guest");
+        const parsedRaw = raw ? JSON.parse(raw) as {
+          ids?: string[]; guestToken?: string; guestTokensBySubmissionId?: Record<string, string>;
+        } : null;
+        const token = window.localStorage.getItem("onside:guest-token:album:guest") ?? parsedRaw?.guestToken ?? undefined;
+        const tokens = { ...(parsedRaw?.guestTokensBySubmissionId ?? {}) };
+        if (!token && Object.keys(tokens).length === 0) return null;
+        return { ids: parsedRaw?.ids ?? [], guestToken: token ?? undefined, guestTokensBySubmissionId: tokens };
+      } catch {
+        return null;
+      }
+    };
+    const clearGuestLeftovers = () => {
+      try {
+        window.localStorage.removeItem("onside:draft:album:guest");
+        window.localStorage.removeItem("onside:guest-token:album:guest");
+      } catch {
+        // ignore storage errors
+      }
+    };
     const run = async () => {
       const stored = readDraftStorage();
-      if (!isFromDraftsTab && (!stored?.ids || stored.ids.length === 0)) {
+      const guestLeftovers = readGuestLeftovers();
+      if (!isFromDraftsTab && (!stored?.ids || stored.ids.length === 0) && !guestLeftovers) {
         setResumeChecked(true);
         return;
       }
@@ -2696,13 +2722,14 @@ export function AlbumWizard({
         undefined;
       const storedGuestTokensBySubmissionId =
         stored?.guestTokensBySubmissionId ?? {};
+      const requestedIds = [...(stored?.ids ?? []), ...(guestLeftovers?.ids ?? [])];
       const payload = {
         type: "ALBUM",
-        ids: stored?.ids,
-        guestToken: isGuest ? storedGuestToken : undefined,
+        ids: requestedIds.length > 0 ? Array.from(new Set(requestedIds)) : undefined,
+        guestToken: isGuest ? storedGuestToken : guestLeftovers?.guestToken,
         guestTokensBySubmissionId: isGuest
           ? storedGuestTokensBySubmissionId
-          : undefined,
+          : guestLeftovers?.guestTokensBySubmissionId,
       };
       try {
         const res = await fetchWithTimeout("/api/submissions/drafts", {
@@ -2712,8 +2739,10 @@ export function AlbumWizard({
         });
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
+          claimedIds?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
+        if (guestLeftovers && res.ok) clearGuestLeftovers();
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);

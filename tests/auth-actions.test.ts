@@ -24,7 +24,7 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       });
     } }],
   });
-  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string; notice?: string; retryAfterSeconds?: number }>;
+  type Action = (_: object, form: FormData) => Promise<{ error?: string; fieldErrors?: Record<string, string>; message?: string; notice?: string; retryAfterSeconds?: number; verificationPending?: boolean }>;
   const bundled = { exports: {} as { state: { error: unknown; throws: boolean; linkData: unknown; emailResult: {ok:boolean;reason?:string;retryAfterSeconds?:number}; limited:boolean; account: {id:string;email:string;email_confirmed_at:string}|null }; calls: { method: string; input?: unknown }[]; loginAction: Action; signupAction: Action; resetPasswordAction: Action } };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
   const auth = bundled.exports;
@@ -40,7 +40,15 @@ test("auth actions validate, map transport failures, preserve safe login redirec
       auth.state.error = new TypeError("fetch failed"); auth.state.throws = throws;
       const state = await auth.loginAction({}, form(signIn));
       assert.match(state.error ?? "", /인증 서버에 연결/); assert.doesNotMatch(state.error ?? "", /fetch/);
+      const english = await auth.loginAction({}, form({ ...signIn, locale: "en" }));
+      assert.match(english.error ?? "", /could not connect to the authentication service/); assert.doesNotMatch(english.error ?? "", /fetch|[가-힣]/);
     }
+    const englishFieldErrors = await auth.loginAction({}, form({ email: "not-an-email", password: "", locale: "en" }));
+    assert.equal(englishFieldErrors.fieldErrors?.email, "Enter a valid email address.");
+    assert.equal(englishFieldErrors.fieldErrors?.password, "Enter your password.");
+    const koreanFieldErrors = await auth.loginAction({}, form({ email: "not-an-email", password: "" }));
+    assert.equal(koreanFieldErrors.fieldErrors?.email, "올바른 이메일 주소를 입력해주세요.");
+    assert.equal(koreanFieldErrors.fieldErrors?.password, "비밀번호를 입력해주세요.");
     auth.state.error = null; auth.state.throws = false;
     for (const [next, expected] of [["/admin/review-docs", "/admin/review-docs"], ["https://evil.test", "/mypage"], ["/login?next=%2Fadmin", "/mypage"], ["/en/login?loop=1", "/mypage"]]) {
       await assert.rejects(auth.loginAction({}, form({ ...signIn, next })), (error: unknown) => (error as { location: string }).location === expected);
@@ -63,7 +71,12 @@ test("auth actions validate, map transport failures, preserve safe login redirec
     assert.equal(duplicate.error, "이미 가입된 이메일입니다.");
     assert.equal(duplicate.notice, "email_already_registered");
     assert.equal(duplicate.message, undefined);
+    assert.equal(duplicate.verificationPending, undefined, "manual mode cannot resend verification mail, so no resend link is offered");
     assert.deepEqual(auth.calls.map(call => call.method), ["signup"], "duplicate manual signup must not send a welcome email");
+    auth.calls.length = 0;
+    const englishDuplicate = await auth.signupAction({}, form({ ...signIn, locale: "en", password: "fixture-password", confirmPassword: "fixture-password", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));
+    assert.equal(englishDuplicate.error, "This email is already registered.");
+    assert.equal(englishDuplicate.notice, "email_already_registered");
     auth.state.error = null;
     auth.calls.length = 0;
     const invalidSignup = await auth.signupAction({}, form({ ...signIn, password: "123", confirmPassword: "123", agreeAge: "on", agreeTerms: "on", agreePrivacy: "on", agreeRefund: "on" }));

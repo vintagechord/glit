@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { isInicisMobileRequest, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
+import { isInicisMobileCardConfigured } from "@/lib/inicis/config";
 
 import { ensureSubmissionOwner, createSubmissionPaymentOrder } from "../../../../../lib/payments/submission";
 import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
@@ -33,6 +34,8 @@ const requestSchema = z
       .record(z.string().uuid(), guestTokenSchema)
       .optional(),
     context: z.string().min(1).max(32),
+    channel: z.enum(["pc", "mobile"]).optional(),
+    locale: z.enum(["ko", "en"]).optional(),
   })
   .strict();
 
@@ -63,12 +66,6 @@ export async function POST(req: NextRequest) {
         status: 429,
         headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
       },
-    );
-  }
-  if (isInicisMobileRequest(req.headers)) {
-    return NextResponse.json(
-      { error: INICIS_MOBILE_UNAVAILABLE_MESSAGE, code: "MOBILE_CARD_UNAVAILABLE" },
-      { status: 409 },
     );
   }
   try {
@@ -113,6 +110,15 @@ export async function POST(req: NextRequest) {
       parsed.data.guestTokensBySubmissionId ?? {};
     const guestTokenEntries = Object.entries(guestTokensBySubmissionId);
     const context = parseInicisContext(parsed.data.context);
+    // INIStdPay is the PC protocol. Mobile browsers use the INIpayMobile
+    // top-level flow, which needs the merchant's mobile hash key.
+    const channel = parsed.data.channel ?? (isInicisMobileRequest(req.headers) ? "mobile" : "pc");
+    if (channel === "mobile" && !isInicisMobileCardConfigured()) {
+      return NextResponse.json(
+        { error: INICIS_MOBILE_UNAVAILABLE_MESSAGE, code: "MOBILE_CARD_UNAVAILABLE" },
+        { status: 409 },
+      );
+    }
 
     if (!context) {
       return NextResponse.json(
@@ -175,7 +181,7 @@ export async function POST(req: NextRequest) {
     const { error, result } = await createSubmissionPaymentOrder(
       submissionId,
       baseUrl,
-      { submissionIds },
+      { submissionIds, channel, locale: parsed.data.locale },
     );
     if (error || !result) {
       console.error("[Inicis][STDPay][init][order-error]", {

@@ -19,6 +19,12 @@ import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
+import {
+  BANK_DEPOSITOR_NAME_MAX,
+  isValidDepositorName,
+  normalizeDepositorName,
+  parseDepositDueAt,
+} from "@/lib/bank-transfer-details";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,6 +32,8 @@ export const runtime = "nodejs";
 const requestSchema = z.object({
   submissionIds: z.array(z.string().uuid()).min(1).max(100),
   guestTokensBySubmissionId: orderGuestTokensSchema.optional(),
+  depositorName: z.string().min(1).max(BANK_DEPOSITOR_NAME_MAX * 2),
+  depositDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 }).strict();
 
 type CartBankSubmission = {
@@ -96,6 +104,15 @@ export async function POST(req: NextRequest) {
       { error: "결제할 신청서를 선택해주세요." },
       { status: 400 },
     );
+  }
+
+  const depositorName = normalizeDepositorName(parsed.data.depositorName);
+  if (!isValidDepositorName(depositorName)) {
+    return NextResponse.json({ error: "입금자명을 확인해주세요." }, { status: 400 });
+  }
+  const depositDueAt = parseDepositDueAt(parsed.data.depositDate);
+  if (!depositDueAt) {
+    return NextResponse.json({ error: "입금 예정일은 오늘부터 2주 이내에서 선택해주세요." }, { status: 400 });
   }
 
   const submissionIds = Array.from(new Set(parsed.data.submissionIds));
@@ -233,6 +250,8 @@ export async function POST(req: NextRequest) {
       {
         p_submission_ids: submissionIds,
         p_user_id: user?.id ?? null,
+        p_depositor_name: depositorName,
+        p_deposit_due_at: depositDueAt.toISOString(),
       },
     );
 
@@ -299,6 +318,14 @@ export async function POST(req: NextRequest) {
       items.data?.length !== submissionIds.length || items.data.some(item => !requested.has(item.submission_ref) || orderBySubmission.get(item.submission_ref) !== item.order_id)) {
     return NextResponse.json({ error: "입금 대기 주문의 신청서 전체를 선택해주세요." }, { status: 409 });
   }
+  if (isExistingBankRequest) {
+    // A re-request for an open bank order may correct the depositor details.
+    // Ownership of every order was verified above.
+    const { error: detailError } = await admin.from("submission_orders")
+      .update({ depositor_name: depositorName, deposit_due_at: depositDueAt.toISOString(), updated_at: new Date().toISOString() })
+      .in("id", orderIds).eq("status", "BANK_PENDING");
+    if (detailError) console.warn("[CartBank] depositor detail update failed", { orderIds, message: detailError.message });
+  }
 
   const baseUrl = getBaseUrl(req);
   const submissionsByOrder = new Map<string, CartBankSubmission[]>();
@@ -357,6 +384,8 @@ export async function POST(req: NextRequest) {
           orderId,
           items,
           totalAmountKrw: orderTotalKrw,
+          depositorName,
+          depositDueAt: depositDueAt.toISOString(),
           link,
           siteLink: buildUrl("/", baseUrl),
         });

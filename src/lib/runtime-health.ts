@@ -1,6 +1,6 @@
 import { APP_CONFIG } from "./config";
 import { getEmailDeliveryConfiguration } from "./email-config";
-import { getInicisMode, getStdPayConfig } from "./inicis/config";
+import { getInicisMode, getStdPayConfig, isInicisMobileCardConfigured } from "./inicis/config";
 import { getKakaoConfiguration } from "./kakao-config";
 import { checkSupabaseConfig } from "./supabase/health";
 
@@ -148,6 +148,15 @@ const checkInicis = (): RuntimeHealthCheck => {
   return { name: `inicis ${mode} env`, ok: true, severity: "error" };
 };
 
+// Mobile card payment needs the merchant's INIpayMobile hash key. Without it
+// the checkout keeps offering bank transfer on phones, so this is a warning.
+const checkInicisMobile = (): RuntimeHealthCheck => ({
+  name: `inicis ${getInicisMode()} mobile env`,
+  ok: isInicisMobileCardConfigured(),
+  severity: "warning",
+  detail: isInicisMobileCardConfigured() ? undefined : "missing: INICIS_MOBILE_HASH_KEY (mobile card payment disabled)",
+});
+
 export const runRuntimeConfigChecks = (
   options: RuntimeHealthOptions = {},
 ): RuntimeHealthCheck[] => {
@@ -171,6 +180,7 @@ export const runRuntimeConfigChecks = (
       "b2",
     ),
     checkInicis(),
+    checkInicisMobile(),
     checkConfiguredValues(
       [
         ["supportEmail", APP_CONFIG.supportEmail],
