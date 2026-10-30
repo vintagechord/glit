@@ -1,0 +1,39 @@
+{
+  "version": "2.3.3",
+  "build": "8",
+  "preserved": {
+    "connectionKeysUnchanged": true,
+    "allCasesPreserved": true,
+    "allExistingFilesPreserved": true,
+    "fileCount": 5
+  },
+  "installedSourceHashes": {
+    "server.mjs": "a0d79dba59ffcf56d710ec84612548f521c82fcf94495e6bbc654d053181b58b",
+    "documents.mjs": "f1574c305cd96fd3a73246a9a0b2cda98d5ff0941f2469b556aa9ce0ae8b3ced",
+    "manual-import.mjs": "5a8d35f736da70cd70089c6e3c169f793ea8c546fdcf3edf679d8c159db8a5c2",
+    "manual-document-parser.mjs": "70194e4229ed9b6068623cc9b2269e499b9dcaaafacb8439c90d839213934351",
+    "screening.mjs": "52d478cedd1eb955cbfd76dd3b8e91747c5027697c6f287f441824f7b58a0e84",
+    "public/index.html": "4d21644ccf7a04ba6392c79a925adf8af5ba143ae32ccafd280ef04e73b05866"
+  },
+  "verification": {
+    "signature": "codesign --verify --deep --strict passed",
+    "runtimeHealth": {
+      "app": "onside-review-desk",
+      "version": "2.3.3"
+    },
+    "nativeUiVersion": "v2.3.3",
+    "stateBackupCreated": true,
+    "previousApplicationRetained": true
+  },
+  "validation": {
+    "regression": {
+      "passed": 191,
+      "skipped": 5,
+      "failed": 0
+    },
+    "manualUiChecks": 24,
+    "renderedDocuments": 21,
+    "renderedPages": 44,
+    "realCaseDataChangedByVerification": false
+  }
+}

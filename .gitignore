@@ -49,3 +49,6 @@ services/spellcheck/__pycache__/
 /tmp/review-docs-*/
 services/review-docs/.venv/
 services/review-docs/__pycache__/
+
+# Supabase CLI link metadata (organization identifiers); kept local only.
+supabase/.temp/linked-project.json

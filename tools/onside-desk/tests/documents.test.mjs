@@ -7,7 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import PizZip from 'pizzip';
 import {readCompoundStreams,OLE_SIGNATURE} from '../manual-ole.mjs';
-import { generateDocuments,safeDocumentName,mediaDeliveryDescription } from '../documents.mjs';
+import { generateDocuments,safeDocumentName,mediaDeliveryDescription,renderDocumentTemplate } from '../documents.mjs';
 const output=()=>fs.mkdtemp(path.join(os.tmpdir(),'onside-doc-test-'));
 const base={id:'fixture-only',type:'ALBUM',title:'별 & 달',artist_name:'가수 <이름>',release_date:'2026-10-25',genre:'발라드',production_company:'실제 회사',distributor:'유통사'};
 const tracks=[{track_no:1,track_title:'밤 / 낮',is_title:true,lyrics:'첫 줄\n두 번째 & <세 번째>\n\n반복\n반복',composer:'작곡가',lyricist:'작사가',arranger:'편곡가'},{track_no:2,track_title:'밤 / 낮 (Inst.)',composer:'작곡가'},{track_no:3,track_title:'Mr. Sunshine',lyrics:''}];
@@ -41,12 +41,12 @@ test('album packet preserves original lyrics, title roles, source broadcaster ma
 test('MV types produce exactly one genuine legacy DOC and one safe copy-paste HTML', {skip:process.platform!=='darwin'},async()=>{
  for(const type of ['MV_DISTRIBUTION','MV_BROADCAST']) {
   const dir=await output();try {
-   const result=await generateDocuments({submission:{...base,type,mv_song_title:'영상 제목',mv_lyrics:'하나\n둘',mv_storyline:'</textarea><script>alert(1)</script>',delivery_method:'EMAIL'},outputDir:dir,settings:{pagination:false}});
+   const result=await generateDocuments({submission:{...base,type,mv_song_title:'영상 제목',mv_lyrics:'하나\r둘\u2028셋 🎵',mv_storyline:'</textarea><script>alert(1)</script>',delivery_method:'EMAIL'},outputDir:dir,settings:{pagination:false}});
    assert.equal(result.summary.docxCount,0);assert.equal(result.summary.docCount,1);assert.equal(result.summary.trackCount,0);assert.equal(result.artifacts.length,2);
    assert.equal((await fs.readdir(dir)).length,2);
    const lyrics=result.artifacts.find(a=>a.type==='doc');assert.equal(lyrics.name,'가사_가수 이름_영상 제목.doc');
    const bytes=await fs.readFile(lyrics.path);assert.ok(bytes.subarray(0,8).equals(OLE_SIGNATURE));assert.ok(readCompoundStreams(bytes).has('WordDocument'));
-   const content=await docText(lyrics.path);assert.match(content,/가수 <이름>/);assert.match(content,/영상 제목/);assert.match(content,/하나\n둘/);
+   const content=await docText(lyrics.path);assert.match(content,/가수 <이름>/);assert.match(content,/영상 제목/);assert.match(content,/하나\n둘\n셋 🎵/);
    const page=await fs.readFile(result.artifacts.find(a=>a.type==='html').path,'utf8');assert.ok(page.includes('&lt;/textarea&gt;&lt;script&gt;'));assert.doesNotMatch(page,/<script>/);
    assert.match(page,/이메일 전달 선택/);assert.match(page,/실제 이메일 수신/);
   } finally {await fs.rm(dir,{recursive:true,force:true});}
@@ -97,4 +97,57 @@ test('manual documents honor intentionally cleared lyrics instead of restoring r
    if(type==='ALBUM') assert.match(content,/가사 없음 \/ Instrumental/);else assert.match(content,/가사 입력 필요/);
   } finally {await fs.rm(dir,{recursive:true,force:true});}
  }
+});
+
+test('all album path components and ZIP entries fit portable byte limits without shortening document text',async()=>{
+ const dir=await output();try {
+  const title='한글앨범제목'.repeat(25),artist='아티스트이름'.repeat(20),trackTitle='긴곡명🎵'.repeat(30);
+  const result=await generateDocuments({submission:{...base,title,artist_name:artist},tracks:[{...tracks[0],track_title:trackTitle},{...tracks[0],track_title:trackTitle,track_no:1}],outputDir:dir,settings:{pagination:false}});
+  for(const artifact of result.artifacts) for(const component of artifact.name.split('/')) assert.ok(Buffer.byteLength(component)<=255,component);
+  assert.equal(new Set(result.artifacts.map(a=>a.name)).size,result.artifacts.length);
+  const request=await xml(result.artifacts.find(a=>a.name.includes('가요심의요청서_')).path);
+  assert.ok(request.includes(title));assert.ok(request.includes(artist));assert.ok(request.includes(trackTitle));
+  for(const artifact of result.artifacts.filter(a=>a.type==='zip')) {
+   const zip=new PizZip(await fs.readFile(artifact.path),{checkCRC32:true});
+   for(const name of Object.keys(zip.files)) for(const component of name.split('/')) assert.ok(Buffer.byteLength(component)<=255,component);
+  }
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('Word and legacy line separators become actual DOCX line breaks and invalid Unicode cannot corrupt XML',async()=>{
+ const template=await fs.readFile(new URL('../templates/lyrics-track.docx',import.meta.url));
+ const lyric='첫 줄\r둘째 줄\r\n셋째 줄\u2028넷째 줄\u2029다섯째 🎵\ud800끝\u0000';
+ const buffer=renderDocumentTemplate({template,templateName:'lyrics-track.docx',data:{track_title:'검수곡',track_title_with_title_mark:'검수곡',manager_name:'검수자',lyrics_with_translation:lyric}});
+ const zip=new PizZip(buffer,{checkCRC32:true});
+ const source=new TextDecoder('utf-8',{fatal:true}).decode(zip.file('word/document.xml').asUint8Array());
+ assert.equal((source.match(/<w:br\/>/g)||[]).length,4);
+ assert.doesNotMatch(source,/[\r\u2028\u2029\u0000]/);assert.match(source,/다섯째 🎵�끝/);
+});
+
+test('damaged XML and missing lyric slots fail before a malformed or empty document is released',async()=>{
+ const template=await fs.readFile(new URL('../templates/lyrics-track.docx',import.meta.url));
+ const missing=new PizZip(template);missing.file('word/document.xml',missing.file('word/document.xml').asText().replaceAll('{lyrics_with_translation}',''));
+ assert.throws(()=>renderDocumentTemplate({template:missing.generate({type:'nodebuffer'}),templateName:'lyrics-track.docx',data:{}}),/필수 입력 위치/);
+ const malformed=new PizZip(template);malformed.file('word/styles.xml',malformed.file('word/styles.xml').asText().replace('</w:styles>','</w:broken>'));
+ assert.throws(()=>renderDocumentTemplate({template:malformed.generate({type:'nodebuffer'}),templateName:'lyrics-track.docx',data:{}}),/XML 구성 검사/);
+ const incomplete=new PizZip(template);incomplete.remove('_rels/.rels');
+ assert.throws(()=>renderDocumentTemplate({template:incomplete.generate({type:'nodebuffer'}),templateName:'lyrics-track.docx',data:{}}),/문서 구성 파일/);
+});
+
+test('template-looking literal lyrics remain data after generation',async()=>{
+ const template=await fs.readFile(new URL('../templates/lyrics-track.docx',import.meta.url));
+ const lyric='첫 줄 {lyrics_with_translation}\n{#tracks} 반복 {/tracks}\n마지막 & <가사>';
+ const buffer=renderDocumentTemplate({template,templateName:'lyrics-track.docx',data:{track_title:'검수곡',track_title_with_title_mark:'검수곡',manager_name:'검수자',lyrics_with_translation:lyric}});
+ const source=new PizZip(buffer).file('word/document.xml').asText();
+ assert.match(source,/첫 줄 \{lyrics_with_translation\}/);assert.match(source,/\{#tracks\} 반복 \{\/tracks\}/);assert.match(source,/마지막 &amp; &lt;가사&gt;/);
+});
+
+test('title-mark normalization is validated against the title actually printed in album lyric templates',async()=>{
+ const dir=await output();try {
+  const result=await generateDocuments({submission:base,tracks:[{...tracks[0],track_title:'노래 (타이틀) (타이틀)',is_title:true}],outputDir:dir,settings:{pagination:false}});
+  for(const artifact of result.artifacts.filter(a=>a.type==='docx'&&/가사전체파일_|\/01_|심의폼_|앨범정보_/.test(a.name))) {
+   const source=await xml(artifact.path);
+   assert.match(source,/노래 \(타이틀\)/);assert.doesNotMatch(source,/노래 \(타이틀\) \(타이틀\)/);assert.match(source,/첫 줄/);
+  }
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

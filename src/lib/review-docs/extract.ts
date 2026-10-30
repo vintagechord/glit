@@ -107,8 +107,10 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
   let track: ReviewTrack | undefined;
   let activeLyrics: "lyrics" | "existingTranslation" | undefined;
   let header: (Field | undefined)[] | undefined;
+  let headerTable: string | undefined;
   let pendingNumber: number | undefined;
   let unused = 0;
+  let auxiliary = false;
   const makeTrack = () => { const t = reviewTrackSchema.parse({ id: randomUUID(), number: pendingNumber || album.tracks.length + 1, sourceIds: [source.id] }); album.tracks.push(t); pendingNumber = undefined; return t; };
   const evidence = (target: ReviewAlbum | ReviewTrack, field: string, value: string, location: string) => target.evidence.push({ sourceId: source.id, field, location, excerpt: value.slice(0, 2000) });
   function assign(field: Field, value: string, location: string) {
@@ -120,10 +122,11 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
     }
     if (field === "trackNumber") { const number = Number.parseInt(value, 10); if (number > 0) pendingNumber = number; return; }
     if (field === "trackTitle") {
-      if (!track || (track.title && track.title !== value)) track = makeTrack();
+      const cleanTitle = value.replace(/\s*[(\[]타이틀[)\]]\s*$/, "");
+      if (!track || (pendingNumber && track.number !== pendingNumber) || (track.title && track.title !== cleanTitle)) track = makeTrack();
       if (pendingNumber) { track.number = pendingNumber; pendingNumber = undefined; }
       const titleMarked = /\s*[(\[]타이틀[)\]]\s*$/.test(value);
-      track.title = value.replace(/\s*[(\[]타이틀[)\]]\s*$/, "");
+      track.title = cleanTitle;
       if (titleMarked) { track.isTitle = true; track.titleConfirmed = true; }
       if (explicitInstrumental(value)) { track.instrumentalConfirmed = true; track.lyricStatus = "instrumental"; }
       evidence(track, "title", value, location); return;
@@ -139,20 +142,36 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
     if (field === "declaredTrackCount") { const count = Number.parseInt(value, 10); if (Number.isFinite(count)) album.declaredTrackCount = count; evidence(album, field, value, location); return; }
     if (field === "releaseDate" || field === "productionDate") value = normalizeReviewDate(value);
     const object = target as unknown as Record<string, unknown>;
+    if (field === "lyrics" || field === "existingTranslation") {
+      // A lyric cell may continue in another row/page. Preserve every segment,
+      // including repeated choruses, instead of keeping only the first label.
+      if (value) object[field] = object[field] ? `${object[field]}\n${value}` : value;
+      evidence(target, field, value, location);
+      if (field === "lyrics" && value) track!.lyricStatus = track!.instrumentalConfirmed ? "instrumental" : "provided";
+      return;
+    }
     if (typeof object[field] === "string" && object[field] && object[field] !== value && value) issues.push({ id: `conflict:${target.id}:${field}:${issues.length}`, code: "FIELD_CONFLICT", severity: "error", albumId: album.id, trackId: target === track ? track?.id : undefined, sourceId: source.id, field, message: `${field} 값이 원문 내에서 충돌합니다. 근거를 비교하고 값을 선택해주세요.` });
     if (!object[field]) object[field] = value;
     evidence(target, field, value, location);
-    if (field === "lyrics" && value) track!.lyricStatus = track!.instrumentalConfirmed ? "instrumental" : "provided";
   }
   for (const b of result.blocks) {
     // Retain the initial OCR pass in source.text for comparison, but do not
     // append its rejected layout to recovered lyrics or create duplicate tracks.
     if (b.kind === "ocrAlternative") continue;
+    // These blocks are still available in source.text. They are separate document
+    // stories, not a continuation of the final song in the main body.
+    if (/^word\/(?:header\d+|footer\d+|footnotes|endnotes)\.xml(?:\/|$)/.test(b.location)) {
+      if (b.text.trim()) auxiliary = true;
+      activeLyrics = undefined; header = undefined; headerTable = undefined;
+      continue;
+    }
     if (b.cells) {
       const values = b.cells.map((c) => c.text.trim());
       const keys = values.map(labelField);
-      if (keys.filter(Boolean).length >= 2 && keys.includes("trackTitle") && !values.some((v, i) => v && !keys[i])) { header = keys; activeLyrics = undefined; continue; }
-      if (header && values.length >= header.length && !keys[0]) {
+      const table = b.location.match(/^(.*)\/(?:row:?|행:)\d+(?:\/.*)?$/)?.[1];
+      if (headerTable && table && headerTable !== table) header = undefined;
+      if (keys.filter(Boolean).length >= 2 && keys.includes("trackTitle") && !values.some((v, i) => v && !keys[i])) { header = keys; headerTable = table; activeLyrics = undefined; continue; }
+      if (header && values.length === header.length && (!keys[0] || !!table && table === headerTable)) {
         // One repeated table row = one track. Never let a row overwrite the prior song's credits.
         track = undefined;
         const numberIndex = header.indexOf("trackNumber");
@@ -163,13 +182,15 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
         activeLyrics = undefined;
         continue;
       }
+      header = undefined;
+      headerTable = undefined;
       if (keys[0] && values.length > 1) {
         for (let i = 0; i < values.length - 1; i++) if (keys[i]) { assign(keys[i]!, values[i+1], `${b.location}/셀:${i+2}`); i++; }
         activeLyrics = undefined;
         continue;
       }
       activeLyrics = undefined;
-    }
+    } else { header = undefined; headerTable = undefined; }
     for (const raw of b.text.split(/\r?\n/)) {
       const line = raw.trim();
       if (/^(?:참고|안내|담당자|연락처|이메일|신청자)\s*[:：]/.test(line)) { activeLyrics = undefined; continue; }
@@ -199,6 +220,7 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
   if (album.title || album.artistName || album.tracks.length) albums.push(album);
   if (!albums.length) issues.push({ id: `unstructured:${source.id}`, code: "STRUCTURE_REQUIRED", severity: "error", sourceId: source.id, message: "본문은 추출했지만 곡 정보를 확정하지 못했습니다. 원문을 보며 아티스트·곡명·가사를 입력해주세요." });
   if (unused) issues.push({ id: `unmapped:${source.id}`, code: "UNMAPPED_CONTENT", severity: "warning", sourceId: source.id, message: `${unused}개 원문 행이 표준 항목에 대응되지 않았습니다. 누락된 가사·트랙이 없는지 원문과 비교해주세요.` });
+  if (auxiliary) issues.push({ id: `auxiliary:${source.id}`, code: "AUXILIARY_CONTENT", severity: "warning", sourceId: source.id, message: "머리글·바닥글·각주는 원문 근거에 보존했습니다. 가사에 자동으로 합치지 않았으므로 필요한 곡 정보가 있는지 확인해주세요." });
   if (result.warnings.some((s) => /OCR|다단|RTF|구형 Word|HWP|이미지/.test(s))) issues.push({ id: `layout:${source.id}`, code: "EXTRACTION_REVIEW", severity: "error", sourceId: source.id, message: "변환/OCR/배치 읽기 순서의 확인이 필요합니다. 원문과 아티스트·곡명·전체 가사·크레딧을 비교 후 확인해주세요." });
   return { albums, issues };
 }

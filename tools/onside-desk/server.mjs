@@ -45,7 +45,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.3.2' };
+    return { connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.3.3' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -63,7 +63,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (refresh) throw new Error('최신 신청 내용을 확인하지 못했습니다. 인터넷 연결 후 다시 실행하세요. 저장된 자료는 계속 열람할 수 있습니다.');
       }
     }
-    const base = { ...item.detail, source: item.source || 'online', localAttachments: item.attachments || [] };
+    const base = { ...item.detail, source: item.source || 'online', localAttachments: item.attachments || [], warnings: [...new Set([...(item.detail.warnings || []), ...(item.source === 'manual' ? item.importInfo?.warnings || [] : [])])] };
     const effective = applyOverrides(base, item.local);
     const screening = item.source === 'manual' ? await reviewer(effective) : undefined;
     return { ...effective, sourceSubmission: item.detail.submission, local: item.local, generations: item.generations || [], localAttachments: item.attachments || [], downloads: item.downloads || [], history: item.history || [], fetchedAt: item.fetchedAt, warnings: [...caseWarnings(base, item.local), ...(offlineWarning ? [offlineWarning] : [])], sourceChanged: !!item.sourceChanged,
@@ -80,7 +80,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const dir = path.join(caseDir(id), '기준파일'); await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     try {
       const originalPath = path.join(dir, originalName); await fs.writeFile(originalPath, body, { flag: 'wx', mode: 0o600 });
-      const importInfo = { parserVersion: 3, filename: originalName, format: imported.format, warnings: imported.warnings || [], extractedText: imported.extractedText, importedAt: timestamp, bytes: body.length, sha256: await sha256(originalPath) };
+      const importInfo = { parserVersion: 4, filename: originalName, format: imported.format, warnings: imported.warnings || [], extractedText: imported.extractedText, importedAt: timestamp, bytes: body.length, sha256: await sha256(originalPath) };
       await fs.writeFile(path.join(dir, '추출 원문.txt'), imported.extractedText, { mode: 0o600 });
       const parsed = { source: 'manual', submission, tracks, stations: [], stationReviews: [], files: [], assets: [], warnings: [] };
       store.data.cases[id] = { source: 'manual', submission, detail: parsed, importInfo, local: { stage: 'CHECKING', notes: '', dueDate: '', checklist: {} }, generations: [], downloads: [], attachments: [], history: [], fetchedAt: timestamp };
@@ -313,7 +313,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.3.2' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.3.3' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];

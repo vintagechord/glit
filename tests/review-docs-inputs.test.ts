@@ -100,6 +100,42 @@ test("MV repeated minimal artist-title headings become separate songs with origi
   assert.equal(result.albums[0].tracks.length, 2);
   assert.equal(result.albums[0].tracks[0].lyrics, "첫 가사");
 });
+test("repeated lyric cells preserve continued verses and repeated choruses", () => {
+  const rows = [["앨범명", "앨범"], ["곡명", "첫 곡"], ["가사", "반복 구절"], ["가사", "반복 구절"], ["가사", "마지막 구절"], ["번역가사", "첫 번역"], ["번역가사", "끝 번역"]];
+  const result = structureExtractedFile(source, { format: "docx", warnings: [], blocks: rows.map((values, i) => ({ text: values.join("\t"), location: `본문/1/row:${i+1}`, kind: "tableRow", cells: values.map((text, column) => ({ text, column: column + 1 })) })) }, "album");
+  assert.equal(result.albums[0].tracks[0].lyrics, "반복 구절\n반복 구절\n마지막 구절");
+  assert.equal(result.albums[0].tracks[0].existingTranslation, "첫 번역\n끝 번역");
+});
+test("track headers stay inside their table and title values may equal field labels", () => {
+  const rows = [
+    { table: 1, values: ["곡명", "가사"] },
+    { table: 1, values: ["가사", "원래 가사"] },
+    { table: 2, values: ["담당 연락", "연락 정보"] },
+  ];
+  const result = structureExtractedFile(source, { format: "docx", warnings: [], blocks: rows.map(({ table, values }, i) => ({ text: values.join("\t"), location: `본문/${table}/row:${i+1}`, kind: "tableRow", cells: values.map((text, column) => ({ text, column: column + 1 })) })) }, "album");
+  assert.equal(result.albums[0].tracks.length, 1);
+  assert.equal(result.albums[0].tracks[0].title, "가사");
+  assert.equal(result.albums[0].tracks[0].lyrics, "원래 가사");
+  assert.ok(result.issues.some((issue) => issue.code === "UNMAPPED_CONTENT"));
+});
+test("explicit different track numbers retain songs with identical titles", () => {
+  const lines = ["앨범명: 앨범", "트랙번호: 1", "곡명: 같은 제목 (타이틀)", "곡명: 같은 제목 (타이틀)", "가사: 첫 곡 가사", "트랙번호: 2", "곡명: 같은 제목", "가사: 둘째 곡 가사"];
+  const result = structureExtractedFile(source, { format: "docx", warnings: [], blocks: lines.map((text, i) => ({ text, location: `p${i}`, kind: "paragraph" })) }, "album");
+  assert.deepEqual(result.albums[0].tracks.map(({ number, title, lyrics }) => ({ number, title, lyrics })), [
+    { number: 1, title: "같은 제목", lyrics: "첫 곡 가사" },
+    { number: 2, title: "같은 제목", lyrics: "둘째 곡 가사" },
+  ]);
+});
+test("DOCX footer and note evidence does not become the final song's lyrics", () => {
+  const result = structureExtractedFile(source, { format: "docx", warnings: [], blocks: [
+    { text: "가수 - 곡명", location: "본문/1", kind: "paragraph" },
+    { text: "마지막 가사", location: "본문/2", kind: "paragraph" },
+    { text: "1 / 3 연락처", location: "word/footer1.xml/1", kind: "paragraph" },
+    { text: "참고 각주", location: "word/footnotes.xml/1/1", kind: "paragraph" },
+  ] }, "mv");
+  assert.equal(result.albums[0].tracks[0].lyrics, "마지막 가사");
+  assert.ok(result.issues.some((issue) => issue.code === "AUXILIARY_CONTENT"));
+});
 test("segment translation keeps repeated English/Japanese/mixed originals and detects alignment drift", async () => {
   const data = createData("I love you\n한국어 I love you\n君が好き\nI love you");
   let requests = 0;

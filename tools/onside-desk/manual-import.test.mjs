@@ -100,6 +100,30 @@ test('numbered lyric lines do not become tracks without a following track headin
   const result=await importReferenceDocument({body:docx(['곡명: 첫 곡','가사: 첫 줄','1. 기다려 줘','끝 줄'].map(p).join('')),filename:'가사.docx'});
   assert.equal(result.tracks.length,1);assert.equal(result.tracks[0].lyrics,'첫 줄\n1. 기다려 줘\n끝 줄');
 });
+test('checkbox choices read the selected option in both prefix and suffix forms',async()=>{
+  for (const value of ['□ 발라드 ☑ 힙합 □ 댄스','발라드 □ 힙합 ☑ 댄스 □']) {
+    const result=await importReferenceDocument({body:docx(table([['앨범명','앨범'],['장르',value],['곡명','노래'],['가사','온전한 가사']])),filename:'선택.docx'});
+    assert.equal(result.submission.genre,'힙합');
+  }
+  const result=await importReferenceDocument({body:docx(table([['앨범명','앨범'],['장르','□ 발라드 □ 힙합'],['곡명','노래'],['가사','온전한 가사']])),filename:'미선택.docx'});
+  assert.equal(result.submission.genre,'');
+  assert.ok(result.warnings.some(w=>w.includes('선택')));
+});
+test('multiline MV synopsis stays out of lyrics and does not hide the actual lyrics',async()=>{
+  const result=await importReferenceDocument({body:docx(['곡명: 영상','작사: 작사가','줄거리: 첫 장면 설명','2. 두 번째 장면 설명','마지막 장면 설명','가사: 첫 번째 가사','마지막 가사'].map(p).join('')),filename:'줄거리.docx',type:'MV_DISTRIBUTION'});
+  assert.equal(result.submission.mv_storyline,'첫 장면 설명\n2. 두 번째 장면 설명\n마지막 장면 설명');
+  assert.equal(result.submission.mv_lyrics,'첫 번째 가사\n마지막 가사');
+});
+test('HWPX paragraph lyrics preserve the blank line between stanzas',async()=>{
+  const result=await importReferenceDocument({body:hwpx([['곡명: 노래','가사: 첫 절','','둘째 절'].map(hp).join('')]),filename:'절.hwpx'});
+  assert.equal(result.tracks[0].lyrics,'첫 절\n\n둘째 절');
+});
+test('an empty standalone field cannot consume the next labeled field',async()=>{
+  const result=await importReferenceDocument({body:docx(['앨범명','가수명: 아티스트','곡명: 노래','가사: 첫 줄','끝 줄'].map(p).join('')),filename:'빈항목.docx'});
+  assert.equal(result.submission.title,'');
+  assert.equal(result.submission.artist_name,'아티스트');
+  assert.equal(result.tracks[0].lyrics,'첫 줄\n끝 줄');
+});
 test('identical titles with different explicit numbers remain separate tracks',async()=>{
   const result=await importReferenceDocument({body:docx(table([['트랙번호','1','동일 제목'],['가사','첫 트랙'],['트랙번호','2','동일 제목'],['가사','두 번째 트랙']])),filename:'반복제목.docx'});
   assert.equal(result.tracks.length,2);assert.equal(result.tracks[0].lyrics,'첫 트랙');assert.equal(result.tracks[1].lyrics,'두 번째 트랙');assert.equal(result.tracks[1].track_no,2);

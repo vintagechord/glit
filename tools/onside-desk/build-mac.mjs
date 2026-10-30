@@ -13,7 +13,7 @@ const payload = path.join(resources, 'app');
 await fs.mkdir(payload, { recursive: true });
 await fs.mkdir(path.join(bundle, 'Contents', 'MacOS'), { recursive: true });
 for (const name of ['server.mjs', 'core.mjs', 'source.mjs', 'remote.mjs', 'documents.mjs', 'manual-upgrade.mjs', 'manual-import.mjs', 'manual-ole.mjs', 'manual-document-parser.mjs', 'screening.mjs', 'screening-engine.mjs', 'manual-translation.mjs', 'public', 'templates', 'README.md']) await fs.cp(path.join(here, name), path.join(payload, name), { recursive: true });
-await fs.writeFile(path.join(payload, 'package.json'), JSON.stringify({ name: 'onside-review-desk', version: '2.3.2', private: true, type: 'module' }, null, 2));
+await fs.writeFile(path.join(payload, 'package.json'), JSON.stringify({ name: 'onside-review-desk', version: '2.3.3', private: true, type: 'module' }, null, 2));
 const copied = new Set();
 async function copyPackage(name, from) {
   const require = createRequire(path.join(from, 'package.json'));
@@ -39,7 +39,7 @@ async function copyPackage(name, from) {
   for (const dependency of Object.keys(manifest.optionalDependencies || {})) await copyPackage(dependency, base);
   return true;
 }
-for (const name of ['@supabase/supabase-js', '@aws-sdk/client-s3', 'docxtemplater', 'pizzip', 'yazl']) if (!await copyPackage(name, repo)) throw new Error(`Missing ${name}`);
+for (const name of ['@supabase/supabase-js', '@aws-sdk/client-s3', '@xmldom/xmldom', 'docxtemplater', 'pizzip', 'yazl']) if (!await copyPackage(name, repo)) throw new Error(`Missing ${name}`);
 const runtimeArchive = process.env.ONSIDE_NODE_ARCHIVE || '/private/tmp/onside-node-runtime.tar.gz';
 await fs.mkdir(path.join(resources, 'runtime'), { recursive: true });
 execFileSync('/usr/bin/tar', ['-xzf', runtimeArchive, '--strip-components=1', '-C', path.join(resources, 'runtime'), 'node-v24.7.0-darwin-arm64/bin/node', 'node-v24.7.0-darwin-arm64/LICENSE']);
@@ -59,6 +59,6 @@ execFileSync('/usr/bin/iconutil', ['-c', 'icns', path.join(output, 'AppIcon.icon
 }
 await fs.writeFile(path.join(bundle, 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleExecutable</key><string>OnsideDesk</string><key>CFBundleIdentifier</key><string>kr.onside.review-desk</string><key>CFBundleName</key><string>온사이드 심의 데스크</string><key>CFBundleDisplayName</key><string>온사이드 심의 데스크</string><key>CFBundleIconFile</key><string>AppIcon</string><key>CFBundleVersion</key><string>7</string><key>CFBundleShortVersionString</key><string>2.3.2</string><key>CFBundlePackageType</key><string>APPL</string><key>NSHighResolutionCapable</key><true/><key>LSMinimumSystemVersion</key><string>12.0</string><key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict></dict></plist>`);
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>OnsideDesk</string><key>CFBundleIdentifier</key><string>kr.onside.review-desk</string><key>CFBundleName</key><string>온사이드 심의 데스크</string><key>CFBundleDisplayName</key><string>온사이드 심의 데스크</string><key>CFBundleIconFile</key><string>AppIcon</string><key>CFBundleVersion</key><string>8</string><key>CFBundleShortVersionString</key><string>2.3.3</string><key>CFBundlePackageType</key><string>APPL</string><key>NSHighResolutionCapable</key><true/><key>LSMinimumSystemVersion</key><string>12.0</string><key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict></dict></plist>`);
 execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', bundle], { stdio: 'inherit' });
 console.log(JSON.stringify({ bundle, dependencies: copied.size }));
