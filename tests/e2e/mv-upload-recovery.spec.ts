@@ -24,7 +24,8 @@ for (const state of ["failed", "stalled"] as const) test(`MV ${state} upload can
   });
   try {
     await page.goto("/dashboard/new/mv");
-    await expect.poll(() => drafts).toBeGreaterThan(0);
+    // MV drafts are created at the form step (2026-10-31), not on page load.
+    expect(drafts).toBe(0);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await page.getByRole("radio", { name: /파일로 제출/ }).click();
     await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
@@ -35,6 +36,7 @@ for (const state of ["failed", "stalled"] as const) test(`MV ${state} upload can
     await page.getByRole("button", { name: "파일 업로드로 이동", exact: true }).click();
     const files = page.locator('[data-preflight-field="files"]');
     await expect(files).toBeVisible();
+    await expect.poll(() => drafts).toBeGreaterThan(0);
     await files.locator('input[type="file"]').setInputFiles({ name: "fixture.mp4", mimeType: "video/mp4", buffer: Buffer.from("fixture video bytes") });
     await expect.poll(() => puts).toBeGreaterThan(0);
     if (state === "failed") await expect(files.getByText("실패", { exact: true })).toBeVisible();
