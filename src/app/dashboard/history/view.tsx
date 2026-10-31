@@ -147,7 +147,7 @@ async function HistoryContent({ loginPath }: { loginPath: string }) {
 
       grouped.get(key)?.submissions.push({
         ...item,
-        title: item.title || (item.is_oneclick ? "발매된 음반 · URL 접수" : null),
+        title: item.title || null,
       });
     }
 

@@ -26,6 +26,7 @@ type SubmissionItem = {
   created_at: string;
   updated_at: string | null;
   type: string;
+  is_oneclick?: boolean | null;
 };
 
 type ArtistGroup = {
@@ -113,10 +114,14 @@ function SubmissionManagementRow({
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
   const [prefetchDetail, setPrefetchDetail] = React.useState(false);
   const detailHref = `${localePrefix}/dashboard/submissions/${encodeURIComponent(item.id)}`;
+  // Untitled released-album URL submissions show only their status; the
+  // placeholder title and date line repeated on every row added no information.
+  const label = item.title || (item.is_oneclick ? "발매된 음반 URL 접수" : "제목 미입력");
+  const showSummary = Boolean(item.title) || !item.is_oneclick;
   return (
     <div
       role="group"
-      aria-label={item.title || "제목 미입력"}
+      aria-label={label}
       data-no-translate-attributes={item.title ? "aria-label" : undefined}
       className={`grid grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 border-t border-black/15 px-2 py-3 text-sm transition dark:border-white/15 ${
         selected
@@ -132,7 +137,7 @@ function SubmissionManagementRow({
         }`}
       >
         <span className="sr-only">
-          {item.title || "제목 미입력"} 선택
+          {label} 선택
         </span>
         <input
           type="checkbox"
@@ -159,7 +164,7 @@ function SubmissionManagementRow({
           onClick={() => onDelete(item)}
           disabled={deleting}
           className={`${smallDangerControlClass} shrink-0`}
-          aria-label={`${item.title || "제목 미입력"} 심의 내역 삭제`}
+          aria-label={`${label} 심의 내역 삭제`}
           title="삭제"
         >
           {deleting ? (
@@ -169,20 +174,22 @@ function SubmissionManagementRow({
           )}
         </button>
       </div>
-      <Link
-        href={detailHref}
-        prefetch={prefetchDetail ? true : false}
-        onMouseEnter={() => setPrefetchDetail(true)}
-        onFocus={() => setPrefetchDetail(true)}
-        className="col-span-2 flex min-h-11 min-w-0 flex-col justify-center gap-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
-      >
-        <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
-          {item.title ? <span data-no-translate>{item.title}</span> : "제목 미입력"}
-        </p>
-        <p className={`text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
-          {formatDate(item.created_at)}
-        </p>
-      </Link>
+      {showSummary ? (
+        <Link
+          href={detailHref}
+          prefetch={prefetchDetail ? true : false}
+          onMouseEnter={() => setPrefetchDetail(true)}
+          onFocus={() => setPrefetchDetail(true)}
+          className="col-span-2 flex min-h-11 min-w-0 flex-col justify-center gap-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+        >
+          <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
+            {item.title ? <span data-no-translate>{item.title}</span> : "제목 미입력"}
+          </p>
+          <p className={`text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
+            {formatDate(item.created_at)}
+          </p>
+        </Link>
+      ) : null}
     </div>
   );
 }
