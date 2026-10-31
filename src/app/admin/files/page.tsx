@@ -8,6 +8,7 @@ import { Download, FileCheck2, UploadCloud } from "lucide-react";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
 import { downloadEndpointFile } from "@/lib/browser-download";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
 type MvSubmissionItem = {
   id: string;
@@ -251,9 +252,8 @@ export default function AdminFilesPage() {
       setError("필증은 PDF, PNG, JPG 파일만 업로드할 수 있습니다.");
       return;
     }
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setError("필증 파일 크기는 20MB 이하만 허용됩니다.");
+    if (file.size > SERVER_UPLOAD_MAX_BYTES) {
+      setError(`필증 파일 크기는 ${SERVER_UPLOAD_MAX_LABEL} 이하만 허용됩니다.`);
       return;
     }
 

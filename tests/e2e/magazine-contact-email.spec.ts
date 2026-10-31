@@ -13,11 +13,12 @@ test.beforeAll(async () => {
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"production"' },
     plugins: [{ name: "magazine-contact-ui-fixture", setup(plugin) {
-      plugin.onResolve({ filter: /^(next\/(navigation|link)|\.\/actions|@\/lib\/credits)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
+      plugin.onResolve({ filter: /^(next\/(navigation|link)|\.\/actions|@\/lib\/credits|@\/lib\/supabase\/client)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
         "next/navigation": `export const usePathname=()=>location.pathname;export const useRouter=()=>({refresh(){}});`,
         "next/link": `import React from 'react';export default function Link({children,...props}){return <a {...props}>{children}</a>}`,
-        "./actions": `export const createMagazineRequestAction=async(form)=>{window.__calls.push(Object.fromEntries(form));return {error:'Test submission received'};};`,
+        "./actions": `export const createMagazineRequestAction=async(form)=>{window.__calls.push(Object.fromEntries(form));return {error:'Test submission received'};};export const createMagazineArtworkUploadAction=async()=>({error:'Artwork upload blocked'});`,
+        "@/lib/supabase/client": `export const createClient=()=>{throw new Error('Storage is not available in this fixture');};`,
         "@/lib/credits": `export const MAGAZINE_REQUEST_CREDIT_COST=1;export const MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE='Unavailable';`,
       }[path]! }));
     } }],

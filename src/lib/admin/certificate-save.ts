@@ -3,8 +3,9 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getB2Config, sanitizeFileName } from "@/lib/b2";
 import { reviewManagementError } from "@/lib/admin/review-management";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
-export const MAX_CERTIFICATE_BYTES = 20 * 1024 * 1024;
+export const MAX_CERTIFICATE_BYTES = SERVER_UPLOAD_MAX_BYTES;
 export type ManagedCertificateSaveResult =
   | { ok: true; changed: boolean; certificate: { objectKey: string; originalName: string | null; uploadedAt: string | null } }
   | { ok: false; error: string; status: number };
@@ -20,7 +21,7 @@ export async function saveManagedCertificate(db: SupabaseClient, input: {
 }): Promise<ManagedCertificateSaveResult> {
   const mime = detectCertificateMimeType(input.body);
   const name = input.filename.normalize("NFC").replace(/[\x00-\x1f\x7f/\\]/g, "_").trim();
-  if (!mime || !input.body.length || input.body.length > MAX_CERTIFICATE_BYTES || !name || name.length > 255 || (input.declaredMime && input.declaredMime !== mime)) return { ok: false, error: "필증은 실제 내용이 일치하는 PDF·PNG·JPG 파일(20MB 이하)이어야 합니다.", status: 400 };
+  if (!mime || !input.body.length || input.body.length > MAX_CERTIFICATE_BYTES || !name || name.length > 255 || (input.declaredMime && input.declaredMime !== mime)) return { ok: false, error: `필증은 실제 내용이 일치하는 PDF·PNG·JPG 파일(${SERVER_UPLOAD_MAX_LABEL} 이하)이어야 합니다.`, status: 400 };
   const { data: submission, error } = await db.from("submissions").select("id,type,updated_at,certificate_b2_path,certificate_original_name,certificate_uploaded_at").eq("id", input.submissionId).maybeSingle();
   if (error || !submission) return { ok: false, error: "접수를 찾을 수 없습니다.", status: 404 };
   if (submission.type !== "MV_DISTRIBUTION") return { ok: false, error: "온라인 MV에만 영등위 필증을 등록할 수 있습니다.", status: 400 };

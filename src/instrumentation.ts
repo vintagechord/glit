@@ -1,4 +1,8 @@
-/** Native Render web process only. Registration never waits for queue work. */
+/**
+ * Resident Node process only (the former Render Docker host). Vercel Functions
+ * never set RENDER, so these timers stay off there; pg_cron calls
+ * /api/internal/background-jobs instead. Registration never waits for queue work.
+ */
 export function register() {
   if (
     process.env.NEXT_RUNTIME !== "nodejs" ||

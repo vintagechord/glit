@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { runWebReviewBatch } from "../src/lib/review-docs/web-runner";
+import { REVIEW_WEB_PROCESSING_SECONDS, runWebReviewBatch } from "../src/lib/review-docs/web-runner";
 import { createReviewUrlFetcher } from "../src/lib/review-docs/urls";
 import type { ReviewJob } from "../src/lib/review-docs/jobs-types";
 
@@ -26,7 +26,7 @@ test("a stalled S3 response body times out, releases the web singleton and can c
   let resumeStalledBody!: (value: IteratorResult<Uint8Array>) => void;
   const schedule = globalThis.setTimeout;
   t.mock.method(globalThis, "setTimeout", ((callback: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
-    schedule(callback, ms === 900_000 ? 25 : ms, ...args)) as typeof setTimeout);
+    schedule(callback, ms === REVIEW_WEB_PROCESSING_SECONDS * 1000 ? 25 : ms, ...args)) as typeof setTimeout);
   t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.hostname === "api.backblazeb2.com") return Response.json({ apiUrl: "https://api004.backblazeb2.com", accountId: "fixture", authorizationToken: "fixture" });

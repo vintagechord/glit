@@ -42,7 +42,9 @@ test("direct uploads enforce actual byte and multipart limits without raw client
   const source = read("src/app/api/uploads/direct/route.ts");
 
   assert.match(source, /fileSize: MAX_DIRECT_UPLOAD_BYTES/);
-  assert.match(source, /MAX_DIRECT_UPLOAD_BYTES = 128 \* 1024 \* 1024/);
+  // Vercel Functions reject larger request bodies; big files use signed URLs.
+  assert.match(source, /MAX_DIRECT_UPLOAD_BYTES = SERVER_UPLOAD_MAX_BYTES/);
+  assert.equal(read("src/lib/server-upload-limit.ts").includes("SERVER_UPLOAD_MAX_BYTES = 4 * 1024 * 1024"), true);
   assert.match(source, /fields: MAX_MULTIPART_FIELDS/);
   assert.match(source, /parts: MAX_MULTIPART_PARTS/);
   assert.match(source, /file\.on\("limit"/);

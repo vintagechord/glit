@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
-import { createMagazineRequestAction } from "./actions";
+import { createMagazineArtworkUploadAction, createMagazineRequestAction } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 import { MAGAZINE_REQUEST_CREDIT_COST, MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE } from "@/lib/credits";
 
 const channelOptions = [
@@ -71,6 +72,30 @@ export function MagazineRequestForm({
 
     setNotice(null);
     startTransition(async () => {
+      const artwork = formData.get("artworkFile");
+      formData.delete("artworkFile");
+      if (artwork instanceof File && artwork.size > 0) {
+        // Upload the image directly to Storage; the request itself stays small.
+        const upload = await createMagazineArtworkUploadAction({
+          filename: artwork.name,
+          mimeType: artwork.type,
+          sizeBytes: artwork.size,
+        });
+        if (upload.error || !upload.path || !upload.token) {
+          setNotice({ type: "error", text: upload.error ?? "대표 이미지 업로드를 준비하지 못했습니다. 잠시 후 다시 시도해주세요." });
+          return;
+        }
+        const { error: uploadError } = await createClient()
+          .storage.from("magazine-artwork")
+          .uploadToSignedUrl(upload.path, upload.token, artwork, {
+            contentType: upload.contentType,
+          });
+        if (uploadError) {
+          setNotice({ type: "error", text: "대표 이미지 파일 업로드에 실패했습니다." });
+          return;
+        }
+        formData.set("artworkPath", upload.path);
+      }
       const result = await createMagazineRequestAction(formData);
 
       if (result.error) {

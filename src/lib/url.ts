@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-const DEFAULT_PRODUCTION_ORIGIN = "https://glit-b1yn.onrender.com";
+const DEFAULT_PRODUCTION_ORIGIN = "https://iamonside.com";
 
 const normalizeConfiguredOrigin = (value?: string | null) => {
   const raw = value?.trim();

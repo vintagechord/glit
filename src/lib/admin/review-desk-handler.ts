@@ -5,6 +5,7 @@ import { stationManagementSchema, stationBulkSchema, type ManagedReviewResult } 
 import type { loadDeskResults, downloadDeskResultAsset } from "./review-desk";
 import type { saveManagedStationReview, saveManagedStationReviews, saveManagedOnlineReview } from "./review-management";
 import type { saveManagedCertificate } from "./certificate-save";
+import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/server-upload-limit";
 import type { getReviewSummaryEmailPreviewById, sendReviewSummaryNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
 
 const uuid = z.string().uuid();
@@ -108,7 +109,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
     try {
       const url = new URL(request.url);
       const isCertificate = url.searchParams.get("action") === "certificate";
-      const bytes = await readBoundedDeskBody(request, isCertificate ? 20 * 1024 * 1024 : 3 * 1024 * 1024);
+      const bytes = await readBoundedDeskBody(request, isCertificate ? SERVER_UPLOAD_MAX_BYTES : 3 * 1024 * 1024);
       const auth = await authenticate(request, bytes);
       if (auth.error) return auth.error;
       const { id } = await context.params;

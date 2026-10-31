@@ -12,11 +12,12 @@ import {
   presignGetUrl,
 } from "@/lib/b2";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_BYTES = SERVER_UPLOAD_MAX_BYTES;
 
 const getObjectKeyFromRequest = (request: Request) => {
   const url = new URL(request.url);
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
     });
     file.on("limit", () => {
       parseErrorStatus = 413;
-      parseErrorBody = { error: "파일 크기는 20MB 이하만 허용됩니다." };
+      parseErrorBody = { error: `파일 크기는 ${SERVER_UPLOAD_MAX_LABEL} 이하만 허용됩니다.` };
     });
     file.pipe(pass);
     filePart = nextFilePart;

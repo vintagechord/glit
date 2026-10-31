@@ -4,7 +4,7 @@ import { publicReviewJob, REVIEW_JOB_LIMITS } from "@/lib/review-docs/jobs-types
 import { resumeWebReviewJobs } from "@/lib/review-docs/web-runner";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 900;
+export const maxDuration = 300;
 export async function GET(request: Request) {
   try {
     const user = await authorizeReviewRequest(request);

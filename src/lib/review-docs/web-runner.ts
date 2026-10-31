@@ -6,6 +6,9 @@ import { cleanupReviewJobs, failReviewJob, processReviewJob } from "./worker";
 import { awaitReviewAbort } from "./abort";
 
 const state = globalThis as typeof globalThis & { __reviewWebBatch?: Promise<void>; __reviewWebCleanupAt?: number };
+// Web jobs run inside a Vercel function (Hobby: 300 seconds including after()).
+// Stop early so the job fails with a retryable timeout instead of being killed.
+export const REVIEW_WEB_PROCESSING_SECONDS = Math.min(REVIEW_JOB_LIMITS.processingSeconds, 240);
 
 export async function runClaimedWebReviewJob(job: ReviewJob, options: {
   process?: (job: ReviewJob, signal: AbortSignal) => Promise<void>;
@@ -18,7 +21,7 @@ export async function runClaimedWebReviewJob(job: ReviewJob, options: {
 } = {}) {
   const now = options.now ?? Date.now;
   const started = now();
-  const timeoutMs = options.timeoutMs ?? REVIEW_JOB_LIMITS.processingSeconds * 1000;
+  const timeoutMs = options.timeoutMs ?? REVIEW_WEB_PROCESSING_SECONDS * 1000;
   const deadline = started + timeoutMs;
   const controller = new AbortController();
   const deadlineTimer = setTimeout(() => controller.abort(new ReviewJobError(

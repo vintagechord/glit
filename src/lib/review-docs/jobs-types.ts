@@ -2,7 +2,9 @@ import type { ReviewDocumentData } from "./model";
 import { isReviewJobExpired } from "./retention";
 
 export const REVIEW_JOB_LIMITS = {
-  files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024,
+  // A browser upload request must stay under the Vercel Function 4.5MB body
+  // limit. fileBytes still bounds stored sources created before the move.
+  files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024, uploadRequestBytes: 4 * 1024 * 1024,
   urls: 8, pagesPerFile: 80, albums: 8, tracks: 100,
   activePerAdmin: 3, workerConcurrency: 1, processingSeconds: 900,
   retentionDays: null, retentionPolicy: "until_admin_deletion", translationCharacters: 60_000,

@@ -198,7 +198,7 @@ export function ReviewDocsWorkspace() {
         options = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: list, mode: "album" }) };
       } else {
         if (!files.length || files.length > REVIEW_DOC_LIMITS.files) throw new Error(`파일을 1~${REVIEW_DOC_LIMITS.files}개 선택해주세요.`);
-        if (files.some((file) => file.size > REVIEW_DOC_LIMITS.fileBytes) || files.reduce((total, file) => total + file.size, 0) > REVIEW_DOC_LIMITS.totalBytes) throw new Error("파일은 개별 10MB, 전체 40MB 이내로 업로드해주세요.");
+        if (files.reduce((total, file) => total + file.size, 0) > REVIEW_DOC_LIMITS.uploadRequestBytes) throw new Error("파일은 한 번에 전체 4MB 이내로 업로드해주세요.");
         const body = new FormData(); files.forEach((file) => body.append("files", file)); body.set("mode", tab === "mv" ? "mv" : "album");
         options = { method: "POST", body };
       }
@@ -234,7 +234,7 @@ export function ReviewDocsWorkspace() {
         <p className="text-sm text-muted-foreground">{tab === "mv" ? "아티스트·곡명·가사로 곡별 DOCX를 만듭니다. 한 곡도 DOCX와 ZIP을 각각 다운로드할 수 있습니다." : tab === "urls" ? "멜론·지니 링크로 앨범 정보·트랙·크레딧·가사를 분석합니다. URL별 결과를 확인하고 같은 앨범의 자료를 합칠 수 있습니다." : "한 앨범의 자료를 여러 파일로, 여러 앨범을 한 파일로 업로드할 수 있습니다. 분석 후 원본 연결과 트랙 순서를 확인해주세요."}</p>
         {tab === "urls" ? <Field label="멜론·지니 URL (한 줄에 하나, 최대 8개)" value={urls} onChange={setUrls} multiline /> : <div>
           <label className="block text-sm font-semibold">기준파일 선택<input type="file" multiple accept={supportedFormats.map((format) => `.${format}`).join(",")} onChange={(event) => setFiles(Array.from(event.target.files ?? []))} className={`${inputClass} file:mr-4 file:rounded file:border-0 file:px-3 file:py-1`} /></label>
-          <p className="mt-2 text-xs text-muted-foreground">{supportedFormats.length <= 1 ? "DOCX / 최대 8개, 파일당 10MB, 전체 40MB" : "DOC · DOCX · HWP · PDF / 최대 8개, 파일당 10MB, 전체 40MB, PDF 파일당 80쪽"}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{supportedFormats.length <= 1 ? "DOCX / 최대 8개, 한 번에 전체 4MB" : "DOC · DOCX · HWP · PDF / 최대 8개, 한 번에 전체 4MB, PDF 파일당 80쪽"}</p>
           {files.length > 0 && <ul className="mt-3 space-y-1 text-sm">{files.map((file, index) => <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-3"><span className="break-all">{file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)</span><button type="button" className="shrink-0 text-xs underline" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}>제외</button></li>)}</ul>}
         </div>}
         <button type="button" className="bauhaus-button px-5 py-3 text-sm disabled:opacity-50" onClick={() => void createJob()} disabled={pending || dirty || workerReady !== true} aria-describedby={workerReady !== true ? "review-connection-help" : undefined}>{pending ? "처리 중…" : "업로드·분석 시작"}</button>
