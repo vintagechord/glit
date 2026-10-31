@@ -29,7 +29,10 @@ function fakes(overrides = {}) {
     if (target.hostname === 'api.vercel.com') {
       assert.equal(init.headers.Authorization, 'Bearer vercel-token-0123456789');
       if (target.pathname === '/v6/deployments') return json({ deployments: [{ state: overrides.deployState || 'READY', created: NOW - 60_000, meta: { githubCommitSha: 'abcdef1234' } }] });
-      if (target.pathname.endsWith('/config')) return json({ misconfigured: false, recommendedIPv4: [{ rank: 1, value: ['216.198.79.1', '64.29.17.1'] }], recommendedCNAME: [{ rank: 1, value: '6dbbb6e9e0c47844.vercel-dns-017.com.' }] });
+      if (target.pathname.endsWith('/config')) return json(overrides.domainConfig || { misconfigured: false, recommendedIPv4: [{ rank: 1, value: ['216.198.79.1', '64.29.17.1'] }], recommendedCNAME: [{ rank: 1, value: '6dbbb6e9e0c47844.vercel-dns-017.com.' }] });
+      // Without overrides the token behaves like a project-scoped one: no team billing.
+      if (target.pathname === '/v1/invoices/pre-commitment-usage') return overrides.ledger ? json(overrides.ledger) : json({ error: { code: 'forbidden' } }, 403);
+      if (target.pathname === '/v1/billing/charges') return overrides.charges ? new Response(overrides.charges, { status: 200, headers: { 'content-type': 'application/jsonl' } }) : json({ error: { code: 'not_found', message: 'Plan not found.' } }, 404);
       return new Response('forbidden', { status: 403 });
     }
     throw new Error(`unexpected ${url}`);
@@ -108,8 +111,66 @@ test('a Vercel token adds deployment and domain checks; a failed deploy is a war
   const vercel = sectionOf(snapshot, 'vercel');
   assert.equal(item(vercel, '최근 배포').status, 'warning');
   assert.equal(item(vercel, '도메인 연결').value, '정상');
-  assert.equal(item(vercel, '이번 달 사용량').status, 'unknown', 'Hobby usage is not available by API');
+  const usageItem = item(vercel, '이번 달 사용량');
+  assert.equal(usageItem.status, 'unknown', 'a project-scoped token cannot read team billing');
+  assert.match(usageItem.hint, /All Projects/);
   assert.ok(!JSON.stringify(snapshot).includes('vercel-token-0123456789'));
+});
+
+const charge = (service, quantity, unit, cost, project, extra = {}) => JSON.stringify({ ChargePeriodStart: '2026-10-31T07:00:00.000Z', ChargePeriodEnd: '2026-11-01T07:00:00.000Z', ChargeCategory: 'Usage', BilledCost: 0, EffectiveCost: cost, ServiceName: service,
+  ServiceCategory: unit === null ? 'Subscription Licenses' : 'Compute', ConsumedQuantity: quantity, ConsumedUnit: unit, Tags: project ? { ProjectId: project, ProjectName: project === 'prj_2BagpJ3xO4SYqS0taoYSdg2RlPRl' ? 'glit' : 'other' } : {}, ...extra });
+const GLIT = 'prj_2BagpJ3xO4SYqS0taoYSdg2RlPRl', OTHER = 'prj_other';
+const CHARGES = [
+  charge('Pro', 1, null, 0.67), charge('Flat Rate CDN 1M', 1, null, 0),
+  charge('CDN Requests', 600_000, 'Requests', 0.5, GLIT), charge('CDN Requests', 200_000, 'Requests', 0.2, OTHER),
+  charge('Fluid Active CPU', 0.5, 'hour', 0.06, GLIT), charge('Fluid Active CPU', 1.5, 'hour', 0.2, OTHER),
+  charge('Function Invocations', 3000, 'Invocations', 0.01, GLIT), charge('Fast Data Transfer', 2, 'gigabyte', 0.6, GLIT),
+  'not json', '',
+].join('\n');
+
+test('a team token shows the Pro credit, Flat Rate CDN headroom and Onside\'s share', async () => {
+  const ledger = { creditLedgers: [{ currency: 'USD', total: 20, remaining: 4, periodStart: '2026-10-31T07:00:00.000Z', periodEnd: '2026-11-30T08:00:00.000Z' }] };
+  const f = fakes({ ledger, charges: CHARGES });
+  const monitor = monitorWith(f, { vercelToken: 'vercel-token-0123456789' });
+  const vercel = sectionOf(await monitor.snapshot(true), 'vercel');
+  const credit = vercel.usage.find(row => row.label.startsWith('Pro 월 크레딧'));
+  assert.equal(credit.label, 'Pro 월 크레딧 ($20)');
+  assert.deepEqual([credit.usedLabel, credit.limitLabel, credit.percent, credit.status], ['$16.00', '$20.00', 80, 'warning']);
+  const cdn = vercel.usage.find(row => row.label.startsWith('CDN 요청'));
+  assert.deepEqual([cdn.usedLabel, cdn.percent, cdn.status], ['800,000건', 80, 'warning']);
+  assert.equal(vercel.usage.find(row => row.label.startsWith('데이터 전송')).usedLabel, '2.0 GB');
+  assert.equal(item(vercel, '결제 주기').value, '10월 31일 ~ 11월 30일');
+  assert.equal(item(vercel, '크레딧 초과 사용').status, 'ok');
+  assert.equal(item(vercel, '온사이드 사용액').value, '$1.17 · 팀 전체 $1.57', 'licence rows are not usage');
+  assert.equal(item(vercel, '이번 달 · 함수 CPU').value, '온사이드 30분 · 팀 2시간');
+  assert.deepEqual(vercel.items.filter(entry => entry.label.startsWith('이번 달 ·')).map(entry => entry.label), ['이번 달 · 함수 CPU', '이번 달 · 함수 실행', '이번 달 · CDN 요청', '이번 달 · 데이터 전송']);
+  assert.equal(vercel.status, 'warning');
+  const chargeUrl = new URL(f.calls.find(url => url.includes('/v1/billing/charges')));
+  assert.equal(chargeUrl.searchParams.get('from'), '2026-10-31T07:00:00.000Z');
+  assert.equal(chargeUrl.searchParams.get('to'), '2026-11-03T00:00:00.000Z', 'through tomorrow, not the whole period');
+  await monitor.snapshot(true);
+  assert.equal(f.calls.filter(url => url.includes('/v1/billing/charges')).length, 1, 'forced refreshes reuse recent billing data');
+});
+
+test('usage past the credit is billed and flagged; without the ledger the $20 credit is assumed', async () => {
+  const over = [charge('Fluid Active CPU', 300, 'hour', 23, GLIT, { BilledCost: 3 }), charge('Flat Rate CDN 1M', 1, null, 0)].join('\n');
+  const billed = sectionOf(await monitorWith(fakes({ ledger: { creditLedgers: [{ currency: 'USD', total: 20, remaining: 0, periodStart: '2026-10-31T07:00:00.000Z', periodEnd: '2026-11-30T08:00:00.000Z' }] }, charges: over }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'vercel');
+  assert.equal(billed.usage[0].status, 'error');
+  assert.equal(item(billed, '크레딧 초과 사용').value, '$3.00 · Pro 요금 외 추가 청구 예정');
+  const fallback = sectionOf(await monitorWith(fakes({ charges: CHARGES }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'vercel');
+  assert.deepEqual([fallback.usage[0].usedLabel, fallback.usage[0].limitLabel], ['$1.57', '$20.00']);
+  assert.match(item(fallback, '결제 주기').value, /^11월 1일부터/, 'calendar month when the ledger is unavailable');
+});
+
+test('DNS on an older Vercel IP pool is fine while Vercel accepts it; a flagged domain is an error', async () => {
+  const domainConfig = { misconfigured: false, ipStatus: 'optional-change', recommendedIPv4: [{ rank: 1, value: ['216.150.1.1', '216.150.16.1'] }, { rank: 2, value: ['76.76.21.21'] }], recommendedCNAME: [{ rank: 1, value: '6dbbb6e9e0c47844.vercel-dns-017.com.' }] };
+  const accepted = item(sectionOf(await monitorWith(fakes({ domainConfig }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'domain'), '대표 주소(A)');
+  assert.equal(accepted.status, 'ok');
+  assert.match(accepted.hint, /216\.150\.1\.1, 216\.150\.16\.1.*선택/);
+  const moved = item(sectionOf(await monitorWith(fakes({ domainConfig, aRecords: ['216.150.16.1', '216.150.1.1'] }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'domain'), '대표 주소(A)');
+  assert.deepEqual([moved.status, moved.hint], ['ok', undefined]);
+  const flagged = sectionOf(await monitorWith(fakes({ domainConfig: { ...domainConfig, misconfigured: true } }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'domain');
+  assert.equal(item(flagged, '대표 주소(A)').status, 'error');
 });
 
 test('B2 listing is cached and forced refreshes are rate-limited; stale multipart uploads warn', async () => {
