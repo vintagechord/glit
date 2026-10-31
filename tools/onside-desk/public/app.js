@@ -261,19 +261,57 @@ function settingsScreen() {
   const s = ui.data.settings || {}, c = ui.data.connection || {};
   screen.innerHTML = `${heading('데스크 설정','문서 담당자와 이 Mac의 작업 방식을 설정합니다.',trashButton())}<form id="settings-form" class="panel settings-panel"><section class="settings-section"><h2>서비스 연결</h2><p>신청을 조회하고, 심의 결과 저장 시 관리자 페이지와 고객 결과 페이지에 반영합니다.</p><div class="connection-detail"><span>${c.connected ? '✓' : '○'}</span><div>${e(c.message || (c.connected ? '온사이드 서비스에 연결되어 있습니다.' : c.configured ? '연결 상태를 확인해 주세요.' : '서비스 연결 설정이 필요합니다.'))}<div class="helper">마지막 동기화 ${e(formatDate(ui.data.lastSync, true))}</div></div></div></section><section class="settings-section"><h2>심의 자료 담당자</h2><p>생성하는 심의 요청서와 방송사 신청서의 담당자 정보에 사용합니다.</p><div class="field-grid">${inputField('managerName','담당자 이름',s.managerName)}${inputField('companyName','심의 담당 회사명',s.companyName)}${inputField('managerPhone','담당자 연락처',s.managerPhone,'tel')}${inputField('managerEmail','담당자 이메일',s.managerEmail,'email')}</div></section><section class="settings-section"><h2>자동 작업</h2><label class="toggle-row"><span>새 신청 자동 가져오기<small>프로그램이 실행되는 동안 5분마다 신청 내역을 확인합니다.</small></span><input type="checkbox" name="autoSync"${s.autoSync !== false ? ' checked' : ''} aria-label="새 신청 자동 가져오기"></label><label class="toggle-row"><span>새 신청의 문서 자동 생성<small>새로 접수된 결제 완료 신청의 문서만 자동 생성합니다. 결과 이메일은 미리보기 확인 후 발송 버튼을 누를 때만 요청합니다. 생성 후 업로드된 원본 음원·영상도 작업 폴더에 저장합니다.</small></span><input type="checkbox" name="autoGenerate"${s.autoGenerate ? ' checked' : ''} aria-label="새 신청 문서 자동 생성"></label></section><section class="settings-section"><h2>자료 저장과 백업</h2><p>생성 문서, 받은 원본, 진행 기록을 이 Mac에 보관합니다.</p><div class="path-line">${e(ui.data.outputRoot || '이 Mac의 온사이드 심의 데스크 작업 폴더')}</div><div class="button-row" style="margin-top:15px"><button type="button" class="button secondary" data-action="backup">진행 기록 백업</button><button type="button" class="button secondary" data-action="open-root">저장 폴더 열기 ↗</button></div><p class="helper">백업에는 관리 기록과 생성 문서가 포함됩니다. 대용량 원본 음원·영상과 연결 키는 제외되므로 별도로 보관하세요.</p></section><div class="save-bar"><span class="save-status">설정은 이 Mac에 적용됩니다.</span><button class="button primary" type="submit">설정 저장</button></div></form>`;
 }
+const MONITOR_STATUS = { ok: ['정상', ''], warning: ['주의', 'amber'], error: ['문제', 'red'], unknown: ['확인 필요', 'neutral'] };
+function monitorBadge(status) { const [text, tone] = MONITOR_STATUS[status] || MONITOR_STATUS.unknown; return `<span class="badge ${tone}">${e(text)}</span>`; }
+function monitorUsage(row) {
+  const width = Math.max(row.percent > 0 ? 2 : 0, Math.min(100, Number(row.percent) || 0));
+  return `<div class="usage-row ${e(row.status)}"><div class="usage-head"><span>${e(row.label)}</span><strong>${e(row.usedLabel)} / ${e(row.limitLabel)} · ${e(row.percent ?? 0)}%</strong></div><div class="usage-track" role="meter" aria-label="${e(row.label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${e(Math.min(100, Number(row.percent) || 0))}"><span style="width:${width}%"></span></div>${row.note ? `<small>${e(row.note)}</small>` : ''}</div>`;
+}
+function monitorDetails(section) {
+  const d = section.details; if (!d?.categories) return '';
+  return `<div class="monitor-details"><h3>종류별 용량</h3><ul class="monitor-files">${d.categories.map(c => `<li><span>${e(c.name)}</span><span>${e(c.count)}개</span><strong>${e(fileSize(c.bytes) || '0 B')}</strong></li>`).join('')}</ul>${d.largest?.length ? `<h3>큰 파일</h3><ul class="monitor-files">${d.largest.map(f => `<li><span class="monitor-file" title="${e(f.name)}">${e(f.name)}</span><span>${e(f.category)} · ${e(formatDate(f.lastModified))}</span><strong>${e(fileSize(f.size))}</strong></li>`).join('')}</ul>` : ''}</div>`;
+}
+function monitorCards() {
+  const data = ui.monitor?.snapshot;
+  if (!data) return ui.monitorError ? `<div class="notice error">${e(ui.monitorError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>사이트 상태를 확인하고 있습니다</h1><p>Vercel · Supabase · Backblaze · 가비아에 차례로 접속합니다.</p></div>`;
+  const problems = data.issues || [];
+  return `<div class="monitor-banner ${e(data.overall)}" role="status">${data.overall === 'ok' ? '모든 서비스가 정상입니다.' : `확인할 항목 ${problems.length}개: ${e(problems.slice(0, 4).map(p => `${p.section} · ${p.label}`).join(', '))}${problems.length > 4 ? ' …' : ''}`} <span class="monitor-checked">마지막 확인 ${e(formatDate(data.checkedAt, true))}</span></div>${ui.monitorError ? `<div class="notice error">${e(ui.monitorError)}</div>` : ''}<div class="monitor-grid">${data.sections.map(s => `<section class="panel monitor-card status-${e(s.status)}"><div class="monitor-card-head"><h2>${e(s.title)}</h2>${monitorBadge(s.status)}</div><p class="monitor-summary">${e(s.summary || '')}</p>${(s.usage || []).map(monitorUsage).join('')}<ul class="monitor-items">${s.items.map(i => `<li class="${e(i.status || 'ok')}"><span class="monitor-dot" aria-hidden="true"></span><span class="monitor-label">${e(i.label)}</span><span class="monitor-value">${e(i.value)}</span>${i.hint ? `<small>${e(i.hint)}</small>` : ''}</li>`).join('')}</ul>${monitorDetails(s)}${s.links?.length ? `<div class="button-row">${s.links.map(l => `<button class="button secondary small" data-action="monitor-open" data-target="${e(l.target)}">${e(l.label)} ↗</button>`).join('')}</div>` : ''}</section>`).join('')}</div>`;
+}
+function monitorScreen() {
+  const settings = ui.monitor?.settings || {};
+  screen.innerHTML = `${heading('사이트 관리','온사이드를 운영하는 Vercel · Supabase · Backblaze · 가비아의 상태와 무료 사용량을 확인합니다.',`<button class="button primary" data-action="monitor-refresh"${ui.monitorLoading ? ' disabled' : ''}>${ui.monitorLoading ? '확인 중…' : '지금 확인'}</button>`)}<div id="monitor-body">${monitorCards()}</div><form id="monitor-settings-form" class="panel settings-panel monitor-settings"><section class="settings-section"><h2>점검 설정</h2><p>Vercel 토큰을 넣으면 배포 상태와 도메인 연결까지 확인합니다. 토큰은 이 Mac의 데스크 데이터 폴더(monitor.json)에만 저장되고 백업에는 포함되지 않습니다.</p><div class="connection-detail"><span>${settings.vercelConfigured ? '✓' : '○'}</span><div>${settings.vercelConfigured ? 'Vercel 토큰이 등록되어 있습니다.' : 'Vercel 토큰이 없습니다. Vercel ▶ Account Settings ▶ Tokens에서 이 팀(vintagechord85-2949\'s projects) 범위로 만드세요.'}</div></div><label class="monitor-token">Vercel 토큰<input type="password" name="vercelToken" autocomplete="off" spellcheck="false" placeholder="${settings.vercelConfigured ? '새 토큰으로 바꾸려면 붙여넣기' : '토큰 붙여넣기'}"></label><label class="toggle-row"><input type="checkbox" name="notify"${settings.notify !== false ? ' checked' : ''}> 문제가 생기면 Mac 알림 보내기 (창을 닫아도 5분마다 확인)</label><div class="button-row"><button class="button primary" type="submit">설정 저장</button>${settings.vercelConfigured ? '<button class="button secondary" type="button" data-action="monitor-clear-token">토큰 삭제</button>' : ''}<button class="button secondary" type="button" data-action="monitor-open" data-target="vercel-tokens">Vercel 토큰 만들기 ↗</button></div></section></form>`;
+  if (!ui.monitor && !ui.monitorLoading) void loadMonitor(false);
+}
+async function loadMonitor(force = false) {
+  if (ui.monitorLoading) return; ui.monitorLoading = true;
+  const button = document.querySelector('[data-action="monitor-refresh"]'); if (button) { button.disabled = true; button.textContent = '확인 중…'; }
+  try { ui.monitor = await api(`/api/monitor${force ? '?refresh=1' : ''}`); ui.monitorError = ''; if (ui.data) ui.data.monitor = { overall: ui.monitor.snapshot.overall, issues: ui.monitor.snapshot.issues.length, checkedAt: ui.monitor.snapshot.checkedAt }; }
+  catch (error) { ui.monitorError = `상태 확인 실패: ${error.message}`; }
+  finally {
+    ui.monitorLoading = false;
+    // Refresh only the cards so a token being typed is not wiped.
+    const body = document.getElementById('monitor-body'); if (ui.nav === 'monitor' && body) body.innerHTML = monitorCards();
+    const refreshButton = document.querySelector('[data-action="monitor-refresh"]'); if (refreshButton) { refreshButton.disabled = false; refreshButton.textContent = '지금 확인'; }
+    if (ui.data) headerRender();
+    clearTimeout(ui.monitorTimer); if (ui.nav === 'monitor') ui.monitorTimer = setTimeout(() => { if (ui.nav === 'monitor') void loadMonitor(false); }, 60_000);
+  }
+}
 function render() {
   if (ui.nav === 'manual' && ui.detail && !isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
   if (ui.nav === 'cases' && isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
-  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', queue: '작업 현황', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
+  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', queue: '작업 현황', monitor: '사이트 관리', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
   document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('active', b.dataset.nav === ui.nav));
   document.querySelectorAll('[data-manual-type]').forEach(b => b.classList.toggle('active', ui.nav === 'manual' && b.dataset.manualType === ui.manualType));
   document.getElementById('manual-subnav').hidden = ui.nav !== 'manual';
-  document.getElementById('refresh-top').hidden = ui.nav === 'manual';
-  ({cases:casesScreen, manual:manualScreen, queue:queueScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
+  document.getElementById('refresh-top').hidden = ui.nav === 'manual' || ui.nav === 'monitor';
+  if (ui.nav !== 'monitor') clearTimeout(ui.monitorTimer);
+  ({cases:casesScreen, manual:manualScreen, queue:queueScreen, monitor:monitorScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
+  if (ui.nav === 'monitor' && ui.monitor) void loadMonitor(false);
 }
 function headerRender() {
   const c = ui.data.connection || {}, badge = document.getElementById('connection-badge'); badge.className = `connection-badge ${c.connected ? 'online' : 'offline'}`; badge.innerHTML = `<i></i>${e(ui.nav === 'manual' ? '이 Mac에 저장' : c.connected ? '온사이드 연결됨' : c.configured ? '연결 확인 필요' : '연결 설정 필요')}`;
   document.getElementById('nav-count').textContent = serviceCases().length; document.getElementById('manual-count').textContent = manualCases().length; document.getElementById('job-count').textContent = jobs().filter(activeJob).length;
+  const monitorState = ui.data.monitor, monitorCount = document.getElementById('monitor-count'); if (monitorCount) { monitorCount.hidden = !monitorState?.issues; monitorCount.textContent = monitorState?.issues || 0; monitorCount.classList.toggle('alert', monitorState?.overall === 'error'); }
   globalAlert(ui.nav === 'manual' ? '' : ui.data.syncError ? `신청 동기화 확인: ${typeof ui.data.syncError === 'string' ? ui.data.syncError : ui.data.syncError.message || '서비스 연결을 확인해 주세요.'}` : !c.configured ? '서비스 연결 정보가 설정되지 않았습니다. 데스크 설치 안내의 연결 설정을 확인해 주세요.' : '');
 }
 async function refresh(initial = false) {
@@ -558,6 +596,9 @@ async function action(name, button) {
     else if (name === 'generate' || name === 'download') { if (ui.dirty) { toast('수정 중인 내용을 먼저 저장해 주세요.', true); return; } await api(apiPath(`/${name}`), { method: 'POST', body: {} }); toast(name === 'generate' ? '심의 자료 생성을 시작했습니다.' : '원본 파일 다운로드를 시작했습니다.'); await refresh(); detailRender(); }
     else if (name === 'open-case' || name === 'open-latest') await api(apiPath('/open'), { method: 'POST', body: { target: name === 'open-latest' ? 'latest' : 'case' } });
     else if (name === 'open-root') await api('/api/open-output', { method: 'POST', body: {} });
+    else if (name === 'monitor-refresh') await loadMonitor(true);
+    else if (name === 'monitor-open') await api('/api/monitor/open', { method: 'POST', body: { target: button?.dataset.target || '' } });
+    else if (name === 'monitor-clear-token') { const result = await api('/api/monitor/settings', { method: 'POST', body: { vercelToken: null } }); ui.monitor = { ...ui.monitor, ...result }; monitorScreen(); toast('Vercel 토큰을 삭제했습니다.'); }
     else if (name === 'backup') { const backup = await api('/api/backup', { method: 'POST', body: {} }); toast(backup.message || '관리 내역과 생성 문서를 백업했습니다.'); await refresh(); }
     else if (name === 'copy-info') { await navigator.clipboard.writeText(copyText(effective())); toast('입력용 정보를 복사했습니다.'); }
   } catch (error) { toast(error.message, true); } finally { if (button?.isConnected) button.disabled = false; updateResultControls(); }
@@ -591,7 +632,7 @@ document.addEventListener('change', async event => {
   if (el.closest('#station-result-form') && el.name === 'status') { el.closest('form').dataset.applyOverallStatus = 'true'; updateRatingRequired(); const next = ['APPROVED','REJECTED'].includes(el.value) ? el.value : 'PENDING'; el.closest('form').querySelectorAll('[name^=trackResult_]').forEach(field => { field.value = next; }); }
   if (el.closest('#station-result-form') && el.name?.startsWith('trackResult_')) el.closest('form').dataset.applyOverallStatus = 'false';
   if (el.id === 'certificate-file') {
-    const file = el.files?.[0]; if (file && file.size > 20 * 1024 * 1024) { el.value = ''; ui.certificateFile = null; toast('필증은 20MB 이하 파일을 선택해 주세요.', true); return; }
+    const file = el.files?.[0]; if (file && file.size > 4 * 1024 * 1024) { el.value = ''; ui.certificateFile = null; toast('필증은 4MB 이하 파일을 선택해 주세요.', true); return; }
     ui.certificateFile = file || null; const selection = document.getElementById('certificate-selection'); if (selection) selection.textContent = file ? `${file.name} · ${fileSize(file.size)} · 업로드 전` : '파일을 선택해 주세요.'; return;
   }
   if (el.id === 'manual-reference') { ui.referenceFile = el.files?.[0] || null; const selection = document.getElementById('manual-reference-name'); if (selection) selection.textContent = ui.referenceFile ? `${ui.referenceFile.name} · ${fileSize(ui.referenceFile.size)}` : 'Word·한글 기준파일을 선택하세요.'; return; }
@@ -613,11 +654,17 @@ document.addEventListener('change', async event => {
   } catch (error) { toast(error.message, true); el.disabled = false; }
 });
 document.addEventListener('submit', async event => {
-  const form = event.target; if (!['manual-import-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form'].includes(form.id)) return; event.preventDefault();
+  const form = event.target; if (!['manual-import-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form','monitor-settings-form'].includes(form.id)) return; event.preventDefault();
   const button = form.querySelector('button[type="submit"]'); button.disabled = true;
   try {
     const data = new FormData(form);
     if (form.id === 'manual-import-form') { await importManualReference(); return; }
+    if (form.id === 'monitor-settings-form') {
+      const token = String(data.get('vercelToken') || '').trim();
+      button.textContent = '저장 · 확인 중…';
+      const result = await api('/api/monitor/settings', { method: 'POST', body: { ...(token ? { vercelToken: token } : {}), notify: data.has('notify') } });
+      ui.monitor = { ...ui.monitor, ...result }; monitorScreen(); toast(token ? 'Vercel 토큰을 저장하고 다시 확인했습니다.' : '점검 설정을 저장했습니다.'); return;
+    }
     if (form.id === 'bulk-station-form') { await publishResult(bulkResultBody(form)); return; }
     if (form.id === 'station-result-form' || form.id === 'online-result-form') { await publishResult(resultBody(form)); return; }
     if (form.id === 'certificate-form') { if (!ui.certificateFile) throw new Error('업로드할 영등위 필증 파일을 선택해 주세요.'); await publishResult({ operation: 'certificate', expectedUpdatedAt: ui.resultData?.submission?.updated_at ?? null },ui.certificateFile); return; }
