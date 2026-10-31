@@ -2,10 +2,14 @@ import { Clapperboard, Disc3, Tv } from "lucide-react";
 
 import { ReliableLink } from "@/components/site/reliable-link";
 import { reviewServices } from "@/lib/onside-content";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "새 심의 접수",
-};
+export const metadata = pageMetadata({
+  title: "심의 신청 · 음반 심의·뮤직비디오 심의 온라인 접수",
+  description: "음반 심의와 뮤직비디오 심의를 온라인으로 신청하세요. 방송국을 고르고 파일을 올린 뒤 카드 결제나 무통장 입금으로 접수합니다.",
+  path: "/dashboard/new",
+  enPath: "/en/dashboard/new",
+});
 
 const submissionCards = [
   {

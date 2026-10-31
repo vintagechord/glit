@@ -25,7 +25,8 @@ test("application entry headers keep essentials without repeating the wizard ste
   const albumIntro = readSource(
     "src/features/submissions/album-intro-panel.tsx",
   );
-  const mvPage = readSource("src/app/dashboard/new/mv/page.tsx");
+  // Search metadata may use the query wording; the rule covers visible copy.
+  const mvPage = readSource("src/app/dashboard/new/mv/page.tsx").replace(/export const metadata = [\s\S]*?\}\);\n/, "");
 
   assert.match(albumIntro, />\s*음반 심의 접수\s*</);
   assert.match(albumIntro, /비회원 가능/);

@@ -1,10 +1,14 @@
 import { MvWizard } from "@/features/submissions/mv-wizard";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "뮤직비디오 심의 접수",
-};
+export const metadata = pageMetadata({
+  title: "뮤직비디오 심의 신청 · 뮤비 심의 온라인 접수",
+  description: "온라인 유통용 등급분류와 KBS·MBC·SBS·ETN 방송사 뮤직비디오 심의를 온라인으로 신청하세요.",
+  path: "/dashboard/new/mv",
+  enPath: "/en/dashboard/new/mv",
+});
 
 const mvChecklist = [
   "영상 파일: MOV 또는 MP4 권장",

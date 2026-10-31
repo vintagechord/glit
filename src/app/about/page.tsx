@@ -4,10 +4,14 @@ import Image from "next/image";
 
 import { AboutRevealSection } from "@/components/about/about-reveal-section";
 import { SiteLogo } from "@/components/site/site-logo";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata = {
-  title: "회사소개",
-};
+export const metadata = pageMetadata({
+  title: "회사소개 · 2017년부터 이어온 음반·뮤직비디오 심의 대행",
+  description: "온사이드는 2017년부터 음반 심의와 뮤직비디오 심의 접수를 대행해 온 (주)빈티지하우스의 온라인 심의 서비스입니다.",
+  path: "/about",
+  enPath: "/en/about",
+});
 
 export default function AboutPage() {
   return (
