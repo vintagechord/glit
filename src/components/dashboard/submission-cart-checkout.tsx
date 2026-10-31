@@ -46,6 +46,8 @@ import {
   parseDepositDueAt,
 } from "@/lib/bank-transfer-details";
 import { GuestCartRecoveryNotice } from "@/features/submissions/guest-cart-recovery-notice";
+import { CashReceiptFields, type CashReceiptDraft } from "./cash-receipt-fields";
+import { validateCashReceiptRequest } from "@/lib/cash-receipts";
 
 type CartItem = {
   id: string;
@@ -199,6 +201,7 @@ export function SubmissionCartCheckout({
   }, [mobileCardBlocked]);
   const [depositorName, setDepositorName] = React.useState("");
   const [depositDate, setDepositDate] = React.useState(() => getBankDepositDateRange().suggested);
+  const [cashReceiptDraft, setCashReceiptDraft] = React.useState<CashReceiptDraft>({ purpose: "", identifier: "" });
   const depositRange = React.useMemo(() => getBankDepositDateRange(), []);
   const [isOpening, setIsOpening] = React.useState(false);
   const [paymentWindowOpen, setPaymentWindowOpen] = React.useState(false);
@@ -586,6 +589,8 @@ export function SubmissionCartCheckout({
   };
 
   const handleBankTransfer = async (orderedItems: CartItem[]) => {
+    const cashReceipt = cashReceiptDraft.purpose ? validateCashReceiptRequest(cashReceiptDraft) : null;
+    if (cashReceipt && !cashReceipt.ok) throw new Error(cashReceipt.error);
     const response = await fetchWithTimeout("/api/cart/bank", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -594,14 +599,17 @@ export function SubmissionCartCheckout({
         guestTokensBySubmissionId: getGuestTokensForItems(orderedItems),
         depositorName: normalizeDepositorName(depositorName),
         depositDate,
+        cashReceipt: cashReceipt?.ok ? cashReceipt.value : null,
       }),
     });
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    const payload = (await response.json().catch(() => ({}))) as { error?: string; cashReceiptSaved?: boolean };
     if (!response.ok) throw new Error(payload.error ?? "입금 신청을 완료하지 못했습니다. 다시 시도해주세요.");
     checkoutItemsRef.current = [];
     moveItemsToOrders(orderedItems);
     setNotice(null);
-    router.push(`${ordersHref}?focus=${encodeURIComponent(orderedItems[0].id)}`);
+    // The order exists either way; a missed receipt request is retried from the order list.
+    const receiptNotice = cashReceipt?.ok && payload.cashReceiptSaved === false ? "&cashReceipt=retry" : "";
+    router.push(`${ordersHref}?focus=${encodeURIComponent(orderedItems[0].id)}${receiptNotice}`);
     router.refresh();
   };
 
@@ -1008,6 +1016,7 @@ export function SubmissionCartCheckout({
               />
             </label>
             <p className="text-[11px] leading-5 text-muted-foreground">입금자명과 입금 예정일은 입금 확인에 사용합니다. 예정일이 지나도 신청서는 보관되며, 주문내역에서 다시 결제할 수 있습니다.</p>
+            <CashReceiptFields idPrefix="cart" value={cashReceiptDraft} onChange={setCashReceiptDraft} disabled={isOpening || isDeleting} />
           </div>
         ) : null}
         <div className="mt-4 space-y-3 text-sm font-semibold text-foreground">

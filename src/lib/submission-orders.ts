@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { loadCashReceiptRows, toCashReceiptSummary } from "@/lib/cash-receipts-server";
 import type { SubmissionOrder, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
 
 type OrdersDb = Pick<ReturnType<typeof createAdminClient>, "from" | "rpc">;
@@ -99,11 +100,28 @@ export async function listSubmissionOrders(db: OrdersDb, actor: OrderActor, offs
   const rows = (data ?? []) as unknown as RawOrder[];
   const parents = await loadParents(db, rows);
   const visible = rows.slice(0, pageSize).filter(order => ownsOrder(order, actor, parents));
+  const bankOrderIds = visible.filter(order => order.payment_method === "BANK").map(order => order.id);
+  // Receipts are optional extras: a lookup failure must not hide the orders.
+  const receipts = bankOrderIds.length ? await loadCashReceiptRows(db, bankOrderIds).catch(() => new Map()) : new Map();
   return {
-    orders: visible.map(order => mapOrder(order, actor, parents)),
+    orders: visible.map(order => {
+      const receipt = receipts.get(order.id);
+      return { ...mapOrder(order, actor, parents), cashReceipt: receipt ? toCashReceiptSummary(receipt) : null };
+    }),
     // A page can be entirely filtered by ownership for guests; later pages may still match.
     nextOffset: rows.length > pageSize ? offset + pageSize : null,
   };
+}
+
+/** Ownership check shared by order sub-resources such as cash receipts. */
+export async function loadOwnedSubmissionOrder(db: OrdersDb, orderId: string, actor: OrderActor) {
+  const { data, error } = await db.from("submission_orders").select(orderSelect).eq("id", orderId).maybeSingle();
+  if (error) return { ok: false as const, status: 500, error: "주문 정보를 확인하지 못했습니다." };
+  const order = data as unknown as RawOrder | null;
+  if (!order) return { ok: false as const, status: 404, error: "주문을 찾을 수 없습니다." };
+  const parents = await loadParents(db, [order]);
+  if (!ownsOrder(order, actor, parents)) return { ok: false as const, status: 403, error: "주문의 소유권을 확인할 수 없습니다." };
+  return { ok: true as const, order: { id: order.id, payment_method: order.payment_method, status: order.status } };
 }
 
 export async function returnSubmissionOrderToCart(db: OrdersDb, orderId: string, actor: OrderActor) {

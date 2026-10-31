@@ -245,6 +245,15 @@ test.describe("isolated commerce account fixtures", () => {
     const missingDepositor = page.getByRole("dialog", { name: "확인 필요" }); await expect(missingDepositor).toContainText("입금자명을 입력해주세요."); await missingDepositor.getByRole("button", { name: "확인", exact: true }).click();
     expect(harness.writes).toHaveLength(0);
     await fillBankDetails(page);
+    if (identity === "member-a") {
+      // A personal cash receipt request travels with the bank order; an invalid number never leaves the browser.
+      await page.getByRole("radio", { name: "개인 소득공제", exact: true }).click();
+      await page.getByLabel("휴대폰 번호 또는 현금영수증 카드 번호").fill("02-123-4567");
+      await page.getByRole("button", { name: "입금 신청", exact: true }).click();
+      const invalidReceipt = page.getByRole("dialog", { name: "확인 필요" }); await expect(invalidReceipt).toContainText("휴대폰 번호(010으로 시작)"); await invalidReceipt.getByRole("button", { name: "확인", exact: true }).click();
+      expect(harness.writes).toHaveLength(0);
+      await page.getByLabel("휴대폰 번호 또는 현금영수증 카드 번호").fill("010-1234-5678");
+    }
     harness.bankError = "이미 주문이 생성된 신청서입니다.";
     await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     const error = page.getByRole("dialog", { name: "확인 필요" }); await expect(error).toContainText(harness.bankError); await error.getByRole("button", { name: "확인", exact: true }).click();
@@ -252,7 +261,7 @@ test.describe("isolated commerce account fixtures", () => {
     harness.bankError = null; await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     await expect(orderRow(page, orderIds[0])).toContainText("입금 대기");
     expect(await navigation(page)).toEqual([checkoutHref(ids.slice(0, 2)), `/mypage/orders?focus=${ids[0]}`]);
-    expect(harness.writes.at(-1)).toEqual({ path: "/api/cart/bank", body: { submissionIds: ids.slice(0, 2), guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])), depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
+    expect(harness.writes.at(-1)).toEqual({ path: "/api/cart/bank", body: { submissionIds: ids.slice(0, 2), guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])), depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), cashReceipt: identity === "member-a" ? { purpose: "INCOME_DEDUCTION", identifier: "01012345678" } : null } });
     if (!identity) { expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toEqual([]); expect(await stored(page, GUEST_SUBMISSION_ORDERS_STORAGE_KEY)).toHaveLength(2); } expectClean(harness);
   });
   test("card initialization failure retains selection; INIStdPay preserves the card and amount until cancellation", async ({ page }) => {

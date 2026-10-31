@@ -19,6 +19,8 @@ import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
+import { validateCashReceiptRequest, type CashReceiptRequestInput } from "@/lib/cash-receipts";
+import { saveCashReceiptRequest } from "@/lib/cash-receipts-server";
 import {
   BANK_DEPOSITOR_NAME_MAX,
   isValidDepositorName,
@@ -34,6 +36,11 @@ const requestSchema = z.object({
   guestTokensBySubmissionId: orderGuestTokensSchema.optional(),
   depositorName: z.string().min(1).max(BANK_DEPOSITOR_NAME_MAX * 2),
   depositDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // null withdraws an earlier request; omitted keeps it (older clients).
+  cashReceipt: z.object({
+    purpose: z.enum(["INCOME_DEDUCTION", "EXPENSE_PROOF"]),
+    identifier: z.string().min(1).max(40),
+  }).strict().nullable().optional(),
 }).strict();
 
 type CartBankSubmission = {
@@ -104,6 +111,13 @@ export async function POST(req: NextRequest) {
       { error: "결제할 신청서를 선택해주세요." },
       { status: 400 },
     );
+  }
+
+  let cashReceipt: CashReceiptRequestInput | null | undefined = parsed.data.cashReceipt === null ? null : undefined;
+  if (parsed.data.cashReceipt) {
+    const validReceipt = validateCashReceiptRequest(parsed.data.cashReceipt);
+    if (!validReceipt.ok) return NextResponse.json({ error: validReceipt.error }, { status: 400 });
+    cashReceipt = validReceipt.value;
   }
 
   const depositorName = normalizeDepositorName(parsed.data.depositorName);
@@ -326,6 +340,19 @@ export async function POST(req: NextRequest) {
       .in("id", orderIds).eq("status", "BANK_PENDING");
     if (detailError) console.warn("[CartBank] depositor detail update failed", { orderIds, message: detailError.message });
   }
+  // The order is already stored; a receipt failure is reported, not fatal, and
+  // the customer can request it again from the order list.
+  let cashReceiptSaved = true;
+  if (cashReceipt !== undefined) {
+    for (const orderId of orderIds) {
+      const saved = await saveCashReceiptRequest(admin, { id: orderId, payment_method: "BANK", status: "BANK_PENDING" }, cashReceipt)
+        .catch(() => ({ ok: false as const, status: 500, error: "" }));
+      if (!saved.ok) {
+        cashReceiptSaved = false;
+        console.warn("[CartBank] cash receipt request was not saved", { orderId, status: saved.status });
+      }
+    }
+  }
 
   const baseUrl = getBaseUrl(req);
   const submissionsByOrder = new Map<string, CartBankSubmission[]>();
@@ -416,5 +443,6 @@ export async function POST(req: NextRequest) {
     ok: true,
     count: submissionIds.length,
     totalAmountKrw,
+    cashReceiptSaved,
   });
 }

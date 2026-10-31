@@ -1,3 +1,5 @@
+import type { CashReceiptSummary } from "@/lib/cash-receipts";
+
 export type SubmissionOrderStatus =
   | "BANK_PENDING"
   | "CARD_PENDING"
@@ -38,6 +40,7 @@ export type SubmissionOrder = {
   depositDueAt?: string | null;
   items: SubmissionOrderItem[];
   canReturnToCart: boolean;
+  cashReceipt?: CashReceiptSummary | null;
 };
 
 export type SubmissionOrdersPage = {
