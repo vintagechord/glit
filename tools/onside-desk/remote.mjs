@@ -4,7 +4,8 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 const UUID = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 const ASSET_KINDS = new Set(['ratingImage', 'usageGuide', 'certificate']);
 const JSON_LIMIT = 3 * 1024 * 1024;
-const CERTIFICATE_LIMIT = 20 * 1024 * 1024;
+// The web app runs on Vercel Functions (4.5MB request bodies); certificates stay at 4MB.
+const CERTIFICATE_LIMIT = 4 * 1024 * 1024;
 const ASSET_LIMIT = 25 * 1024 * 1024;
 const text = value => typeof value === 'string' ? value.trim() : '';
 
@@ -149,7 +150,7 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
   }
   async function uploadCertificate(id, { body: input, filename, expectedUpdatedAt, requestId: requestedId, signal } = {}) {
     if (!(input instanceof Uint8Array) && !(input instanceof ArrayBuffer)) throw new RemoteReviewError('업로드할 필증 파일을 확인해 주세요.', 400, 'INVALID_CERTIFICATE');
-    if (input.byteLength === 0 || input.byteLength > CERTIFICATE_LIMIT) throw new RemoteReviewError('필증은 20MB 이하의 PDF, PNG, JPG 파일이어야 합니다.', 413, 'CERTIFICATE_TOO_LARGE');
+    if (input.byteLength === 0 || input.byteLength > CERTIFICATE_LIMIT) throw new RemoteReviewError('필증은 4MB 이하의 PDF, PNG, JPG 파일이어야 합니다.', 413, 'CERTIFICATE_TOO_LARGE');
     const body = Buffer.from(input instanceof ArrayBuffer ? new Uint8Array(input) : input);
     const mime = body.subarray(0, 5).equals(Buffer.from('%PDF-')) ? 'application/pdf' : body.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? 'image/png' : body[0] === 255 && body[1] === 216 && body[2] === 255 ? 'image/jpeg' : null;
     if (!mime) throw new RemoteReviewError('PDF, PNG, JPG 형식의 실제 필증 파일을 선택해 주세요.', 400, 'INVALID_CERTIFICATE_TYPE');

@@ -15,7 +15,7 @@ const plist = path.join(agents, 'kr.onside.review-desk.plist');
 const identity = `gui/${process.getuid()}/kr.onside.review-desk`;
 process.umask(0o077);
 // Validate the complete bundle before stopping a working installation.
-for (const file of ['Contents/MacOS/OnsideDesk', 'Contents/Resources/app/remote.mjs', 'Contents/Resources/app/manual-upgrade.mjs', 'Contents/Resources/app/manual-import.mjs', 'Contents/Resources/app/manual-ole.mjs', 'Contents/Resources/app/manual-document-parser.mjs', 'Contents/Resources/app/screening.mjs', 'Contents/Resources/app/screening-engine.mjs', 'Contents/Resources/app/manual-translation.mjs', 'Contents/Resources/runtime/bin/node']) await fs.access(path.join(sourceBundle, file));
+for (const file of ['Contents/MacOS/OnsideDesk', 'Contents/Resources/app/remote.mjs', 'Contents/Resources/app/monitor.mjs', 'Contents/Resources/app/manual-upgrade.mjs', 'Contents/Resources/app/manual-import.mjs', 'Contents/Resources/app/manual-ole.mjs', 'Contents/Resources/app/manual-document-parser.mjs', 'Contents/Resources/app/screening.mjs', 'Contents/Resources/app/screening-engine.mjs', 'Contents/Resources/app/manual-translation.mjs', 'Contents/Resources/runtime/bin/node']) await fs.access(path.join(sourceBundle, file));
 for (const dir of [path.dirname(target), dataRoot, agents]) await fs.mkdir(dir, { recursive: true, mode: 0o700 });
 const connection = path.join(dataRoot, 'connection.env');
 if (!await fs.stat(connection).catch(() => null)) {

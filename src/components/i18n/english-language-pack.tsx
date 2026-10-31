@@ -301,6 +301,7 @@ const exactTranslations: Record<string, string> = {
   "WAV 파일을 개별로 첨부하거나, 전체 음원을 ZIP 파일로 묶어 업로드해주세요.": "Upload individual WAV files or a ZIP containing all audio files.",
   "업로드가 완료되지 않으면 접수할 수 없습니다. 문제가 계속되면 고객센터로 문의해주세요.": "Your submission cannot proceed until the upload is complete. If the issue continues, please contact support.",
   "발매된 음반 · URL 접수": "Released Album · URL Submission",
+  "발매된 음반 URL 접수": "Released album URL submission",
   "선택을 확정하면 URL과 접수자 정보 입력으로 이동합니다.": "Confirm to enter your album URL and contact details.",
   "멜론 또는 지니의 앨범 링크를 입력해주세요.": "Enter your Melon or Genie album link.",
   "멜론 또는 지니의 앨범 상세 페이지 URL을 확인해주세요. 곡·아티스트 링크는 사용할 수 없습니다.": "Check your Melon or Genie album detail page URL. Song and artist links are not supported.",

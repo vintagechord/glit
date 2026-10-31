@@ -17,6 +17,8 @@ import {
 } from "@/lib/guest-submission-cart";
 import type { SubmissionOrder, SubmissionOrderItem, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
+import type { CashReceiptSummary } from "@/lib/cash-receipts";
+import { OrderCashReceiptPanel } from "./order-cash-receipt-panel";
 
 const statusLabels: Record<SubmissionOrderStatus, string> = {
   BANK_PENDING: "입금 대기", CARD_PENDING: "결제 확인 대기", PAYPAL_PENDING: "결제 확인 대기",
@@ -82,6 +84,9 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
   const focusedId = React.useRef<string | null>(null);
   const guestEntries = readGuestSubmissionOrderEntries();
   const guestTokens = toGuestTokensBySubmissionId(guestEntries);
+  const updateCashReceipt = React.useCallback((orderId: string, cashReceipt: CashReceiptSummary | null) => {
+    setOrders((previous) => previous.map((order) => order.id === orderId ? { ...order, cashReceipt } : order));
+  }, []);
 
   const loadOrders = React.useCallback(async (offset = 0, append = false) => {
     if (append && activeRequest.current) return;
@@ -183,6 +188,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
           className={cn(buttonClass, filter === entry.id && "bg-[var(--bauhaus-yellow)] text-[#111111]")}>{entry.label}</button>)}
       </nav>
       {error && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>{error}</div>}
+      {params.get("cashReceipt") === "retry" && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>입금 신청은 완료됐지만 현금영수증 신청이 저장되지 않았습니다. 아래 주문의 현금영수증에서 다시 신청해주세요.</div>}
       {!loaded && loading ? <div className={panelClass}>주문내역을 불러오는 중입니다...</div> : visibleOrders.length === 0 ? (
         <div className={`${panelClass} space-y-3`}>
           <p className="text-sm text-muted-foreground">{orders.length === 0 ? error ? "새로고침을 눌러 주문내역을 다시 확인해주세요." : "주문 내역이 없습니다." : "해당 상태의 주문이 없습니다."}</p>
@@ -235,6 +241,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                 ? "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 입금하거나 결제하기에서 다시 신청해주세요."
                 : "입금자명이 다르면 입금 확인이 늦어질 수 있습니다. 이미 입금했다면 입금 확인을 기다려주세요."}</p>
             </div>}
+            <OrderCashReceiptPanel order={order} guestTokens={userId ? {} : guestTokens} onChanged={updateCashReceipt} />
             {order.note && <p className="mt-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs leading-6 text-muted-foreground">{order.note}</p>}
             {order.returnedAt && <p className="mt-3 text-xs leading-5 text-muted-foreground">장바구니로 돌린 주문입니다. 기존 주문 이력은 보관됩니다.</p>}
           </article>)}

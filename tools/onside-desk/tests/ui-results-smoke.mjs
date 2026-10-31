@@ -70,7 +70,7 @@ await page.route('**/api/cases/*/email-preview', async route => {
 });
 try {
   await page.goto(`http://127.0.0.1:${desk.server.address().port}`);
-  assert.equal(await page.locator('.nav-item').count(), 4);
+  assert.equal(await page.locator('.nav-item').count(), 5);
   await page.locator('[data-case]').filter({hasText:'우리의 계절이 시작되는 곳'}).click();
   await page.locator('.detail-statuses').getByText('미결제', { exact: true }).waitFor();
   await page.getByRole('tab', { name: '심의 결과', exact: true }).click();

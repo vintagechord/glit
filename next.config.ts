@@ -4,7 +4,9 @@ const nextConfig: NextConfig = {
   // Reserve memory for on-demand document readers on the existing Free host.
   ...(process.env.REVIEW_DOCS_LOW_MEMORY === "true" ? { cacheMaxMemorySize: 8 * 1024 * 1024 } : {}),
   outputFileTracingIncludes: {
-    "/api/admin/**": ["./templates/review-docs/**/*.docx", "./services/review-docs/extract.py", "./services/review-docs/check.py"],
+    "/api/admin/**": ["./templates/review-docs/**/*.docx", "./services/review-docs/extract.py", "./services/review-docs/check.py", "./src/assets/fonts/nanum-gothic/*.ttf"],
+    // Cash receipt PDFs embed Nanum Gothic read from disk at runtime.
+    "/api/orders/**": ["./src/assets/fonts/nanum-gothic/*.ttf"],
   },
   poweredByHeader: false,
   experimental: {

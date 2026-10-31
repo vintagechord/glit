@@ -9,12 +9,13 @@ import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { Transform, Readable } from 'node:stream';
 import { createRemoteReviewClient } from './remote.mjs';
+import { createSiteMonitor, notificationText, worst } from './monitor.mjs';
 import { upgradeManualMvCases } from './manual-upgrade.mjs';
 import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings } from './core.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, timers = true } = {}) {
+export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, openUrl, monitor, notify, timers = true } = {}) {
   process.umask(0o077);
   if (!source) {
     const envFile = path.join(dataRoot, 'connection.env');
@@ -27,6 +28,30 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   reviewer ||= async input => (await import('./screening.mjs')).reviewLyrics(input);
   translator ||= async input => (await import('./manual-translation.mjs')).translateMissingLyrics(input);
   openFolder ||= target => { const child = spawn('/usr/bin/open', [target], { stdio: 'ignore' }); child.on('error', () => {}); };
+  openUrl ||= openFolder;
+  // Site monitoring settings live outside state.json so backups never copy the Vercel token.
+  const monitorFile = path.join(dataRoot, 'monitor.json');
+  let monitorSettings = { vercelToken: '', notify: true };
+  try { monitorSettings = { ...monitorSettings, ...JSON.parse(await fs.readFile(monitorFile, 'utf8')) }; } catch { /* first run */ }
+  monitor ||= createSiteMonitor({ env: process.env, settings: () => monitorSettings });
+  notify ||= message => {
+    const text = message.replace(/[\\"]/g, ' ').slice(0, 180);
+    const child = spawn('/usr/bin/osascript', ['-e', `display notification "${text}" with title "온사이드 사이트 관리"`], { stdio: 'ignore' }); child.on('error', () => {});
+  };
+  const monitorState = { snapshot: null, running: null, notified: '' };
+  async function runMonitor(force = false) {
+    if (monitorState.running) return monitorState.running;
+    monitorState.running = monitor.snapshot(force).then(snapshot => {
+      // Notify once per new set of problems; recovery resets the memory.
+      const signature = snapshot.issues.filter(issue => issue.status === 'error' || issue.status === 'warning').map(issue => `${issue.section}/${issue.label}/${issue.status}`).sort().join('|');
+      if (signature && signature !== monitorState.notified && monitorSettings.notify !== false && worst([snapshot.overall]) !== 'ok') { try { notify(notificationText(snapshot)); } catch { /* notification is best effort */ } }
+      monitorState.notified = signature;
+      monitorState.snapshot = snapshot;
+      return snapshot;
+    }).finally(() => { monitorState.running = null; });
+    return monitorState.running;
+  }
+  const monitorSettingsView = () => ({ vercelConfigured: Boolean(monitorSettings.vercelToken), notify: monitorSettings.notify !== false });
   const store = await new Store(dataRoot).init();
   const outputRoot = path.join(dataRoot, '신청별 자료');
   await fs.mkdir(outputRoot, { recursive: true, mode: 0o700 });
@@ -45,7 +70,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.3.3' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.4.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -274,7 +299,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   async function readCertificate(req) {
     const chunks = []; let size = 0;
-    for await (const chunk of req) { size += chunk.length; if (size > 20 * 1024 * 1024) throw Object.assign(new Error('필증은 20MB까지 업로드할 수 있습니다.'), { status: 413 }); chunks.push(chunk); }
+    for await (const chunk of req) { size += chunk.length; if (size > 4 * 1024 * 1024) throw Object.assign(new Error('필증은 4MB까지 업로드할 수 있습니다.'), { status: 413 }); chunks.push(chunk); }
     if (!size) throw Object.assign(new Error('필증 파일을 선택하세요.'), { status: 400 });
     return Buffer.concat(chunks);
   }
@@ -313,7 +338,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.3.3' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.4.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -336,6 +361,26 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (url.pathname === '/api/settings' && req.method === 'POST') { store.data.settings = validateSettings(await readJSON(req), store.data.settings); await store.save(); return sendJSON(res, 200, { settings: store.data.settings }); }
       if (url.pathname === '/api/backup' && req.method === 'POST') return sendJSON(res, 200, await backup());
       if (url.pathname === '/api/open-output' && req.method === 'POST') { openFolder(outputRoot); return sendJSON(res, 200, { opened: true }); }
+      if (url.pathname === '/api/monitor' && req.method === 'GET') return sendJSON(res, 200, { snapshot: await runMonitor(url.searchParams.get('refresh') === '1'), settings: monitorSettingsView() });
+      if (url.pathname === '/api/monitor/settings' && req.method === 'POST') {
+        const body = await readJSON(req);
+        const next = { ...monitorSettings };
+        if (body.vercelToken === null || body.vercelToken === '') next.vercelToken = '';
+        else if (body.vercelToken !== undefined) {
+          const value = String(body.vercelToken).trim();
+          if (!/^[A-Za-z0-9_.-]{16,256}$/.test(value)) return sendJSON(res, 400, { error: 'Vercel 토큰 형식을 확인하세요.' });
+          next.vercelToken = value;
+        }
+        if (body.notify !== undefined) next.notify = body.notify === true;
+        monitorSettings = next; await atomicJSON(monitorFile, monitorSettings);
+        return sendJSON(res, 200, { settings: monitorSettingsView(), snapshot: await runMonitor(true) });
+      }
+      if (url.pathname === '/api/monitor/open' && req.method === 'POST') {
+        const target = String((await readJSON(req)).target || '');
+        const link = Object.hasOwn(monitor.links(), target) ? monitor.links()[target] : null;
+        if (!link) return sendJSON(res, 400, { error: '열 수 없는 주소입니다.' });
+        openUrl(link); return sendJSON(res, 200, { opened: true });
+      }
       const artifact = url.pathname.match(/^\/api\/artifacts\/([^/]+)\/([^/]+)\/([^/]+)$/);
       if (artifact && req.method === 'GET') {
         const [, id, genId, encoded] = artifact; const name = decodeURIComponent(encoded);
@@ -434,12 +479,15 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   server.requestTimeout = 30 * 60 * 1000;
   server.headersTimeout = 20000;
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
-  let timer;
+  let timer, monitorTimer;
   if (timers) {
+    // Background checks keep notifications working while the window is closed.
+    monitorTimer = setInterval(() => { void runMonitor(false).catch(() => {}); }, 5 * 60 * 1000); monitorTimer.unref();
+    setTimeout(() => { void runMonitor(false).catch(() => {}); }, 10_000).unref();
     timer = setInterval(() => { if (store.data.settings.autoSync) void sync().catch(() => {}); }, 5 * 60 * 1000); timer.unref();
     if (store.data.settings.autoSync && source.sourceStatus().configured) void sync().catch(() => {});
   }
-  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, async idle() { await queue; }, async close() { closing = true; clearInterval(timer); shutdown.abort(); await queue.catch(() => {}); await store.save(); await new Promise(resolve => server.close(resolve)); } };
+  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, async idle() { await queue; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); shutdown.abort(); await queue.catch(() => {}); await store.save(); await new Promise(resolve => server.close(resolve)); } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

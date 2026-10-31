@@ -31,6 +31,7 @@ import {
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
+import { autoIssueRequestedCashReceipt } from "@/lib/cash-receipts-server";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import {
   PUBLIC_CATALOG_CACHE_TAG,
@@ -2107,6 +2108,10 @@ export async function saveSubmissionAdminFormAction(
     }
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+    const confirmedOrderId = currentSubmissionRow.current_order_id;
+    // A requested cash receipt is issued once the deposit is confirmed (when
+    // the Inicis INIAPI key is registered); failures stay visible to admins.
+    if (confirmedOrderId) after(() => autoIssueRequestedCashReceipt(createAdminClient(), confirmedOrderId, actor.id));
   }
   if (orderPayment.refundedIds) {
     for (const id of orderPayment.refundedIds) revalidateUserDashboards(id);

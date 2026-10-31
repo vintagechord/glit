@@ -16,9 +16,9 @@ test.beforeAll(async () => {
         import {createRoot} from 'react-dom/client';
         import {ArtistHistoryTabs} from './src/components/dashboard/artist-history';
         import {EnglishLanguagePack} from './src/components/i18n/english-language-pack';
-        const submission=(id,title,status='RESULT_READY')=>({id,title,status,payment_status:'PAID',type:'ALBUM',created_at:'2026-10-24T00:00:00Z',updated_at:null});
+        const submission=(id,title,status='RESULT_READY',extra={})=>({id,title,status,payment_status:'PAID',type:'ALBUM',created_at:'2026-10-24T00:00:00Z',updated_at:null,...extra});
         const groups=[
-          {artistId:null,artistName:'앨범 링크 확인 대기',thumbnail:null,submissions:[submission('fixture-1','발매된 음반 · URL 접수'),submission('fixture-2',${JSON.stringify(longTitle)},'COMPLETED'),submission('fixture-3','Short album title','IN_PROGRESS')]},
+          {artistId:null,artistName:'앨범 링크 확인 대기',thumbnail:null,submissions:[submission('fixture-1',null,'RESULT_READY',{is_oneclick:true}),submission('fixture-2',${JSON.stringify(longTitle)},'COMPLETED'),submission('fixture-3','Short album title','IN_PROGRESS')]},
           {artistId:'fixture-artist-2',artistName:'이름이아주긴아티스트와여러멤버가함께하는그룹',thumbnail:null,submissions:[submission('fixture-4','Second artist album')]},
           {artistId:'fixture-artist-3',artistName:'Third Artist',thumbnail:null,submissions:[submission('fixture-5','Third artist album','SUBMITTED')]}
         ];
@@ -61,11 +61,16 @@ for (const width of [320, 390, 1024, 1440]) test(`history cards balance controls
   const blocked = await mount(page);
   const rows = page.getByRole("group");
   await expect(rows).toHaveCount(5);
+  // An untitled released-album URL submission shows its status only.
+  const urlOnly = page.getByRole("group", { name: "발매된 음반 URL 접수", exact: true });
+  await expect(urlOnly.getByRole("link")).toHaveCount(1);
+  await expect(page.getByText("발매된 음반 · URL 접수")).toHaveCount(0);
   for (const row of await rows.all()) {
+    const titled = (await row.getByRole("link").count()) > 1;
     const checkbox = await row.getByRole("checkbox").locator("..").boundingBox();
     const status = await row.getByRole("link").first().boundingBox();
     const remove = await row.getByRole("button", { name: /심의 내역 삭제$/ }).boundingBox();
-    const title = await row.getByRole("link").last().boundingBox();
+    const title = titled ? await row.getByRole("link").last().boundingBox() : status;
     const bounds = await row.boundingBox();
     expect(checkbox && status && remove && title && bounds).toBeTruthy();
     if (!checkbox || !status || !remove || !title || !bounds) continue;
@@ -77,9 +82,11 @@ for (const width of [320, 390, 1024, 1440]) test(`history cards balance controls
     expect(Math.abs(remove.y - checkbox.y)).toBeLessThan(1);
     expect(status.x).toBeGreaterThanOrEqual(checkbox.x + checkbox.width);
     expect(remove.x + remove.width).toBeLessThanOrEqual(bounds.x + bounds.width);
-    expect(title.y).toBeGreaterThanOrEqual(Math.max(status.y + status.height, remove.y + remove.height));
-    expect(Math.abs(title.x - checkbox.x)).toBeLessThan(1);
-    expect(title.width).toBeGreaterThan(bounds.width - 20);
+    if (titled) {
+      expect(title.y).toBeGreaterThanOrEqual(Math.max(status.y + status.height, remove.y + remove.height));
+      expect(Math.abs(title.x - checkbox.x)).toBeLessThan(1);
+      expect(title.width).toBeGreaterThan(bounds.width - 20);
+    }
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
