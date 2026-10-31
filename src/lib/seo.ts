@@ -43,7 +43,8 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
   if (input.enPath) languages.en = input.enPath;
   const siteName = locale === "en" ? SITE_NAME_EN : SITE_NAME;
   return {
-    title: input.absoluteTitle ? { absolute: input.title } : input.title,
+    // The root template appends "| 온사이드"; English pages use the English name.
+    title: input.absoluteTitle ? { absolute: input.title } : locale === "en" ? { absolute: `${input.title} | ${SITE_NAME_EN}` } : input.title,
     description: input.description,
     ...(input.keywords ? { keywords: input.keywords } : {}),
     alternates: { canonical, languages },
