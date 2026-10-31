@@ -54,3 +54,9 @@ test("the client-side guide link list matches the guide content", async () => {
   const { REVIEW_GUIDE_LINKS } = await import("../src/lib/review-guide-links");
   assert.deepEqual(REVIEW_GUIDE_LINKS.map((link) => [link.slug, link.menuLabel]), REVIEW_GUIDES.map((guide) => [guide.slug, guide.menuLabel]));
 });
+
+test("English pages carry the English site name in their titles", async () => {
+  const { pageMetadata } = await import("../src/lib/seo");
+  assert.deepEqual(pageMetadata({ locale: "en", title: "Log in", description: "x", path: "/login", enPath: "/en/login" }).title, { absolute: "Log in | Onside" });
+  assert.equal(pageMetadata({ title: "로그인", description: "x", path: "/login" }).title, "로그인");
+});
