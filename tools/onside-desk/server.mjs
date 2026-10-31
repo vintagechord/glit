@@ -482,7 +482,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   let timer, monitorTimer;
   if (timers) {
     // Background checks keep notifications working while the window is closed.
-    monitorTimer = setInterval(() => { void runMonitor(false).catch(() => {}); }, 5 * 60 * 1000); monitorTimer.unref();
+    monitorTimer = setInterval(() => { void runMonitor(false).catch(() => {}); }, 10 * 60 * 1000); monitorTimer.unref();
     setTimeout(() => { void runMonitor(false).catch(() => {}); }, 10_000).unref();
     timer = setInterval(() => { if (store.data.settings.autoSync) void sync().catch(() => {}); }, 5 * 60 * 1000); timer.unref();
     if (store.data.settings.autoSync && source.sourceStatus().configured) void sync().catch(() => {});
