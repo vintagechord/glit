@@ -444,7 +444,7 @@ export async function SubmissionDetailPageView({
       initialFiles={related.files.data ?? []}
       initialDataComplete={!related.files.error && !related.reviews.error}
       enableRealtime={!hasGuestPaymentResultGrant}
-      refreshIntervalMs={hasGuestPaymentResultGrant ? 10000 : undefined}
+      refreshIntervalMs={hasGuestPaymentResultGrant ? 60000 : undefined}
       paymentState={paymentState}
       resultsOnly={resolvedSearchParams.view === "archive-result"}
     />

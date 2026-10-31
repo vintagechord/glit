@@ -72,10 +72,10 @@ export function MusicArchiveClient() {
       if (controller.signal.aborted || pending) return;
       if (timer) clearTimeout(timer);
       if (document.visibilityState === "visible") { pending = true; try { await refreshDetail(artistId, controller.signal); } catch { /* Retain the saved view while retrying. */ } finally { pending = false; } }
-      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), activeJobs ? 5000 : 30000);
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), activeJobs ? 5000 : 60000);
     }
     function visible() { if (document.visibilityState === "visible") void poll(); }
-    timer = setTimeout(() => void poll(), activeJobs ? 2500 : 30000); document.addEventListener("visibilitychange", visible); window.addEventListener("focus", visible);
+    timer = setTimeout(() => void poll(), activeJobs ? 2500 : 60000); document.addEventListener("visibilitychange", visible); window.addEventListener("focus", visible);
     return () => { controller.abort(); if (timer) clearTimeout(timer); document.removeEventListener("visibilitychange", visible); window.removeEventListener("focus", visible); };
   }, [artistId, activeJobs, refreshDetail]);
   useEffect(() => { if (dialog?.type !== "add_artist") connectionDraft.current = null; }, [dialog?.type]);

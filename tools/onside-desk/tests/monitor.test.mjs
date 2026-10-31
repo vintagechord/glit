@@ -52,7 +52,7 @@ function fakes(overrides = {}) {
   return { calls, fetch, dns, tlsInfo, s3, lists: () => lists };
 }
 
-const monitorWith = (f, settings = {}) => createSiteMonitor({ env, fetch: f.fetch, dns: f.dns, tlsInfo: f.tlsInfo, s3: f.s3, now: () => NOW, settings: () => settings });
+const monitorWith = (f, settings = {}, backupStatusFile = '/nonexistent/onside-backup/last-status.json') => createSiteMonitor({ env, fetch: f.fetch, dns: f.dns, tlsInfo: f.tlsInfo, s3: f.s3, now: () => NOW, settings: () => settings, backupStatusFile });
 const sectionOf = (snapshot, id) => snapshot.sections.find(item => item.id === id);
 const item = (section, label) => section.items.find(entry => entry.label === label);
 
@@ -73,6 +73,20 @@ test('a healthy site reports every service and free-plan usage', async () => {
   assert.equal(snapshot.overall, 'warning');
   assert.ok(snapshot.issues.some(issue => issue.label.startsWith('저장 용량')));
   assert.ok(!JSON.stringify(snapshot).includes('service-role-key-value'));
+});
+
+test('the daily backup status is shown and goes stale after 26 hours', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-backup-status-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'last-status.json');
+  const backupItem = async () => item(sectionOf(await monitorWith(fakes(), {}, file).snapshot(true), 'supabase'), 'DB 자동 백업');
+  assert.equal((await backupItem()).status, 'warning', 'missing setup is flagged');
+  await fs.writeFile(file, JSON.stringify({ ok: true, finishedAt: new Date(NOW - 3_600_000).toISOString(), database: { bytes: 5_000_000 } }));
+  assert.equal((await backupItem()).status, 'ok');
+  await fs.writeFile(file, JSON.stringify({ ok: true, finishedAt: new Date(NOW - 30 * 3_600_000).toISOString(), database: { bytes: 5_000_000 } }));
+  assert.equal((await backupItem()).status, 'warning');
+  await fs.writeFile(file, JSON.stringify({ ok: false, finishedAt: new Date(NOW).toISOString(), error: 'DATABASE_UNREACHABLE' }));
+  assert.match((await backupItem()).value, /실패 · DATABASE_UNREACHABLE/);
 });
 
 test('outages, DNS drift and expiring certificates or domains are errors', async () => {

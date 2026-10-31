@@ -129,7 +129,7 @@ test("PayPal callback and guest detail use the server-only result grant", () => 
   // Browser RLS cannot read a guest record authorized only by the HttpOnly
   // result grant. Refresh through the server without exposing its bearer token.
   assert.match(detailPage, /enableRealtime=\{!hasGuestPaymentResultGrant\}/);
-  assert.match(detailPage, /refreshIntervalMs=\{hasGuestPaymentResultGrant \? 10000 : undefined\}/);
+  assert.match(detailPage, /refreshIntervalMs=\{hasGuestPaymentResultGrant \? 60000 : undefined\}/);
   assert.doesNotMatch(detailPage, /guestToken=\{/);
   assert.match(
     proxy,

@@ -1,4 +1,7 @@
 import dnsPromises from 'node:dns/promises';
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import tls from 'node:tls';
 
 /**
@@ -102,6 +105,8 @@ export function createSiteMonitor(options = {}) {
   const s3Factory = options.s3 || defaultS3;
   const now = options.now || Date.now;
   const getSettings = options.settings || (() => ({}));
+  // Written by scripts/backup/onside-supabase-backup.mjs (launchd, 04:40 daily).
+  const backupStatusFile = options.backupStatusFile || join(homedir(), 'OnsideBackups', 'last-status.json');
   const siteOrigin = (() => { try { return new URL(env.ONSIDE_DESK_SERVICE_URL || `https://${config.domain}`).origin; } catch { return `https://${config.domain}`; } })();
   const supabaseUrl = String(env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/+$/, '');
   const supabaseRef = (() => { try { return new URL(supabaseUrl).hostname.split('.')[0]; } catch { return ''; } })();
@@ -289,6 +294,15 @@ export function createSiteMonitor(options = {}) {
         if (idleDays > 5) items.push({ label: '무료 프로젝트 일시정지 위험', value: `${Math.floor(idleDays)}일간 활동 없음`, status: 'warning', hint: '무료 프로젝트는 1주일간 활동이 없으면 일시정지됩니다.' });
       }
     } catch (error) { items.push({ label: '데이터베이스', value: safeMessage(error), status: 'error' }); }
+    try {
+      const backup = JSON.parse(await readFile(backupStatusFile, 'utf8'));
+      const ageHours = (now() - new Date(backup.finishedAt || backup.startedAt).getTime()) / 3_600_000;
+      items.push(backup.ok
+        ? { label: 'DB 자동 백업', value: `${kst(backup.finishedAt)} 성공 · ${bytesLabel(backup.database?.bytes)}`, status: ageHours > 26 ? 'warning' : 'ok', ...(ageHours > 26 ? { hint: '하루 넘게 백업이 없습니다. Mac이 꺼져 있었는지 확인하세요.' } : {}) }
+        : { label: 'DB 자동 백업', value: `${kst(backup.finishedAt)} 실패 · ${backup.error || '원인 미상'}`, status: 'warning', hint: '~/OnsideBackups/logs/backup.log를 확인하세요.' });
+    } catch {
+      items.push({ label: 'DB 자동 백업', value: '설정되지 않았습니다 (scripts/backup/README.md).', status: 'warning' });
+    }
     items.push({ label: '전송량·Egress', value: '무료 5GB/월 — API로 제공되지 않아 대시보드에서 확인', status: 'unknown' });
     const result = section('supabase', 'Supabase (DB · 로그인)', items, { usage: usageRows, links });
     result.status = worst([result.status === 'unknown' ? 'ok' : result.status, ...usageRows.map(row => row.status)]);

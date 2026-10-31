@@ -141,7 +141,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
   const hasPendingOrder = orders.some((order) => ["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING"].includes(order.status));
   React.useEffect(() => {
     if (!hasPendingOrder || returningId) return;
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void loadOrders(0, true); }, 15000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void loadOrders(0, true); }, 60000);
     return () => window.clearInterval(timer);
   }, [hasPendingOrder, loadOrders, returningId]);
   const focusedOrder = orders.find((order) => order.id === focus || order.items.some((item) => item.submissionId === focus || item.submissionRef === focus));

@@ -2,14 +2,20 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { faqItems } from "@/lib/onside-content";
+import { faqJsonLd, pageMetadata } from "@/lib/seo";
+import { JsonLd } from "@/components/seo/json-ld";
 
-export const metadata = {
-  title: "FAQ",
-};
+export const metadata = pageMetadata({
+  title: "자주 묻는 질문(FAQ) · 음반 심의·뮤직비디오 심의",
+  description: "음반 심의와 뮤직비디오 심의 신청, 준비물, 결제, 결과 확인에 대해 자주 묻는 질문과 답변을 확인하세요.",
+  path: "/faq",
+  enPath: "/en/faq",
+});
 
 export default function FaqPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      <JsonLd data={faqJsonLd(faqItems)} />
       <p className="bauhaus-kicker">FAQ</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">
         자주 묻는 질문

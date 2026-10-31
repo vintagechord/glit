@@ -33,3 +33,24 @@ test("member, operator, payment and token pages stay blocked", () => {
   }
   assert.equal(isAllowed("/dashboard/new/mv", allow, disallow), true);
 });
+
+test("search guides are listed, redirects and placeholder pages are not, AI crawlers are blocked", () => {
+  const paths = sitemap().map((entry) => new URL(entry.url).pathname);
+  for (const path of ["/guide/album-review", "/guide/mv-review", "/guide/broadcast-review", "/guide/radio-review", "/dashboard/new/album", "/dashboard/new/mv"]) {
+    assert.ok(paths.includes(path), `${path} should be in the sitemap`);
+  }
+  assert.equal(paths.includes("/en/apply"), false, "redirecting aliases must not be listed");
+  assert.equal(paths.includes("/studio"), false, "the placeholder Studio page is not indexable");
+  const rules = ([] as Array<{ userAgent?: string | string[]; disallow?: string | string[] }>).concat(robots().rules);
+  const blocked = rules.find((rule) => Array.isArray(rule.userAgent) && rule.userAgent.includes("GPTBot"));
+  assert.ok(blocked && ([] as string[]).concat(blocked.disallow ?? []).includes("/"));
+  for (const searchBot of ["Googlebot", "Yeti", "Daum", "bingbot"]) {
+    assert.equal(rules.some((rule) => ([] as string[]).concat(rule.userAgent ?? []).includes(searchBot)), false, `${searchBot} must stay under the general rules`);
+  }
+});
+
+test("the client-side guide link list matches the guide content", async () => {
+  const { REVIEW_GUIDES } = await import("../src/lib/review-guides");
+  const { REVIEW_GUIDE_LINKS } = await import("../src/lib/review-guide-links");
+  assert.deepEqual(REVIEW_GUIDE_LINKS.map((link) => [link.slug, link.menuLabel]), REVIEW_GUIDES.map((guide) => [guide.slug, guide.menuLabel]));
+});

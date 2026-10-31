@@ -1,6 +1,10 @@
-export const metadata = {
+import { pageMetadata } from "@/lib/seo";
+export const metadata = pageMetadata({
   title: "Studio",
-};
+  description: "온사이드 Studio 서비스를 준비하고 있습니다.",
+  path: "/studio",
+  noindex: true,
+});
 
 export default function StudioPage() {
   return (

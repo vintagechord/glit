@@ -1,5 +1,9 @@
 import { APP_CONFIG } from "./config";
 
+/** Update together with every material change to the privacy policy text. */
+export const PRIVACY_POLICY_EFFECTIVE_DATE = "2026년 11월 1일";
+const PRIVACY_POLICY_EFFECTIVE_DATE_EN = "November 1, 2026";
+
 export const termsContent = `온사이드 심의 서비스 이용약관
 
 제1조 목적
@@ -28,32 +32,106 @@ export const termsContent = `온사이드 심의 서비스 이용약관
 
 export const privacyContent = `온사이드 개인정보처리방침
 
-온사이드는 음반·뮤직비디오 심의 신청, 파일 제출, 결제, 진행 확인, 결과 수령 서비스를 제공하기 위해 필요한 범위에서 개인정보를 수집·이용합니다.
+${APP_CONFIG.businessName}(이하 "회사")는 온사이드(iamonside.com) 서비스를 운영하면서 「개인정보 보호법」 등 관련 법령을 지킵니다. 이 방침은 회사가 어떤 개인정보를 어떤 목적으로 처리하고, 누구에게 처리를 맡기며, 이용자가 어떤 권리를 행사할 수 있는지 안내합니다.
 
-1. 수집 항목
-회원가입: 이메일, 비밀번호
-심의 신청: 신청자명, 연락처, 이메일, 회사/기획사명, 아티스트명, 앨범·곡·영상 정보, 결제 및 증빙 발급 정보
-파일 제출: 음원, 영상, 가사, 신청서, 사업자등록증 등 이용자가 제출한 자료
-서비스 이용 과정: 접속 기록, 조회 코드, 결제 상태, 진행 상태, 문의 내역
+시행일: ${PRIVACY_POLICY_EFFECTIVE_DATE}
 
-2. 이용 목적
-심의 신청 접수와 본인 확인, 자료 검수, 방송국/기관 접수 대행, 진행 상태 안내, 결과 및 필증 제공, 결제 처리, 세금계산서·현금영수증 등 증빙 발급, 고객 문의 대응, 부정 이용 방지에 사용합니다.
+1. 개인정보의 처리 목적과 근거
+- 회원 가입·관리: 회원 식별, 로그인, 계정 관리, 부정 이용 방지 (정보주체의 동의, 계약 이행)
+- 심의 신청 대행: 신청 접수, 자료 검수, 방송사·영상물등급위원회 등 심의기관 신청, 진행 상황과 결과 안내, 필증·결과 자료 제공 (계약 이행)
+- 결제와 증빙: 결제 처리, 입금 확인, 환불, 현금영수증·세금계산서 발급 (계약 이행, 법령상 의무)
+- 고객 지원: 문의 응대, 서비스 안내 메일 발송, 분쟁 대응 (계약 이행)
+- 부가 서비스: 매거진 발행 요청, 노래방 등록, 내 음악 관리 (계약 이행)
+- 마케팅: 이벤트·혜택 안내 (선택 동의한 경우에만)
+- 안전한 서비스 운영: 접속 기록 확인, 장애·보안 대응 (법령상 의무, 정당한 이익)
 
-3. 보관 기간
-회원 정보는 회원 탈퇴 또는 서비스 이용 목적 달성 시까지 보관합니다. 심의 신청, 결제, 세금 증빙, 분쟁 대응에 필요한 기록은 관련 법령에서 정한 기간 동안 보관할 수 있습니다. 업로드 파일의 보관과 삭제는 파일 보관/삭제 정책을 따릅니다.
+2. 처리하는 개인정보 항목
+- 회원 가입: [필수] 이메일, 비밀번호(암호화하여 저장), 만 14세 이상 여부와 약관 동의 내역 / [선택] 마케팅 정보 수신 동의
+- 소셜 로그인(카카오·네이버·구글): 해당 서비스에서 제공받는 이메일, 이름(또는 별명), 서비스별 회원 식별값
+- 심의 신청: 신청자 이름, 휴대폰 번호, 이메일, 회사·기획사명, 아티스트명, 앨범·곡·영상 정보, 가사, 크레딧, 비회원 조회 코드
+- 제출 파일: 음원, 영상, 가사, 신청서, 사업자등록증 등 이용자가 제출한 자료와 그 안에 담긴 개인정보
+- 결제: 결제 수단, 결제 금액과 일시, 결제대행사가 제공하는 승인 결과(카드번호는 회사가 저장하지 않음), 무통장 입금 시 입금자명과 입금 예정일
+- 현금영수증·세금계산서: 발급 용도, 휴대폰 번호·사업자등록번호 또는 현금영수증 카드 번호, 세금계산서 발급용 사업자 정보
+- 부가 서비스: 매거진·노래방 신청자 이름, 연락처, 이메일, 앨범 정보와 대표 이미지
+- 자동 수집: 접속 IP, 접속 일시, 브라우저·기기 정보, 서비스 이용 기록, 쿠키
 
-4. 제3자 제공과 처리 위탁
-심의 접수를 위해 필요한 자료는 방송국·심의기관·결제대행사·스토리지·알림 발송 서비스 등 업무 수행에 필요한 범위에서 제공 또는 위탁될 수 있습니다. 회사는 목적 외 제공을 하지 않으며, 위탁사가 개인정보를 안전하게 처리하도록 관리합니다.
+3. 처리 및 보유 기간
+회원 정보는 회원 탈퇴 시까지, 심의 신청 내역·결과·필증은 결과 확인과 재발급 요청에 대응하기 위해 회원 탈퇴 또는 삭제 요청 시까지 보관합니다. 제출 파일은 파일 보관/삭제 정책에 따릅니다(심의용 음원은 제출일부터 1개월). 다만 아래 기록은 관련 법령에 따라 정해진 기간 동안 보관합니다.
+- 계약 또는 청약철회 등에 관한 기록: 5년 (전자상거래 등에서의 소비자보호에 관한 법률)
+- 대금결제 및 재화 등의 공급에 관한 기록: 5년 (전자상거래 등에서의 소비자보호에 관한 법률)
+- 소비자의 불만 또는 분쟁처리에 관한 기록: 3년 (전자상거래 등에서의 소비자보호에 관한 법률)
+- 표시·광고에 관한 기록: 6개월 (전자상거래 등에서의 소비자보호에 관한 법률)
+- 현금영수증·세금계산서 등 거래 증빙: 5년 (국세기본법)
+- 웹사이트 방문 기록: 3개월 (통신비밀보호법)
 
-5. 이용자 권리
-이용자는 본인 개인정보의 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다. 법령상 보관 의무가 있는 정보는 해당 기간 동안 삭제가 제한될 수 있습니다.
+4. 개인정보의 파기 절차와 방법
+보유 기간이 끝나거나 처리 목적이 달성된 개인정보는 지체 없이 파기합니다. 법령에 따라 계속 보관해야 하는 정보는 다른 정보와 분리하여 보관합니다. 전자 파일은 복구할 수 없는 방법으로 삭제하고, 종이 문서는 분쇄하거나 소각합니다. 장애 대비용 백업 데이터는 최대 14일 보관한 뒤 순서대로 삭제합니다.
 
-6. 안전성 확보
-회사는 접근 권한 관리, 암호화 통신, 파일 접근 제한, 업무 담당자 접근 통제 등 개인정보와 저작물 자료 보호를 위한 기술적·관리적 조치를 적용합니다.
+5. 개인정보의 제3자 제공
+회사는 이용자의 개인정보를 처리 목적 범위에서만 이용하며, 아래의 경우에만 제3자에게 제공합니다.
+- 방송사(KBS·MBC·SBS 등 이용자가 신청한 방송사)와 영상물등급위원회 등 심의기관: 이용자가 신청한 음반·뮤직비디오 심의(등급분류) 신청을 위해 신청자·권리자 정보(이름, 회사명, 연락처), 아티스트·작품 정보, 가사, 제출 파일을 제공합니다. 보유 기간은 각 기관의 기준에 따릅니다.
+- 국세청: 현금영수증 발급을 위해 발급 번호와 거래 금액·일시를 법령에 따라 제공합니다.
+- 그 밖에 법률에 특별한 규정이 있거나 수사기관이 법령에 정한 절차에 따라 요청하는 경우
 
-7. 개인정보 보호책임자
-개인정보 보호책임자: ${APP_CONFIG.privacyOfficer}
-문의: ${APP_CONFIG.supportEmail}`;
+6. 개인정보 처리 위탁
+회사는 원활한 서비스 제공을 위해 아래와 같이 개인정보 처리를 맡기고 있습니다. 위탁 계약에서 안전성 확보, 재위탁 제한, 손해배상 등 책임을 정하고 수탁자가 개인정보를 안전하게 처리하는지 관리·감독합니다. 수탁자나 위탁 업무가 바뀌면 이 방침을 통해 알립니다.
+- Vercel Inc.: 웹 서비스 호스팅과 서버 운영
+- Supabase Pte. Ltd.: 데이터베이스, 회원 인증, 파일 저장 시스템 운영과 알림 메일 발송 처리
+- Backblaze, Inc.: 제출 파일(음원·영상·가사·신청서 등) 저장
+- (주)케이지이니시스: 신용카드 결제 처리와 현금영수증 발급 대행
+- (주)카카오: 알림 메일 발송(Daum 메일)
+
+7. 개인정보의 국외 이전
+회사는 서비스 이용 계약의 체결과 이행을 위해 아래와 같이 개인정보를 국외에 처리 위탁·보관합니다(「개인정보 보호법」 제28조의8 제1항 제3호).
+(1) Vercel Inc. (연락처: privacy@vercel.com)
+- 이전 국가: 인도(뭄바이 서버), 미국 등 Vercel 네트워크가 있는 국가
+- 이전 항목: 서비스 이용 중 주고받는 회원·신청·결제 요청 정보, 접속 기록
+- 이전 시기와 방법: 서비스를 이용할 때마다 암호화된 네트워크(HTTPS)로 전송
+- 이용 목적: 웹 서비스 호스팅과 서버 운영
+- 보유·이용 기간: 요청을 처리한 뒤 삭제하며, 접속 기록은 수탁자의 보관 기준에 따라 단기간 보관 후 삭제
+(2) Supabase Pte. Ltd. (연락처: privacy@supabase.com)
+- 이전 국가: 인도(아마존웹서비스 뭄바이 데이터센터)
+- 이전 항목: 위 2항의 회원 정보, 심의 신청 정보, 결제·증빙 정보, 문의 내역, 서비스 이용 기록
+- 이전 시기와 방법: 서비스를 이용할 때마다 암호화된 네트워크(HTTPS)로 전송하여 저장
+- 이용 목적: 데이터베이스·회원 인증·파일 저장 시스템 운영, 알림 메일 발송 처리
+- 보유·이용 기간: 위 3항의 보유 기간 또는 위탁 계약 종료 시까지
+(3) Backblaze, Inc. (연락처: privacyrequest@backblaze.com)
+- 이전 국가: 미국(동부 데이터센터)
+- 이전 항목: 이용자가 제출한 파일(음원·영상·가사·신청서·사업자등록증 등)과 그 안에 담긴 개인정보
+- 이전 시기와 방법: 파일을 업로드할 때 암호화된 네트워크(HTTPS)로 전송하여 저장
+- 이용 목적: 제출 파일 저장
+- 보유·이용 기간: 파일 보관/삭제 정책에 따른 기간 또는 위탁 계약 종료 시까지
+국외 이전을 원하지 않으면 ${APP_CONFIG.supportEmail}로 이전 중단을 요청할 수 있습니다. 다만 위 업무는 서비스 제공에 꼭 필요하므로, 이전을 거부하면 회원 가입과 온라인 심의 신청 등 서비스 이용이 제한될 수 있습니다.
+
+8. 정보주체의 권리와 행사 방법
+이용자는 언제든지 자신의 개인정보 열람, 정정·삭제, 처리 정지, 동의 철회(회원 탈퇴, 마케팅 수신 거부 포함)를 요청할 수 있습니다. 마이페이지에서 직접 확인·수정하거나 ${APP_CONFIG.supportEmail} 또는 ${APP_CONFIG.supportPhone}로 요청하면 본인 확인 후 지체 없이(10일 이내) 처리하고 결과를 알려드립니다. 법정대리인이나 위임을 받은 대리인을 통해서도 요청할 수 있으며, 이 경우 위임장을 제출해야 합니다. 법령에서 보관을 정한 정보는 해당 기간 동안 삭제가 제한될 수 있습니다.
+
+9. 만 14세 미만 아동의 개인정보
+회사는 만 14세 미만 아동의 회원 가입을 받지 않습니다. 만 14세 미만 아동의 개인정보가 필요한 경우 법정대리인의 동의를 받아 처리합니다.
+
+10. 개인정보 자동 수집 장치의 설치·운영과 거부
+회사는 로그인 유지, 결제 결과 확인, 비회원 신청 내용 임시 저장을 위해 쿠키와 브라우저 저장소를 사용합니다. 광고나 행태정보 수집을 위한 추적 도구는 사용하지 않습니다. 이용자는 브라우저 설정(예: Chrome 설정 > 개인정보 및 보안 > 서드 파티 쿠키)에서 쿠키 저장을 거부하거나 삭제할 수 있으며, 거부하면 로그인과 결제 등 일부 서비스 이용이 어려울 수 있습니다.
+
+11. 개인정보의 안전성 확보 조치
+- 관리적 조치: 내부 관리 계획 수립, 개인정보 취급자 최소화와 교육
+- 기술적 조치: 접근 권한 관리와 접근 통제, 비밀번호 암호화 저장, 전송 구간 암호화(HTTPS), 접속 기록 보관, 데이터베이스 행 단위 접근 제한, 보안 업데이트
+- 물리적 조치: 출입이 통제되는 수탁자의 클라우드 데이터센터 이용, 백업 데이터 접근 제한
+
+12. 개인정보 보호책임자와 고충 처리
+개인정보 처리와 관련한 문의, 열람 청구, 불만 처리, 피해 구제는 아래로 연락해 주세요.
+- 개인정보 보호책임자: ${APP_CONFIG.privacyOfficer}
+- 이메일: ${APP_CONFIG.supportEmail}
+- 전화: ${APP_CONFIG.supportPhone} (${APP_CONFIG.supportHours})
+
+13. 권익침해 구제 방법
+개인정보 침해에 대한 신고나 상담이 필요하면 아래 기관에 문의할 수 있습니다.
+- 개인정보분쟁조정위원회: (국번없이) 1833-6972 (www.kopico.go.kr)
+- 개인정보침해신고센터: (국번없이) 118 (privacy.kisa.or.kr)
+- 대검찰청: (국번없이) 1301 (www.spo.go.kr)
+- 경찰청: (국번없이) 182 (ecrm.police.go.kr)
+
+14. 개인정보처리방침의 변경
+이 방침은 ${PRIVACY_POLICY_EFFECTIVE_DATE}부터 시행합니다. 내용을 추가·삭제·수정하면 시행 7일 전(이용자 권리에 중요한 변경은 30일 전)부터 사이트를 통해 알립니다.`;
 
 export const partnershipContent = `제휴안내
 독창적인 아이디어나 사업모델을 가지고 계신 분은 언제든지 제안을 주세요.
@@ -140,32 +218,102 @@ const privacyOfficerNameEn =
 
 export const privacyContentEn = `Onside Privacy Policy
 
-Onside collects and uses personal information only as needed to provide album and music video review application, file submission, payment, progress tracking, and result delivery services.
+${APP_CONFIG.businessName} ("the Company") operates Onside (iamonside.com) in compliance with the Korean Personal Information Protection Act (PIPA) and related laws. This policy explains what personal information we process and why, who processes it on our behalf, and how you can exercise your rights. The Korean version prevails if the two versions differ.
 
-1. Collected Information
-Sign-up: email and password.
-Review application: applicant name, phone, email, company or label name, artist name, album, song, video information, payment information, and receipt information.
-File submission: audio, video, lyrics, application forms, business registration certificates, and other user-submitted materials.
-Service use: access records, lookup codes, payment status, review status, and inquiry history.
+Effective date: ${PRIVACY_POLICY_EFFECTIVE_DATE_EN}
 
-2. Purpose of Use
-Information is used for review application intake, identity checks, material review, broadcaster or organization submission support, status updates, result and certificate delivery, payment processing, tax invoice or receipt issuance, support inquiries, and abuse prevention.
+1. Purposes and Legal Bases
+- Membership: identification, sign-in, account management, abuse prevention (consent, performance of contract)
+- Review application service: intake, material checks, submission to broadcasters and review bodies such as the Korea Media Rating Board, progress and result notices, certificates and result files (performance of contract)
+- Payment and receipts: payment processing, deposit confirmation, refunds, cash receipts and tax invoices (performance of contract, legal obligation)
+- Support: inquiries, service emails, dispute handling (performance of contract)
+- Additional services: magazine requests, karaoke registration, My Music (performance of contract)
+- Marketing: event and benefit notices (only with your optional consent)
+- Secure operation: access logs, incident and security response (legal obligation, legitimate interest)
 
-3. Retention Period
-Member information is retained until account deletion or until the service purpose is completed. Records required for review applications, payment, tax evidence, and dispute handling may be retained for legally required periods. Uploaded files follow the file storage and deletion policy.
+2. Personal Information Processed
+- Sign-up: [required] email, password (stored encrypted), age (14 or older) and consent records / [optional] marketing consent
+- Social sign-in (Kakao, Naver, Google): email, name or nickname, and account identifier provided by that service
+- Review applications: applicant name, mobile number, email, company or label, artist name, album, track and video information, lyrics, credits, guest lookup code
+- Submitted files: audio, video, lyrics, application forms, business registration certificates and any personal information they contain
+- Payments: payment method, amount and time, approval results from the payment processor (we do not store card numbers), depositor name and expected deposit date for bank transfers
+- Cash receipts and tax invoices: purpose, mobile number, business registration number or cash receipt card number, business details for tax invoices
+- Additional services: requester name, contact details, email, album information and artwork
+- Collected automatically: IP address, access time, browser and device information, usage records, cookies
 
-4. Third-party Provision and Processing Entrustment
-Materials required for review submission may be provided or entrusted to broadcasters, review organizations, payment processors, storage providers, and notification services within the scope needed to perform the service. The company does not provide information for unrelated purposes and manages entrusted processors to handle personal information safely.
+3. Retention
+Member information is kept until account deletion. Applications, results and certificates are kept until account deletion or a deletion request so that results can be checked and certificates reissued. Submitted files follow the File Storage / Deletion Policy (review audio: one month from submission). The following records are kept for the periods required by Korean law:
+- Contracts and withdrawal of offers: 5 years (Act on Consumer Protection in Electronic Commerce)
+- Payment and supply records: 5 years (same Act)
+- Consumer complaints and disputes: 3 years (same Act)
+- Labeling and advertising: 6 months (same Act)
+- Cash receipts, tax invoices and other transaction evidence: 5 years (Framework Act on National Taxes)
+- Website access logs: 3 months (Protection of Communications Secrets Act)
 
-5. User Rights
-Users may request access, correction, deletion, or suspension of processing for their personal information. Information subject to statutory retention obligations may be restricted from deletion during the required period.
+4. Destruction
+Personal information is destroyed without delay once its retention period ends or its purpose is fulfilled. Information that must be kept by law is stored separately. Electronic files are deleted so they cannot be recovered and paper records are shredded or incinerated. Disaster-recovery backups are kept for up to 14 days and then deleted in order.
 
-6. Security Measures
-The company applies technical and administrative measures such as access control, encrypted communication, file access restrictions, and staff access management to protect personal information and submitted materials.
+5. Provision to Third Parties
+We use personal information only within the stated purposes and provide it to third parties only as follows:
+- Broadcasters you apply to (such as KBS, MBC, SBS) and review bodies such as the Korea Media Rating Board: applicant and rights holder details (name, company, contact), artist and work information, lyrics and submitted files, to file the review or rating you request. Retention follows each body's rules.
+- National Tax Service: the cash receipt identifier and the transaction amount and time, as required by law to issue cash receipts.
+- Other cases required by law or requested by investigative authorities under legal procedures.
 
-7. Privacy Officer
-Privacy Officer: ${privacyOfficerNameEn}
-Contact: ${APP_CONFIG.supportEmail}`;
+6. Processors
+We entrust the following processing. Contracts with processors set out security measures, limits on sub-processing and liability, and we supervise their handling of personal information. Changes are announced through this policy.
+- Vercel Inc.: web hosting and server operation
+- Supabase Pte. Ltd.: database, authentication and file storage systems, notification email processing
+- Backblaze, Inc.: storage of submitted files (audio, video, lyrics, application forms)
+- KG Inicis Co., Ltd.: card payment processing and cash receipt issuance
+- Kakao Corp.: notification email delivery (Daum Mail)
+
+7. International Transfers
+To conclude and perform the service contract, we entrust and store personal information overseas as follows (PIPA Article 28-8(1)(3)):
+(1) Vercel Inc. (privacy@vercel.com)
+- Countries: India (Mumbai servers), the United States and other countries in Vercel's network
+- Items: member, application and payment request information exchanged while using the service, access logs
+- When and how: transmitted over encrypted connections (HTTPS) each time you use the service
+- Purpose: web hosting and server operation
+- Retention: deleted after the request is processed; access logs are kept briefly under the processor's rules
+(2) Supabase Pte. Ltd. (privacy@supabase.com)
+- Country: India (Amazon Web Services Mumbai data center)
+- Items: member, application, payment and receipt information, inquiries and usage records listed in Section 2
+- When and how: transmitted over HTTPS and stored each time you use the service
+- Purpose: database, authentication and file storage systems, notification email processing
+- Retention: the periods in Section 3 or until the processing contract ends
+(3) Backblaze, Inc. (privacyrequest@backblaze.com)
+- Country: United States (US East data center)
+- Items: files you submit (audio, video, lyrics, application forms, business registration certificates) and the personal information they contain
+- When and how: transmitted over HTTPS and stored when you upload a file
+- Purpose: storage of submitted files
+- Retention: the period in the File Storage / Deletion Policy or until the processing contract ends
+You may ask us to stop these transfers at ${APP_CONFIG.supportEmail}. Because they are necessary to provide the service, refusing them may prevent sign-up and online review applications.
+
+8. Your Rights
+You may request access to, correction or deletion of, or suspension of processing of your personal information, and withdraw consent (including account deletion and marketing opt-out) at any time. Use My Page or contact ${APP_CONFIG.supportEmail} or ${APP_CONFIG.supportPhone}; after verifying your identity we act without delay (within 10 days) and tell you the result. A legal representative or authorized agent may request on your behalf with a power of attorney. Information that must be kept by law may not be deleted during the required period.
+
+9. Children Under 14
+We do not accept sign-ups from children under 14. If personal information of a child under 14 is needed, we process it only with the consent of a legal guardian.
+
+10. Cookies
+We use cookies and browser storage to keep you signed in, confirm payment results and temporarily save guest applications. We do not use advertising or behavioral tracking tools. You can block or delete cookies in your browser settings; some features such as sign-in and payment may then not work.
+
+11. Security Measures
+- Administrative: internal management plan, minimal staff access and training
+- Technical: access control, encrypted password storage, encryption in transit (HTTPS), access logs, row-level database access restrictions, security updates
+- Physical: processors' access-controlled cloud data centers, restricted access to backups
+
+12. Privacy Officer
+For questions, access requests, complaints and remedies regarding personal information:
+- Privacy Officer: ${privacyOfficerNameEn}
+- Email: ${APP_CONFIG.supportEmail}
+- Phone: ${APP_CONFIG.supportPhone}
+
+13. Remedies
+You may also contact: Personal Information Dispute Mediation Committee (1833-6972, www.kopico.go.kr), Personal Information Infringement Report Center (118, privacy.kisa.or.kr), Supreme Prosecutors' Office (1301, www.spo.go.kr), Korean National Police Agency (182, ecrm.police.go.kr).
+
+14. Changes
+This policy takes effect on ${PRIVACY_POLICY_EFFECTIVE_DATE_EN}. We announce additions, deletions or changes on the site at least 7 days in advance (30 days for changes material to your rights).`;
 
 export const partnershipContentEn = `Partnership
 

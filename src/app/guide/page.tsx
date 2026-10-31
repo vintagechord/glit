@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { REVIEW_GUIDES } from "@/lib/review-guides";
+import { pageMetadata } from "@/lib/seo";
 import {
   ArrowRight,
   CheckCircle2,
@@ -11,9 +13,14 @@ import {
 
 import { albumPreparationItems, mvPreparationItems } from "@/lib/onside-content";
 
-export const metadata = {
-  title: "심의 안내",
-};
+export const metadata = pageMetadata({
+  title: "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물",
+  description:
+    "음반 심의(앨범 심의), 뮤직비디오 심의, 방송국 심의, 라디오 심의의 신청 절차와 준비물, 비용, 결과 확인 방법을 한눈에 확인하세요. 온라인으로 접수하고 방송국별 결과를 받아볼 수 있습니다.",
+  path: "/guide",
+  enPath: "/en/guide",
+  keywords: ["심의 안내", "음반심의 절차", "뮤직비디오 심의 절차", "방송국 심의", "라디오 심의", "심의 준비물"],
+});
 
 const reviewFlowSteps = [
   {
@@ -75,6 +82,17 @@ export default function GuidePage() {
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <p className="bauhaus-kicker">이용가이드</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">심의 안내</h1>
+      <p className="mt-4 max-w-3xl break-keep text-[15px] leading-8 text-foreground/85">
+        방송국에서 노래를 방송하려면 음반 심의, TV에 뮤직비디오를 송출하거나 온라인에 유통하려면 뮤직비디오 심의가 필요합니다. 온사이드에서 온라인으로 접수하고 방송국별 결과를 한곳에서 확인하세요.
+      </p>
+      <nav aria-label="심의 종류별 안내" className="mt-6 grid gap-3 sm:grid-cols-2">
+        {REVIEW_GUIDES.map((guide) => (
+          <Link key={guide.slug} href={`/guide/${guide.slug}`} className="group rounded-[8px] border-2 border-[#111111] bg-card p-4 transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
+            <span className="flex items-center justify-between gap-2 text-base font-black">{`${guide.menuLabel} 안내`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
+            <span className="mt-1 block break-keep text-xs font-semibold leading-5 text-muted-foreground group-hover:text-[#111111]">{guide.facts[0]?.value}</span>
+          </Link>
+        ))}
+      </nav>
 
       <section className="relative mt-8 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">
         <div aria-hidden="true" className="absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
