@@ -86,7 +86,7 @@ test("lookup and auth pages remove repeated headers while retaining required con
   assert.doesNotMatch(trackPage, /회원은 로그인 후 접수 현황으로 이동/);
   assert.doesNotMatch(trackPage, /접수 시 발급받은 조회 코드를 입력하면/);
   assert.doesNotMatch(trackDetail, /최신 진행 상황을 자동으로 갱신합니다/);
-  assert.match(trackDetail, /refreshIntervalMs=\{10000\}/);
+  assert.match(trackDetail, /refreshIntervalMs=\{60000\}/);
   assert.match(trackForm, /htmlFor="guest-track-token"/);
   assert.match(trackForm, /조회 코드를 이메일로 받기/);
 

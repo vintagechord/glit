@@ -1204,10 +1204,16 @@ export function SubmissionDetailClient({
 
   React.useEffect(() => {
     if (!refreshIntervalMs || refreshIntervalMs <= 0) return;
-    const intervalId = window.setInterval(() => {
-      router.refresh();
-    }, refreshIntervalMs);
-    return () => window.clearInterval(intervalId);
+    // Each refresh is a server render; skip hidden tabs and catch up on return.
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    const intervalId = window.setInterval(refreshIfVisible, refreshIntervalMs);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
   }, [refreshIntervalMs, router]);
 
   React.useEffect(() => {
@@ -1215,7 +1221,7 @@ export function SubmissionDetailClient({
     const refresh = () => {
       if (document.visibilityState === "visible") void fetchLatest();
     };
-    const timer = window.setInterval(refresh, 15000);
+    const timer = window.setInterval(refresh, 60000);
     window.addEventListener("focus", refresh);
     return () => {
       window.clearInterval(timer);

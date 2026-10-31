@@ -160,7 +160,7 @@ export default async function TrackDetailPage({
       enableRealtime={false}
       guestToken={token}
       paymentState={paymentState}
-      refreshIntervalMs={10000}
+      refreshIntervalMs={60000}
     />
   );
 }
