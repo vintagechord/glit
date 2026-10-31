@@ -1,0 +1,13 @@
+# Git deployments only include committed files. These rules protect manual
+# `vercel deploy` uploads from local secrets and QA artifacts.
+.env*
+!.env.example
+tmp/
+test-results/
+playwright-report/
+out/
+output/
+supabase/.temp/
+services/**/.venv/
+services/**/__pycache__/
+*.tsbuildinfo
