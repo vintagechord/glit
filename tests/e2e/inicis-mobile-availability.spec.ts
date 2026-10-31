@@ -116,7 +116,7 @@ test.describe("mobile checkout offers INIpayMobile card payment and bank transfe
     await expect(page.locator(`#order-${orderId}`)).toContainText("입금 대기");
     await expect(page.locator(`#order-${orderId}`)).toContainText("홍길동");
     await expect(page.locator(`#order-${orderId}`)).toContainText("2099-01-01");
-    expect(effects.writes).toEqual([{ path: "/api/cart/bank", body: { submissionIds: [submissionId], guestTokensBySubmissionId: { [submissionId]: guestToken }, depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } }]);
+    expect(effects.writes).toEqual([{ path: "/api/cart/bank", body: { submissionIds: [submissionId], guestTokensBySubmissionId: { [submissionId]: guestToken }, depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), cashReceipt: null } }]);
     expect(effects.gateway).toEqual([]);
     expect(effects.unexpected).toEqual([]);
     expect(effects.errors).toEqual([]);
