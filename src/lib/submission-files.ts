@@ -99,3 +99,21 @@ export const isApplicationFormMime = (mimeType?: string | null) => {
     mime === "application/vnd.hancom.hwp"
   );
 };
+
+// Business registration, payment documents and other result attachments.
+export const resultAttachmentUploadPattern = /\.(pdf|jpg|jpeg|png|webp|txt)$/i;
+
+export const isResultAttachmentFile = (
+  filename?: string | null,
+  mimeType?: string | null,
+) => {
+  const mime = (mimeType ?? "").toLowerCase();
+  return (
+    resultAttachmentUploadPattern.test(filename ?? "") ||
+    mime === "application/pdf" ||
+    mime === "text/plain" ||
+    mime === "image/jpeg" ||
+    mime === "image/png" ||
+    mime === "image/webp"
+  );
+};

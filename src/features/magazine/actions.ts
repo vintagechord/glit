@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -103,13 +104,13 @@ const isUploadedFile = (value: unknown): value is File => {
   );
 };
 
-const isValidArtworkFile = (file: File) => {
+const isValidArtworkFile = (file: Pick<File, "name" | "type">) => {
   const mimeType = file.type.toLowerCase();
   if (mimeType && artworkImageTypes.has(mimeType)) return true;
   return /\.(jpe?g|png|webp|gif)$/i.test(file.name);
 };
 
-const getArtworkContentType = (file: File) => {
+const getArtworkContentType = (file: Pick<File, "name" | "type">) => {
   const mimeType = file.type.toLowerCase();
   if (artworkImageTypes.has(mimeType)) return mimeType;
   const lowerName = file.name.toLowerCase();
@@ -124,6 +125,7 @@ const getMagazinePayload = (
 ) => {
   if (typeof FormData !== "undefined" && payload instanceof FormData) {
     const artworkEntry = payload.get("artworkFile");
+    const artworkPathEntry = payload.get("artworkPath");
     return {
       values: {
         submissionId: payload.get("submissionId") || undefined,
@@ -142,12 +144,17 @@ const getMagazinePayload = (
         notes: payload.get("notes"),
       },
       artworkFile: isUploadedFile(artworkEntry) ? artworkEntry : undefined,
+      artworkPath:
+        typeof artworkPathEntry === "string" && artworkPathEntry.trim()
+          ? artworkPathEntry.trim()
+          : undefined,
     };
   }
 
   return {
     values: payload,
     artworkFile: undefined,
+    artworkPath: undefined,
   };
 };
 
@@ -187,6 +194,75 @@ async function uploadMagazineArtworkFile({
 
   const { data } = admin.storage.from(magazineArtworkBucket).getPublicUrl(path);
   return { publicUrl: data.publicUrl, path };
+}
+
+// Vercel Functions accept at most 4.5MB per request, so the browser uploads
+// artwork straight to Storage with a one-time signed URL created here.
+export async function createMagazineArtworkUploadAction(input: {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}): Promise<{ path?: string; token?: string; contentType?: string; error?: string }> {
+  const file = {
+    name: String(input?.filename ?? "").slice(0, 255),
+    type: String(input?.mimeType ?? "").slice(0, 255),
+  };
+  const sizeBytes = Number(input?.sizeBytes);
+  if (!file.name || !isValidArtworkFile(file)) {
+    return { error: "대표 이미지는 JPG, PNG, WEBP, GIF 이미지 파일만 첨부할 수 있습니다." };
+  }
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > maxArtworkBytes) {
+    return { error: "대표 이미지 파일은 20MB 이하로 첨부해주세요." };
+  }
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "로그인한 회원만 크레딧을 사용할 수 있습니다." };
+  }
+
+  const safeName = sanitizeStorageFileName(file.name || "artwork.jpg");
+  const path = `${user.id}/uploads/${Date.now()}-${randomUUID()}-${safeName}`;
+  const { data, error } = await createAdminClient()
+    .storage.from(magazineArtworkBucket)
+    .createSignedUploadUrl(path);
+  if (error || !data?.token) {
+    console.error("[magazine] artwork upload url failed", error);
+    return { error: "대표 이미지 업로드를 준비하지 못했습니다. 잠시 후 다시 시도해주세요." };
+  }
+  return { path, token: data.token, contentType: getArtworkContentType(file) };
+}
+
+async function verifyMagazineArtworkUpload({
+  admin,
+  path,
+  userId,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  path: string;
+  userId: string;
+}): Promise<{ error?: string; publicUrl?: string; path?: string }> {
+  const invalid = { error: "대표 이미지 업로드 정보를 확인해주세요. 이미지를 다시 첨부해주세요." };
+  if (
+    path.length > 400 ||
+    !path.startsWith(`${userId}/uploads/`) ||
+    !/^[a-zA-Z0-9/._-]+$/.test(path) ||
+    path.includes("..")
+  ) {
+    return invalid;
+  }
+  const bucket = admin.storage.from(magazineArtworkBucket);
+  const { data, error } = await bucket.info(path);
+  if (error || !data) return invalid;
+  const size = Number(data.size ?? 0);
+  const contentType = String(data.contentType ?? "").toLowerCase();
+  if (size <= 0 || size > maxArtworkBytes || !artworkImageTypes.has(contentType)) {
+    await bucket.remove([path]).catch(() => undefined);
+    return { error: "대표 이미지는 20MB 이하의 JPG, PNG, WEBP, GIF 이미지 파일만 첨부할 수 있습니다." };
+  }
+  return { publicUrl: bucket.getPublicUrl(path).data.publicUrl, path };
 }
 
 const withSavedQuery = (path: string) => {
@@ -243,7 +319,7 @@ const normalizeMagazineRpcError = (message?: string | null) => {
 export async function createMagazineRequestAction(
   payload: z.infer<typeof magazineRequestSchema> | FormData,
 ): Promise<MagazineRequestActionState> {
-  const { values, artworkFile } = getMagazinePayload(payload);
+  const { values, artworkFile, artworkPath } = getMagazinePayload(payload);
   const parsed = magazineRequestSchema.safeParse(values);
   if (!parsed.success) {
     return { error: "입력값을 확인해주세요. URL은 https:// 형식으로 입력해주세요." };
@@ -299,7 +375,9 @@ export async function createMagazineRequestAction(
     return { error: MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE };
   }
 
-  const uploadedArtwork = artworkFile
+  const uploadedArtwork = artworkPath
+    ? await verifyMagazineArtworkUpload({ admin, path: artworkPath, userId: user.id })
+    : artworkFile
     ? await uploadMagazineArtworkFile({
         admin,
         file: artworkFile,

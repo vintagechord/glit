@@ -3,6 +3,7 @@
 import Image from "next/image";
 import * as React from "react";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
 type Props = {
   initialUrl?: string | null;
@@ -79,9 +80,8 @@ export function ArtistThumbnailUploader({ initialUrl, onBusyChange }: Props) {
       return;
     }
 
-    const maxBytes = 20 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setNotice("이미지 크기는 20MB 이하만 허용됩니다.");
+    if (file.size > SERVER_UPLOAD_MAX_BYTES) {
+      setNotice(`이미지 크기는 ${SERVER_UPLOAD_MAX_LABEL} 이하만 허용됩니다.`);
       return;
     }
 

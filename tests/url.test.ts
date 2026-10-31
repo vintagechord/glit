@@ -33,7 +33,7 @@ test("getBaseUrl never trusts request host headers in production", () => {
       }),
     } as Parameters<typeof getBaseUrl>[0];
 
-    assert.equal(getBaseUrl(request), "https://glit-b1yn.onrender.com");
+    assert.equal(getBaseUrl(request), "https://iamonside.com");
   } finally {
     if (originalNodeEnv === undefined) Reflect.deleteProperty(mutableEnv, "NODE_ENV");
     else mutableEnv.NODE_ENV = originalNodeEnv;

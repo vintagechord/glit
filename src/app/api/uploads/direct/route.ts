@@ -22,8 +22,10 @@ import {
   isApplicationFormFile,
   isApplicationFormMime,
   isAudioUploadFile,
+  isResultAttachmentFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 import {
   getSubmissionUploadBlockMessage,
   getSubmissionUploadBlockReason,
@@ -46,7 +48,8 @@ const schema = z.object({
 
 // This route streams through the application worker and is only a small-file
 // compatibility fallback. Large media must use size-bound PUT/multipart URLs.
-const MAX_DIRECT_UPLOAD_BYTES = 128 * 1024 * 1024;
+// Vercel rejects function request bodies above 4.5MB before this code runs.
+const MAX_DIRECT_UPLOAD_BYTES = SERVER_UPLOAD_MAX_BYTES;
 const MAX_MULTIPART_OVERHEAD_BYTES = 256 * 1024;
 const MAX_MULTIPART_FIELDS = 16;
 const MAX_MULTIPART_FIELD_BYTES = 8 * 1024;
@@ -55,23 +58,6 @@ const BYTE_QUOTA_UNIT = 1024 * 1024;
 const SINGLE_PUT_SUBMISSION_DAILY_MIB = 4 * 1024;
 const SINGLE_PUT_OWNER_DAILY_MIB = 8 * 1024;
 const SINGLE_PUT_IP_DAILY_MIB = 8 * 1024;
-
-const resultAttachmentPattern = /\.(pdf|jpg|jpeg|png|webp|txt)$/i;
-
-const isResultAttachmentFile = (
-  filename?: string | null,
-  mimeType?: string | null,
-) => {
-  const mime = (mimeType ?? "").toLowerCase();
-  return (
-    resultAttachmentPattern.test(filename ?? "") ||
-    mime === "application/pdf" ||
-    mime === "text/plain" ||
-    mime === "image/jpeg" ||
-    mime === "image/png" ||
-    mime === "image/webp"
-  );
-};
 
 const isAllowedDirectUploadFile = (
   filename?: string | null,
@@ -315,7 +301,7 @@ export async function POST(request: Request) {
     declaredRequestBytes > MAX_DIRECT_UPLOAD_BYTES + MAX_MULTIPART_OVERHEAD_BYTES
   ) {
     return NextResponse.json(
-      { error: "직접 업로드는 최대 128MB까지 지원합니다." },
+      { error: `직접 업로드는 최대 ${SERVER_UPLOAD_MAX_LABEL}까지 지원합니다.` },
       { status: 413 },
     );
   }
@@ -397,7 +383,7 @@ export async function POST(request: Request) {
       uploadControl.aborted = true;
       parseErrorStatus = 413;
       parseErrorBody = {
-        error: "직접 업로드는 최대 128MB까지 지원합니다.",
+        error: `직접 업로드는 최대 ${SERVER_UPLOAD_MAX_LABEL}까지 지원합니다.`,
       };
       file.unpipe(pass);
       pass.destroy();
@@ -470,7 +456,7 @@ export async function POST(request: Request) {
     if (parsed.data.sizeBytes > MAX_DIRECT_UPLOAD_BYTES) {
       parseErrorStatus = 413;
       parseErrorBody = {
-        error: "직접 업로드는 최대 128MB까지 지원합니다.",
+        error: `직접 업로드는 최대 ${SERVER_UPLOAD_MAX_LABEL}까지 지원합니다.`,
       };
       filePart.stream.resume();
       return;
@@ -540,7 +526,7 @@ export async function POST(request: Request) {
     ) {
       parseErrorStatus = 413;
       parseErrorBody = {
-        error: "직접 업로드는 최대 128MB까지 지원합니다.",
+        error: `직접 업로드는 최대 ${SERVER_UPLOAD_MAX_LABEL}까지 지원합니다.`,
       };
     } else if (completedFilePart.sizeBytes !== completedParsedData.sizeBytes) {
       parseErrorStatus = 400;

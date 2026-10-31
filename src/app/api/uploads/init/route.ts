@@ -18,6 +18,7 @@ import {
   isApplicationFormFile,
   isApplicationFormMime,
   isAudioUploadFile,
+  isResultAttachmentFile,
   isVideoUploadFile,
 } from "@/lib/submission-files";
 import {
@@ -31,7 +32,7 @@ export const maxDuration = 120;
 
 const schema = z.object({
   submissionId: z.string().uuid(),
-  kind: z.enum(["audio", "video"]),
+  kind: z.enum(["audio", "video", "etc"]),
   filename: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   sizeBytes: z.number().int().positive(),
@@ -55,10 +56,17 @@ const EXPIRES_SECONDS = Number.isFinite(configuredExpiresSeconds)
   : 900;
 
 const isAllowedUploadFile = (
-  kind: "audio" | "video",
+  kind: "audio" | "video" | "etc",
   filename: string,
   mimeType: string,
 ) => {
+  if (kind === "etc") {
+    return (
+      isResultAttachmentFile(filename, mimeType) ||
+      isApplicationFormFile(filename) ||
+      isApplicationFormMime(mimeType)
+    );
+  }
   if (kind === "audio") {
     return (
       isAudioUploadFile(filename, mimeType) ||
@@ -122,7 +130,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          kind === "audio"
+          kind === "etc"
+            ? "PDF, JPG, PNG, WEBP, TXT 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
+            : kind === "audio"
             ? "음원 파일은 WAV/MP3/ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
             : "영상 파일은 MP4/MOV/WMV/MPG 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.",
       },

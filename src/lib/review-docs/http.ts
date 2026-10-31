@@ -50,9 +50,9 @@ export async function readReviewUpload(request: Request) {
   if (!contentType.startsWith("multipart/form-data") || !request.body) throw new ReviewJobError("업로드할 파일을 선택해주세요.");
   const files: { name: string; mime: string; buffer: Buffer }[] = [];
   const fields: Record<string, string> = {};
-  const parser = Busboy({ headers: { "content-type": contentType }, defParamCharset: "utf8", limits: { files: REVIEW_JOB_LIMITS.files, fileSize: REVIEW_JOB_LIMITS.fileBytes, fields: 2, fieldSize: 100, parts: 10 } });
+  const parser = Busboy({ headers: { "content-type": contentType }, defParamCharset: "utf8", limits: { files: REVIEW_JOB_LIMITS.files, fileSize: REVIEW_JOB_LIMITS.uploadRequestBytes, fields: 2, fieldSize: 100, parts: 10 } });
   let failure: Error | null = null;
-  const fail = () => { failure = new ReviewJobError("파일 수·크기 제한을 초과했습니다. 파일 8개, 개별 10MB, 전체 40MB까지 가능합니다.", 413, "UPLOAD_LIMIT"); };
+  const fail = () => { failure = new ReviewJobError("파일 수·크기 제한을 초과했습니다. 파일 8개, 한 번에 전체 4MB까지 가능합니다.", 413, "UPLOAD_LIMIT"); };
   parser.on("file", (field, stream, info) => {
     const chunks: Buffer[] = [];
     if (field !== "files") failure = new ReviewJobError("잘못된 업로드 항목입니다.");
@@ -71,14 +71,14 @@ export async function readReviewUpload(request: Request) {
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.length;
-      if (size > REVIEW_JOB_LIMITS.totalBytes + 65536 || failure) { await reader.cancel(); fail(); break; }
+      if (size > REVIEW_JOB_LIMITS.uploadRequestBytes + 65536 || failure) { await reader.cancel(); fail(); break; }
       parser.write(Buffer.from(value));
     }
     parser.end(); await finished;
   } catch { throw failure ?? new ReviewJobError("손상된 업로드 요청입니다."); }
   finally { reader.releaseLock(); }
   if (failure) throw failure;
-  if (!files.length || files.reduce((n, f) => n + f.buffer.length, 0) > REVIEW_JOB_LIMITS.totalBytes) throw new ReviewJobError("파일을 1개 이상 선택하고 전체 40MB 이내로 업로드해주세요.");
+  if (!files.length || files.reduce((n, f) => n + f.buffer.length, 0) > REVIEW_JOB_LIMITS.uploadRequestBytes) throw new ReviewJobError("파일을 1개 이상 선택하고 전체 4MB 이내로 업로드해주세요.");
   if (fields.mode !== "album" && fields.mode !== "mv") throw new ReviewJobError("음반 또는 영등위 모드를 선택해주세요.");
   return { files, mode: fields.mode as "album" | "mv" };
 }

@@ -40,6 +40,7 @@ import {
 } from "@/lib/public-cache-tags";
 import { safeAdminRedirectPath } from "@/lib/admin/redirect";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 import {
   cleanupDeletedSubmissionB2Objects,
   loadSubmissionB2ObjectRefs,
@@ -273,7 +274,7 @@ const deleteArtistsSchema = z.object({
 });
 
 const bannerBucket = "banners";
-const maxBannerImageSizeBytes = 10 * 1024 * 1024;
+const maxBannerImageSizeBytes = SERVER_UPLOAD_MAX_BYTES;
 const bannerFolders = {
   STRIP: "strip",
   HOME_HERO: "home-hero",
@@ -319,7 +320,7 @@ const uploadBannerImage = async (
     return { error: "PNG, JPG, GIF, WebP 이미지만 업로드 가능합니다." };
   }
   if (file.size <= 0 || file.size > maxBannerImageSizeBytes) {
-    return { error: "배너 이미지는 10MB 이하만 업로드 가능합니다." };
+    return { error: `배너 이미지는 ${SERVER_UPLOAD_MAX_LABEL} 이하만 업로드 가능합니다.` };
   }
 
   const admin = await createServerSupabase();

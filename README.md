@@ -7,7 +7,8 @@
 - Next.js (App Router) + TypeScript + Tailwind
 - shadcn/ui
 - Supabase (Auth, Postgres, Storage, Realtime)
-- Render (free web service)
+- Vercel (Hobby, Next.js Functions in `bom1` Mumbai, next to the Supabase project)
+- Backblaze B2 (submission files)
 
 ## Local Setup
 
@@ -71,7 +72,7 @@ SUBSCRIPTION_PRICE_KRW=1000
 ### Inicis STDPay(일반 결제) 체크리스트
 - 필요 env(일반 결제만): `INICIS_ENV`(기본 stg), `INICIS_MID_{STG|PROD}`, `INICIS_SIGN_KEY_{STG|PROD}`, 선택 `INICIS_STDJS_URL_{STG|PROD}`. 빌링용 키(`INICIS_BILLING_*`, `INICIS_LITE_KEY_*`, `INICIS_API_URL_*`)가 없어도 STDPay는 동작해야 합니다.
 - 로컬: 위 env만 넣고 `npm run dev` → `POST /api/inicis/submission/order`가 200/`stdJsUrl` 응답인지 확인 → 브라우저 Network에서 `INIStdPay.js` 200 로드 및 콘솔의 `[Inicis][STDPay] INIStdPay.js loaded?` 로그 확인. `localhost`는 INI에서 차단될 수 있으므로 ngrok 등 퍼블릭 URL을 `NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_SITE_URL`로 주입하세요.
-- Render: Render Dashboard에 동일 env 저장 후 배포 → `/api/inicis/submission/order` 200 및 `INIStdPay.js` 로드 확인.
+- Vercel: Project → Settings → Environment Variables(Production)에 동일 env 저장 후 재배포 → `/api/inicis/submission/order` 200 및 `INIStdPay.js` 로드 확인.
 
 3) Supabase SQL (run in SQL Editor)
 ```sql
@@ -114,35 +115,35 @@ npm run dev
 - 관리자 다운로드: B2 저장소 파일에 대해 관리자 다운로드 링크가 생성·동작하는지 확인
 - 대용량 업로드: 앨범(1GB)·뮤비(4GB) 정책 용량까지 업로드 진행률 표시와 완료 여부 확인
 
-## Render 배포 가이드
+## Vercel 배포 가이드
 
-1) Render → New Web Service → Git repo 연결  
-2) Build Command
-```bash
-npm ci && npm run build
-```
-3) Start Command
-```bash
-npm run start
-```
-4) Env (Render Dashboard)
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-NEXT_PUBLIC_APP_URL
-```
+2026-10-31 Render에서 Vercel로 이전했습니다. 절차와 검증 기록은
+[Vercel 이전 기록](docs/onside-vercel-migration-2026-10-31.md)을 참고하세요.
 
-### Render uptime
+1) Vercel 프로젝트 `glit`이 GitHub `vintagechord/glit`의 `main`에 연결되어
+   있습니다. `main`에 병합하면 Production으로 자동 배포됩니다.
+2) Build는 Vercel 기본값(`npm install` → `next build`)을 사용합니다. 함수 리전은
+   `vercel.json`의 `bom1`(Mumbai, Supabase `glit`과 같은 지역)입니다.
+3) Env는 Vercel → Project Settings → Environment Variables(Production)에
+   저장합니다. 값을 바꾼 뒤에는 재배포해야 반영됩니다.
+4) DB 마이그레이션은 배포 전에 `supabase db push`로 먼저 적용합니다. 새 RPC를
+   호출하는 코드가 마이그레이션보다 먼저 배포되지 않도록 순서를 지킵니다.
 
-Render 무료 플랜은 비활성 상태에서 인스턴스가 잠들 수 있습니다. 무료 플랜의
-sleep 정책을 우회하기 위한 in-app self-ping 또는 별도 cron keepalive는 운영
-안정성의 근본 해결책으로 사용하지 않습니다. 실서비스에서 always-on이 필요하면
-Render Starter 이상 유료 플랜 또는 always-on을 제공하는 호스팅으로 전환하세요.
+### Vercel 제약
+
+- 함수 요청·응답 본문은 4.5MB까지입니다. 음원·영상·신청서·결제 서류는 B2
+  presigned URL로 브라우저에서 바로 올리고, 서버를 거치는 관리자 업로드는 4MB로
+  제한합니다(`src/lib/server-upload-limit.ts`).
+- Hobby 함수 실행 시간은 최대 300초입니다.
+- 상주 프로세스가 없으므로 음악 아카이브·심의자료 작업은 Supabase pg_cron
+  (`onside-background-jobs`)이 대기 작업이 있을 때만 `/api/internal/background-jobs`를
+  호출해 이어서 처리합니다.
+- 웹 심의자료 처리는 DOCX와 멜론·지니 URL만 지원합니다. DOC·HWP·PDF는 Mac 심의
+  데스크로 처리합니다.
 
 ## Health Check
 
-- `/healthz`: lightweight liveness endpoint for Render and uptime monitors
+- `/healthz`: lightweight liveness endpoint for uptime monitors
 - `/readyz`: runtime configuration readiness check
 - `/api/health`: backward-compatible runtime configuration check
 
@@ -163,7 +164,7 @@ npm run email:smoke -- --to you@example.com
 `/api/health` checks provider configuration, durable queue availability, worker
 heartbeat and delivery exceptions; it does not verify inbox delivery.
 Resend remains an optional provider and requires an owned, verified sender
-domain. Daum SMTP credentials stay in Supabase function secrets; Render uses
+domain. Daum SMTP credentials stay in Supabase function secrets; the web app uses
 the HTTPS relay URL and its separate server secret.
 
 Signup verification, account lookup, password recovery, guest code recovery
@@ -187,7 +188,7 @@ AUTH_QA_BASE_URL=http://127.0.0.1:3000 npx tsx scripts/auth-live-smoke.ts
 ## Notes
 
 - Storage는 Supabase Storage만 사용합니다.
-- Render 무료 플랜의 휘발성 디스크에 파일을 저장하지 않습니다.
+- Vercel 함수의 파일 시스템은 휘발성이므로 파일을 저장하지 않습니다.
 - `public/forms/*` 파일은 MVP용 placeholder입니다.
 - 관리자 계정은 Supabase `profiles` 테이블에서 `role='admin'`으로 설정하세요.
 - 운영 회원가입은 이메일 확인 후 비밀번호를 설정합니다. Supabase Auth의 Email Confirm을 유지하고 [이메일 설정 문서](docs/auth-email-configuration.md)를 따르세요.

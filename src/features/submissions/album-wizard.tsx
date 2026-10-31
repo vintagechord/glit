@@ -66,6 +66,7 @@ import {
   isAudioUploadFile,
   isReleasedAlbumAudioFile,
 } from "@/lib/submission-files";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 import type { ProfanityTerm } from "@/lib/profanity/legacy";
 import { analyzeLyricsProfanity } from "@/lib/profanity/check";
 import {
@@ -254,7 +255,8 @@ const uploadMaxMb = Number(
   "4096",
 );
 const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
-const directUploadMaxBytes = 128 * 1024 * 1024;
+// The server-streamed fallback is bound by the Vercel 4.5MB request limit.
+const directUploadMaxBytes = SERVER_UPLOAD_MAX_BYTES;
 const albumMultipartThresholdBytes = 32 * 1024 * 1024;
 const uploadMaxLabel =
   uploadMaxMb >= 1024
@@ -2020,8 +2022,6 @@ export function AlbumWizard({
   ) => {
     const submissionId = requireSubmissionId();
     const mimeType = file.type || "application/octet-stream";
-    const isApplicationFormUpload =
-      isApplicationFormFile(file.name) || isApplicationFormMime(file.type);
     const completeUpload = async (objectKey: string) => {
       const completeRes = await fetchWithTimeout("/api/uploads/complete", {
         method: "POST",
@@ -2049,7 +2049,7 @@ export function AlbumWizard({
       if (file.size > directUploadMaxBytes) {
         return Promise.reject(
           new Error(
-            "128MB를 초과한 파일은 보안 업로드 URL로만 전송할 수 있습니다. 네트워크를 확인한 뒤 다시 시도해주세요.",
+            `${SERVER_UPLOAD_MAX_LABEL}를 초과한 파일은 보안 업로드 URL로만 전송할 수 있습니다. 네트워크를 확인한 뒤 다시 시도해주세요.`,
           ),
         );
       }
@@ -2099,11 +2099,6 @@ export function AlbumWizard({
       });
     };
 
-    if (isApplicationFormUpload) {
-      const directUpload = await directUploadFallback();
-      return completeUpload(directUpload.objectKey);
-    }
-
     if (file.size >= albumMultipartThresholdBytes) {
       return uploadMultipartAudioFile(file, onProgress);
     }
@@ -2135,6 +2130,11 @@ export function AlbumWizard({
       await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt));
     }
     if (!initRes?.ok || !initJson.key || !initJson.uploadUrl) {
+      // Validation/permission errors would fail the same way through the
+      // fallback, which cannot carry files above the server request limit.
+      if (initRes && initRes.status < 500 && initJson.error && file.size > directUploadMaxBytes) {
+        throw new Error(initJson.error);
+      }
       console.warn("[Upload][album] init failed, fallback to direct", {
         status: initRes?.status,
         error: initJson.error,

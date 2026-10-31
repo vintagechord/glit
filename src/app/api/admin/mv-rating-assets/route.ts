@@ -20,12 +20,13 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getBaseUrl } from "@/lib/url";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = SERVER_UPLOAD_MAX_BYTES;
 
 const isManagedRating = (value: unknown): value is ManagedRatingImageCode =>
   value === "ALL" || value === "12" || value === "15" || value === "19";
@@ -155,7 +156,7 @@ export async function POST(req: NextRequest) {
   }
   if (fileValue.size <= 0 || fileValue.size > MAX_IMAGE_SIZE_BYTES) {
     return NextResponse.json(
-      { error: "이미지 파일은 5MB 이하만 업로드할 수 있습니다." },
+      { error: `이미지 파일은 ${SERVER_UPLOAD_MAX_LABEL} 이하만 업로드할 수 있습니다.` },
       { status: 400 },
     );
   }

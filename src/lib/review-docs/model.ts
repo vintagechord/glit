@@ -2,7 +2,9 @@ import { z } from "zod";
 import { findForeignLyricsSpans, inlineLyricTranslation } from "../foreign-lyrics";
 
 export const REVIEW_DOC_LIMITS = {
-  files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024,
+  // A browser upload request must stay under the Vercel Function 4.5MB body
+  // limit. fileBytes still bounds stored sources created before the move.
+  files: 8, fileBytes: 10 * 1024 * 1024, totalBytes: 40 * 1024 * 1024, uploadRequestBytes: 4 * 1024 * 1024,
   pages: 80, albums: 8, tracks: 100, urls: 8,
   sourceCharacters: 600_000, lyricCharacters: 80_000,
   translationCharacters: 60_000, conversionSeconds: 90, concurrentConversions: 1,

@@ -6,6 +6,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
 type Props = {
   submissionId: string;
@@ -106,9 +107,8 @@ export function CertificateUploader({
       setNotice("PDF, PNG, JPG만 업로드할 수 있습니다.");
       return;
     }
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setNotice("파일 크기는 20MB 이하만 허용됩니다.");
+    if (file.size > SERVER_UPLOAD_MAX_BYTES) {
+      setNotice(`파일 크기는 ${SERVER_UPLOAD_MAX_LABEL} 이하만 허용됩니다.`);
       return;
     }
     setIsUploading(true);
