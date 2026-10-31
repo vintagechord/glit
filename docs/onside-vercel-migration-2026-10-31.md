@@ -62,15 +62,25 @@ Mumbai)와 Backblaze B2는 그대로 유지한다. 아트멜론·암파인·워�
 
 TTL은 600초. MX·TXT·CAA 레코드는 없다. B2 CORS는 이미 `https://iamonside.com`을 허용한다.
 
-## 전환 순서와 상태
+## 전환 순서와 결과
 
 1. Vercel 프로젝트 생성·환경변수·리전·도메인 추가 — 완료.
 2. Production 배포(`glit-five.vercel.app`) 점검 — `/api/health` 오류 0, 경고 1(카카오 알림톡,
-   Render와 동일), 주요 페이지 200, 내부 API 무인증 401.
-3. PR #45 `main` 병합 — 사용자 진행(자동 모드에서 병합이 차단됨).
-4. `supabase db push --linked`로 `20261031210000` 적용 — 사용자 진행.
-5. 가비아 DNS 변경 — 사용자 진행.
-6. DNS·SSL 확인 후 Render `glit`(`srv-d5bvt5ggjchc73ccaaug`) 일시 중지.
+   Render와 동일), 주요 페이지 200, 내부 API 무인증 401, Mac 데스크 서명 health `ok:true`.
+3. PR #45 `main` 병합(`9905121`, 사용자) → Vercel Git 배포 `dpl_3X6iLSV3ivfQ76uiJq2mt9XBth5y` READY.
+4. `20261031210000_vercel_background_jobs.sql` 적용(사용자, `supabase db push --linked`).
+5. 가비아 DNS 변경(사용자) — 권한 DNS와 공용 DNS(8.8.8.8, 1.1.1.1) 모두 Vercel IP 응답,
+   Vercel 도메인 설정 `misconfigured: false`.
+6. SSL: 전환 직후 Vercel 인증서 발급 전까지 HTTPS 접속이 실패했고, 2026-11-01 00:19 KST부터
+   `iamonside.com`·`www` 모두 Let's Encrypt 인증서(만료 2027-01-29, 자동 갱신)로 정상.
+   DNS가 먼저 바뀐 방문자는 약 10분간 HTTPS 오류를 볼 수 있었다.
+7. 실제 도메인 점검(00:20 KST) — `server: Vercel`, 주요 페이지 14개 200, `/api/health` 오류 0,
+   `www`→apex 308, HTTP→HTTPS 308.
+8. Render 마지막 앱 로그 00:01 KST(전환 전) 확인 후 Render `glit`
+   (`srv-d5bvt5ggjchc73ccaaug`) 일시 중지. `glit-b1yn.onrender.com`은 이제 503.
+9. Render 중지 상태에서 pg_cron 메일 워커 일일 실행이 00:25 KST에 Vercel로 도착해 정상 완료
+   (`email_worker_config.last_finished_at` 갱신, `last_error=false`). 백그라운드 작업 크론은
+   같은 경로를 쓰며, 당시 대기 중인 음악·심의자료 작업이 없어 호출되지 않았다.
 
 ## 되돌리기
 
@@ -82,5 +92,5 @@ Resume 후 가비아 DNS를 위 "기존" 값으로 되돌린다. Render에는 �
 
 - Hobby 월 한도: 함수 호출 100만, Active CPU 4시간, Fast Data Transfer 100GB,
   이미지 최적화 5천 건. pg_cron은 대기 작업이 있을 때만 앱을 깨운다.
-- Render 무료 플랜 대비 콜드스타트가 짧아져 외부 keep-alive 핑은 더 이상 필요 없다.
+- Render 무료 플랜용으로 돌리던 외부 keep-alive 핑은 더 이상 필요 없다.
 - 기존 `glit-b1yn.onrender.com` 링크는 Render 중지 후 열리지 않는다.
