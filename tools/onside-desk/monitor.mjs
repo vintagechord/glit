@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import dnsPromises from 'node:dns/promises';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -7,16 +8,21 @@ import tls from 'node:tls';
 /**
  * Site operations monitor for the review desk ("사이트 관리").
  * Checks the services Onside runs on — Vercel, Supabase, Backblaze B2 and the
- * Gabia-registered domain — and the free-plan headroom of each. All calls are
- * read-only. Secrets never leave this module in results.
+ * Gabia-registered domain — and the plan headroom of each (Vercel Pro credit,
+ * Supabase and B2 free tiers). All calls are read-only. Secrets never leave
+ * this module in results.
  */
 export const MONITOR_DEFAULTS = Object.freeze({
   domain: 'iamonside.com',
   wwwHost: 'www.iamonside.com',
-  expectedA: ['216.198.79.1', '64.29.17.1'],
+  // Vercel A values known to serve this project. The ones Gabia had at the
+  // cutover stay valid after the Pro upgrade; Vercel's current recommendation
+  // (and whether the live records are accepted) comes from its domain API.
+  acceptedA: ['216.198.79.1', '64.29.17.1', '216.150.1.1', '216.150.16.1'],
   expectedCname: '6dbbb6e9e0c47844.vercel-dns-017.com',
   vercelTeamId: 'team_WpvLGENQ2rt0S7kipCRKvIZK',
   vercelTeamSlug: 'vintagechord85-2949s-projects',
+  vercelTeamName: "vintagechord85-2949's projects",
   vercelProjectId: 'prj_2BagpJ3xO4SYqS0taoYSdg2RlPRl',
   vercelProjectName: 'glit',
   limits: Object.freeze({
@@ -24,25 +30,32 @@ export const MONITOR_DEFAULTS = Object.freeze({
     supabaseDatabaseBytes: 500 * 1024 ** 2,
     supabaseStorageBytes: 1024 ** 3,
     supabaseMonthlyActiveUsers: 50_000,
+    // Used only when Vercel's credit ledger is unavailable.
+    vercelMonthlyCreditUsd: 20,
   }),
   // Known, accepted warnings from /api/health (e.g. optional Kakao alerts).
   benignHealthWarnings: Object.freeze(['kakao notification env']),
 });
 
-const TTL = { site: 60_000, domain: 10 * 60_000, rdap: 12 * 60 * 60_000, vercel: 5 * 60_000, supabase: 5 * 60_000, b2: 30 * 60_000 };
+const TTL = { site: 60_000, domain: 10 * 60_000, rdap: 12 * 60 * 60_000, vercel: 5 * 60_000, vercelUsage: 30 * 60_000, supabase: 5 * 60_000, b2: 30 * 60_000 };
 // B2 listing costs Class C transactions; manual refreshes are rate-limited.
 const B2_MIN_FORCED_INTERVAL = 2 * 60_000;
+// Vercel bills in daily buckets and the charge export grows to ~900 rows a day.
+const VERCEL_USAGE_MIN_FORCED_INTERVAL = 5 * 60_000;
 const RANK = { ok: 0, unknown: 1, warning: 2, error: 3 };
 export const worst = statuses => statuses.reduce((current, next) => (RANK[next] ?? 0) > (RANK[current] ?? 0) ? next : current, 'ok');
 const usageStatus = ratio => ratio >= 0.9 ? 'error' : ratio >= 0.7 ? 'warning' : 'ok';
 const daysUntil = (date, now) => Math.floor((new Date(date).getTime() - now) / 86_400_000);
 const bytesLabel = (n, base = 1000) => { n = Number(n) || 0; const units = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= base && i < units.length - 1) { n /= base; i++; } return `${n.toFixed(i ? 1 : 0)} ${units[i]}`; };
 const countLabel = n => Number(n || 0).toLocaleString('ko-KR');
+const usd = n => `$${(Number(n) || 0).toFixed(2)}`;
+const amountLabel = (n, unit, base) => unit === 'bytes' ? bytesLabel(n, base) : unit === 'usd' ? usd(n) : `${countLabel(n)}${unit === 'requests' ? '건' : '명'}`;
+const kstDay = value => { const day = new Date(new Date(value).getTime() + 9 * 3_600_000); return `${day.getUTCMonth() + 1}월 ${day.getUTCDate()}일`; };
 const kst = value => value ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
 const safeMessage = error => String(error?.message || error || '확인하지 못했습니다.').replace(/(?:eyJ[A-Za-z0-9_-]{10,}|Bearer\s+\S+|[A-Za-z0-9_-]{32,})/g, '***').slice(0, 200);
 const usage = (label, used, limit, unit, note, base = 1000) => ({
   label, used, limit, unit, percent: limit ? Math.min(999, Math.round((used / limit) * 1000) / 10) : null,
-  usedLabel: unit === 'bytes' ? bytesLabel(used, base) : `${countLabel(used)}명`, limitLabel: unit === 'bytes' ? bytesLabel(limit, base) : `${countLabel(limit)}명`,
+  usedLabel: amountLabel(used, unit, base), limitLabel: amountLabel(limit, unit, base),
   status: limit ? usageStatus(used / limit) : 'ok', ...(note ? { note } : {}),
 });
 
@@ -96,6 +109,50 @@ async function defaultS3(env) {
 const VIDEO = /\.(mp4|mov|wmv|mpg|mpeg|m4v|avi|mkv)$/i, AUDIO = /\.(wav|mp3|flac|aif|aiff|m4a|zip)$/i, DOCS = /\.(pdf|doc|docx|hwp|txt|xlsx|xls)$/i, IMAGES = /\.(jpe?g|png|webp|gif)$/i;
 export const fileCategory = key => VIDEO.test(key) ? '영상' : AUDIO.test(key) ? '음원' : DOCS.test(key) ? '문서' : IMAGES.test(key) ? '이미지' : '기타';
 
+// Korean names for the Vercel services Onside uses; others keep Vercel's name.
+const VERCEL_SERVICES = {
+  'Fluid Active CPU': '함수 CPU', 'Function Invocations': '함수 실행', 'Fluid Provisioned Memory': '함수 메모리',
+  'CDN Requests': 'CDN 요청', 'CDN Requests - Additional CPU Duration': 'CDN 추가 CPU', 'Fast Data Transfer': '데이터 전송', 'Fast Origin Transfer': '원본 전송',
+  'Build CPU Minutes': '빌드', 'ISR Reads': 'ISR 읽기', 'ISR Writes': 'ISR 쓰기', 'Function Storage': '함수 저장 공간', 'Deployment Storage': '배포 저장 공간',
+  'Observability Events': '로그·관측 이벤트', 'Image Optimization Transformation': '이미지 변환',
+  'Image Optimization Cache Reads': '이미지 캐시 읽기', 'Image Optimization Cache Writes': '이미지 캐시 쓰기',
+};
+// Always listed when used, in this order; any other service shows once it costs a cent.
+const VERCEL_KEY_SERVICES = ['Fluid Active CPU', 'Function Invocations', 'Fluid Provisioned Memory', 'CDN Requests', 'Fast Data Transfer', 'Fast Origin Transfer', 'Build CPU Minutes'];
+const quantityLabel = (quantity, unit) => {
+  const q = Number(quantity) || 0;
+  switch (String(unit || '').toLowerCase()) {
+    case 'gigabyte': return bytesLabel(q * 1e9);
+    case 'hour': return q < 1 ? `${countLabel(Math.round(q * 600) / 10)}분` : `${countLabel(Math.round(q * 100) / 100)}시간`;
+    case 'minute': return `${countLabel(Math.round(q))}분`;
+    case 'gigabyte-hour': return `${countLabel(Math.round(q * 100) / 100)} GB·시간`;
+    case 'requests': return `${countLabel(Math.round(q))}건`;
+    default: return `${countLabel(Math.round(q))}회`;
+  }
+};
+
+/**
+ * Totals Vercel's FOCUS charge export (JSONL, one row per service, project and
+ * day) for the whole team and for one project. EffectiveCost is what draws
+ * down the Pro credit; BilledCost stays 0 until the credit runs out.
+ */
+export function summarizeVercelCharges(text, projectId) {
+  const services = new Map(); const subscriptions = new Set(); let cost = 0, projectCost = 0, billed = 0;
+  for (const line of String(text || '').split('\n')) {
+    if (!line.trim()) continue;
+    let row; try { row = JSON.parse(line); } catch { continue; }
+    const name = row.ServiceName; if (!name) continue;
+    // The plan fee and included tiers (Pro, Flat Rate CDN 1M, …) are licences, not usage.
+    if (row.ServiceCategory === 'Subscription Licenses') { if (Number(row.ConsumedQuantity)) subscriptions.add(name); continue; }
+    const quantity = Number(row.ConsumedQuantity) || 0, effective = Number(row.EffectiveCost) || 0;
+    const entry = services.get(name) || { name, label: VERCEL_SERVICES[name] || name, unit: row.ConsumedUnit || '', quantity: 0, cost: 0, projectQuantity: 0, projectCost: 0 };
+    entry.quantity += quantity; entry.cost += effective; cost += effective; billed += Number(row.BilledCost) || 0;
+    if (row.Tags?.ProjectId === projectId) { entry.projectQuantity += quantity; entry.projectCost += effective; projectCost += effective; }
+    services.set(name, entry);
+  }
+  return { services: [...services.values()].filter(entry => entry.quantity > 0).sort((a, b) => b.cost - a.cost || b.quantity - a.quantity), subscriptions: [...subscriptions], cost, projectCost, billed };
+}
+
 export function createSiteMonitor(options = {}) {
   const env = options.env || process.env;
   const config = { ...MONITOR_DEFAULTS, ...(options.config || {}) };
@@ -112,6 +169,7 @@ export function createSiteMonitor(options = {}) {
   const supabaseRef = (() => { try { return new URL(supabaseUrl).hostname.split('.')[0]; } catch { return ''; } })();
   const cache = new Map();
   let lastB2Forced = 0;
+  let lastVercelUsageForced = 0;
   let vercelExpectations = null;
 
   async function cached(key, ttl, force, run) {
@@ -165,16 +223,24 @@ export function createSiteMonitor(options = {}) {
 
   async function checkDomain(force) {
     const items = [];
-    const expected = vercelExpectations || { a: config.expectedA, cname: config.expectedCname };
+    // Vercel hands out A values from pools per plan, so several are valid at once.
+    // A record is fine when it points only at Vercel and Vercel does not flag it.
+    const vercel = vercelExpectations || { verified: {}, recommendedA: [], acceptedA: [], recommendedCname: '', acceptedCnames: [] };
+    const acceptedA = new Set([...config.acceptedA, ...vercel.acceptedA]);
+    const acceptedCnames = new Set([config.expectedCname, ...vercel.acceptedCnames]);
     try {
       const records = (await dns.resolve4(config.domain)).sort();
-      const match = expected.a.every(ip => records.includes(ip)) && records.every(ip => expected.a.includes(ip));
-      items.push({ label: '대표 주소(A)', value: records.join(', '), status: match ? 'ok' : 'error', ...(match ? {} : { hint: `Vercel 값 ${expected.a.join(', ')}와 다릅니다. 가비아 DNS를 확인하세요.` }) });
+      const ok = records.length > 0 && records.every(ip => acceptedA.has(ip)) && vercel.verified[config.domain] !== false;
+      const recommended = vercel.recommendedA;
+      const isRecommended = recommended.length === records.length && recommended.every(ip => records.includes(ip));
+      const hint = !ok ? `Vercel 주소가 아니거나 Vercel이 설정 오류로 표시합니다. 가비아 DNS의 대표(@) A 레코드를 ${(recommended.length ? recommended : config.acceptedA.slice(0, 2)).join(', ')}로 맞추세요.`
+        : recommended.length && !isRecommended ? `Vercel이 지금 값도 정상으로 인식합니다. Vercel의 최신 권장값은 ${recommended.join(', ')}이며, 바꾸는 것은 선택입니다.` : '';
+      items.push({ label: '대표 주소(A)', value: records.join(', '), status: ok ? 'ok' : 'error', ...(hint ? { hint } : {}) });
     } catch (error) { items.push({ label: '대표 주소(A)', value: safeMessage(error), status: 'error' }); }
     try {
       const cnames = (await dns.resolveCname(config.wwwHost)).map(name => name.replace(/\.$/, ''));
-      const match = cnames.includes(expected.cname);
-      items.push({ label: 'www(CNAME)', value: cnames.join(', '), status: match ? 'ok' : 'error', ...(match ? {} : { hint: `Vercel 값 ${expected.cname}와 다릅니다.` }) });
+      const ok = cnames.some(name => acceptedCnames.has(name)) && vercel.verified[config.wwwHost] !== false;
+      items.push({ label: 'www(CNAME)', value: cnames.join(', '), status: ok ? 'ok' : 'error', ...(ok ? {} : { hint: `Vercel 값 ${vercel.recommendedCname || config.expectedCname}와 다릅니다.` }) });
     } catch (error) { items.push({ label: 'www(CNAME)', value: safeMessage(error), status: 'error' }); }
     try {
       const ns = await dns.resolveNs(config.domain);
@@ -206,15 +272,60 @@ export function createSiteMonitor(options = {}) {
     return { status: response.status, body, text };
   }
 
-  async function checkVercel() {
+  async function vercelUsage(token) {
+    // The credit ledger is what `vercel usage` (the official CLI) reads; the
+    // charge export is the documented FOCUS endpoint. Both are team-level.
+    const ledger = await vercelApi('/v1/invoices/pre-commitment-usage', token).catch(() => null);
+    const credit = ledger?.status === 200 ? (ledger.body?.creditLedgers || []).find(entry => entry.currency === 'USD') || null : null;
+    const current = new Date(now());
+    const periodStart = new Date(credit?.periodStart || Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), 1));
+    const periodEnd = new Date(credit?.periodEnd || Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
+    // Charges come in whole-day buckets; a range shorter than one bucket returns 404.
+    const to = new Date(Math.min(periodEnd.getTime(), Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() + 2)));
+    const charges = await vercelApi(`/v1/billing/charges?from=${encodeURIComponent(periodStart.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, token);
+    if (charges.status === 404 && charges.body?.error?.code === 'costs_not_found') return { periodStart, periodEnd, credit, services: [], subscriptions: [], cost: 0, projectCost: 0, billed: 0, empty: true };
+    // A project-scoped token reaches deployments and domains but not team billing.
+    if (charges.status !== 200) return { denied: [401, 403, 404].includes(charges.status), httpStatus: charges.status };
+    return { periodStart, periodEnd, credit, ...summarizeVercelCharges(charges.text, config.vercelProjectId) };
+  }
+
+  function vercelUsageRows(bill, items, usageRows) {
+    const label = '이번 달 사용량';
+    if (bill.error) return items.push({ label, value: safeMessage(bill.error), status: 'warning' });
+    if (bill.denied) return items.push({ label, value: '이 토큰으로는 팀 요금 정보를 볼 수 없습니다.', status: 'unknown', hint: `사용량은 팀 단위로 집계됩니다. Vercel ▶ Account Settings ▶ Tokens에서 Scope를 ${config.vercelTeamName} ▶ All Projects로 골라 만든 토큰으로 바꾸세요. 프로젝트 하나만 고른 토큰은 배포·도메인만 확인합니다.` });
+    if (bill.httpStatus) return items.push({ label, value: `Vercel 응답 ${bill.httpStatus}`, status: 'warning' });
+    const total = Number(bill.credit?.total ?? config.limits.vercelMonthlyCreditUsd);
+    const used = bill.credit ? Math.max(0, total - Number(bill.credit.remaining ?? total)) : bill.cost;
+    const ratio = total ? used / total : 0;
+    // Going past the credit bills the excess; the site keeps running.
+    usageRows.push({ ...usage(`Pro 월 크레딧 ($${Number.isInteger(total) ? total : total.toFixed(2)})`, used, total, 'usd', '같은 팀의 모든 프로젝트 합산입니다. 다 쓰면 넘은 만큼만 추가 청구되며, 75%가 되면 Vercel이 메일로 알립니다.'), status: ratio >= 1 ? 'error' : ratio >= 0.75 ? 'warning' : 'ok' });
+    const tier = bill.subscriptions.map(name => /^Flat Rate CDN (\d+)M$/i.exec(name)).find(Boolean);
+    if (tier) {
+      const millions = Number(tier[1]);
+      const quantity = name => bill.services.find(entry => entry.name === name)?.quantity || 0;
+      usageRows.push(usage(`CDN 요청 (Flat Rate 월 ${countLabel(millions * 100)}만 건)`, quantity('CDN Requests'), millions * 1e6, 'requests', '넘으면 다음 결제 주기부터 한 단계 위 등급으로 바뀝니다. 하루 이틀 몰리는 것은 괜찮습니다.'));
+      usageRows.push(usage(`데이터 전송 (Flat Rate 월 ${millions === 1 ? '1TB' : '50TB'})`, quantity('Fast Data Transfer') * 1e9, millions === 1 ? 1e12 : 50e12, 'bytes'));
+    }
+    items.push({ label: '결제 주기', value: bill.credit ? `${kstDay(bill.periodStart)} ~ ${kstDay(bill.periodEnd.getTime() - 1)}` : `${kstDay(bill.periodStart)}부터 집계 (Vercel 결제일과 다를 수 있음)`, status: 'ok' });
+    // BilledCost is the part the credit no longer covers; rows carry float dust (~1e-11).
+    const over = Math.round(Math.max(bill.billed, bill.credit ? 0 : bill.cost - total) * 100) / 100;
+    items.push({ label: '크레딧 초과 사용', value: over ? `${usd(over)} · Pro 요금 외 추가 청구 예정` : '없음 (크레딧 안에서 사용 중)', status: over ? 'warning' : 'ok' });
+    if (bill.empty) return items.push({ label, value: '아직 집계된 사용량이 없습니다.', status: 'ok' });
+    items.push({ label: '온사이드 사용액', value: `${usd(bill.projectCost)} · 팀 전체 ${usd(bill.cost)}`, status: 'ok' });
+    const listed = VERCEL_KEY_SERVICES.map(name => bill.services.find(entry => entry.name === name)).filter(Boolean)
+      .concat(bill.services.filter(entry => !VERCEL_KEY_SERVICES.includes(entry.name) && entry.cost >= 0.01)).slice(0, 9);
+    for (const entry of listed) items.push({ label: `이번 달 · ${entry.label}`, value: `온사이드 ${quantityLabel(entry.projectQuantity, entry.unit)} · 팀 ${quantityLabel(entry.quantity, entry.unit)}`, status: 'ok' });
+  }
+
+  async function checkVercel(force = false) {
     const links = [{ target: 'vercel-project', label: '프로젝트' }, { target: 'vercel-usage', label: '사용량' }];
     const token = getSettings().vercelToken;
     if (!token) {
       const result = section('vercel', 'Vercel (호스팅)', [{ label: '배포 상태', value: 'Vercel 토큰을 입력하면 확인합니다.', status: 'unknown' }], { status: 'unknown', links: [...links, { target: 'vercel-tokens', label: '토큰 만들기' }] });
-      result.summary = '사이트 응답은 위 "온사이드 사이트"에서 확인합니다. 배포·도메인 상태는 토큰이 필요합니다.';
+      result.summary = '사이트 응답은 위 "온사이드 사이트"에서 확인합니다. 배포·도메인 상태와 사용량은 토큰이 필요합니다.';
       return result;
     }
-    const items = [];
+    const items = []; const usageRows = [];
     try {
       const deployments = await vercelApi(`/v6/deployments?projectId=${config.vercelProjectId}&target=production&limit=5`, token);
       if (deployments.status === 401 || deployments.status === 403) throw Object.assign(new Error('토큰이 만료되었거나 이 팀에 권한이 없습니다.'), { auth: true });
@@ -224,32 +335,35 @@ export function createSiteMonitor(options = {}) {
       const state = latest ? latest.state || latest.readyState : 'NONE';
       items.push({ label: '최근 배포', value: latest ? `${state} · ${kst(latest.created)}${latest.meta?.githubCommitSha ? ` · ${latest.meta.githubCommitSha.slice(0, 7)}` : ''}` : '배포 없음', status: state === 'READY' || state === 'BUILDING' || state === 'QUEUED' || state === 'INITIALIZING' ? 'ok' : state === 'ERROR' ? 'warning' : 'unknown', ...(state === 'ERROR' ? { hint: '최근 배포가 실패했습니다. 사이트는 직전 성공 배포로 계속 운영됩니다.' } : {}) });
       if (live && live !== latest) items.push({ label: '운영 중인 배포', value: `${kst(live.created)}${live.meta?.githubCommitSha ? ` · ${live.meta.githubCommitSha.slice(0, 7)}` : ''}`, status: 'ok' });
-      const domainConfig = await vercelApi(`/v6/domains/${config.domain}/config`, token);
-      if (domainConfig.body) {
-        const misconfigured = domainConfig.body.misconfigured === true;
-        items.push({ label: '도메인 연결', value: misconfigured ? '설정 오류' : '정상', status: misconfigured ? 'error' : 'ok' });
-        const a = domainConfig.body.recommendedIPv4?.[0]?.value; const cname = domainConfig.body.recommendedCNAME?.[0]?.value;
-        if (Array.isArray(a) && a.length && typeof cname === 'string') vercelExpectations = { a: a.slice().sort(), cname: cname.replace(/\.$/, '') };
+      const verified = {}; const expectations = { verified, recommendedA: [], acceptedA: [], recommendedCname: '', acceptedCnames: [] };
+      for (const host of [config.domain, config.wwwHost]) {
+        const domainConfig = await vercelApi(`/v6/domains/${host}/config`, token);
+        if (domainConfig.status !== 200 || !domainConfig.body) continue;
+        verified[host] = domainConfig.body.misconfigured !== true;
+        if (host !== config.domain) continue;
+        const ranked = list => (Array.isArray(list) ? list : []).slice().sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
+        const ipv4 = ranked(domainConfig.body.recommendedIPv4), cnames = ranked(domainConfig.body.recommendedCNAME);
+        expectations.recommendedA = (Array.isArray(ipv4[0]?.value) ? ipv4[0].value : []).slice().sort();
+        expectations.acceptedA = ipv4.flatMap(entry => Array.isArray(entry.value) ? entry.value : [entry.value]).filter(Boolean);
+        expectations.acceptedCnames = cnames.map(entry => String(entry.value || '').replace(/\.$/, '')).filter(Boolean);
+        expectations.recommendedCname = expectations.acceptedCnames[0] || '';
       }
-      const monthStart = new Date(new Date(now()).toISOString().slice(0, 8) + '01T00:00:00Z');
-      const charges = await vercelApi(`/v1/billing/charges?from=${encodeURIComponent(monthStart.toISOString())}&to=${encodeURIComponent(new Date(now()).toISOString())}`, token).catch(() => null);
-      const totals = new Map();
-      if (charges?.status === 200) {
-        for (const line of charges.text.split('\n')) {
-          try {
-            const row = JSON.parse(line);
-            const name = row.ServiceName || row.ChargeDescription; const quantity = Number(row.ConsumedQuantity);
-            if (name && Number.isFinite(quantity)) { const entry = totals.get(name) || { quantity: 0, unit: row.ConsumedUnit || '' }; entry.quantity += quantity; totals.set(name, entry); }
-          } catch { /* skip non-JSON lines */ }
-        }
+      if (Object.keys(verified).length) {
+        vercelExpectations = expectations;
+        const broken = Object.keys(verified).filter(host => !verified[host]);
+        items.push({ label: '도메인 연결', value: broken.length ? `설정 오류 · ${broken.join(', ')}` : '정상', status: broken.length ? 'error' : 'ok' });
       }
-      if (totals.size) for (const [name, entry] of [...totals].sort((a, b) => b[1].quantity - a[1].quantity).slice(0, 8)) items.push({ label: `이번 달 · ${name}`, value: `${countLabel(Math.round(entry.quantity * 100) / 100)} ${entry.unit}`.trim(), status: 'ok' });
-      else items.push({ label: '이번 달 사용량', value: 'Hobby 사용량은 API로 제공되지 않습니다. "사용량" 버튼으로 확인하세요.', status: 'unknown' });
+      const forceUsage = force && now() - lastVercelUsageForced >= VERCEL_USAGE_MIN_FORCED_INTERVAL;
+      if (forceUsage) lastVercelUsageForced = now();
+      // Keyed by token so a replaced token is checked at once.
+      const usageKey = `vercel-usage:${createHash('sha256').update(token).digest('hex').slice(0, 16)}`;
+      vercelUsageRows(await cached(usageKey, TTL.vercelUsage, forceUsage, () => vercelUsage(token)).catch(error => ({ error })), items, usageRows);
     } catch (error) {
       items.push({ label: 'Vercel API', value: safeMessage(error), status: error?.auth ? 'error' : 'warning' });
     }
-    const result = section('vercel', 'Vercel (호스팅)', items, { links });
-    result.summary = result.status === 'ok' ? 'Production 배포와 도메인 연결이 정상입니다.' : '배포 또는 도메인 연결을 확인하세요.';
+    const result = section('vercel', 'Vercel (호스팅)', items, { usage: usageRows, links });
+    result.summary = result.status === 'ok' ? (usageRows.length ? 'Production 배포와 도메인 연결이 정상이고, 이번 달 사용량이 Pro 크레딧 안에 있습니다.' : 'Production 배포와 도메인 연결이 정상입니다.')
+      : usageRows.some(row => row.status !== 'ok') ? 'Pro 크레딧이나 CDN 한도에 가까워졌습니다. 사용량을 확인하세요.' : '배포 또는 도메인 연결을 확인하세요.';
     return result;
   }
 
@@ -347,7 +461,7 @@ export function createSiteMonitor(options = {}) {
     const forceB2 = force && now() - lastB2Forced >= B2_MIN_FORCED_INTERVAL;
     if (forceB2) lastB2Forced = now();
     const guard = (id, title, promise) => promise.catch(error => ({ ...section(id, title, [{ label: '점검', value: safeMessage(error), status: 'error' }]), summary: '점검 중 오류가 발생했습니다.' }));
-    const vercel = await guard('vercel', 'Vercel (호스팅)', cached('vercel', TTL.vercel, force, checkVercel));
+    const vercel = await guard('vercel', 'Vercel (호스팅)', cached('vercel', TTL.vercel, force, () => checkVercel(force)));
     const sections = await Promise.all([
       guard('site', '온사이드 사이트', cached('site', TTL.site, force, checkSite)),
       Promise.resolve(vercel),
