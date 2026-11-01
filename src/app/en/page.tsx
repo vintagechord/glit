@@ -1,6 +1,6 @@
 import { pageMetadata, SITE_DESCRIPTION_EN } from "@/lib/seo";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export { default } from "@/app/page";
 

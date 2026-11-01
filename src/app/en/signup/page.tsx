@@ -10,7 +10,7 @@ export const metadata = pageMetadata({
 });
 
 // Static: the query is read in the browser and provider settings refresh each minute.
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export default function EnglishSignupPage() {
   return <SignupPageView english />;

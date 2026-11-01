@@ -8,13 +8,8 @@ import { usePathname } from "next/navigation";
 
 import { APP_CONFIG } from "@/lib/config";
 
-import {
-  termsContent, privacyContent, refundContent, termsContentEn, privacyContentEn, refundContentEn,
-  partnershipContent, filePolicyContent, partnershipContentEn, filePolicyContentEn,
-} from "@/lib/legal-content";
-
-// Preserve the published imports used by existing signup and policy modals.
-export { termsContent, privacyContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/lib/legal-content";
+// The policy texts (about 60 KB) load only once a visitor opens a modal.
+type LegalContent = typeof import("@/lib/legal-content");
 
 const footerLinkClass = "transition hover:text-[#f2cf27]";
 const footerDisclosureClass =
@@ -41,6 +36,21 @@ export function SiteFooter() {
   >(null);
 
   const closeModal = () => setActiveModal(null);
+  const [legal, setLegal] = React.useState<LegalContent | null>(null);
+  React.useEffect(() => {
+    if (!activeModal || legal) return;
+    let active = true;
+    import("@/lib/legal-content")
+      .then((loaded) => {
+        if (active) setLegal(loaded);
+      })
+      .catch(() => {
+        // The modal keeps its loading line; reopening it retries.
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeModal, legal]);
   const isTermsOpen = activeModal === "terms";
   const isPrivacyOpen = activeModal === "privacy";
   const isRefundOpen = activeModal === "refund";
@@ -73,25 +83,27 @@ export function SiteFooter() {
         : isFileOpen
           ? "File Policy"
           : "Partnership";
-  const modalContentKo = isTermsOpen
-    ? termsContent
-    : isPrivacyOpen
-      ? privacyContent
-      : isRefundOpen
-        ? refundContent
-        : isFileOpen
-          ? filePolicyContent
-          : partnershipContent;
-  const modalContentEn = isTermsOpen
-    ? termsContentEn
-    : isPrivacyOpen
-      ? privacyContentEn
-      : isRefundOpen
-        ? refundContentEn
-        : isFileOpen
-          ? filePolicyContentEn
-          : partnershipContentEn;
-  const modalContent = isEnglishRoute ? modalContentEn : modalContentKo;
+  const modalContent = !legal
+    ? isEnglishRoute ? "Loading…" : "불러오는 중…"
+    : isEnglishRoute
+      ? isTermsOpen
+        ? legal.termsContentEn
+        : isPrivacyOpen
+          ? legal.privacyContentEn
+          : isRefundOpen
+            ? legal.refundContentEn
+            : isFileOpen
+              ? legal.filePolicyContentEn
+              : legal.partnershipContentEn
+      : isTermsOpen
+        ? legal.termsContent
+        : isPrivacyOpen
+          ? legal.privacyContent
+          : isRefundOpen
+            ? legal.refundContent
+            : isFileOpen
+              ? legal.filePolicyContent
+              : legal.partnershipContent;
   const modalTitleId = React.useId();
 
   const dialogRef = React.useRef<HTMLDivElement>(null);

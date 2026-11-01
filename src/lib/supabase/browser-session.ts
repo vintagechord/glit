@@ -1,7 +1,6 @@
-// Supabase SSR keeps the session in script-readable cookies named
-// sb-<project-ref>-auth-token (split into .0, .1 … when large). The PKCE
-// verifier cookie (…-auth-token-code-verifier) is not a session.
-const AUTH_COOKIE = /(?:^|;\s*)sb-[a-z0-9]+-auth-token(?:\.\d+)?=/i;
+import { SESSION_COOKIE_SOURCE } from "@/lib/session-cookie";
+
+const AUTH_COOKIE = new RegExp(SESSION_COOKIE_SOURCE, "i");
 
 /** Whether this browser holds a Supabase session cookie, without loading the SDK. */
 export function hasBrowserAuthCookie(

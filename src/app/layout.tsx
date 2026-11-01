@@ -6,6 +6,7 @@ import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CenteredDialogHost } from "@/components/ui/centered-dialog-host";
 import { OG_IMAGE, SEO_KEYWORDS, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
+import { SESSION_COOKIE_FLAG_SCRIPT } from "@/lib/session-cookie";
 import { getBaseUrl } from "@/lib/url";
 
 const enableNavigationLatencyLogger =
@@ -62,6 +63,7 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="min-h-dvh font-sans antialiased">
+        <script dangerouslySetInnerHTML={{ __html: SESSION_COOKIE_FLAG_SCRIPT }} />
         <ThemeProvider>
           {enableNavigationLatencyLogger ? (
             <Suspense fallback={null}>

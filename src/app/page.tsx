@@ -24,10 +24,11 @@ import {
   websiteJsonLd,
 } from "@/lib/seo";
 
-// Served from the CDN and rebuilt in the background at the banner cache's
-// pace; banner edits revalidate "/" at once, and the visitor's own status
-// loads in the browser.
-export const revalidate = 60;
+// Served from the CDN for an hour at a time: a stale copy costs a round trip
+// to the function region, so the window is long. Banner, package and setting
+// edits revalidate "/" at once, and the visitor's own status loads in the
+// browser.
+export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
   title: `${SITE_NAME} | ${SITE_TAGLINE} · 방송국 심의 대행`,
@@ -116,7 +117,7 @@ export default function Home() {
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
-            <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-700 sm:gap-6">
+            <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-6">
               <div className="space-y-5 sm:space-y-6">
                 <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
                   Since 2017

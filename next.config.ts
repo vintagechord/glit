@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
     // Cash receipt PDFs embed Nanum Gothic read from disk at runtime.
     "/api/orders/**": ["./src/assets/fonts/nanum-gothic/*.ttf"],
   },
+  // Vercel optimizes /_next/image outside the function, so the sharp fallbacks
+  // (the 9 MB WebAssembly build in particular) only slow cold starts.
+  outputFileTracingExcludes: {
+    "/*": ["./node_modules/sharp/**/*", "./node_modules/@img/**/*"],
+  },
   poweredByHeader: false,
   experimental: {
     serverActions: {
@@ -15,6 +20,10 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
+    // Banner uploads get a timestamped name, so an optimized copy never has to
+    // expire early; the default 4 hours made the first visitor afterwards wait
+    // for a new optimization.
+    minimumCacheTTL: 2678400,
     remotePatterns: [
       {
         protocol: "https",

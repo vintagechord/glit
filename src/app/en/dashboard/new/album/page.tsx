@@ -7,7 +7,7 @@ export const metadata = pageMetadata({
   path: "/dashboard/new/album",
   enPath: "/en/dashboard/new/album",
 });
-export const revalidate = 60;
+export const revalidate = 3600;
 export default function EnglishAlbumSubmissionPage() {
   return <AlbumApplicationPageView />;
 }

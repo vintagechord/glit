@@ -35,7 +35,7 @@ const loadPublicAdBanners = unstable_cache(
     return data ?? [];
   },
   ["public-ad-banners-v1"],
-  { revalidate: 60, tags: [PUBLIC_AD_BANNERS_CACHE_TAG] },
+  { revalidate: 3600, tags: [PUBLIC_AD_BANNERS_CACHE_TAG] },
 );
 
 // Hero and strip share one query even on the first render of an uncached page.
