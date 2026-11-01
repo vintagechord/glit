@@ -1645,8 +1645,8 @@ const exactTranslations: Record<string, string> = {
   "주식회사 빈티지하우스": "Vintage House Co., Ltd.",
   "주식회사 Vintage House": "Vintage House Co., Ltd.",
   "정준영": "Jung Junyoung",
-  "경기도 김포시 사우중로74번길 29 (사우동) 시그마프라자 7층 뮤직스튜디오":
-    "7F Music Studio, Sigma Plaza, 29 Saujung-ro 74beon-gil, Gimpo-si, Gyeonggi-do, Korea",
+  "경기도 김포시 사우중로74번길 29, 시그마프라자 7층 빈티지하우스 (Music Studio)":
+    "Vintage House (Music Studio), 7F Sigma Plaza, 29 Saujung-ro 74beon-gil, Gimpo-si, Gyeonggi-do, Korea",
   "(주)가비아인터넷서비스": "Gabia Internet Service Co., Ltd.",
   "Copyright © (주)빈티지하우스. All Rights Reserved.":
     "Copyright © Vintage House Co., Ltd. All Rights Reserved.",
