@@ -22,8 +22,9 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parseEnv } from 'node:util';
 
-const projectRef = 'rwysjsmxtpuqekeltwxi';
-const region = 'ap-south-1';
+// Moved from Mumbai (rwysjsmxtpuqekeltwxi, ap-south-1) to Seoul on 2026-11-02.
+const projectRef = 'ggpkzttyfkopcdctvxzz';
+const region = 'ap-northeast-2';
 const root = process.env.ONSIDE_BACKUP_DIR ?? join(homedir(), 'OnsideBackups');
 const connectionFile = process.env.ONSIDE_BACKUP_CONNECTION ?? join(homedir(), 'Library', 'Application Support', 'Onside Review Desk', 'connection.env');
 const keepDays = 14;
