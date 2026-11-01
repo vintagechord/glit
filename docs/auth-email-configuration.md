@@ -35,7 +35,7 @@
 
 ### 2. Supabase의 함수 비밀값 설정
 
-[온사이드 Edge Function Secrets](https://supabase.com/dashboard/project/rwysjsmxtpuqekeltwxi/functions/secrets)에 다음을 저장한다. SMTP 비밀번호는 Supabase에만 저장하며 Render에는 복사하지 않는다.
+[온사이드 Edge Function Secrets](https://supabase.com/dashboard/project/ggpkzttyfkopcdctvxzz/functions/secrets)에 다음을 저장한다. SMTP 비밀번호는 Supabase에만 저장하며 Render에는 복사하지 않는다.
 
 ```dotenv
 SMTP_HOST=smtp.daum.net
@@ -53,7 +53,7 @@ EMAIL_RELAY_SECRET=<32 random bytes encoded as 64 hexadecimal characters>
 CLI가 온사이드 프로젝트를 관리할 수 있는 계정으로 로그인된 상태에서 저장소 루트에서 실행한다:
 
 ```bash
-supabase functions deploy send-transactional-email --project-ref rwysjsmxtpuqekeltwxi --use-api
+supabase functions deploy send-transactional-email --project-ref ggpkzttyfkopcdctvxzz --use-api
 ```
 
 `supabase/config.toml`의 이 함수는 `verify_jwt=false`다. 자체 서버 비밀값 검증을 사용하기 때문이며 인증 없는 공개 발송 API가 아니다. 다른 함수의 인증 설정은 변경하지 않는다. 기존 Supabase Auth SMTP 설정을 바꾸는 작업도 아니다.
@@ -62,7 +62,7 @@ supabase functions deploy send-transactional-email --project-ref rwysjsmxtpuqeke
 
 ```dotenv
 EMAIL_PROVIDER=supabase-smtp
-SUPABASE_EMAIL_RELAY_URL=https://rwysjsmxtpuqekeltwxi.supabase.co/functions/v1/send-transactional-email
+SUPABASE_EMAIL_RELAY_URL=https://ggpkzttyfkopcdctvxzz.supabase.co/functions/v1/send-transactional-email
 EMAIL_RELAY_SECRET=<same relay secret as Supabase>
 SMTP_FROM=온사이드 <iamonside@daum.net>
 NEXT_PUBLIC_SUPPORT_EMAIL=iamonside@daum.net
