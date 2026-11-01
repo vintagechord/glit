@@ -162,6 +162,29 @@ test('usage past the credit is billed and flagged; without the ledger the $20 cr
   assert.match(item(fallback, '결제 주기').value, /^11월 1일부터/, 'calendar month when the ledger is unavailable');
 });
 
+test('a slow Vercel billing export keeps the last usage on screen and never flags the hosting', async () => {
+  const ledger = { creditLedgers: [{ currency: 'USD', total: 20, remaining: 19.5, periodStart: '2026-10-31T07:00:00.000Z', periodEnd: '2026-11-30T08:00:00.000Z' }] };
+  const overrides = { ledger, charges: CHARGES };
+  const f = fakes(overrides);
+  const slowFetch = async (url, init) => {
+    if (overrides.slow && String(url).includes('/v1/billing/charges')) throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+    return f.fetch(url, init);
+  };
+  let clock = NOW;
+  const monitor = createSiteMonitor({ env, fetch: slowFetch, dns: f.dns, tlsInfo: f.tlsInfo, s3: f.s3, now: () => clock, settings: () => ({ vercelToken: 'vercel-token-0123456789' }), backupStatusFile: '/nonexistent/last-status.json' });
+  const fresh = sectionOf(await monitor.snapshot(true), 'vercel');
+  assert.equal(fresh.usage[0].usedLabel, '$0.50');
+  overrides.slow = true; clock += 31 * 60_000;
+  const stale = sectionOf(await monitor.snapshot(true), 'vercel');
+  assert.equal(stale.usage[0].usedLabel, '$0.50', 'the last successful usage stays');
+  assert.match(item(stale, '사용량 기준 시각').value, /다음 확인 때 갱신/);
+  assert.equal(stale.status, fresh.status, 'only the usage meters themselves decide the status');
+  clock += 7 * 60 * 60_000;
+  const expired = sectionOf(await monitor.snapshot(true), 'vercel');
+  assert.deepEqual([item(expired, '이번 달 사용량').status, item(expired, '이번 달 사용량').value], ['unknown', 'Vercel 요금 정보 응답이 늦습니다. 다음 확인 때 다시 불러옵니다.']);
+  assert.equal(expired.status, 'ok', 'a usage read failure is not a hosting problem');
+});
+
 test('DNS on an older Vercel IP pool is fine while Vercel accepts it; a flagged domain is an error', async () => {
   const domainConfig = { misconfigured: false, ipStatus: 'optional-change', recommendedIPv4: [{ rank: 1, value: ['216.150.1.1', '216.150.16.1'] }, { rank: 2, value: ['76.76.21.21'] }], recommendedCNAME: [{ rank: 1, value: '6dbbb6e9e0c47844.vercel-dns-017.com.' }] };
   const accepted = item(sectionOf(await monitorWith(fakes({ domainConfig }), { vercelToken: 'vercel-token-0123456789' }).snapshot(true), 'domain'), '대표 주소(A)');

@@ -42,6 +42,10 @@ const TTL = { site: 60_000, domain: 10 * 60_000, rdap: 12 * 60 * 60_000, vercel:
 const B2_MIN_FORCED_INTERVAL = 2 * 60_000;
 // Vercel bills in daily buckets and the charge export grows to ~900 rows a day.
 const VERCEL_USAGE_MIN_FORCED_INTERVAL = 5 * 60_000;
+// The billing export sometimes takes well over 15 s; a slow answer is not an outage.
+const VERCEL_BILLING_TIMEOUT = 60_000;
+// After a failed refresh the last successful usage stays on screen this long.
+const VERCEL_USAGE_KEEP = 6 * 60 * 60_000;
 const RANK = { ok: 0, unknown: 1, warning: 2, error: 3 };
 export const worst = statuses => statuses.reduce((current, next) => (RANK[next] ?? 0) > (RANK[current] ?? 0) ? next : current, 'ok');
 const usageStatus = ratio => ratio >= 0.9 ? 'error' : ratio >= 0.7 ? 'warning' : 'ok';
@@ -52,7 +56,8 @@ const usd = n => `$${(Number(n) || 0).toFixed(2)}`;
 const amountLabel = (n, unit, base) => unit === 'bytes' ? bytesLabel(n, base) : unit === 'usd' ? usd(n) : `${countLabel(n)}${unit === 'requests' ? '건' : '명'}`;
 const kstDay = value => { const day = new Date(new Date(value).getTime() + 9 * 3_600_000); return `${day.getUTCMonth() + 1}월 ${day.getUTCDate()}일`; };
 const kst = value => value ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
-const safeMessage = error => String(error?.message || error || '확인하지 못했습니다.').replace(/(?:eyJ[A-Za-z0-9_-]{10,}|Bearer\s+\S+|[A-Za-z0-9_-]{32,})/g, '***').slice(0, 200);
+const isTimeout = error => error?.name === 'TimeoutError' || /aborted due to timeout/i.test(String(error?.message || ''));
+const safeMessage = error => isTimeout(error) ? '응답 시간이 초과되었습니다.' : String(error?.message || error || '확인하지 못했습니다.').replace(/(?:eyJ[A-Za-z0-9_-]{10,}|Bearer\s+\S+|[A-Za-z0-9_-]{32,})/g, '***').slice(0, 200);
 const usage = (label, used, limit, unit, note, base = 1000) => ({
   label, used, limit, unit, percent: limit ? Math.min(999, Math.round((used / limit) * 1000) / 10) : null,
   usedLabel: amountLabel(used, unit, base), limitLabel: amountLabel(limit, unit, base),
@@ -170,6 +175,7 @@ export function createSiteMonitor(options = {}) {
   const cache = new Map();
   let lastB2Forced = 0;
   let lastVercelUsageForced = 0;
+  let lastVercelUsage = null;
   let vercelExpectations = null;
 
   async function cached(key, ttl, force, run) {
@@ -264,9 +270,9 @@ export function createSiteMonitor(options = {}) {
     return result;
   }
 
-  async function vercelApi(path, token) {
+  async function vercelApi(path, token, timeoutMs) {
     const separator = path.includes('?') ? '&' : '?';
-    const { response } = await timedFetch(fetchImpl, `https://api.vercel.com${path}${separator}teamId=${config.vercelTeamId}`, { headers: { Authorization: `Bearer ${token}` }, redirect: 'error' });
+    const { response } = await timedFetch(fetchImpl, `https://api.vercel.com${path}${separator}teamId=${config.vercelTeamId}`, { headers: { Authorization: `Bearer ${token}` }, redirect: 'error' }, timeoutMs);
     const text = await response.text();
     let body = null; try { body = JSON.parse(text); } catch { body = null; }
     return { status: response.status, body, text };
@@ -275,14 +281,14 @@ export function createSiteMonitor(options = {}) {
   async function vercelUsage(token) {
     // The credit ledger is what `vercel usage` (the official CLI) reads; the
     // charge export is the documented FOCUS endpoint. Both are team-level.
-    const ledger = await vercelApi('/v1/invoices/pre-commitment-usage', token).catch(() => null);
+    const ledger = await vercelApi('/v1/invoices/pre-commitment-usage', token, VERCEL_BILLING_TIMEOUT).catch(() => null);
     const credit = ledger?.status === 200 ? (ledger.body?.creditLedgers || []).find(entry => entry.currency === 'USD') || null : null;
     const current = new Date(now());
     const periodStart = new Date(credit?.periodStart || Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), 1));
     const periodEnd = new Date(credit?.periodEnd || Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1));
     // Charges come in whole-day buckets; a range shorter than one bucket returns 404.
     const to = new Date(Math.min(periodEnd.getTime(), Date.UTC(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate() + 2)));
-    const charges = await vercelApi(`/v1/billing/charges?from=${encodeURIComponent(periodStart.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, token);
+    const charges = await vercelApi(`/v1/billing/charges?from=${encodeURIComponent(periodStart.toISOString())}&to=${encodeURIComponent(to.toISOString())}`, token, VERCEL_BILLING_TIMEOUT);
     if (charges.status === 404 && charges.body?.error?.code === 'costs_not_found') return { periodStart, periodEnd, credit, services: [], subscriptions: [], cost: 0, projectCost: 0, billed: 0, empty: true };
     // A project-scoped token reaches deployments and domains but not team billing.
     if (charges.status !== 200) return { denied: [401, 403, 404].includes(charges.status), httpStatus: charges.status };
@@ -291,9 +297,10 @@ export function createSiteMonitor(options = {}) {
 
   function vercelUsageRows(bill, items, usageRows) {
     const label = '이번 달 사용량';
-    if (bill.error) return items.push({ label, value: safeMessage(bill.error), status: 'warning' });
+    // Usage is informational: a failed read never flags the hosting itself.
+    if (bill.error) return items.push({ label, value: isTimeout(bill.error) ? 'Vercel 요금 정보 응답이 늦습니다. 다음 확인 때 다시 불러옵니다.' : safeMessage(bill.error), status: 'unknown' });
     if (bill.denied) return items.push({ label, value: '이 토큰으로는 팀 요금 정보를 볼 수 없습니다.', status: 'unknown', hint: `사용량은 팀 단위로 집계됩니다. Vercel ▶ Account Settings ▶ Tokens에서 Scope를 ${config.vercelTeamName} ▶ All Projects로 골라 만든 토큰으로 바꾸세요. 프로젝트 하나만 고른 토큰은 배포·도메인만 확인합니다.` });
-    if (bill.httpStatus) return items.push({ label, value: `Vercel 응답 ${bill.httpStatus}`, status: 'warning' });
+    if (bill.httpStatus) return items.push({ label, value: `Vercel 요금 정보 응답 ${bill.httpStatus} · 다음 확인 때 다시 불러옵니다.`, status: 'unknown' });
     const total = Number(bill.credit?.total ?? config.limits.vercelMonthlyCreditUsd);
     const used = bill.credit ? Math.max(0, total - Number(bill.credit.remaining ?? total)) : bill.cost;
     const ratio = total ? used / total : 0;
@@ -306,6 +313,7 @@ export function createSiteMonitor(options = {}) {
       usageRows.push(usage(`CDN 요청 (Flat Rate 월 ${countLabel(millions * 100)}만 건)`, quantity('CDN Requests'), millions * 1e6, 'requests', '넘으면 다음 결제 주기부터 한 단계 위 등급으로 바뀝니다. 하루 이틀 몰리는 것은 괜찮습니다.'));
       usageRows.push(usage(`데이터 전송 (Flat Rate 월 ${millions === 1 ? '1TB' : '50TB'})`, quantity('Fast Data Transfer') * 1e9, millions === 1 ? 1e12 : 50e12, 'bytes'));
     }
+    if (bill.staleSince) items.push({ label: '사용량 기준 시각', value: `${kst(bill.staleSince)} 집계 · Vercel 응답이 늦어 다음 확인 때 갱신합니다.`, status: 'ok' });
     items.push({ label: '결제 주기', value: bill.credit ? `${kstDay(bill.periodStart)} ~ ${kstDay(bill.periodEnd.getTime() - 1)}` : `${kstDay(bill.periodStart)}부터 집계 (Vercel 결제일과 다를 수 있음)`, status: 'ok' });
     // BilledCost is the part the credit no longer covers; rows carry float dust (~1e-11).
     const over = Math.round(Math.max(bill.billed, bill.credit ? 0 : bill.cost - total) * 100) / 100;
@@ -357,7 +365,10 @@ export function createSiteMonitor(options = {}) {
       if (forceUsage) lastVercelUsageForced = now();
       // Keyed by token so a replaced token is checked at once.
       const usageKey = `vercel-usage:${createHash('sha256').update(token).digest('hex').slice(0, 16)}`;
-      vercelUsageRows(await cached(usageKey, TTL.vercelUsage, forceUsage, () => vercelUsage(token)).catch(error => ({ error })), items, usageRows);
+      let bill = await cached(usageKey, TTL.vercelUsage, forceUsage, () => vercelUsage(token)).catch(error => ({ error }));
+      if (!bill.error && !bill.httpStatus && !bill.denied) lastVercelUsage = { key: usageKey, at: now(), bill };
+      else if (!bill.denied && lastVercelUsage?.key === usageKey && now() - lastVercelUsage.at < VERCEL_USAGE_KEEP) bill = { ...lastVercelUsage.bill, staleSince: lastVercelUsage.at };
+      vercelUsageRows(bill, items, usageRows);
     } catch (error) {
       items.push({ label: 'Vercel API', value: safeMessage(error), status: error?.auth ? 'error' : 'warning' });
     }
