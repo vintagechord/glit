@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
+import { useAuthQuery } from "./auth-query";
 import { getAuthReturnPath } from "./navigation";
 import { socialProviders, type SocialAvailability } from "./social-contract";
 import { SocialProviderMark, socialProviderStyles } from "./social-provider-mark";
@@ -40,12 +41,15 @@ export type SocialAuthButtonsProps = {
 export function SocialAuthButtons({ availability, nextPath, mode = "login", errorCode, loading = false }: SocialAuthButtonsProps) {
   const pathname = usePathname();
   const english = pathname === "/en" || pathname.startsWith("/en/");
-  const next = getAuthReturnPath(nextPath, english);
+  // Static sign-in pages pass nothing and read the browser's query instead.
+  const authQuery = useAuthQuery();
+  const next = getAuthReturnPath(nextPath ?? authQuery.next, english);
+  const shownError = errorCode ?? authQuery.socialError;
   const query = new URLSearchParams({ locale: english ? "en" : "ko" });
   if (next) query.set("next", next);
   return (
     <div className="space-y-4">
-      <SocialAuthNotice errorCode={errorCode} english={english} />
+      <SocialAuthNotice errorCode={shownError} english={english} />
       <div className="grid gap-3" aria-label={english ? "Social sign-in" : "소셜 로그인"}>
         {socialProviders.map(({ id, label }) => {
           const providerName = english ? ({ google: "Google", naver: "Naver", kakao: "Kakao" } as const)[id] : label;

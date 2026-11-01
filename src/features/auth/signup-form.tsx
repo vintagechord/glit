@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 
 import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/components/site/footer";
 import { useModalFocus } from "@/lib/use-modal-focus";
+import { useAuthQuery } from "./auth-query";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
 import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "./policy";
 import { PasswordInput } from "./password-input";
@@ -26,7 +27,8 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
   const english = Boolean(localePrefix);
   useAuthNotice(state, english);
   const needsVerification = getEmailDeliveryMode() !== "manual";
-  const effectiveNextPath = getAuthReturnPath(nextPath, english);
+  const query = useAuthQuery();
+  const effectiveNextPath = getAuthReturnPath(nextPath ?? query.next, english);
   const loginHref = getAuthPageHref("login", effectiveNextPath, english);
   const successHref = getAuthPageHref("login", effectiveNextPath, english, true);
   const didRedirect = useRef(false);

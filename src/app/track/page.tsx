@@ -1,4 +1,4 @@
-import { TrackPageView, type TrackPageProps } from "@/features/track/track-page-view";
+import { TrackPageView } from "@/features/track/track-page-view";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata({
@@ -8,6 +8,6 @@ export const metadata = pageMetadata({
   enPath: "/en/track",
 });
 
-export default async function TrackPage({ searchParams }: TrackPageProps) {
-  return TrackPageView({ searchParams });
+export default function TrackPage() {
+  return <TrackPageView />;
 }

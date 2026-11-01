@@ -1,4 +1,4 @@
-import { LoginPageView, type LoginPageProps } from "@/features/auth/login-page-view";
+import { LoginPageView } from "@/features/auth/login-page-view";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata({
@@ -8,6 +8,9 @@ export const metadata = pageMetadata({
   enPath: "/en/login",
 });
 
-export default function LoginPage(props: LoginPageProps) {
-  return LoginPageView(props);
+// Static: the query is read in the browser and provider settings refresh each minute.
+export const revalidate = 60;
+
+export default function LoginPage() {
+  return <LoginPageView />;
 }

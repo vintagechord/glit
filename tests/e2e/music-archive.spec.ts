@@ -379,7 +379,8 @@ test("review results refresh on focus and periodically after import jobs have fi
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(card).toContainText("심의 진행 중");
   harness.onsideReviews[0].status = "COMPLETED";
-  await page.clock.runFor(30001);
+  // Idle refresh runs every 60 seconds (lowered from 30 to cut server load).
+  await page.clock.runFor(60001);
   await expect(card).toContainText("심의 완료");
   expect(harness.writes).toEqual([]);
   expect(harness.errors).toEqual([]);

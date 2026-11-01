@@ -6,10 +6,9 @@ import { AlbumWizard } from "@/features/submissions/album-wizard";
 import { getPublicAlbumCatalog } from "@/lib/public-catalog";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
-import { getMemberNotificationEmail } from "@/lib/member-notification-email";
-import { socialDisplayName } from "@/features/auth/social-contract";
+import { loadMemberApplicant } from "@/lib/member-applicant";
 
-const preparationChecklist = [
+export const albumPreparationChecklist = [
   "WAV 음원 또는 전체 음원 ZIP",
   "앨범명, 아티스트명, 발매일, 장르, 유통사, 제작사",
   "트랙별 제목, 작·편곡자, 작사가, 전체 가사",
@@ -18,6 +17,7 @@ const preparationChecklist = [
   "실제 발매 앨범과 동일한 트랙 순서와 INST 포함 여부",
 ];
 
+/** Server-rendered album application, used for the member flow from My Music (/dashboard/new/album/archive). */
 export async function AlbumSubmissionPageView({ searchParams, localePrefix = "" }: { searchParams?: Promise<Record<string, string | string[] | undefined>>; localePrefix?: "" | "/en" }) {
   const query = await searchParams ?? {};
   const scalar = (key: string) => typeof query[key] === "string" ? query[key] as string : undefined;
@@ -29,18 +29,13 @@ export async function AlbumSubmissionPageView({ searchParams, localePrefix = "" 
     getPublicAlbumCatalog(),
   ]);
 
-  if (archiveContext && !user) redirect(`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/new/album?${new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string"))}`)}`);
+  if (archiveContext && !user) redirect(`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/new/album/archive?${new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string"))}`)}`);
   const archiveResult = archiveContext && user ? await getArchiveReviewEntry(user.id, archiveContext).then(entry => ({ entry, error: null })).catch((error: Error) => ({ entry: null, error: error.message })) : null;
   if (archiveResult?.error) return <div className="mx-auto max-w-3xl px-6 py-12"><p>{archiveResult.error}</p><Link href={`${localePrefix}/mypage/music`} className="mt-5 inline-block underline">내 음악 관리로 돌아가기</Link></div>;
-  const profile = user ? (await supabase.from("profiles").select("name,phone,notification_email").eq("user_id", user.id).maybeSingle()).data : null;
-  const initialApplicant = user ? {
-    name: profile?.name ?? socialDisplayName(user),
-    email: getMemberNotificationEmail(user, undefined, profile?.notification_email) ?? "",
-    phone: profile?.phone ?? (typeof user.user_metadata?.phone === "string" ? user.user_metadata.phone : user.phone ?? ""),
-  } : undefined;
+  const initialApplicant = user ? await loadMemberApplicant(supabase, user) : undefined;
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
-      {archiveResult?.entry ? <div><h1 className="text-2xl font-black">심의 신청</h1><p className="mt-2 text-sm text-muted-foreground">음원을 첨부하고 결제를 진행해주세요.</p></div> : <AlbumIntroPanel preparationChecklist={preparationChecklist} />}
+      {archiveResult?.entry ? <div><h1 className="text-2xl font-black">심의 신청</h1><p className="mt-2 text-sm text-muted-foreground">음원을 첨부하고 결제를 진행해주세요.</p></div> : <AlbumIntroPanel preparationChecklist={albumPreparationChecklist} />}
 
       <div className="mt-8">
         <AlbumWizard

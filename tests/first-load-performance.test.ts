@@ -34,3 +34,22 @@ test("guests do not download the Supabase SDK or zod on first load", () => {
   assert.doesNotMatch(readSource("src/constants/review-status.ts"), /from "zod"/);
   assert.doesNotMatch(readSource("src/lib/support-chat-cursor.ts"), /from "(?:zod|@supabase\/[^"]+|@\/lib\/supabase\/[^"]+)"/);
 });
+
+test("auth, lookup and application pages are prerendered and resolve the visitor in the browser", () => {
+  for (const page of [
+    "src/app/login/page.tsx", "src/app/en/login/page.tsx", "src/app/signup/page.tsx", "src/app/en/signup/page.tsx",
+    "src/app/track/page.tsx", "src/app/en/track/page.tsx",
+    "src/app/dashboard/new/album/page.tsx", "src/app/en/dashboard/new/album/page.tsx", "src/app/dashboard/new/mv/page.tsx",
+  ]) {
+    assert.doesNotMatch(readSource(page), /searchParams|createServerSupabase|getServerSessionUser|force-dynamic/, `${page} must stay static`);
+  }
+  for (const view of [
+    "src/features/auth/login-page-view.tsx", "src/features/auth/signup-page-view.tsx",
+    "src/features/track/track-page-view.tsx", "src/app/dashboard/new/album/application-view.tsx",
+  ]) {
+    assert.doesNotMatch(readSource(view), /await searchParams|createServerSupabase|getServerSessionUser|\.auth\.getUser/, view);
+  }
+  // Provider settings are cached as parsed booleans only, never as the raw response.
+  assert.match(readSource("src/features/auth/auth-provider-options.tsx"), /unstable_cache\(getSocialAvailability/);
+  assert.match(readSource("src/proxy.ts"), /trackMemberRedirectPath\(pathname, request\.nextUrl\.searchParams\)/);
+});

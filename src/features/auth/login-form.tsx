@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { TrackLookupModalTrigger } from "@/features/track/track-lookup-modal";
 
 import { loginAction, type ActionState } from "./actions";
+import { useAuthQuery } from "./auth-query";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
 import { PasswordInput } from "./password-input";
 
@@ -18,7 +19,8 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
   const [emailValue, setEmailValue] = useState("");
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
-  const effectiveNextPath = getAuthReturnPath(nextPath, isEnglishRoute);
+  const query = useAuthQuery();
+  const effectiveNextPath = getAuthReturnPath(nextPath ?? query.next, isEnglishRoute);
   const signupHref = getAuthPageHref("signup", effectiveNextPath, isEnglishRoute);
   const forgotPasswordHref = getAuthPageHref("forgot-password", effectiveNextPath, isEnglishRoute);
 

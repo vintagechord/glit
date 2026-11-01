@@ -1625,6 +1625,8 @@ const exactTranslations: Record<string, string> = {
   "온라인 유통용": "For online release",
   "음반 방송 심의": "Album broadcast review",
   "라디오 방송을 원하는 신곡·앨범": "New songs or albums for radio",
+  "영상물등급위원회 등급분류 · Mnet·ETN 추가 선택": "KMRB rating · optional Mnet and ETN",
+  "라디오·TV에서 노래를 방송하기 위한 심의": "Review required to air a song on radio and TV",
   "이용약관": "Terms of Use",
   "개인정보처리방침": "Privacy Policy",
   "환불/취소 규정": "Refund / Cancellation Policy",

@@ -1,4 +1,4 @@
-import { AlbumSubmissionPageView } from "./view";
+import { AlbumApplicationPageView } from "./application-view";
 import { pageMetadata } from "@/lib/seo";
 export const metadata = pageMetadata({
   title: "음반 심의 신청 · 앨범 심의 온라인 접수",
@@ -6,6 +6,8 @@ export const metadata = pageMetadata({
   path: "/dashboard/new/album",
   enPath: "/en/dashboard/new/album",
 });
-export default function AlbumSubmissionPage(props: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-  return AlbumSubmissionPageView(props);
+// Served from the CDN; package prices refresh with the catalog cache (and at once on admin edits).
+export const revalidate = 60;
+export default function AlbumSubmissionPage() {
+  return <AlbumApplicationPageView />;
 }

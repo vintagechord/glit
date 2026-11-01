@@ -3,18 +3,20 @@ import test from "node:test";
 import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { customerPaymentFeedback } from "../src/lib/customer-payment-feedback";
+import { trackMemberRedirectPath } from "../src/lib/track-member-redirect";
 import type { ReactElement, ReactNode } from "react";
 
 async function fixture() {
   const bundle=await build({stdin:{contents:`export {TrackPageView} from './src/features/track/track-page-view';export {POST} from './src/app/api/track/validate/route';export {AlbumSubmissionPageView} from './src/app/dashboard/new/album/view';export {state,calls} from 'journey-fixture';`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,platform:'node',format:'cjs',packages:'external',jsx:'automatic',write:false,
     plugins:[{name:'journey-fixture',setup(p){
-      p.onResolve({filter:/^(journey-fixture|next\/(navigation|link)|@\/lib\/(supabase\/(admin|server|server-user)|public-catalog|music-archive\/review-entry|request-rate-limit)|@\/features\/(track\/(track-lookup-form|track-lookup-selector)|submissions\/(album-wizard|album-intro-panel)))$/},args=>({path:args.path,namespace:'fixture'}));
+      p.onResolve({filter:/^(journey-fixture|next\/(navigation|link)|@\/lib\/(supabase\/(admin|server|server-user)|public-catalog|music-archive\/review-entry|request-rate-limit)|@\/features\/(track\/(track-lookup-form|track-lookup-selector|track-mode-switch)|submissions\/(album-wizard|album-intro-panel)))$/},args=>({path:args.path,namespace:'fixture'}));
       p.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({loader:'tsx',contents:({
         'journey-fixture':`export const state={user:null,profile:null,lookupError:null,lookupMatch:null,archiveEntry:null};export const calls=[];`,
         'next/navigation':`export const redirect=url=>{throw new Error('redirect:'+url)};`,
         'next/link':`export default function Link(props){return props.children};`,
         '@/features/track/track-lookup-form':`export const TrackLookupForm=()=>null;`,
         '@/features/track/track-lookup-selector':`export const TrackLookupSelector=()=>null;`,
+        '@/features/track/track-mode-switch':`export const TrackModeSwitch=()=>null;`,
         '@/features/submissions/album-wizard':`export const AlbumWizard=()=>null;`,
         '@/features/submissions/album-intro-panel':`export const AlbumIntroPanel=()=>null;`,
         '@/lib/supabase/server':`import {state,calls} from 'journey-fixture';export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:state.user}})},from(table){if(table!=='profiles')throw Error('Unexpected profile table');const q={select(fields){calls.push(['profile-select',fields]);return q},eq(key,value){if(key!=='user_id'||value!==state.user?.id)throw Error('Wrong profile owner');calls.push(['profile-owner',value]);return q},async maybeSingle(){return {data:state.profile,error:null}}};return q;}});`,
@@ -89,10 +91,13 @@ test('signup contact details fill missing profiles while saved profile choices t
 });
 
 test('signed-in customers may explicitly look up older guest applications',async()=>{
+  // The proxy applies this to members; /track itself is static.
+  assert.equal(trackMemberRedirectPath('/track',new URLSearchParams()),'/dashboard');
+  assert.equal(trackMemberRedirectPath('/en/track',new URLSearchParams('mode=chooser')),'/en/dashboard');
+  assert.equal(trackMemberRedirectPath('/en/track',new URLSearchParams('mode=guest')),null);
+  assert.equal(trackMemberRedirectPath('/track/fixture-token',new URLSearchParams()),null);
   const h=await fixture();h.state.user={id:'fixture-member'};
-  await assert.rejects(h.TrackPageView({dashboardPath:'/en/dashboard'}),/redirect:\/en\/dashboard/);
-  const page=await h.TrackPageView({dashboardPath:'/en/dashboard',searchParams:Promise.resolve({mode:'guest'})});
-  assert.ok(page);
+  assert.ok(h.TrackPageView(),'the static page renders without reading the session');
 });
 
 test('guest lookup preserves opaque invalid-code responses but reports service outages separately',async()=>{
@@ -108,7 +113,7 @@ test('guest lookup preserves opaque invalid-code responses but reports service o
 test('archive album entry preserves English through sign-in and retry destinations',async()=>{
   const h=await fixture();
   const searchParams=Promise.resolve({archiveLibrary:'library-fixture',archiveRelease:'release-fixture'});
-  await assert.rejects(h.AlbumSubmissionPageView({localePrefix:'/en',searchParams}),error=>error instanceof Error&&error.message.startsWith('redirect:/en/login?next=')&&decodeURIComponent(error.message).includes('/en/dashboard/new/album?archiveLibrary=library-fixture'));
+  await assert.rejects(h.AlbumSubmissionPageView({localePrefix:'/en',searchParams}),error=>error instanceof Error&&error.message.startsWith('redirect:/en/login?next=')&&decodeURIComponent(error.message).includes('/en/dashboard/new/album/archive?archiveLibrary=library-fixture'));
   h.state.user={id:'fixture'};
   const tree=await h.AlbumSubmissionPageView({localePrefix:'/en',searchParams});
   assert.match(JSON.stringify(tree),/\/en\/mypage\/music/);
