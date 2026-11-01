@@ -10,6 +10,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  ListObjectVersionsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
@@ -268,4 +269,39 @@ export async function deleteObject(objectKey: string) {
     Key: objectKey,
   });
   return client.send(command);
+}
+
+/**
+ * The bucket keeps file versions, so a plain delete only hides a file and
+ * its bytes stay billed. This removes every version and hide marker of
+ * exactly this key (never a longer key that merely shares the prefix) and
+ * returns how many entries were removed; 0 means nothing was stored.
+ */
+export async function deleteObjectAllVersions(objectKey: string) {
+  const { client, bucket } = getB2Config();
+  let removed = 0;
+  let keyMarker: string | undefined;
+  let versionIdMarker: string | undefined;
+  do {
+    const page = await client.send(
+      new ListObjectVersionsCommand({
+        Bucket: bucket,
+        Prefix: objectKey,
+        KeyMarker: keyMarker,
+        VersionIdMarker: versionIdMarker,
+      }),
+    );
+    const versionIds = [...(page.Versions ?? []), ...(page.DeleteMarkers ?? [])]
+      .filter((entry) => entry.Key === objectKey && entry.VersionId)
+      .map((entry) => entry.VersionId as string);
+    for (const versionId of versionIds) {
+      await client.send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: objectKey, VersionId: versionId }),
+      );
+      removed += 1;
+    }
+    keyMarker = page.IsTruncated ? page.NextKeyMarker : undefined;
+    versionIdMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined;
+  } while (keyMarker);
+  return removed;
 }

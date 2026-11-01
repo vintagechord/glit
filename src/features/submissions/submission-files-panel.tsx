@@ -12,6 +12,7 @@ export type SubmissionFile = {
   mime: string | null;
   size: number | null;
   created_at: string | null;
+  purged_at?: string | null;
 };
 
 const kindLabelMap: Record<string, string> = {
@@ -116,7 +117,11 @@ export function SubmissionFilesPanel({
                 {kindLabelMap[file.kind] ?? file.kind} · {formatFileSize(file.size)}
               </p>
             </div>
-            {canDownload ? (
+            {file.purged_at ? (
+              <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black text-[#111111]">
+                보관 종료로 삭제됨
+              </span>
+            ) : canDownload ? (
               <button
                 type="button"
                 onClick={() => handleDownload(file.id)}

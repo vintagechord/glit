@@ -734,13 +734,16 @@ export async function getSubmissionFileUrlAction(
 
     const { data: fileRow } = await supabase
       .from("submission_files")
-      .select("file_path, storage_provider, object_key")
+      .select("file_path, storage_provider, object_key, purged_at")
       .eq("id", parsed.data.fileId)
       .eq("submission_id", parsed.data.submissionId)
       .maybeSingle();
 
     if (!fileRow?.file_path && !fileRow?.object_key) {
       return { error: "파일을 찾을 수 없습니다." };
+    }
+    if (fileRow.purged_at) {
+      return { error: "보관이 끝나 삭제된 파일입니다." };
     }
 
     if (fileRow.storage_provider === "b2" && fileRow.object_key) {

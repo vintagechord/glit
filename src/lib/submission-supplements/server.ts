@@ -75,7 +75,7 @@ async function mutate(context: Context, action: string, options: { requestId?: s
 export async function listSupplements(context: Context) {
   const { data, error } = await context.db.from("submission_supplement_requests").select(`id,note,status,created_at,updated_at,
     revisions:submission_supplement_revisions(id,revision_no,status,note,review_note,created_at,submitted_at,reviewed_at,
-      files:submission_supplement_files(id,original_name,size_bytes,mime_type,status,created_at,verified_at)
+      files:submission_supplement_files(id,original_name,size_bytes,mime_type,status,created_at,verified_at,purged_at)
       ${context.isAdmin ? ",notifications:submission_supplement_notifications(id,state_key,attempts,outcome,last_attempt_at,completed_at)" : ""})`)
     .eq("submission_id", context.submission.id).order("created_at", { ascending: true });
   if (error) throw new SupplementError("보완 자료 기능을 불러올 수 없습니다. 관리자에게 문의해주세요.", 503);
@@ -89,7 +89,7 @@ async function findRequest(context: Context, requestId: string) {
 }
 
 async function findFile(context: Context, fileId: string) {
-  const { data: file, error } = await context.db.from("submission_supplement_files").select("id,revision_id,grant_id,original_name,size_bytes,mime_type,object_key,status").eq("id", fileId).maybeSingle();
+  const { data: file, error } = await context.db.from("submission_supplement_files").select("id,revision_id,grant_id,original_name,size_bytes,mime_type,object_key,status,purged_at").eq("id", fileId).maybeSingle();
   if (error || !file) throw new SupplementError("보완 파일을 찾을 수 없습니다.", 404);
   const { data: revision, error: revisionError } = await context.db.from("submission_supplement_revisions").select("id,request_id,status").eq("id", file.revision_id).maybeSingle();
   if (revisionError || !revision) throw new SupplementError("보완 파일을 찾을 수 없습니다.", 404);
@@ -116,6 +116,7 @@ export async function performSupplementAction(context: Context, input: z.infer<t
   }
   if (input.action === "download") {
     const { file } = await findFile(context, input.fileId);
+    if (file.purged_at) throw new SupplementError("보관이 끝나 삭제된 파일입니다.", 410);
     if (file.status !== "VERIFIED") throw new SupplementError("전송 확인이 완료된 파일만 다운로드할 수 있습니다.");
     return { url: await presignGetUrl(file.object_key, 300) };
   }

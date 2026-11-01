@@ -71,9 +71,10 @@ test('detail combines tracks, station results, email delivery, profile and certi
   assert.equal('guest_token' in detail.submission, false);
 });
 
-test('asset normalization ignores unfinished uploads and blocks foreign URLs/path traversal', () => {
+test('asset normalization ignores unfinished and purged uploads and blocks foreign URLs/path traversal', () => {
   const assets = normalizeAssets([
     { id: 'pending', file_path: 'submissions/incomplete.wav', status: 'PENDING' },
+    { id: 'purged', file_path: 'submissions/deleted-after-review.wav', status: 'UPLOADED', purged_at: '2026-11-01T00:00:00Z' },
     { id: 'audio', file_path: 'submissions/곡.wav' },
     { id: 'duplicate', file_path: 'submissions/곡.wav' },
     { id: 'bad-prefix', file_path: 'somewhere/secret.wav' },

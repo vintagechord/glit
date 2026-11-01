@@ -72,7 +72,7 @@ export async function loadSubmissionDetailRelations(
     loadStationReviews(client, submissionId),
     client
       .from("submission_files")
-      .select("id, kind, file_path, original_name, mime, size, created_at")
+      .select("id, kind, file_path, original_name, mime, size, created_at, purged_at")
       .eq("submission_id", submissionId)
       .order("created_at", { ascending: false }),
     packageId

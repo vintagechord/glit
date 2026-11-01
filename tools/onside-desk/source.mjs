@@ -95,7 +95,8 @@ export function normalizeAssets(files = [], submission = {}, env = process.env) 
   }
   const seen = new Set();
   return records.flatMap(file => {
-    if (file.status && file.status !== 'UPLOADED') return [];
+    // purged_at: the service deleted this customer file after the review ended.
+    if ((file.status && file.status !== 'UPLOADED') || file.purged_at) return [];
     const key = text(file.object_key) || text(file.file_path);
     if (!key || seen.has(key)) return [];
     seen.add(key);
