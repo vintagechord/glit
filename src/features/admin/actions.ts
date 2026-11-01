@@ -1571,6 +1571,7 @@ export async function updateAlbumReviewDiscountFormAction(
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
   revalidatePath("/en/dashboard/new/album");
+  revalidatePath("/en/dashboard/new/album");
   redirect(withSavedQuery("/admin/config"));
 }
 
@@ -1795,6 +1796,7 @@ export async function upsertProfanityTermFormAction(
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
+  revalidatePath("/en/dashboard/new/album");
   redirect(withSavedQuery("/admin/config"));
 }
 
@@ -1831,6 +1833,7 @@ export async function deleteProfanityTermFormAction(
   }
   revalidatePath("/admin/config");
   revalidatePath("/dashboard/new/album");
+  revalidatePath("/en/dashboard/new/album");
 }
 
 export async function deleteSubmissionsAction(

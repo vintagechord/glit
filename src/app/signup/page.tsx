@@ -1,4 +1,4 @@
-import { SignupPageView, type SignupPageProps } from "@/features/auth/signup-page-view";
+import { SignupPageView } from "@/features/auth/signup-page-view";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata({
@@ -8,6 +8,9 @@ export const metadata = pageMetadata({
   enPath: "/en/signup",
 });
 
-export default function SignupPage(props: SignupPageProps) {
-  return SignupPageView(props);
+// Static: the query is read in the browser and provider settings refresh each minute.
+export const revalidate = 60;
+
+export default function SignupPage() {
+  return <SignupPageView />;
 }

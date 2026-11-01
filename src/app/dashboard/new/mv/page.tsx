@@ -1,6 +1,4 @@
-import { MvWizard } from "@/features/submissions/mv-wizard";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { MvApplication } from "@/features/submissions/mv-application";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata({
@@ -25,10 +23,9 @@ const mvStationRows = [
   { id: "", name: "Mnet", code: "MNET" },
 ];
 
-export default async function MvSubmissionPage() {
-  const supabase = await createServerSupabase();
+// Served from the CDN; the applicant (guest or member) is resolved in the browser.
+export default function MvSubmissionPage() {
   const profanityFilterV2Enabled = process.env.PROFANITY_FILTER_V2 !== "false";
-  const user = await getServerSessionUser(supabase);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
@@ -61,12 +58,7 @@ export default async function MvSubmissionPage() {
       </section>
 
       <div className="mt-8">
-        <MvWizard
-          stations={mvStationRows}
-          userId={user?.id ?? null}
-          userEmail={user?.email ?? null}
-          profanityFilterV2Enabled={profanityFilterV2Enabled}
-        />
+        <MvApplication stations={mvStationRows} profanityFilterV2Enabled={profanityFilterV2Enabled} />
       </div>
     </div>
   );

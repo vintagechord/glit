@@ -5,6 +5,7 @@ import { requiresSocialSignupCompletion } from "@/features/auth/social-contract"
 import { getCanonicalPageRedirect } from "@/lib/canonical-page-redirect";
 import { PAYMENT_RESULT_GRANT_COOKIE } from "@/lib/payment-result-grant-cookie";
 import { middleware as updateSession } from "@/lib/supabase/middleware";
+import { trackMemberRedirectPath } from "@/lib/track-member-redirect";
 import { getBaseUrl } from "@/lib/url";
 
 const devStdPayCsp =
@@ -141,6 +142,15 @@ export default async function proxy(request: NextRequest) {
         const refreshedUser = refreshed instanceof NextResponse ? null : refreshed?.user;
         if (refreshedUser && requiresSocialSignupCompletion(refreshedUser)) {
           return signupCompletionResponse(request, refreshedResponse);
+        }
+        const dashboardPath = refreshedUser ? trackMemberRedirectPath(pathname, request.nextUrl.searchParams) : null;
+        if (dashboardPath) {
+          const dashboardUrl = request.nextUrl.clone();
+          dashboardUrl.pathname = dashboardPath;
+          dashboardUrl.search = "";
+          const redirect = withCookies(NextResponse.redirect(dashboardUrl), refreshedResponse);
+          redirect.headers.set("Cache-Control", "private, no-store");
+          return redirect;
         }
         if (isDev && isDevStdPayPath) {
           refreshedResponse.headers.set("Content-Security-Policy", devStdPayCsp);

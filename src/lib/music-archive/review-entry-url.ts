@@ -11,5 +11,6 @@ export type ArchiveReviewEntry = {
 export function buildArchiveReviewEntryHref({ libraryId, releaseId, trackId, localePrefix = "" }: ArchiveReviewContext & { localePrefix?: string }) {
   const query = new URLSearchParams({ archiveLibrary: libraryId, archiveRelease: releaseId });
   if (trackId) query.set("archiveTrack", trackId);
-  return `${localePrefix === "/en" ? "/en" : ""}/dashboard/new/album?${query}`;
+  // Its own server route: the regular album application page is static.
+  return `${localePrefix === "/en" ? "/en" : ""}/dashboard/new/album/archive?${query}`;
 }

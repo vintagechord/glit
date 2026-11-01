@@ -39,7 +39,7 @@ test("archive entry rejects artist/song links and safely encodes identifiers", (
   assert.throws(() => resolveArchiveReviewEntry(data, { libraryId, releaseId: "release" }), /발매 링크/);
   const href = buildArchiveReviewEntryHref({ libraryId, releaseId: "a&archiveTrack=wrong", trackId: "곡/1", localePrefix: "/en" });
   const url = new URL(href, "https://onside.test");
-  assert.equal(url.pathname, "/en/dashboard/new/album");
+  assert.equal(url.pathname, "/en/dashboard/new/album/archive");
   assert.equal(url.searchParams.get("archiveRelease"), "a&archiveTrack=wrong");
   assert.equal(url.searchParams.get("archiveTrack"), "곡/1");
 });

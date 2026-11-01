@@ -15,7 +15,7 @@ const compiled = build({
   stdin: { resolveDir: process.cwd(), loader: "ts", contents: `export {LoginPageView} from './src/features/auth/login-page-view';export {SignupPageView} from './src/features/auth/signup-page-view';export {CompleteSignupView} from './src/features/auth/complete-signup-view';export {ProfilePageView} from './src/app/dashboard/profile/view';export {state} from 'page-fixture';` },
   bundle: true, write: false, platform: "node", format: "cjs", packages: "external", jsx: "automatic",
   plugins: [{ name: "page-streaming-fixture", setup(plugin) {
-    plugin.onResolve({ filter: /^(page-fixture|next\/navigation|\.\/(login-form|signup-form|complete-signup-form|social-auth-buttons|social)|@\/features\/auth\/social|@\/features\/profile\/profile-form|\.\/profile-social-accounts|@\/lib\/supabase\/(server|server-user)|@\/components\/dashboard\/dashboard-shell)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
+    plugin.onResolve({ filter: /^(page-fixture|next\/navigation|\.\/(login-form|signup-form|complete-signup-form|social-auth-buttons|social|auth-query)|@\/features\/auth\/social|@\/features\/profile\/profile-form|\.\/profile-social-accounts|@\/lib\/supabase\/(server|server-user)|@\/components\/dashboard\/dashboard-shell)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
     plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "js", contents: {
       "page-fixture": "export const state={user:null,sessionUser:null,settingsCalls:0};",
       "next/navigation": "export function redirect(location){throw Object.assign(new Error('test redirect'),{location});}",
@@ -23,6 +23,7 @@ const compiled = build({
       "./signup-form": "export function SignupForm(){return null;}",
       "./complete-signup-form": "export function CompleteSignupForm(){return null;}",
       "./social-auth-buttons": "export function SocialAuthButtons(){return null;}",
+      "./auth-query": "export function AuthQueryProvider(props){return props.children;}export function SignupSuccessNotice(){return null;}",
       "./profile-social-accounts": "export function ProfileSocialAccounts(){return null;}",
       "@/features/profile/profile-form": "export function ProfileForm(){return null;}",
       "./social": "import {state} from 'page-fixture';export function getSocialAvailability(){state.settingsCalls++;return new Promise(()=>{});}",
