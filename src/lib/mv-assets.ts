@@ -42,6 +42,43 @@ export const LABEL_GUIDE_KEY = getEnvKey(
   "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/mv_guide.pdf",
 );
 
+/** Replacement rating marks live in Supabase Storage next to the usage guide,
+ * outside the B2 prefix that holds customer uploads and gets cleaned up. */
+export const MV_RATING_IMAGE_BUCKET = "mv";
+export const MV_RATING_IMAGE_FOLDER = "rating-images";
+
+const supabasePublicOrigin = () => {
+  const url = process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
+
+/** Storage path of a replacement mark uploaded by an administrator, or null
+ * for the bundled defaults and for anything this app did not upload there. */
+export const managedRatingImageStoragePath = (objectKey?: string | null) => {
+  if (!objectKey || !/^https:\/\//i.test(objectKey)) return null;
+  const origin = supabasePublicOrigin();
+  let url: URL;
+  try {
+    url = new URL(objectKey);
+  } catch {
+    return null;
+  }
+  const publicPrefix = `/storage/v1/object/public/${MV_RATING_IMAGE_BUCKET}/`;
+  if (!origin || url.origin !== origin || url.search || url.hash || !url.pathname.startsWith(publicPrefix)) {
+    return null;
+  }
+  const storagePath = decodeURIComponent(url.pathname.slice(publicPrefix.length));
+  return storagePath.startsWith(`${MV_RATING_IMAGE_FOLDER}/`) &&
+    !storagePath.split("/").some((part) => part === "" || part === "." || part === "..")
+    ? storagePath
+    : null;
+};
+
 export type ManagedRatingImageCode = (typeof MANAGED_RATING_IMAGE_CODES)[number];
 
 export type MvRatingImageSetting = {

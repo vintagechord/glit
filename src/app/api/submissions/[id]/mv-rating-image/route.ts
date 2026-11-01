@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { isRatingCode, resolveRatingImageUrl, type RatingCode } from "@/lib/mv-assets";
+import { isRejectedMvResult } from "@/lib/submission-certificate";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBaseUrl } from "@/lib/url";
@@ -61,6 +62,10 @@ export async function GET(
   );
   if (!hasResultSignal) {
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+  }
+
+  if (isRejectedMvResult(fields)) {
+    return NextResponse.json({ error: "심의 불가 결과에는 제공되는 파일이 없습니다." }, { status: 404 });
   }
 
   const rating = fields.mv_desired_rating ?? null;

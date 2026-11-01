@@ -743,8 +743,10 @@ export default async function AdminSubmissionDetailPage({
   const hasMvRating = isRatingCode(submission.mv_desired_rating);
   const hasMvCertificate = Boolean(submission.certificate_b2_path);
   const hasMvResultGrade = isMvDistribution && hasMvRating && hasResultPublished;
+  // A rejected review hands the customer no files, so it needs no certificate.
+  const isMvRejected = hasMvResultGrade && submission.mv_desired_rating === "REJECT";
   const hasMvResultComplete = isMvDistribution
-    ? hasMvResultGrade && hasMvCertificate
+    ? hasMvResultGrade && (hasMvCertificate || isMvRejected)
     : isMvSubmission && hasResultPublished;
   const hasMvReceptionStarted =
     isMvSubmission &&
@@ -784,13 +786,15 @@ export default async function AdminSubmissionDetailPage({
   const finalReviewStepLabel = "결과 등록";
   const finalReviewStepValue = isMvSubmission
     ? isMvDistribution
-      ? hasMvResultComplete
-        ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 등록`
-        : hasMvResultGrade
-          ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 대기`
-          : hasMvReceptionStarted
-            ? "결과 등급 선택"
-            : "접수 후 결과 등록"
+      ? isMvRejected
+        ? `${mvRatingLabel(submission.mv_desired_rating)} · 제공 파일 없음`
+        : hasMvResultComplete
+          ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 등록`
+          : hasMvResultGrade
+            ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 대기`
+            : hasMvReceptionStarted
+              ? "결과 등급 선택"
+              : "접수 후 결과 등록"
       : hasResultPublished
         ? resultStatusLabelMap[
             submission.result_status as keyof typeof resultStatusLabelMap

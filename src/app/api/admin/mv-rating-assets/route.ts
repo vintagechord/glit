@@ -1,17 +1,15 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  deleteObject,
-  getB2Config,
-  sanitizeFileName,
-} from "@/lib/b2";
+import { deleteObject } from "@/lib/b2";
 import { getStorageLogId } from "@/lib/guest-storage-owner";
 import {
   MANAGED_RATING_IMAGE_CODES,
+  MV_RATING_IMAGE_BUCKET,
+  MV_RATING_IMAGE_FOLDER,
   MV_RATING_IMAGE_SETTING_KEY,
   RATING_LABELS,
   isRatingCode,
+  managedRatingImageStoragePath,
   parseMvRatingImageSettings,
   resolveRatingImageUrl,
   type ManagedRatingImageCode,
@@ -31,8 +29,30 @@ const MAX_IMAGE_SIZE_BYTES = SERVER_UPLOAD_MAX_BYTES;
 const isManagedRating = (value: unknown): value is ManagedRatingImageCode =>
   value === "ALL" || value === "12" || value === "15" || value === "19";
 
-const isCustomObjectKey = (value?: string | null): value is string =>
+// Replacements uploaded before the move to Supabase Storage were B2 keys.
+const isLegacyB2ObjectKey = (value?: string | null): value is string =>
   Boolean(value && !/^https?:\/\//i.test(value) && !value.startsWith("/"));
+
+/** Removes a replaced mark; bundled defaults and foreign URLs are left alone. */
+const removeRatingImage = async (
+  admin: ReturnType<typeof createAdminClient>,
+  objectKey: string | null,
+) => {
+  const storagePath = managedRatingImageStoragePath(objectKey);
+  if (storagePath) {
+    const { error } = await admin.storage.from(MV_RATING_IMAGE_BUCKET).remove([storagePath]);
+    if (error) throw error;
+    return;
+  }
+  if (isLegacyB2ObjectKey(objectKey)) await deleteObject(objectKey);
+};
+
+const logRemoveFailure = (message: string, objectKey: string, error: unknown) => {
+  console.warn(message, {
+    objectKeyId: getStorageLogId(objectKey),
+    errorName: error instanceof Error ? error.name : "UnknownError",
+  });
+};
 
 const normalizeUploadedFilename = (value: string) => {
   const trimmed = value.trim();
@@ -177,22 +197,21 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   const settings = await loadSettings(admin);
   const previousObjectKey = settings.images[rating]?.objectKey ?? null;
-  const safeName = sanitizeFileName(filename) || "mv-rating-image.png";
   const uploadedAt = new Date().toISOString();
 
   try {
-    const { client, bucket, prefix } = getB2Config();
-    const objectKey = `${prefix}admin-mv-rating-images/${rating}/${Date.now()}_${safeName}`;
-
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: objectKey,
-        Body: fileBuffer,
-        ContentType: "image/png",
-        ContentLength: fileValue.size,
-      }),
-    );
+    // A fresh path per upload keeps the public URL immutable, so CDN copies of
+    // an earlier mark never stand in for the new one. The original filename
+    // stays in the settings only.
+    const storagePath = `${MV_RATING_IMAGE_FOLDER}/${rating}/${Date.now()}.png`;
+    const bucket = admin.storage.from(MV_RATING_IMAGE_BUCKET);
+    const { error: uploadError } = await bucket.upload(storagePath, fileBuffer, {
+      contentType: "image/png",
+      cacheControl: "31536000",
+      upsert: false,
+    });
+    if (uploadError) throw uploadError;
+    const objectKey = bucket.getPublicUrl(storagePath).data.publicUrl;
 
     settings.images[rating] = {
       objectKey,
@@ -205,32 +224,19 @@ export async function POST(req: NextRequest) {
     const saveError = await saveSettings(admin, settings);
     if (saveError) {
       console.error("[admin][mv-rating-assets] save failed", saveError);
-      await deleteObject(objectKey).catch((cleanupError) => {
-        console.warn("[admin][mv-rating-assets] rollback delete failed", {
-          objectKeyId: getStorageLogId(objectKey),
-          errorName:
-            cleanupError instanceof Error
-              ? cleanupError.name
-              : "UnknownError",
-        });
-      });
+      await removeRatingImage(admin, objectKey).catch((cleanupError) =>
+        logRemoveFailure("[admin][mv-rating-assets] rollback delete failed", objectKey, cleanupError),
+      );
       return NextResponse.json(
         { error: "연령등급 이미지 설정을 저장하지 못했습니다." },
         { status: 500 },
       );
     }
 
-    if (
-      previousObjectKey &&
-      previousObjectKey !== objectKey &&
-      isCustomObjectKey(previousObjectKey)
-    ) {
-      await deleteObject(previousObjectKey).catch((error) => {
-        console.warn("[admin][mv-rating-assets] previous delete failed", {
-          objectKeyId: getStorageLogId(previousObjectKey),
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        });
-      });
+    if (previousObjectKey && previousObjectKey !== objectKey) {
+      await removeRatingImage(admin, previousObjectKey).catch((error) =>
+        logRemoveFailure("[admin][mv-rating-assets] previous delete failed", previousObjectKey, error),
+      );
     }
 
     return NextResponse.json({
@@ -274,14 +280,10 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  if (isCustomObjectKey(previousObjectKey)) {
-    const objectKeyToDelete = previousObjectKey;
-    await deleteObject(objectKeyToDelete).catch((error) => {
-      console.warn("[admin][mv-rating-assets] object delete failed", {
-        objectKeyId: getStorageLogId(objectKeyToDelete),
-        error,
-      });
-    });
+  if (previousObjectKey) {
+    await removeRatingImage(admin, previousObjectKey).catch((error) =>
+      logRemoveFailure("[admin][mv-rating-assets] object delete failed", previousObjectKey, error),
+    );
   }
 
   return NextResponse.json({
