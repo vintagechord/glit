@@ -31,7 +31,13 @@ const apiPath = suffix => `/api/cases/${encodeURIComponent(ui.selected)}${suffix
 
 async function api(path, options = {}) {
   const headers = { 'X-Desk-Token': token, ...(options.body && !(options.body instanceof Blob) ? { 'Content-Type': 'application/json' } : {}), ...options.headers };
-  const response = await fetch(path, { credentials: 'same-origin', ...options, headers, body: options.body && typeof options.body !== 'string' && !(options.body instanceof Blob) ? JSON.stringify(options.body) : options.body });
+  let response;
+  try { response = await fetch(path, { credentials: 'same-origin', ...options, headers, body: options.body && typeof options.body !== 'string' && !(options.body instanceof Blob) ? JSON.stringify(options.body) : options.body }); }
+  catch (cause) {
+    if (cause?.name === 'AbortError') throw cause;
+    // WebKit reports a dropped local connection (e.g. while the service restarts) with an empty or English message.
+    const error = new Error('데스크 서비스에 연결하지 못했습니다. 잠시 후 다시 시도하세요.'); error.status = 0; error.cause = cause; throw error;
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) { const error = new Error(body.error || body.message || `요청을 처리하지 못했습니다 (${response.status})`); error.status = response.status; error.code = body.code; error.body = body; throw error; }
   return body;
@@ -286,14 +292,15 @@ async function loadMonitor(force = false) {
   if (ui.monitorLoading) return; ui.monitorLoading = true;
   const button = document.querySelector('[data-action="monitor-refresh"]'); if (button) { button.disabled = true; button.textContent = '확인 중…'; }
   try { ui.monitor = await api(`/api/monitor${force ? '?refresh=1' : ''}`); ui.monitorError = ''; if (ui.data) ui.data.monitor = { overall: ui.monitor.snapshot.overall, issues: ui.monitor.snapshot.issues.length, checkedAt: ui.monitor.snapshot.checkedAt }; }
-  catch (error) { ui.monitorError = `상태 확인 실패: ${error.message}`; }
+  catch (error) { ui.monitorError = `상태 확인 실패: ${error.status === 0 ? '데스크 서비스에 연결하지 못했습니다. 잠시 후 자동으로 다시 확인합니다.' : error.message || '알 수 없는 오류입니다. 잠시 후 자동으로 다시 확인합니다.'}`; }
   finally {
     ui.monitorLoading = false;
     // Refresh only the cards so a token being typed is not wiped.
     const body = document.getElementById('monitor-body'); if (ui.nav === 'monitor' && body) body.innerHTML = monitorCards();
     const refreshButton = document.querySelector('[data-action="monitor-refresh"]'); if (refreshButton) { refreshButton.disabled = false; refreshButton.textContent = '지금 확인'; }
     if (ui.data) headerRender();
-    clearTimeout(ui.monitorTimer); if (ui.nav === 'monitor') ui.monitorTimer = setTimeout(() => { if (ui.nav === 'monitor') void loadMonitor(false); }, 60_000);
+    // Retry a failed check sooner (e.g. right after the service restarted for an update).
+    clearTimeout(ui.monitorTimer); if (ui.nav === 'monitor') ui.monitorTimer = setTimeout(() => { if (ui.nav === 'monitor') void loadMonitor(false); }, ui.monitorError ? 10_000 : 60_000);
   }
 }
 function render() {
