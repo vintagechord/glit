@@ -307,8 +307,8 @@ export function createSiteMonitor(options = {}) {
       usageRows.push(usage(`데이터 전송 (Flat Rate 월 ${millions === 1 ? '1TB' : '50TB'})`, quantity('Fast Data Transfer') * 1e9, millions === 1 ? 1e12 : 50e12, 'bytes'));
     }
     items.push({ label: '결제 주기', value: bill.credit ? `${kstDay(bill.periodStart)} ~ ${kstDay(bill.periodEnd.getTime() - 1)}` : `${kstDay(bill.periodStart)}부터 집계 (Vercel 결제일과 다를 수 있음)`, status: 'ok' });
-    // BilledCost is the part the credit no longer covers.
-    const over = Math.max(bill.billed, bill.credit ? 0 : bill.cost - total);
+    // BilledCost is the part the credit no longer covers; rows carry float dust (~1e-11).
+    const over = Math.round(Math.max(bill.billed, bill.credit ? 0 : bill.cost - total) * 100) / 100;
     items.push({ label: '크레딧 초과 사용', value: over ? `${usd(over)} · Pro 요금 외 추가 청구 예정` : '없음 (크레딧 안에서 사용 중)', status: over ? 'warning' : 'ok' });
     if (bill.empty) return items.push({ label, value: '아직 집계된 사용량이 없습니다.', status: 'ok' });
     items.push({ label: '온사이드 사용액', value: `${usd(bill.projectCost)} · 팀 전체 ${usd(bill.cost)}`, status: 'ok' });

@@ -124,7 +124,7 @@ const CHARGES = [
   charge('Pro', 1, null, 0.67), charge('Flat Rate CDN 1M', 1, null, 0),
   charge('CDN Requests', 600_000, 'Requests', 0.5, GLIT), charge('CDN Requests', 200_000, 'Requests', 0.2, OTHER),
   charge('Fluid Active CPU', 0.5, 'hour', 0.06, GLIT), charge('Fluid Active CPU', 1.5, 'hour', 0.2, OTHER),
-  charge('Function Invocations', 3000, 'Invocations', 0.01, GLIT), charge('Fast Data Transfer', 2, 'gigabyte', 0.6, GLIT),
+  charge('Function Invocations', 3000, 'Invocations', 0.01, GLIT, { BilledCost: 4e-11 }), charge('Fast Data Transfer', 2, 'gigabyte', 0.6, GLIT),
   'not json', '',
 ].join('\n');
 
