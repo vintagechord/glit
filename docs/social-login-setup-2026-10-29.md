@@ -91,7 +91,7 @@ On **2026-10-29 01:07 KST**, read-only requests to the running release server at
 | Setting | Exact value or required behavior |
 | --- | --- |
 | Canonical app / Site URL | `https://iamonside.com`; saved as Supabase Site URL and both Render public URL variables |
-| Provider callback, all three apps | `https://rwysjsmxtpuqekeltwxi.supabase.co/auth/v1/callback` |
+| Provider callback, all three apps | `https://ggpkzttyfkopcdctvxzz.supabase.co/auth/v1/callback` (Seoul project since 2026-11-02; the Mumbai callback was removed) |
 | Onside callback allowlist | `https://iamonside.com/auth/callback**`; retain `https://glit-b1yn.onrender.com/auth/callback**` during migration |
 | Final-domain recovery allowlist | `https://iamonside.com/reset-password` and `https://iamonside.com/en/reset-password`; both saved and verified |
 | Google | Dedicated Onside web OAuth client; basic OpenID/profile/email scopes |
