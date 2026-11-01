@@ -25,6 +25,7 @@ import {
   buildStationTrackSummaryText,
   getStationReviewDisplayStatus,
 } from "@/lib/station-review-display";
+import { isRejectedMvResult } from "@/lib/submission-certificate";
 import {
   fallbackStationLogoPath,
   getLocalStationLogoSource,
@@ -452,6 +453,7 @@ type MvReviewAssetPath = "mv-rating-image" | "mv-guide" | "mv-certificate";
 
 type DetailMvReviewAssetState = {
   ratingLabel: string;
+  rejected: boolean;
   hasCertificate: boolean;
   certificateName: string | null;
 };
@@ -576,10 +578,12 @@ export function SubmissionDetailClient({
   const isReviewComplete =
     hasMvDistributionResult ||
     (isMvBroadcast && isResultReady);
-  const canDownloadMvReviewAssets = hasMvRatingResult;
+  const isMvRejectedResult = hasMvRatingResult && isRejectedMvResult(submission);
+  // A rejected review hands out no rating mark, certificate or guide.
+  const canDownloadMvReviewAssets = hasMvRatingResult && !isMvRejectedResult;
   const mvFallbackStationStatus =
-    canDownloadMvReviewAssets && submission.mv_desired_rating
-      ? submission.mv_desired_rating === "REJECT"
+    hasMvRatingResult && submission.mv_desired_rating
+      ? isMvRejectedResult
         ? "REJECTED"
         : "APPROVED"
       : isPaymentDone && ["IN_PROGRESS", "RESULT_READY", "COMPLETED"].includes(submission.status)
@@ -1057,10 +1061,11 @@ export function SubmissionDetailClient({
               const resolvedResultNote = note;
               const mvReviewAssets =
                 isMvDistribution &&
-                canDownloadMvReviewAssets &&
+                hasMvRatingResult &&
                 submission.mv_desired_rating
                   ? {
                       ratingLabel: mvRatingLabel(submission.mv_desired_rating),
+                      rejected: isMvRejectedResult,
                       hasCertificate: Boolean(submission.certificate_b2_path),
                       certificateName:
                         submission.certificate_original_name?.trim() || null,
@@ -1068,14 +1073,10 @@ export function SubmissionDetailClient({
                   : null;
               const resultDisplayStatus = mvReviewAssets
                 ? {
-                    label:
-                      submission.mv_desired_rating === "REJECT"
-                        ? "부적격"
-                        : "적격",
-                    tone:
-                      submission.mv_desired_rating === "REJECT"
-                        ? rejectedDetailResultTone
-                        : approvedDetailResultTone,
+                    label: mvReviewAssets.rejected ? "부적격" : "적격",
+                    tone: mvReviewAssets.rejected
+                      ? rejectedDetailResultTone
+                      : approvedDetailResultTone,
                   }
                 : currentStatus;
               const shouldOpenResultModal =
@@ -1940,7 +1941,19 @@ export function SubmissionDetailClient({
                 </p>
               </div>
             ) : null}
-            {trackResultModal.mvReviewAssets ? (
+            {trackResultModal.mvReviewAssets?.rejected ? (
+              <div className="mt-5 border-t-2 border-border pt-4">
+                <div className="rounded-[8px] border-2 border-[#111111] bg-[#d9362c] p-4 text-white dark:border-[#f2cf27]">
+                  <p className="text-sm font-black">심의 불가</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    심의 불가 결과에는 등급 이미지, 필증, 표기 가이드가 제공되지 않습니다.
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    자세한 내용은 고객센터로 문의해주세요.
+                  </p>
+                </div>
+              </div>
+            ) : trackResultModal.mvReviewAssets ? (
               <div className="mt-5 border-t-2 border-border pt-4">
                 <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                   뮤직비디오 결과 다운로드

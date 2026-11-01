@@ -16,6 +16,7 @@ import {
   fallbackStationLogoPath,
   getLocalStationLogoSource,
 } from "@/lib/station-logos";
+import { isRejectedMvResult } from "@/lib/submission-certificate";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
@@ -134,6 +135,7 @@ type MvReviewAssetState = {
   ratingCode: string | null;
   ratingLabel: string;
   hasRating: boolean;
+  rejected: boolean;
   hasResultSignal: boolean;
   hasCertificate: boolean;
   certificateName: string | null;
@@ -248,6 +250,7 @@ function buildMvReviewAssetState(
     ratingCode,
     ratingLabel: mvRatingLabel(ratingCode),
     hasRating: Boolean(ratingCode),
+    rejected: isRejectedMvResult(submission),
     hasResultSignal: hasSubmissionResultSignal(submission),
     hasCertificate: Boolean(submission.certificate_b2_path?.trim()),
     certificateName: submission.certificate_original_name?.trim() || null,
@@ -264,14 +267,13 @@ function getDisplayStatusForReview(
   }
   return {
     ...status,
-    label: mvAssets.ratingCode === "REJECT" ? "부적격" : "적격",
-    tone:
-      mvAssets.ratingCode === "REJECT"
-        ? "bauhaus-status-chip--danger"
-        : "bauhaus-status-chip--success",
+    label: mvAssets.rejected ? "부적격" : "적격",
+    tone: mvAssets.rejected
+      ? "bauhaus-status-chip--danger"
+      : "bauhaus-status-chip--success",
     summaryText: null,
     isComplete: true,
-    needsAttention: mvAssets.ratingCode === "REJECT",
+    needsAttention: mvAssets.rejected,
   };
 }
 
@@ -305,6 +307,7 @@ const getMvReviewAssetDisabledReason = (
 ) => {
   if (!assets.hasResultSignal) return "심의 결과 반영 후 다운로드할 수 있습니다.";
   if (!assets.hasRating) return "심의 등급 설정 후 다운로드할 수 있습니다.";
+  if (assets.rejected) return "심의 불가 결과에는 제공되는 파일이 없습니다.";
   if (assetPath === "mv-certificate" && !assets.hasCertificate) {
     return "필증 업로드 후 다운로드할 수 있습니다.";
   }
@@ -1529,7 +1532,19 @@ export function HomeReviewPanel({
                 </p>
               </div>
             ) : null}
-            {modalMvReviewAssets
+            {modalMvReviewAssets?.rejected ? (
+              <div className="mt-5 border-t border-border/60 pt-4">
+                <div className="rounded-[8px] border-2 border-[#111111] bg-[#d9362c] p-4 text-white dark:border-[#f2cf27]">
+                  <p className="text-sm font-black">심의 불가</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    심의 불가 결과에는 등급 이미지, 필증, 표기 가이드가 제공되지 않습니다.
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    자세한 내용은 고객센터로 문의해주세요.
+                  </p>
+                </div>
+              </div>
+            ) : modalMvReviewAssets
               ? (
                 <div className="mt-5 border-t border-border/60 pt-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">

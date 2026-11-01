@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { presignGetUrl } from "@/lib/b2";
-import { currentSubmissionCertificateKey, hasPublishedSubmissionResult } from "@/lib/submission-certificate";
+import { currentSubmissionCertificateKey, hasPublishedSubmissionResult, isRejectedMvResult } from "@/lib/submission-certificate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,7 @@ type CertificateFields = {
   status?: string | null;
   result_status?: string | null;
   result_notified_at?: string | null;
+  mv_desired_rating?: string | null;
 };
 
 export async function GET(
@@ -51,6 +52,10 @@ export async function GET(
 
   if (!hasPublishedSubmissionResult(cert)) {
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+  }
+
+  if (isRejectedMvResult(cert)) {
+    return NextResponse.json({ error: "심의 불가 결과에는 제공되는 파일이 없습니다." }, { status: 404 });
   }
 
   if (!key) {

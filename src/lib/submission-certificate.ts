@@ -4,6 +4,7 @@ export type SubmissionCertificateState = {
   status?: string | null;
   result_status?: string | null;
   result_notified_at?: string | null;
+  mv_desired_rating?: string | null;
 };
 
 /** All customer certificate routes use the same publication signal. */
@@ -13,6 +14,12 @@ export function hasPublishedSubmissionResult(submission: SubmissionCertificateSt
       submission.result_notified_at ||
       (submission.status && ["RESULT_READY", "COMPLETED"].includes(submission.status)),
   );
+}
+
+/** A rejected online music video has no rating mark, usage guide or
+ * certificate to hand to the customer. */
+export function isRejectedMvResult(submission: Pick<SubmissionCertificateState, "mv_desired_rating">) {
+  return submission.mv_desired_rating?.trim() === "REJECT";
 }
 
 export function currentSubmissionCertificateKey(submission: SubmissionCertificateState) {

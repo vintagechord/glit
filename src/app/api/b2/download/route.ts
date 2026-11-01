@@ -5,7 +5,7 @@ import { getStorageLogId } from "@/lib/guest-storage-owner";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { certificateSubmissionId, currentSubmissionCertificateKey, hasPublishedSubmissionResult, type SubmissionCertificateState } from "@/lib/submission-certificate";
+import { certificateSubmissionId, currentSubmissionCertificateKey, hasPublishedSubmissionResult, isRejectedMvResult, type SubmissionCertificateState } from "@/lib/submission-certificate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,6 +91,11 @@ export async function GET(req: NextRequest) {
     }
     if (!hasPublishedSubmissionResult(certificate)) {
       return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+    }
+    // Customers receive no files for a rejected review; administrators
+    // (the FORBIDDEN branch above) keep access to what was uploaded.
+    if (certificate === submission && isRejectedMvResult(certificate)) {
+      return NextResponse.json({ error: "심의 불가 결과에는 제공되는 파일이 없습니다." }, { status: 404 });
     }
     allowed = true;
   }

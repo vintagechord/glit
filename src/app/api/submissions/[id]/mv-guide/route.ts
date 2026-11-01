@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { getGuideSignedUrl } from "@/lib/mv-assets";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { isRejectedMvResult } from "@/lib/submission-certificate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,9 @@ export async function GET(
   );
   if (!hasResultSignal) {
     return NextResponse.json({ error: "아직 결과가 준비되지 않았습니다." }, { status: 403 });
+  }
+  if (isRejectedMvResult(submission)) {
+    return NextResponse.json({ error: "심의 불가 결과에는 제공되는 파일이 없습니다." }, { status: 404 });
   }
 
   try {
