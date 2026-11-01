@@ -7,7 +7,7 @@ export const SITE_NAME = "온사이드";
 export const SITE_NAME_EN = "Onside";
 export const SITE_TAGLINE = "음반심의·뮤직비디오 심의 온라인 접수";
 export const SITE_DESCRIPTION =
-  "음반심의(앨범심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 방송국 심의와 라디오 심의, 영상물등급위원회 뮤직비디오 등급분류까지 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 안내합니다.";
+  "음반심의(앨범심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 TV·라디오 방송국의 음반 심의와 영상물등급위원회 등급분류·방송국별 뮤직비디오 심의까지, 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 한곳에서 안내합니다.";
 export const SITE_DESCRIPTION_EN =
   "Submit Korean broadcast music reviews online: album reviews for KBS, MBC, SBS and radio stations, and music video reviews and ratings. Onside has handled review submissions since 2017.";
 

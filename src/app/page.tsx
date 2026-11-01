@@ -128,9 +128,6 @@ export default function Home() {
                   <br className="hidden sm:block" />
                   결과 확인까지
                 </h1>
-                <p className="max-w-xl break-keep text-sm font-semibold leading-7 text-foreground/80 sm:text-base">
-                  음반 심의(앨범 심의)와 뮤직비디오 심의를 온라인으로 접수하세요. KBS·MBC·SBS 등 방송국 심의와 라디오 심의, 뮤직비디오 등급분류까지 진행 상황과 결과를 한곳에서 확인합니다.
-                </p>
               </div>
               <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px] lg:flex-1">
@@ -185,7 +182,7 @@ export default function Home() {
             className="self-end text-sm font-semibold text-muted-foreground transition hover:text-foreground md:self-auto"
           >
             <span className="inline-flex items-center gap-1.5">
-              구버전 접수
+              Legacy 사이트 접수
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
           </ReliableLink>
@@ -222,7 +219,7 @@ export default function Home() {
         <nav aria-label="심의 종류별 안내" className="mt-10 rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
           <h2 className="text-lg font-black text-foreground">심의 종류별 안내</h2>
           <p className="mt-2 break-keep text-sm leading-6 text-muted-foreground">준비물, 비용, 접수 일정과 결과 확인 방법을 심의 종류별로 정리했습니다.</p>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
             {REVIEW_GUIDES.map((guide) => (
               <li key={guide.slug}>
                 <ReliableLink href={`/guide/${guide.slug}`} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">

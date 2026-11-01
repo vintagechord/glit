@@ -133,3 +133,15 @@ test("remaining public labels have exact English translations", () => {
     );
   }
 });
+
+test("the application entry shows the guest badge beside its kicker and labels the legacy site", () => {
+  const entry = readSource("src/app/dashboard/new/page.tsx");
+  assert.match(entry, /<p className="bauhaus-kicker">심의 신청<\/p>\s*<span[^>]*>\s*비회원 가능\s*<\/span>/);
+  assert.equal(entry.match(/비회원 가능/g)?.length, 1);
+  assert.match(entry, />\s*Legacy 사이트 접수\s*</);
+  assert.doesNotMatch(entry, /기존 사이트 접수/);
+  const home = readSource("src/app/page.tsx");
+  assert.match(home, />\s*Legacy 사이트 접수\s*</);
+  assert.doesNotMatch(home, /음반 심의\(앨범 심의\)와 뮤직비디오 심의를 온라인으로 접수하세요/);
+  assert.match(readSource("src/app/guide/page.tsx"), />\s*참고 사항\s*</);
+});

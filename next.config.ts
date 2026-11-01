@@ -49,6 +49,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Broadcaster and radio reviews are album reviews, so their former guide
+  // pages (already submitted to search engines) point at the album guide.
+  async redirects() {
+    return [
+      { source: "/guide/broadcast-review", destination: "/guide/album-review", permanent: true },
+      { source: "/guide/radio-review", destination: "/guide/album-review", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

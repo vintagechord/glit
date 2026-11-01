@@ -16,7 +16,7 @@ import { albumPreparationItems, mvPreparationItems } from "@/lib/onside-content"
 export const metadata = pageMetadata({
   title: "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물",
   description:
-    "음반 심의(앨범 심의), 뮤직비디오 심의, 방송국 심의, 라디오 심의의 신청 절차와 준비물, 비용, 결과 확인 방법을 한눈에 확인하세요. 온라인으로 접수하고 방송국별 결과를 받아볼 수 있습니다.",
+    "음반 심의(앨범 심의)와 뮤직비디오 심의의 신청 절차와 준비물, 비용, 결과 확인 방법을 한눈에 확인하세요. TV·라디오 방송국 심의는 음반 심의에, 온라인 등급분류와 방송국별 심의는 뮤직비디오 심의에 속합니다.",
   path: "/guide",
   enPath: "/en/guide",
   keywords: ["심의 안내", "음반심의 절차", "뮤직비디오 심의 절차", "방송국 심의", "라디오 심의", "심의 준비물"],
@@ -63,7 +63,7 @@ const reviewTypeCards = [
   {
     badge: "MV",
     title: "뮤직비디오 심의",
-    description: "온라인 · TV",
+    description: "온라인 · 방송국별",
     icon: Clapperboard,
     accentClass: "bg-[#1556a4] text-white",
     bulletClass: "bg-[#d9362c]",
@@ -89,7 +89,7 @@ export default function GuidePage() {
         {REVIEW_GUIDES.map((guide) => (
           <Link key={guide.slug} href={`/guide/${guide.slug}`} className="group rounded-[8px] border-2 border-[#111111] bg-card p-4 transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
             <span className="flex items-center justify-between gap-2 text-base font-black">{`${guide.menuLabel} 안내`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
-            <span className="mt-1 block break-keep text-xs font-semibold leading-5 text-muted-foreground group-hover:text-[#111111]">{guide.facts[0]?.value}</span>
+            <span className="mt-1 block break-keep text-xs font-semibold leading-5 text-muted-foreground group-hover:text-[#111111]">{guide.menuSummary}</span>
           </Link>
         ))}
       </nav>
@@ -167,7 +167,7 @@ export default function GuidePage() {
                 </Link>
                 <details className="group text-xs font-semibold text-muted-foreground">
                   <summary className="cursor-pointer rounded-[6px] px-2 py-2 font-black text-foreground marker:text-[#1556a4]">
-                    핵심 조건
+                    참고 사항
                   </summary>
                   <ul className="mt-2 space-y-2 rounded-[8px] border border-border bg-card p-3">
                     {card.bullets.map((bullet) => (
