@@ -1,8 +1,12 @@
+"use client";
+
+import * as React from "react";
 import type { ComponentProps } from "react";
 
-import { getDashboardStatusData } from "@/lib/dashboard-status";
-import { createServerSupabase } from "@/lib/supabase/server";
+import type { DashboardStatusData } from "@/lib/dashboard-status";
+import { hasBrowserAuthCookie, loadBrowserSupabase } from "@/lib/supabase/browser-session";
 
+import { dashboardStatusResource } from "./dashboard-status-resource";
 import { HomeReviewPanel } from "./home-review-panel";
 
 type HomeReviewPanelProps = ComponentProps<typeof HomeReviewPanel>;
@@ -136,21 +140,69 @@ export function HomeSessionPanelFallback() {
   );
 }
 
-export async function HomeSessionPanel() {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+const noSubmissions: SubmissionSummary[] = [];
 
-  if (error) {
-    if (!error.message.toLowerCase().includes("auth session missing")) {
-      console.error("[HomeSessionPanel] Failed to read session:", error.message);
-    }
-  }
+type Viewer =
+  | { kind: "checking" }
+  | { kind: "guest" }
+  | { kind: "member"; userId: string; data: DashboardStatusData | null; failed: boolean };
 
-  if (!user) {
-    const exampleState = buildExampleState();
+/**
+ * The home page is served from the CDN, so the visitor's session is read in
+ * the browser after hydration. Guests (no session cookie) get the example
+ * without loading the Supabase SDK; members get their live status from
+ * /api/dashboard/status, which verifies the session on the server.
+ */
+export function HomeSessionPanel() {
+  const [viewer, setViewer] = React.useState<Viewer>({ kind: "checking" });
+  const [example, setExample] = React.useState<ReturnType<typeof buildExampleState> | null>(null);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    const showGuest = () => {
+      if (controller.signal.aborted) return;
+      setExample((current) => current ?? buildExampleState());
+      setViewer({ kind: "guest" });
+    };
+    const read = async () => {
+      if (!hasBrowserAuthCookie()) return showGuest();
+      const supabase = await loadBrowserSupabase();
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) return showGuest();
+      if (controller.signal.aborted) return;
+      setViewer({ kind: "member", userId, data: dashboardStatusResource.peek(userId), failed: false });
+      try {
+        const data = await dashboardStatusResource.read(userId, { signal: controller.signal });
+        if (!controller.signal.aborted) setViewer({ kind: "member", userId, data, failed: false });
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        // A cookie the server no longer accepts is a signed-out visitor.
+        if ((failure as { status?: number }).status === 401) return showGuest();
+        console.error("[HomeSessionPanel] Failed to load dashboard status:", failure instanceof Error ? failure.message : failure);
+        setViewer((current) => current.kind === "member" && !current.data ? { ...current, failed: true } : current);
+      }
+    };
+    void read().catch(showGuest);
+    // A page restored from the back-forward cache may predate a login or logout.
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) void read().catch(showGuest);
+    };
+    window.addEventListener("pageshow", restored);
+    return () => {
+      controller.abort();
+      window.removeEventListener("pageshow", restored);
+    };
+  }, []);
+
+  const memberData = viewer.kind === "member" ? viewer.data : null;
+  const albumStations = React.useMemo(() => normalizeStationsMap(memberData?.albumStationsMap), [memberData]);
+  const mvStations = React.useMemo(() => normalizeStationsMap(memberData?.mvStationsMap), [memberData]);
+
+  if (viewer.kind === "checking") return <HomeSessionPanelFallback />;
+
+  if (viewer.kind === "guest") {
+    const exampleState = example ?? buildExampleState();
     return (
       <HomeReviewPanel
         key="guest"
@@ -165,24 +217,21 @@ export async function HomeSessionPanel() {
     );
   }
 
-  const result = await getDashboardStatusData(user.id);
-  if (result.error || !result.data) {
-    console.error(
-      "[HomeSessionPanel] Failed to load dashboard status:",
-      result.error ?? "empty dashboard status",
-    );
+  if (!viewer.data && !viewer.failed) {
+    return <HomeSessionPanelFallback />;
   }
 
   return (
     <HomeReviewPanel
-      key={user.id}
+      key={viewer.userId}
       isLoggedIn
-      viewerId={user.id}
-      albumSubmissions={result.data?.albumSubmissions ?? []}
-      mvSubmissions={result.data?.mvSubmissions ?? []}
-      albumStationsMap={normalizeStationsMap(result.data?.albumStationsMap)}
-      mvStationsMap={normalizeStationsMap(result.data?.mvStationsMap)}
-      enableRemoteSync={Boolean(result.error || !result.data)}
+      viewerId={viewer.userId}
+      albumSubmissions={memberData?.albumSubmissions ?? noSubmissions}
+      mvSubmissions={memberData?.mvSubmissions ?? noSubmissions}
+      albumStationsMap={albumStations}
+      mvStationsMap={mvStations}
+      // After a failed read the panel shows its own error and retry button.
+      enableRemoteSync={viewer.failed}
       {...panelProps}
     />
   );

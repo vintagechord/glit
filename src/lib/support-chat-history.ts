@@ -2,14 +2,13 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SupportChatMessage } from "./support-chat";
 
-export type ChatHistoryCursor = { createdAt: string; id: string };
+import type { ChatHistoryCursor } from "./support-chat-cursor";
+
+export { chatHistoryQuery, type ChatHistoryCursor } from "./support-chat-cursor";
 export const chatHistoryCursorSchema = z.object({ createdAt: z.string().datetime({ offset: true }), id: z.string().uuid() });
 export function parseChatHistoryCursor(params: URLSearchParams): ChatHistoryCursor | undefined {
   if (!params.has("before") && !params.has("beforeId")) return undefined;
   return chatHistoryCursorSchema.parse({ createdAt: params.get("before"), id: params.get("beforeId") });
-}
-export function chatHistoryQuery(cursor: ChatHistoryCursor) {
-  return new URLSearchParams({ before: cursor.createdAt, beforeId: cursor.id });
 }
 export async function loadChatHistory(admin: SupabaseClient, conversationId: string, cursor?: ChatHistoryCursor, limit = 200) {
   let query = admin.from("support_chat_messages").select("id,conversation_id,sender_type,sender_user_id,sender_name,body,created_at").eq("conversation_id", conversationId);

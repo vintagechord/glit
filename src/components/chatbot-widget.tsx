@@ -17,7 +17,7 @@ import {
 
 import { APP_CONFIG } from "@/lib/config";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
-import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-history";
+import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-cursor";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,
@@ -29,7 +29,7 @@ import {
   type SupportChatConversation,
   type SupportChatMessage,
 } from "@/lib/support-chat";
-import { createClient } from "@/lib/supabase/client";
+import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 
 type ChatView = "home" | "conversations" | "thread";
 
@@ -196,10 +196,15 @@ const isDocumentVisible = () =>
 const getConversationPreview = (conversation: SupportChatConversation) =>
   conversation.lastMessagePreview || "새 문의를 시작했습니다.";
 
+type BrowserSupabase = Awaited<ReturnType<typeof loadBrowserSupabase>>;
+type ChatChannel = ReturnType<BrowserSupabase["channel"]>;
+
 export function ChatbotWidget() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
-  const supabase = React.useMemo(() => createClient(), []);
+  // Realtime needs the Supabase SDK; it loads only once the chat is opened or
+  // a stored conversation exists, so ordinary page views never download it.
+  const [supabase, setSupabase] = React.useState<BrowserSupabase | null>(null);
   const [open, setOpen] = React.useState(false);
   const [view, setView] = React.useState<ChatView>("home");
   const [showHours, setShowHours] = React.useState(false);
@@ -226,12 +231,8 @@ export function ChatbotWidget() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
-  const channelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
-    null,
-  );
-  const adminChannelRef = React.useRef<ReturnType<typeof supabase.channel> | null>(
-    null,
-  );
+  const channelRef = React.useRef<ChatChannel | null>(null);
+  const adminChannelRef = React.useRef<ChatChannel | null>(null);
   const storedTokensRef = React.useRef<string[]>([]);
   const activeTokenRef = React.useRef<string | null>(null);
   const activeConversationIdRef = React.useRef<string | null>(null);
@@ -250,6 +251,16 @@ export function ChatbotWidget() {
     normalizedPathname === "/forgot-password" ||
     normalizedPathname === "/reset-password";
   const activeConversationId = conversation?.id ?? null;
+  const needsRealtime = !hiddenRoute && (open || storedTokens.length > 0);
+
+  React.useEffect(() => {
+    if (!needsRealtime || supabase) return;
+    let active = true;
+    void loadBrowserSupabase()
+      .then((client) => { if (active) setSupabase(client); })
+      .catch(() => { /* Polling keeps the chat working without realtime. */ });
+    return () => { active = false; };
+  }, [needsRealtime, supabase]);
   const totalUnread = conversations.reduce(
     (sum, item) => sum + item.unreadVisitorCount,
     0,
@@ -556,7 +567,7 @@ export function ChatbotWidget() {
   }, [hiddenRoute, loadConversationList]);
 
   React.useEffect(() => {
-    if (hiddenRoute || (!open && storedTokens.length === 0)) return;
+    if (!supabase || hiddenRoute || (!open && storedTokens.length === 0)) return;
 
     const channel = supabase
       .channel(supportChatAdminChannelName, {
@@ -582,7 +593,7 @@ export function ChatbotWidget() {
   ]);
 
   React.useEffect(() => {
-    if (!activeConversationId || !activeToken || hiddenRoute) return;
+    if (!supabase || !activeConversationId || !activeToken || hiddenRoute) return;
     const channel = supabase
       .channel(supportChatChannelName(activeConversationId, activeToken), {
         config: { broadcast: { self: false } },

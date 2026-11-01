@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import {
   ArrowRight,
   Clapperboard,
@@ -13,10 +12,7 @@ import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { HomeHeroAdBanner } from "@/components/site/home-hero-ad-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
-import {
-  HomeSessionPanel,
-  HomeSessionPanelFallback,
-} from "@/features/home/home-session-panel";
+import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { JsonLd } from "@/components/seo/json-ld";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import {
@@ -28,7 +24,10 @@ import {
   websiteJsonLd,
 } from "@/lib/seo";
 
-export const dynamic = "force-dynamic";
+// Served from the CDN and rebuilt in the background at the banner cache's
+// pace; banner edits revalidate "/" at once, and the visitor's own status
+// loads in the browser.
+export const revalidate = 60;
 
 export const metadata: Metadata = pageMetadata({
   title: `${SITE_NAME} | ${SITE_TAGLINE} · 방송국 심의 대행`,
@@ -156,9 +155,7 @@ export default function Home() {
               </div>
             </div>
 
-            <Suspense fallback={<HomeSessionPanelFallback />}>
-              <HomeSessionPanel />
-            </Suspense>
+            <HomeSessionPanel />
           </div>
         </div>
       </section>

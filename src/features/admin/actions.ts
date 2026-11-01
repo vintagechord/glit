@@ -9,15 +9,17 @@ import { after } from "next/server";
 
 import {
   paymentStatusLabelMap,
-  paymentStatusEnum,
   type PaymentStatus,
-  resultStatusEnum,
-  reviewStatusEnum,
   reviewStatusLabelMap,
   type ReviewStatus,
-  stationReviewStatusEnum,
   stationReviewStatusOptions,
 } from "@/constants/review-status";
+import {
+  paymentStatusEnum,
+  resultStatusEnum,
+  reviewStatusEnum,
+  stationReviewStatusEnum,
+} from "@/constants/review-status-schema";
 import { saveManagedStationReview, saveManagedStationReviews, type BulkStationReviewInput } from "@/lib/admin/review-management";
 import { sendReviewSummaryNotificationById, sendSubmissionUpdateNotificationById } from "@/lib/admin/submission-notifications";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -1706,6 +1708,7 @@ export async function upsertAdBannerFormAction(
   }
   revalidatePath("/admin/banners");
   revalidatePath("/");
+  revalidatePath("/en");
   redirect(withSavedQuery("/admin/banners"));
 }
 
@@ -1747,6 +1750,7 @@ export async function deleteAdBannerFormAction(
   }
   revalidatePath("/admin/banners");
   revalidatePath("/");
+  revalidatePath("/en");
 }
 
 export async function upsertProfanityTermAction(

@@ -10,6 +10,13 @@ test.beforeAll(async () => {
       import {AccountPageLoading} from './src/components/dashboard/account-page-loading';
       import {changePath,usePathname} from 'next/navigation';
       window.__headerMetrics={sessions:0,subscriptions:0,unsubscribes:0};
+      // The header loads the Supabase SDK only when a session cookie exists, so
+      // the fixture session lives here and mirrors itself into that cookie.
+      const authListeners=new Set();window.__authListeners=authListeners;
+      window.__fixtureSession=location.pathname.endsWith('/login')?null:{user:{id:'fixture-user-one'}};
+      const writeCookie=()=>{document.cookie=window.__fixtureSession?'sb-fixture-auth-token=fixture; path=/':'sb-fixture-auth-token=; path=/; max-age=0'};writeCookie();
+      window.__setCookieSession=id=>{window.__fixtureSession=id?{user:{id}}:null;writeCookie()};
+      window.__changeAuth=id=>{window.__setCookieSession(id);authListeners.forEach(fn=>fn(id?'SIGNED_IN':'SIGNED_OUT',window.__fixtureSession))};
       window.__changePath=changePath;
       const loading=location.search.includes('loading');
       const information=new Promise(resolve=>{window.__resolveInformation=()=>resolve('Information ready')});
@@ -23,7 +30,7 @@ test.beforeAll(async () => {
       builder.onLoad({filter:/.*/,namespace:"fixture"},({path})=>({loader:"tsx",resolveDir:process.cwd(),contents:
         path==='next/navigation'?`import {useSyncExternalStore} from 'react';let path=location.pathname;const listeners=new Set();export function changePath(next){history.pushState(null,'',next);path=location.pathname;listeners.forEach(fn=>fn())}export const usePathname=()=>useSyncExternalStore(fn=>{listeners.add(fn);return ()=>listeners.delete(fn)},()=>path);`:
         path==='next/link'?`import {changePath} from 'next/navigation';export default function Link({prefetch,replace,scroll,onClick,children,...props}){return <a {...props} onClick={event=>{onClick?.(event);if(!event.defaultPrevented&&!event.metaKey&&!event.ctrlKey&&props.target!=='_blank'){event.preventDefault();changePath(props.href)}}}>{children}</a>}`:
-        `let session=location.pathname.endsWith('/login')?null:{user:{id:'fixture-user-one'}};const listeners=new Set();window.__setCookieSession=id=>{session=id?{user:{id}}:null};window.__changeAuth=id=>{window.__setCookieSession(id);listeners.forEach(fn=>fn(id?'SIGNED_IN':'SIGNED_OUT',session))};const client={auth:{getSession:async()=>{window.__headerMetrics.sessions++;if(window.__headerFailSession)throw new Error('Fixture unavailable');return {data:{session},error:null}},onAuthStateChange(fn){window.__headerMetrics.subscriptions++;listeners.add(fn);return {data:{subscription:{unsubscribe(){window.__headerMetrics.unsubscribes++;listeners.delete(fn)}}}}}}};export const createClient=()=>client;`
+        `const client={auth:{getSession:async()=>{window.__headerMetrics.sessions++;if(window.__headerFailSession)throw new Error('Fixture unavailable');return {data:{session:window.__fixtureSession},error:null}},onAuthStateChange(fn){window.__headerMetrics.subscriptions++;window.__authListeners.add(fn);return {data:{subscription:{unsubscribe(){window.__headerMetrics.unsubscribes++;window.__authListeners.delete(fn)}}}}}}};export const createClient=()=>client;`
       }));
     }}],
   });
@@ -137,13 +144,14 @@ test('unexpected session read rejection is handled and the guest cart remains lo
 for(const prefix of ['', '/en']){
   test(`cookie-only server login refreshes the header after ${prefix||'Korean'} login redirect`,async({page})=>{
     const {requests}=await mount(page,{path:`${prefix}/login`,guest:true});
-    await expect.poll(async()=> (await metrics(page)).sessions).toBe(1);
+    // A visitor without a session cookie never loads or calls the auth SDK.
+    expect(await metrics(page)).toEqual({sessions:0,subscriptions:0,unsubscribes:0});
     await page.evaluate(()=>(window as unknown as {__setCookieSession:(id:string)=>void}).__setCookieSession('fixture-cookie-user'));
     await changePath(page,`${prefix}/mypage`);
     await expect(page.getByRole('button',{name:prefix?'Logout':'로그아웃',exact:true})).toBeVisible();
     await expect(page.getByRole('link',{name:prefix?'Cart':'장바구니',exact:true})).toHaveText('3');
     await changePath(page,`${prefix}/track`);
-    expect(await metrics(page)).toEqual({sessions:2,subscriptions:1,unsubscribes:0});expect(requests).toHaveLength(1);
+    expect(await metrics(page)).toEqual({sessions:1,subscriptions:1,unsubscribes:0});expect(requests).toHaveLength(1);
   });
 
   test(`the ${prefix||'Korean'} loading fallback keeps header navigation interactive until information resolves`,async({page})=>{
