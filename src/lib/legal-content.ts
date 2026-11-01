@@ -4,31 +4,104 @@ import { APP_CONFIG } from "./config";
 export const PRIVACY_POLICY_EFFECTIVE_DATE = "2026년 11월 1일";
 const PRIVACY_POLICY_EFFECTIVE_DATE_EN = "November 1, 2026";
 
+/** Update together with every material change to the terms of use text. */
+export const TERMS_EFFECTIVE_DATE = "2026년 11월 1일";
+const TERMS_EFFECTIVE_DATE_EN = "November 1, 2026";
+
 export const termsContent = `온사이드 심의 서비스 이용약관
 
+시행일: ${TERMS_EFFECTIVE_DATE}
+
 제1조 목적
-이 약관은 온사이드 심의센터가 제공하는 음반·뮤직비디오 심의 신청, 파일 제출, 결제, 진행 확인, 결과 수령 서비스 이용 조건과 회사와 이용자의 권리·의무를 정합니다.
+이 약관은 ${APP_CONFIG.businessName}(이하 "회사")가 온사이드(iamonside.com, 이하 "사이트")에서 제공하는 음반·뮤직비디오 심의 신청 대행과 관련 서비스의 이용 조건과 절차, 회사와 이용자의 권리·의무와 책임을 정합니다.
 
-제2조 서비스 범위
-회사는 온라인 신청서 접수, 자료 검수, 음원·영상 파일 관리, 방송국/기관 접수 대행, 진행 상태 안내, 결과 파일 또는 필증 안내, 결제 및 증빙 발급 지원을 제공합니다.
+제2조 정의
+1. "서비스"란 회사가 사이트에서 제공하는 심의 신청 접수, 자료 검수, 방송국·영상물등급위원회 등 심의기관(이하 "방송국/기관") 접수 대행, 진행 상황 안내, 결과와 필증 안내, 결제와 증빙 발급, 매거진·노래방·내 음악 관리 등 부가 서비스를 말합니다.
+2. "이용자"란 이 약관에 따라 서비스를 이용하는 회원과 비회원을 말합니다.
+3. "회원"이란 이메일 또는 소셜 계정(카카오·네이버·구글)으로 가입한 사람을 말합니다.
+4. "비회원"이란 회원 가입 없이 심의를 신청하고 조회 코드로 진행 상황을 확인하는 사람을 말합니다.
+5. "신청"이란 이용자가 심의 종류, 방송국/기관, 신청자 정보와 자료를 입력하고 결제를 요청하는 것을 말합니다.
 
-제3조 이용자 의무
-이용자는 실제 발매 또는 송출 목적과 일치하는 음원, 영상, 가사, 앨범 정보, 신청자 정보를 제출해야 합니다. 허위 정보, 누락 자료, 권리 침해 자료 제출로 발생하는 지연 또는 책임은 이용자에게 있습니다.
+제3조 약관의 게시와 변경
+1. 회사는 이 약관과 상호, 대표자, 주소, 전화번호, 이메일, 사업자등록번호, 통신판매업 신고번호, 개인정보 보호책임자를 사이트 화면 하단에 게시합니다.
+2. 회사는 「약관의 규제에 관한 법률」, 「전자상거래 등에서의 소비자보호에 관한 법률」(이하 "전자상거래법") 등 관련 법령을 위반하지 않는 범위에서 이 약관을 변경할 수 있습니다.
+3. 약관을 변경하면 적용일과 변경 사유를 밝혀 적용일 7일 전부터 사이트에 공지합니다. 이용자에게 불리한 변경은 30일 전부터 공지하고 회원에게 이메일로도 알립니다.
+4. 변경된 약관은 적용일 이후 체결하는 계약에 적용하며, 그 전에 체결한 계약에는 변경 전 약관을 적용합니다.
+5. 회원은 변경된 약관에 동의하지 않으면 탈퇴할 수 있습니다.
 
-제4조 파일 제출과 보관
-업로드 또는 이메일로 제출된 파일은 심의 진행 목적에 한해 사용합니다. 파일 보관 및 삭제 기준은 별도 파일 보관/삭제 정책을 따릅니다.
+제4조 회원 가입
+1. 만 14세 이상인 사람은 이 약관과 개인정보처리방침에 동의하고 이메일 인증 또는 소셜 계정 연결을 마치면 회원이 됩니다.
+2. 타인의 정보를 이용하거나 허위 정보를 입력한 경우 회사는 가입을 거절하거나 나중에 이용을 제한할 수 있습니다.
 
-제5조 결제와 취소
-이용자는 결제 전 선택한 심의 종류, 방송국/기관, 총 금액, 증빙 요청 정보를 확인해야 합니다. 환불과 취소는 별도 환불/취소 규정을 따릅니다.
+제5조 회원 탈퇴와 자격 제한
+1. 회원은 언제든지 고객센터(이메일·전화)로 탈퇴를 요청할 수 있으며, 회사는 본인 확인 후 지체 없이 처리합니다.
+2. 진행 중인 신청이 있으면 그 신청의 처리 또는 환불을 마친 뒤 탈퇴를 처리하며, 처리 방법은 회원과 협의해 정합니다.
+3. 탈퇴한 회원의 개인정보와 신청 내역은 개인정보처리방침에 따라 파기하거나 법령에서 정한 기간 동안 보관합니다.
+4. 회원이 타인의 정보를 도용하거나, 서비스 운영을 고의로 방해하거나, 법령 또는 이 약관을 위반하면 회사는 그 사유를 알린 뒤 이용을 제한하거나 회원 자격을 상실시킬 수 있습니다.
 
-제6조 심의 결과
-방송국/기관의 심의 결과와 처리 기간은 각 기관 기준에 따릅니다. 회사는 접수 및 진행 현황을 확인해 안내하지만, 특정 결과 통과를 보장하지 않습니다.
+제6조 이용자에 대한 통지
+회사는 이용자가 신청서나 회원 정보에 입력한 이메일 등 연락처로 진행 상황과 결과를 알립니다. 불특정 다수 이용자에 대한 통지는 사이트 공지로 갈음할 수 있습니다.
 
-제7조 비회원 조회
-비회원 접수자는 발급된 조회 코드로 진행 상태와 결과를 확인합니다. 조회 코드를 분실한 경우 신청자명과 이메일 등 본인 확인 정보를 통해 재확인을 요청할 수 있습니다.
+제7조 신청과 계약의 성립
+1. 이용자는 사이트에서 심의 종류, 방송국/기관, 신청자 정보와 자료를 입력하고 결제 금액을 확인한 뒤 신청합니다.
+2. 계약은 카드 결제 승인 또는 무통장 입금 확인으로 결제가 완료된 때 성립합니다.
+3. 다음 경우 회사는 신청을 승낙하지 않거나 승낙 후에도 계약을 해제할 수 있으며, 이때 결제 금액 전액을 환불합니다.
+- 신청 내용이 허위이거나 타인의 정보를 도용한 경우
+- 방송국/기관의 심의 대상이 아니거나 접수가 불가능한 경우
+- 그 밖에 신청을 승낙하는 것이 회사 업무상 현저히 곤란한 경우
+4. 회사는 결제 완료 후 신청 내용과 결제 정보를 이메일과 마이페이지 또는 비회원 조회 화면에서 확인할 수 있게 합니다.
 
-제8조 약관 변경
-회사는 서비스 운영과 관련 법령 변경에 따라 약관을 변경할 수 있으며, 중요한 변경 사항은 사이트에 공지합니다.`;
+제8조 결제와 증빙
+1. 표시된 금액은 부가가치세를 포함한 금액입니다.
+2. 결제 수단은 신용·체크카드(KG이니시스)와 무통장 입금입니다. 무통장 입금은 신청 시 안내한 회사 계좌로 입금해야 하며, 입금이 확인되면 접수를 진행합니다.
+3. 회사는 요청에 따라 현금영수증 또는 세금계산서를 발급합니다. 카드 결제 영수증은 결제대행사를 통해 확인할 수 있습니다.
+
+제9조 서비스의 제공
+1. 회사는 결제 완료 후 자료를 검수하고, 보완이 필요하면 이용자에게 요청합니다. 자료가 갖춰지면 방송국/기관에 접수합니다.
+2. 심의 결과와 처리 기간은 각 방송국/기관의 기준과 일정에 따르며, 회사는 특정 결과나 처리 기한을 보장하지 않습니다.
+3. 회사는 진행 상황, 결과와 필증을 마이페이지 또는 비회원 조회 화면과 이메일로 안내합니다.
+4. 비회원은 신청 시 발급한 조회 코드로 진행 상황을 확인합니다. 조회 코드를 분실하면 신청자 이름과 이메일 등 본인 확인 정보로 재확인을 요청할 수 있습니다.
+
+제10조 서비스의 변경과 중단
+1. 회사는 시스템 점검·교체·장애, 통신 두절, 천재지변, 방송국/기관의 접수 중단 등 부득이한 사유가 있으면 서비스의 전부 또는 일부를 일시 중단할 수 있으며, 미리(부득이한 경우 사후에) 사이트에 알립니다.
+2. 이 때문에 이미 결제한 신청을 진행할 수 없게 되면 진행하지 못한 부분을 환불/취소 규정에 따라 환불합니다.
+
+제11조 청약철회와 환불
+1. 이용자는 방송국/기관에 접수하기 전까지 신청을 철회하고 결제 금액 전액을 환불받을 수 있습니다.
+2. 심의 대행은 용역이므로, 전자상거래법에 따라 방송국/기관 접수가 시작된 부분은 청약철회가 제한됩니다. 다만 여러 방송국/기관으로 구성된 신청은 아직 접수하지 않은 부분을 철회할 수 있습니다.
+3. 회사의 귀책 사유로 서비스를 제공하지 못한 부분은 접수 여부와 관계없이 환불합니다.
+4. 환불 금액, 절차와 기한은 별도의 환불/취소 규정을 따릅니다.
+
+제12조 이용자의 의무
+1. 이용자는 실제 발매 또는 송출 목적과 일치하는 음원, 영상, 가사, 앨범 정보와 신청자 정보를 제출해야 합니다.
+2. 이용자는 제출 자료에 대한 저작권 등 권리를 보유하거나 권리자의 허락을 받아야 하며, 권리 침해로 생긴 분쟁은 이용자가 책임집니다.
+3. 허위 정보, 자료 누락, 연락 두절로 생긴 지연이나 불이익은 이용자가 책임집니다.
+4. 회원은 계정과 비밀번호를 직접 관리해야 하며, 도용 사실을 알게 되면 바로 회사에 알려야 합니다.
+
+제13조 제출 자료의 이용과 보관
+1. 회사는 이용자가 업로드하거나 이메일로 제출한 자료를 심의 접수, 자료 보완, 결과 안내와 분쟁 대응 목적으로만 이용하며, 심의를 위해 방송국/기관에 제출하는 경우 외에는 이용자의 동의 없이 제3자에게 제공하지 않습니다.
+2. 자료의 보관 기간과 삭제 기준은 별도의 파일 보관/삭제 정책을 따릅니다.
+
+제14조 회사의 의무
+1. 회사는 관련 법령과 이 약관을 지키며 서비스를 안정적으로 제공하기 위해 노력합니다.
+2. 회사는 이용자의 개인정보를 개인정보처리방침에 따라 보호합니다.
+3. 회사는 이용자의 불만과 피해 구제 요청을 고객센터에서 받아 신속히 처리하며, 처리에 시간이 걸리면 그 사유와 일정을 알립니다.
+
+제15조 책임의 제한
+1. 회사는 방송국/기관의 심의 판단과 결과, 처리 일정과 기준 변경에 대해 책임지지 않습니다.
+2. 회사는 천재지변 등 불가항력이나 이용자의 귀책 사유로 생긴 손해에 대해 책임지지 않습니다.
+3. 회사의 고의 또는 과실로 이용자에게 손해가 생기면 회사는 관련 법령에 따라 배상합니다.
+
+제16조 분쟁 해결
+1. 회사는 고객센터(${APP_CONFIG.supportEmail}, ${APP_CONFIG.supportPhone})에서 이용자의 의견과 불만을 처리합니다.
+2. 회사와 이용자 사이에 분쟁이 생기면 이용자는 한국소비자원, 전자문서·전자거래분쟁조정위원회 등 분쟁조정기관에 조정을 신청할 수 있습니다.
+
+제17조 재판권과 준거법
+1. 회사와 이용자 사이에 생긴 소송은 제소 당시 이용자의 주소를, 주소가 없으면 거소를 관할하는 지방법원의 전속관할로 합니다. 제소 당시 이용자의 주소나 거소가 분명하지 않거나 이용자가 외국 거주자이면 민사소송법에 따라 관할법원을 정합니다.
+2. 회사와 이용자 사이의 소송에는 대한민국 법을 적용합니다.
+
+부칙
+이 약관은 ${TERMS_EFFECTIVE_DATE}부터 시행합니다.`;
 
 export const privacyContent = `온사이드 개인정보처리방침
 
@@ -147,21 +220,36 @@ export const partnershipContent = `제휴안내
 ${APP_CONFIG.supportEmail}`;
 
 export const refundContent = `환불/취소 규정
-심의 대행 서비스는 결제 확인 후 자료 검수와 방송국/기관 접수 준비가 시작됩니다.
+심의 대행 서비스는 결제 확인 후 자료 검수와 방송국/기관 접수 준비가 시작됩니다. 이 규정은 「전자상거래 등에서의 소비자보호에 관한 법률」에 따른 청약철회와 환불 기준을 정합니다.
 
-1. 접수 전 취소
-방송국 또는 기관 접수 전에는 결제 취소 또는 환불이 가능합니다.
+1. 방송국/기관 접수 전
+접수 전에는 언제든지 신청을 취소하고 결제 금액 전액을 환불받을 수 있습니다. 자료 검수나 보완 요청이 진행 중이어도 접수 전이면 전액 환불합니다.
 
-2. 접수 진행 후 취소
-방송국 또는 기관에 자료가 전달된 이후에는 이미 진행된 대행 업무와 외부 접수 비용이 발생하므로 전액 환불이 어려울 수 있습니다.
+2. 일부 방송국/기관 접수 후
+여러 방송국/기관으로 구성된 신청은 아직 접수하지 않은 방송국/기관 부분을 취소할 수 있습니다. 환불 금액은 결제 금액에서 이미 접수한 부분의 이용 금액을 뺀 금액이며, 공제 내역을 환불 전에 안내합니다.
 
-3. 자료 보완 요청
-제출 자료 누락, 파일 오류, 가사 불일치 등으로 보완이 필요한 경우 보완 완료 후 접수가 진행됩니다. 이용자 보완 지연에 따른 일정 지연은 환불 사유가 되지 않습니다.
+3. 모든 방송국/기관 접수 후
+접수를 마친 부분은 용역 제공이 시작된 것이므로 법령에 따라 청약철회가 제한되며 환불되지 않습니다.
 
-4. 방송사 결과
-심의 결과는 방송국/기관의 판단에 따르며, 부적격 또는 수정 요청 자체는 환불 사유가 아닙니다.
+4. 진행 단계와 관계없이 환불하는 경우
+- 회사의 실수로 접수가 누락되거나 잘못 접수된 경우: 해당 부분 전액
+- 방송국/기관의 접수 중단 등으로 회사가 접수하지 못한 경우: 접수하지 못한 부분 전액
+- 회사가 신청을 승낙하지 않거나 계약을 해제한 경우: 결제 금액 전액
+- 중복 결제하거나 결제 금액보다 많이 입금한 경우: 중복·초과 금액 전액
 
-정확한 환불 가능 여부는 접수 상태 확인 후 ${APP_CONFIG.supportEmail}로 안내합니다.`;
+5. 환불 사유가 아닌 경우
+- 방송국/기관의 심의 결과(부적격, 수정 요청 등). 결과는 각 방송국/기관의 판단에 따릅니다.
+- 자료 보완이 늦어지거나 연락이 닿지 않아 생긴 일정 지연
+
+6. 환불 신청
+고객센터(이메일 ${APP_CONFIG.supportEmail}, 전화 ${APP_CONFIG.supportPhone})로 신청자 이름과 신청 정보를 알려주세요. 비회원은 조회 코드나 신청자 이름·이메일로 본인 확인을 합니다.
+
+7. 환불 시기와 방법
+- 환불이 확정된 날부터 3영업일 이내에 환불합니다.
+- 카드 결제는 결제를 취소합니다. 카드사에 따라 취소가 반영되기까지 며칠이 걸릴 수 있습니다.
+- 무통장 입금은 신청자가 알려준 계좌로 돌려드립니다.
+- 현금영수증을 발급한 건은 환불 금액만큼 취소합니다.
+- 회사가 환불을 늦추면 법령에서 정한 지연배상금을 함께 지급합니다.`;
 
 export const filePolicyContent = `파일 보관/삭제 정책
 온사이드는 음원, 영상, 가사, 신청서 등 저작물 자료를 심의 접수와 결과 안내 목적으로만 사용합니다.
@@ -187,29 +275,98 @@ export const filePolicyContent = `파일 보관/삭제 정책
 
 export const termsContentEn = `Onside Review Service Terms of Use
 
+Effective date: ${TERMS_EFFECTIVE_DATE_EN}
+
 Article 1. Purpose
-These terms define the conditions for using Onside review services, including album and music video review applications, file submission, payment, progress tracking, and result delivery, as well as the rights and obligations of the company and users.
+These terms set out the conditions and procedures for using the album and music video review agency service and related services that ${APP_CONFIG.businessName} ("the Company") provides on Onside (iamonside.com, "the Site"), and the rights, obligations and responsibilities of the Company and users.
 
-Article 2. Service Scope
-The company provides online application intake, material checks, audio and video file handling, submission support to broadcasters and review organizations, status updates, result or certificate guidance, and payment or receipt support.
+Article 2. Definitions
+1. "Service" means review application intake, material checks, submission to broadcasters, the Korea Media Rating Board and other review organizations ("broadcasters or organizations"), progress updates, result and certificate delivery, payment and receipts, and additional services such as magazine, karaoke and My Music, all provided on the Site.
+2. "User" means a member or guest who uses the Service under these terms.
+3. "Member" means a person who signed up with an email address or a social account (Kakao, Naver or Google).
+4. "Guest" means a person who applies without signing up and checks progress with a lookup code.
+5. "Application" means a user's request, with payment, that specifies the review type, broadcasters or organizations, applicant information and materials.
 
-Article 3. User Responsibilities
-Users must submit audio, video, lyrics, album information, and applicant information that match the actual release or broadcast purpose. Users are responsible for delays or issues caused by false information, missing materials, or rights-infringing materials.
+Article 3. Posting and Changing the Terms
+1. The Company posts these terms and its company name, representative, address, phone number, email, business registration number, mail-order business registration number and privacy officer at the bottom of the Site.
+2. The Company may change these terms within the limits of the Act on the Regulation of Terms and Conditions, the Act on the Consumer Protection in Electronic Commerce ("the E-Commerce Act") and other applicable laws.
+3. Changes are announced on the Site, with the effective date and the reason, at least 7 days before they take effect. Changes unfavorable to users are announced at least 30 days in advance and also emailed to members.
+4. Changed terms apply to contracts made on or after their effective date. Earlier contracts remain under the previous terms.
+5. A member who does not agree to changed terms may withdraw.
 
-Article 4. File Submission and Storage
-Files submitted by upload or email are used only for review submission and result guidance. File storage and deletion follow the separate file storage and deletion policy.
+Article 4. Membership
+1. A person aged 14 or older becomes a member by agreeing to these terms and the Privacy Policy and completing email verification or connecting a social account.
+2. The Company may refuse or later restrict a membership created with another person's information or false information.
 
-Article 5. Payment and Cancellation
-Before payment, users must confirm the selected review type, broadcasters or organizations, total amount, and receipt information. Refunds and cancellations follow the separate refund and cancellation policy.
+Article 5. Withdrawal and Restrictions
+1. Members may ask customer support (email or phone) to withdraw at any time. The Company processes the request without delay after confirming identity.
+2. If an application is in progress, the withdrawal is completed after that application is finished or refunded, in a way agreed with the member.
+3. A withdrawn member's personal information and application history are destroyed or kept for the periods required by law, as described in the Privacy Policy.
+4. If a member uses another person's information, deliberately disrupts the Service, or violates the law or these terms, the Company may restrict use or end the membership after giving the reason.
 
-Article 6. Review Results
-Review results and processing times follow each broadcaster or organization's own standards. The company checks and guides submission progress, but does not guarantee approval or any specific result.
+Article 6. Notices to Users
+The Company sends progress and result notices to the email address or other contact details entered in the application or member profile. Notices to all users may be posted on the Site instead.
 
-Article 7. Guest Lookup
-Guest applicants can check progress and results with the issued lookup code. If the lookup code is lost, re-confirmation may be requested using applicant name, email, or other identity information.
+Article 7. Applications and Formation of the Contract
+1. Users enter the review type, broadcasters or organizations, applicant information and materials on the Site, confirm the total amount and apply.
+2. The contract is formed when payment is completed, by card approval or confirmation of a bank deposit.
+3. The Company may decline an application, or cancel the contract after accepting it, and refund the full amount, in these cases:
+- the application is false or uses another person's information
+- the material is not reviewable by, or cannot be submitted to, the broadcaster or organization
+- accepting the application is otherwise seriously impracticable for the Company
+4. After payment, the Company makes the application and payment details available by email and on My Page or the guest lookup page.
 
-Article 8. Changes to Terms
-The company may change these terms due to service operation or legal changes. Important changes will be announced on the site.`;
+Article 8. Payment and Receipts
+1. Displayed prices include VAT.
+2. Payment methods are credit or debit card (KG Inicis) and bank transfer to the Company account shown at checkout. Bank transfer applications proceed once the deposit is confirmed.
+3. The Company issues a cash receipt or tax invoice on request. Card receipts are available from the payment provider.
+
+Article 9. Providing the Service
+1. After payment, the Company checks the materials and asks the user for anything missing. Once the materials are complete, the Company submits them to the broadcasters or organizations.
+2. Review results and processing times follow each broadcaster's or organization's standards and schedule. The Company does not guarantee any result or deadline.
+3. The Company delivers progress, results and certificates on My Page or the guest lookup page and by email.
+4. Guests check progress with the lookup code issued at application. If the code is lost, they may ask for re-confirmation using the applicant name, email or other identity information.
+
+Article 10. Changes and Interruptions
+1. The Company may suspend all or part of the Service temporarily for system maintenance, replacement or failure, network outages, natural disasters, a broadcaster or organization stopping intake, or other unavoidable reasons. It announces the suspension on the Site in advance, or afterwards if that is unavoidable.
+2. If a paid application cannot proceed because of such a suspension, the part that could not be provided is refunded under the Refund / Cancellation Policy.
+
+Article 11. Withdrawal of Orders and Refunds
+1. Users may withdraw an application and receive a full refund at any time before it is submitted to a broadcaster or organization.
+2. The review agency is a service, so under the E-Commerce Act withdrawal is limited for any part already submitted to a broadcaster or organization. For applications covering several broadcasters or organizations, the parts not yet submitted can still be withdrawn.
+3. Any part the Company fails to provide through its own fault is refunded regardless of submission status.
+4. Refund amounts, procedures and timing follow the separate Refund / Cancellation Policy.
+
+Article 12. User Responsibilities
+1. Users must submit audio, video, lyrics, album information and applicant information that match the actual release or broadcast.
+2. Users must own the copyright and other rights in the submitted materials or have the right holder's permission, and are responsible for disputes caused by infringement.
+3. Users are responsible for delays or disadvantages caused by false information, missing materials or being unreachable.
+4. Members must keep their account and password safe and tell the Company immediately if they learn of unauthorized use.
+
+Article 13. Use and Storage of Submitted Materials
+1. The Company uses uploaded or emailed materials only for review submission, supplementation, result delivery and dispute handling. Apart from submitting them to broadcasters or organizations for review, it does not give them to third parties without the user's consent.
+2. Storage periods and deletion follow the separate File Storage / Deletion Policy.
+
+Article 14. Company Obligations
+1. The Company complies with applicable laws and these terms and strives to provide the Service reliably.
+2. The Company protects users' personal information under the Privacy Policy.
+3. The Company handles complaints and requests for remedies through customer support promptly, and explains the reason and schedule when handling takes time.
+
+Article 15. Limitation of Liability
+1. The Company is not responsible for review decisions, results, processing schedules or changes in standards of broadcasters or organizations.
+2. The Company is not responsible for damage caused by force majeure, such as natural disasters, or by the user's own fault.
+3. If the Company causes damage to a user intentionally or through negligence, it compensates the user as required by law.
+
+Article 16. Dispute Resolution
+1. The Company handles users' opinions and complaints through customer support (${APP_CONFIG.supportEmail}, ${APP_CONFIG.supportPhone}).
+2. If a dispute arises between the Company and a user, the user may apply for mediation to a dispute mediation body such as the Korea Consumer Agency or the Electronic Document and Transaction Dispute Mediation Committee.
+
+Article 17. Jurisdiction and Governing Law
+1. Lawsuits between the Company and a user fall under the exclusive jurisdiction of the district court for the user's address at the time of filing, or for the user's residence if there is no address. If the user's address or residence is unclear at the time of filing, or the user lives abroad, the competent court is determined under the Civil Procedure Act.
+2. Lawsuits between the Company and a user are governed by the laws of the Republic of Korea.
+
+Addendum
+These terms take effect on ${TERMS_EFFECTIVE_DATE_EN}.`;
 
 const privacyOfficerNameEn =
   APP_CONFIG.privacyOfficer === "정준영"
@@ -331,21 +488,36 @@ ${APP_CONFIG.supportEmail}`;
 
 export const refundContentEn = `Refund / Cancellation Policy
 
-For review agency services, material checking and broadcaster or organization submission preparation begin after payment confirmation.
+For review agency services, material checking and preparation for submission to broadcasters or organizations begin once payment is confirmed. This policy sets the withdrawal and refund standards under the Act on the Consumer Protection in Electronic Commerce.
 
-1. Cancellation Before Submission
-Before submission to a broadcaster or organization, payment cancellation or refund may be possible.
+1. Before Submission
+Before submission to a broadcaster or organization, you can cancel the application at any time for a full refund, even while material checks or supplement requests are in progress.
 
-2. Cancellation After Submission Begins
-After materials are delivered to a broadcaster or organization, completed agency work and external submission costs may already have occurred, so a full refund may not be possible.
+2. After Some Broadcasters or Organizations Are Submitted
+For applications covering several broadcasters or organizations, you can cancel the parts not yet submitted. The refund is the amount paid minus the price of the parts already submitted, and the deduction is explained before the refund.
 
-3. Material Supplement Requests
-If missing materials, file errors, lyric mismatches, or other issues require supplementation, submission proceeds after supplementation is completed. Delays caused by user supplementation are not grounds for refund.
+3. After All Submissions
+Parts already submitted count as services already provided, so withdrawal is limited by law and they are not refunded.
 
-4. Broadcaster Results
-Review results follow broadcaster or organization decisions. Non-approval or revision requests are not refund grounds by themselves.
+4. Refunds at Any Stage
+- The Company missed or made an error in a submission: the full amount for that part
+- The Company could not submit because a broadcaster or organization stopped intake or for a similar reason: the full amount for the parts not submitted
+- The Company declined the application or cancelled the contract: the full amount paid
+- Duplicate payment or a deposit above the amount due: the full duplicate or excess amount
 
-Refund availability is confirmed based on submission status and guided through ${APP_CONFIG.supportEmail}.`;
+5. Not Grounds for Refund
+- Review results from broadcasters or organizations, such as non-approval or revision requests. Results follow each broadcaster's or organization's decision.
+- Schedule delays caused by late supplementation or being unreachable
+
+6. Requesting a Refund
+Contact customer support (email ${APP_CONFIG.supportEmail}, phone ${APP_CONFIG.supportPhone}) with the applicant name and application details. Guests confirm their identity with the lookup code or the applicant name and email.
+
+7. Refund Timing and Method
+- Refunds are made within 3 business days of being confirmed.
+- Card payments are cancelled. Depending on the card issuer, the cancellation can take a few days to appear.
+- Bank transfers are returned to the account the applicant provides.
+- Cash receipts are cancelled for the refunded amount.
+- If the Company delays a refund, it also pays the late-payment compensation set by law.`;
 
 export const filePolicyContentEn = `File Storage / Deletion Policy
 
