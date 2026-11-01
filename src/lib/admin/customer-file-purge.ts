@@ -56,6 +56,7 @@ export type PurgeCandidate = {
   title: string | null;
   artistName: string | null;
   type: string | null;
+  refunded: boolean;
   finishedAt: string | null;
   files: PurgeFile[];
   totalBytes: number;
@@ -70,15 +71,17 @@ export type PurgeResult = {
 };
 
 /**
- * When the review is over, or null while the files may still be needed:
+ * When the files stopped being needed, or null while they may still be:
  * unpaid, a supplement request still open, an online music video without a
- * published rating, or any broadcaster result still outstanding.
+ * published rating, or any broadcaster result still outstanding. A refund
+ * stops the review outright, so a refunded submission always qualifies.
  */
 export function reviewFinishedAt(
   submission: PurgeSubmissionRow,
   reviews: ReviewRow[],
   supplementRequests: Pick<SupplementRequestRow, "status">[],
 ): string | null {
+  if (submission.payment_status === "REFUNDED") return submission.updated_at ?? submission.result_notified_at ?? null;
   if (submission.payment_status !== "PAID") return null;
   if (supplementRequests.some((request) => OPEN_SUPPLEMENT_STATUSES.has(request.status ?? ""))) return null;
   if (submission.type === "MV_DISTRIBUTION") {
@@ -143,15 +146,17 @@ const submissionColumns =
   "id, title, artist_name, type, status, payment_status, result_status, result_notified_at, mv_desired_rating, updated_at";
 
 /**
- * Finished, paid submissions that still hold customer files, oldest result
- * first. Passing ids limits the scan to those submissions (the purge path
- * re-checks with this instead of trusting the browser).
+ * Finished paid submissions and refunded submissions that still hold
+ * customer files, oldest first. Passing ids limits the scan to those
+ * submissions (the purge path re-checks with this instead of trusting the
+ * browser).
  */
 export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[]): Promise<PurgeCandidate[]> {
   const { prefix } = getB2Config();
   const submissions = await selectPages<PurgeSubmissionRow>((from, to) => {
-    let query = db.from("submissions").select(submissionColumns).eq("payment_status", "PAID")
-      .or("status.in.(RESULT_READY,COMPLETED),result_status.not.is.null,result_notified_at.not.is.null");
+    let query = db.from("submissions").select(submissionColumns).or(
+      "payment_status.eq.REFUNDED,and(payment_status.eq.PAID,or(status.in.(RESULT_READY,COMPLETED),result_status.not.is.null,result_notified_at.not.is.null))",
+    );
     if (onlyIds) query = query.in("id", onlyIds);
     return query.order("id").range(from, to);
   });
@@ -189,6 +194,7 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[]): 
         title: submission.title,
         artistName: submission.artist_name,
         type: submission.type,
+        refunded: submission.payment_status === "REFUNDED",
         finishedAt,
         files,
         totalBytes: files.reduce((sum, file) => sum + file.sizeBytes, 0),
@@ -247,7 +253,7 @@ export async function purgeCustomerFiles(
     const empty = { submissionId, deletedFiles: 0, failedFiles: 0, freedBytes: 0 };
     const candidate = candidates.get(submissionId);
     if (!candidate) {
-      results.push({ ...empty, ok: false, error: "심의가 끝나지 않았거나 삭제할 고객 파일이 없습니다." });
+      results.push({ ...empty, ok: false, error: "심의가 끝나지 않았거나(환불 건 제외) 삭제할 고객 파일이 없습니다." });
       continue;
     }
     try {
@@ -287,7 +293,7 @@ export async function purgeCustomerFiles(
           submission_id: submissionId,
           actor_user_id: actorUserId,
           event_type: "CUSTOMER_FILES_PURGED",
-          message: `심의 완료 후 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`,
+          message: `${candidate.refunded ? "환불 후" : "심의 완료 후"} 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`,
         });
       }
       results.push({

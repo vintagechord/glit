@@ -189,7 +189,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
               </li>)}</ul>
             </details>}
             <ul className="mt-2 space-y-2">{revision.files.map(file => <li key={file.id} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="break-all"><span data-no-translate>{file.original_name}</span> · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {file.purged_at ? t("심의 완료 후 삭제됨", "Deleted after review") : statusLabel(file.status)}</span>
+              <span className="break-all"><span data-no-translate>{file.original_name}</span> · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {file.purged_at ? t("보관 종료로 삭제됨", "Deleted after storage ended") : statusLabel(file.status)}</span>
               {!file.purged_at && ["VERIFIED", "UPLOADED"].includes(file.status) && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
                 const result = await api<{ url: string }>({ action: "download", fileId: file.id });
                 const link = document.createElement("a"); link.href = result.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.click();

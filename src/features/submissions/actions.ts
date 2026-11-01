@@ -743,7 +743,7 @@ export async function getSubmissionFileUrlAction(
       return { error: "파일을 찾을 수 없습니다." };
     }
     if (fileRow.purged_at) {
-      return { error: "심의 완료 후 삭제된 파일입니다." };
+      return { error: "보관이 끝나 삭제된 파일입니다." };
     }
 
     if (fileRow.storage_provider === "b2" && fileRow.object_key) {

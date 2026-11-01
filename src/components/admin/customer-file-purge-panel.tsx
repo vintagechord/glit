@@ -12,6 +12,7 @@ export type PurgeListItem = {
   title: string | null;
   artistName: string | null;
   type: string | null;
+  refunded: boolean;
   finishedAt: string | null;
   fileCount: number;
   totalBytes: number;
@@ -34,9 +35,9 @@ const typeLabels: Record<string, string> = {
 
 const ageFilters = [
   ["0", "전체"],
-  ["30", "결과 30일 경과"],
-  ["90", "결과 90일 경과"],
-  ["180", "결과 180일 경과"],
+  ["30", "30일 경과"],
+  ["90", "90일 경과"],
+  ["180", "180일 경과"],
 ] as const;
 
 const formatBytes = (bytes: number) => {
@@ -161,7 +162,7 @@ export function CustomerFilePurgePanel({ items }: { items: PurgeListItem[] }) {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="결과 경과 기간">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="결과·환불 후 경과 기간">
           {ageFilters.map(([value, label]) => (
             <button
               key={value}
@@ -201,7 +202,7 @@ export function CustomerFilePurgePanel({ items }: { items: PurgeListItem[] }) {
                 </th>
                 <th className="px-3 py-2 font-black">신청</th>
                 <th className="px-3 py-2 font-black">유형</th>
-                <th className="px-3 py-2 font-black">결과일</th>
+                <th className="px-3 py-2 font-black">결과·환불일</th>
                 <th className="px-3 py-2 text-right font-black">파일</th>
                 <th className="px-3 py-2 text-right font-black">용량</th>
               </tr>
@@ -230,7 +231,14 @@ export function CustomerFilePurgePanel({ items }: { items: PurgeListItem[] }) {
                       <span data-no-translate className="block text-xs text-muted-foreground">{item.artistName}</span>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2">{typeLabels[item.type ?? ""] ?? item.type ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    {typeLabels[item.type ?? ""] ?? item.type ?? "-"}
+                    {item.refunded ? (
+                      <span className="ml-2 inline-block rounded-[6px] bg-[var(--bauhaus-red)] px-2 py-0.5 text-[11px] font-black text-white">
+                        환불
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">{formatDate(item.finishedAt)}</td>
                   <td className="px-3 py-2 text-right">{item.fileCount}개</td>
                   <td className="px-3 py-2 text-right">{formatBytes(item.totalBytes)}</td>

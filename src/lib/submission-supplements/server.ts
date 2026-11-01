@@ -116,7 +116,7 @@ export async function performSupplementAction(context: Context, input: z.infer<t
   }
   if (input.action === "download") {
     const { file } = await findFile(context, input.fileId);
-    if (file.purged_at) throw new SupplementError("심의 완료 후 삭제된 파일입니다.", 410);
+    if (file.purged_at) throw new SupplementError("보관이 끝나 삭제된 파일입니다.", 410);
     if (file.status !== "VERIFIED") throw new SupplementError("전송 확인이 완료된 파일만 다운로드할 수 있습니다.");
     return { url: await presignGetUrl(file.object_key, 300) };
   }

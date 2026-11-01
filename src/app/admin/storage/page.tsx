@@ -26,6 +26,7 @@ export default async function AdminStoragePage() {
       title: candidate.title,
       artistName: candidate.artistName,
       type: candidate.type,
+      refunded: candidate.refunded,
       finishedAt: candidate.finishedAt,
       fileCount: candidate.files.length,
       totalBytes: candidate.totalBytes,
@@ -44,7 +45,7 @@ export default async function AdminStoragePage() {
           <p className="text-xs font-black tracking-[0.2em] text-muted-foreground">STORAGE</p>
           <h1 className="mt-2 text-3xl font-black text-foreground">저장공간 정리</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            심의가 끝난 신청에서 고객이 올린 파일만 저장소(B2)에서 영구 삭제해 용량을 확보합니다.
+            심의가 끝났거나 환불된 신청에서 고객이 올린 파일만 저장소(B2)에서 영구 삭제해 용량을 확보합니다.
           </p>
         </div>
         <Link href="/admin" className={buttonClass}>관리자 홈</Link>
@@ -57,12 +58,12 @@ export default async function AdminStoragePage() {
         </div>
         <div className="rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-blue)] p-4 text-sm leading-6 text-white">
           <p className="font-black">유지되는 것</p>
-          <p className="mt-1">영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 &ldquo;심의 완료 후 삭제됨&rdquo;으로 표시됩니다.</p>
+          <p className="mt-1">영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 &ldquo;보관 종료로 삭제됨&rdquo;으로 표시됩니다.</p>
         </div>
       </div>
 
       <div className="rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] p-4 text-sm leading-6 text-[#111111]">
-        목록에는 결제가 끝났고 결과가 모두 나온 신청만 나옵니다. 방송국 결과가 하나라도 남았거나 보완 요청이 진행 중인 신청, 결과 등급이 공개되지 않은 온라인 뮤직비디오는 나오지 않습니다.
+        목록에는 결과가 모두 나온 결제 완료 신청과 환불된 신청만 나옵니다. 방송국 결과가 하나라도 남았거나 보완 요청이 진행 중인 신청, 결과 등급이 공개되지 않은 온라인 뮤직비디오는 나오지 않습니다.
       </div>
 
       {loadError ? (

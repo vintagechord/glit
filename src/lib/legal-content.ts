@@ -129,7 +129,7 @@ ${APP_CONFIG.businessName}(이하 "회사")는 온사이드(iamonside.com) 서�
 - 자동 수집: 접속 IP, 접속 일시, 브라우저·기기 정보, 서비스 이용 기록, 쿠키
 
 3. 처리 및 보유 기간
-회원 정보는 회원 탈퇴 시까지, 심의 신청 내역·결과·필증은 결과 확인과 재발급 요청에 대응하기 위해 회원 탈퇴 또는 삭제 요청 시까지 보관합니다. 제출 파일은 파일 보관/삭제 정책에 따릅니다(심의용 음원은 제출일부터 1개월). 다만 아래 기록은 관련 법령에 따라 정해진 기간 동안 보관합니다.
+회원 정보는 회원 탈퇴 시까지, 심의 신청 내역·결과·필증은 결과 확인과 재발급 요청에 대응하기 위해 회원 탈퇴 또는 삭제 요청 시까지 보관합니다. 제출 파일은 파일 보관/삭제 정책에 따릅니다(심의가 끝나거나 환불된 뒤 관리자가 삭제할 때까지). 다만 아래 기록은 관련 법령에 따라 정해진 기간 동안 보관합니다.
 - 계약 또는 청약철회 등에 관한 기록: 5년 (전자상거래 등에서의 소비자보호에 관한 법률)
 - 대금결제 및 재화 등의 공급에 관한 기록: 5년 (전자상거래 등에서의 소비자보호에 관한 법률)
 - 소비자의 불만 또는 분쟁처리에 관한 기록: 3년 (전자상거래 등에서의 소비자보호에 관한 법률)
@@ -258,9 +258,9 @@ export const filePolicyContent = `파일 보관/삭제 정책
 심의 접수, 자료 보완, 방송국/기관 제출, 결과 확인, 분쟁 대응 및 증빙 발급을 위해 필요한 범위에서 보관합니다.
 
 2. 보관 기간
-심의용으로 제출한 음원 파일은 각 파일의 제출일부터 1개월간 보관합니다. 보완 제출한 음원도 해당 파일의 제출일을 기준으로 합니다.
-영상, 가사, 신청서, 결과 파일과 필증은 별도의 기간 만료 없이 관리자가 삭제할 때까지 보관합니다.
-신청 내역과 심의 결과 내역도 관리자가 삭제할 때까지 유지하며, 음원 파일의 보관 기간이 끝나더라도 함께 삭제하지 않습니다.
+음반 심의로 제출한 음원 파일, 뮤직비디오 심의로 제출한 영상 파일과 가사·신청서 등 제출 자료는 심의가 끝나거나 신청이 환불된 뒤 관리자가 삭제할 때까지 보관합니다. 보완 제출한 파일도 같은 기준을 따릅니다.
+결과 파일과 필증은 별도의 기간 만료 없이 관리자가 삭제할 때까지 보관합니다.
+신청 내역과 심의 결과 내역도 관리자가 삭제할 때까지 유지하며, 제출 파일을 삭제하더라도 함께 삭제하지 않습니다. 삭제된 제출 파일은 신청 내역에서 다시 내려받을 수 없습니다.
 
 3. 접근 제한
 업로드 파일은 업무 담당자와 시스템 관리자만 접수 처리 목적에 한해 접근합니다.
@@ -399,7 +399,7 @@ Effective date: ${PRIVACY_POLICY_EFFECTIVE_DATE_EN}
 - Collected automatically: IP address, access time, browser and device information, usage records, cookies
 
 3. Retention
-Member information is kept until account deletion. Applications, results and certificates are kept until account deletion or a deletion request so that results can be checked and certificates reissued. Submitted files follow the File Storage / Deletion Policy (review audio: one month from submission). The following records are kept for the periods required by Korean law:
+Member information is kept until account deletion. Applications, results and certificates are kept until account deletion or a deletion request so that results can be checked and certificates reissued. Submitted files follow the File Storage / Deletion Policy (kept until an administrator deletes them after the review ends or the application is refunded). The following records are kept for the periods required by Korean law:
 - Contracts and withdrawal of offers: 5 years (Act on Consumer Protection in Electronic Commerce)
 - Payment and supply records: 5 years (same Act)
 - Consumer complaints and disputes: 3 years (same Act)
@@ -527,9 +527,9 @@ Onside uses copyrighted materials such as audio, video, lyrics, and application 
 Files are stored only within the scope needed for review submission, material supplementation, broadcaster or organization submission, result confirmation, dispute handling, and receipt issuance.
 
 2. Retention Periods
-Audio files submitted for review are retained for one month from each file's submission date. Supplementary audio files follow the same rule, starting from their own submission date.
-Videos, lyrics, application forms, result files, and certificates have no scheduled expiry and are retained until an administrator deletes them.
-Application and review result records are also retained until an administrator deletes them. They are not deleted when the audio file retention period ends.
+Audio files submitted for album review, video files submitted for music video review, and other submitted materials such as lyrics and application forms are retained until an administrator deletes them after the review ends or the application is refunded. Supplementary files follow the same rule.
+Result files and certificates have no scheduled expiry and are retained until an administrator deletes them.
+Application and review result records are also retained until an administrator deletes them. They are not deleted when submitted files are deleted. Deleted submitted files can no longer be downloaded from the application details.
 
 3. Access Restrictions
 Uploaded files are accessible only to responsible staff and system administrators for submission handling purposes.

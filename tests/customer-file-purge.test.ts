@@ -43,6 +43,7 @@ async function load(): Promise<PurgeApi> {
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const D = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const owner = "11111111-1111-4111-8111-111111111111";
 const upload = (submissionId: string, name: string) => `submissions/${owner}/album/${submissionId}/${name}`;
 const finishedAlbum = (id: string, overrides: Row = {}): Row => ({
@@ -50,7 +51,7 @@ const finishedAlbum = (id: string, overrides: Row = {}): Row => ({
   result_status: null, result_notified_at: null, mv_desired_rating: null, updated_at: "2026-10-01T00:00:00Z", ...overrides,
 });
 
-test("a review counts as finished only when paid, fully decided and free of open supplement requests", async () => {
+test("files qualify once a paid review is fully decided without open supplements, or once the order is refunded", async () => {
   const { reviewFinishedAt } = await load();
   const decided = [
     { submission_id: A, status: "APPROVED", updated_at: "2026-10-05T00:00:00Z" },
@@ -60,7 +61,12 @@ test("a review counts as finished only when paid, fully decided and free of open
   assert.equal(reviewFinishedAt(finishedAlbum(A, { result_notified_at: "2026-10-09T00:00:00Z" }), decided, [{ status: "ACCEPTED" }]), "2026-10-09T00:00:00Z");
   assert.equal(reviewFinishedAt(finishedAlbum(A), [], []), "2026-10-01T00:00:00Z");
 
-  assert.equal(reviewFinishedAt(finishedAlbum(A, { payment_status: "REFUNDED" }), decided, []), null);
+  for (const unpaid of ["UNPAID", "PAYMENT_PENDING"]) {
+    assert.equal(reviewFinishedAt(finishedAlbum(A, { payment_status: unpaid }), decided, []), null, unpaid);
+  }
+  // A refund stops the review, so pending results or open supplements no longer matter.
+  const refunded = finishedAlbum(A, { payment_status: "REFUNDED", status: "IN_PROGRESS", updated_at: "2026-10-20T00:00:00Z" });
+  assert.equal(reviewFinishedAt(refunded, [{ submission_id: A, status: "SENT", updated_at: null }], [{ status: "OPEN" }]), "2026-10-20T00:00:00Z");
   assert.equal(reviewFinishedAt(finishedAlbum(A, { status: "IN_PROGRESS" }), decided, []), null);
   for (const pending of ["NOT_SENT", "SENT", "RECEIVED", "NEEDS_FIX"]) {
     assert.equal(reviewFinishedAt(finishedAlbum(A), [...decided, { submission_id: A, status: pending, updated_at: null }], []), null, pending);
@@ -139,7 +145,7 @@ function fakeDb(tables: Record<string, Row[]>, failUpdate = new Set<string>()) {
 }
 
 const purgeFixture = () => ({
-  submissions: [finishedAlbum(A), finishedAlbum(B, { status: "IN_PROGRESS" }), finishedAlbum(C, { status: "IN_PROGRESS" })],
+  submissions: [finishedAlbum(A), finishedAlbum(B, { status: "IN_PROGRESS" }), finishedAlbum(C, { status: "IN_PROGRESS" }), finishedAlbum(D, { type: "MV_BROADCAST", status: "IN_PROGRESS", payment_status: "REFUNDED" })],
   station_reviews: [{ id: "r1", submission_id: A, status: "APPROVED", updated_at: "2026-10-05T00:00:00Z" }],
   submission_files: [
     { id: "a1", submission_id: A, kind: "AUDIO", storage_provider: "b2", object_key: upload(A, "song.wav"), size: 100, purged_at: null },
@@ -147,6 +153,7 @@ const purgeFixture = () => ({
     { id: "a3", submission_id: A, kind: "VIDEO", storage_provider: "b2", object_key: upload(A, "shared.mp4"), size: 50, purged_at: null },
     { id: "c1", submission_id: C, kind: "VIDEO", storage_provider: "b2", object_key: upload(A, "shared.mp4"), size: 50, purged_at: null },
     { id: "b1", submission_id: B, kind: "AUDIO", storage_provider: "b2", object_key: upload(B, "song.wav"), size: 100, purged_at: null },
+    { id: "d1", submission_id: D, kind: "VIDEO", storage_provider: "b2", object_key: upload(D, "mv.mp4"), size: 400, purged_at: null },
   ],
   submission_upload_staging: [] as Row[],
   submission_supplement_requests: [{ id: "req", submission_id: A, status: "ACCEPTED" }],
@@ -159,7 +166,7 @@ test("purging marks rows first, deletes every version, keeps shared keys, and un
   const tables = purgeFixture();
   const { db } = fakeDb(tables);
   const attempted: string[] = [];
-  const results = await purgeCustomerFiles(db, [A, B], "admin-user", async key => {
+  const results = await purgeCustomerFiles(db, [A, B, D], "admin-user", async key => {
     attempted.push(key);
     const rows = [...tables.submission_files, ...tables.submission_supplement_files].filter(row => row.object_key === key && row.id !== "c1");
     assert.ok(rows.every(row => row.purged_at), "rows are marked before the object is deleted");
@@ -167,7 +174,7 @@ test("purging marks rows first, deletes every version, keeps shared keys, and un
     return 2;
   });
 
-  assert.deepEqual(attempted.sort(), [upload(A, "lyrics.docx"), upload(A, "song.wav"), `submissions/supplements/${A}/req/rev/u/fix.wav`].sort());
+  assert.deepEqual(attempted.sort(), [upload(A, "lyrics.docx"), upload(A, "song.wav"), `submissions/supplements/${A}/req/rev/u/fix.wav`, upload(D, "mv.mp4")].sort());
   const file = (id: string) => [...tables.submission_files, ...tables.submission_supplement_files].find(row => row.id === id)!;
   assert.ok(file("a1").purged_at);
   assert.ok(file("s1").purged_at);
@@ -175,14 +182,16 @@ test("purging marks rows first, deletes every version, keeps shared keys, and un
   assert.equal(file("a3").purged_at, null, "an object another live row uses is kept");
   assert.equal(file("b1").purged_at, null);
 
-  const [resultA, resultB] = results;
+  const [resultA, resultB, resultD] = results;
   assert.deepEqual({ ...resultA, error: undefined }, { submissionId: A, ok: false, deletedFiles: 2, failedFiles: 1, freedBytes: 130, error: undefined });
   assert.equal(resultB.ok, false);
   assert.match(resultB.error ?? "", /심의가 끝나지 않았거나/);
-  assert.equal(tables.submission_events.length, 1);
-  assert.equal(tables.submission_events[0].event_type, "CUSTOMER_FILES_PURGED");
-  assert.equal(tables.submission_events[0].actor_user_id, "admin-user");
-  assert.match(String(tables.submission_events[0].message), /2개/);
+  assert.deepEqual({ ...resultD, error: undefined }, { submissionId: D, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 400, error: undefined });
+  assert.ok(file("d1").purged_at, "a refunded submission is purged even though its review stopped midway");
+  assert.equal(tables.submission_events.length, 2);
+  assert.ok(tables.submission_events.every(event => event.event_type === "CUSTOMER_FILES_PURGED" && event.actor_user_id === "admin-user"));
+  assert.match(String(tables.submission_events[0].message), /^심의 완료 후 .*2개/);
+  assert.match(String(tables.submission_events[1].message), /^환불 후 .*1개/);
 });
 
 test("nothing is deleted when the rows cannot be marked, and partial marks are undone", async () => {

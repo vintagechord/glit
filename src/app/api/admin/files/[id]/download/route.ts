@@ -44,7 +44,7 @@ export async function GET(
     return NextResponse.json({ error: "파일을 찾을 수 없습니다." }, { status: 404 });
   }
   if (fileRow.purged_at) {
-    return NextResponse.json({ error: "심의 완료 후 삭제된 파일입니다." }, { status: 410 });
+    return NextResponse.json({ error: "보관이 끝나 삭제된 파일입니다." }, { status: 410 });
   }
 
   try {
