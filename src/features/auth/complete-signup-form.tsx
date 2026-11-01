@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
-import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/components/site/footer";
+import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/lib/legal-content";
 import { useModalFocus } from "@/lib/use-modal-focus";
 import { completeSignupAction, type CompleteSignupState } from "./complete-signup-action";
 import { getAuthReturnPath } from "./navigation";

@@ -186,13 +186,19 @@ export function SiteHeader() {
       }
     };
 
-    try {
-      const stored = window.sessionStorage.getItem(authStorageKey);
-      if (stored === "authenticated" || stored === "unauthenticated") {
-        setAuthState(stored);
+    // A session cookie is the best first guess: it draws the member controls
+    // at once, before the SDK confirms the account below.
+    if (hasBrowserAuthCookie()) {
+      setAuthState("authenticated");
+    } else {
+      try {
+        const stored = window.sessionStorage.getItem(authStorageKey);
+        if (stored === "authenticated" || stored === "unauthenticated") {
+          setAuthState(stored);
+        }
+      } catch {
+        // Ignore storage failures.
       }
-    } catch {
-      // Ignore storage failures.
     }
 
     // Guests never download the Supabase SDK: it loads, and starts watching

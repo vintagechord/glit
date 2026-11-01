@@ -522,3 +522,13 @@ button[aria-label="Next.js build indicator"]::after {
   color: #111827;
   font-size: 14px;
 }
+
+/* Static home HTML carries both status panels. Before hydration, the inline
+   session script in the root layout flags signed-in browsers and these rules
+   show the loading state to them and the example to everyone else. */
+html[data-session] [data-home-panel="guest"] {
+  display: none;
+}
+html:not([data-session]) [data-home-panel="checking"] {
+  display: none;
+}

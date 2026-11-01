@@ -128,7 +128,39 @@ export function createDashboardStatusResource({
     return subscribe(entry, signal);
   }
 
-  return { peek, seed, read };
+  /**
+   * The signed-in visitor's status without the browser SDK: the server verifies
+   * the cookie and names the account, and the snapshot is cached under it so a
+   * following read(viewerId) needs no second request.
+   */
+  async function readSession({ signal }: { signal: AbortSignal }): Promise<{ viewerId: string; data: DashboardStatusData }> {
+    if (signal.aborted) throw aborted();
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal.addEventListener("abort", cancel, { once: true });
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher("/api/dashboard/status", { cache: "no-store", signal: controller.signal });
+      const data = await response.json().catch(() => null) as
+        | (DashboardStatusData & { error?: string; viewerId?: string })
+        | null;
+      if (!response.ok || !data || data.error || typeof data.viewerId !== "string" || !data.viewerId) {
+        throw Object.assign(new Error(data?.error || "진행 현황을 불러오지 못했습니다."), { status: response.ok ? 401 : response.status });
+      }
+      const { viewerId } = data;
+      seed(viewerId, data);
+      return { viewerId, data };
+    } catch (error) {
+      if (signal.aborted) throw aborted();
+      if (controller.signal.aborted) throw new Error("진행 현황 응답이 지연되고 있습니다. 다시 시도해주세요.");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", cancel);
+    }
+  }
+
+  return { peek, seed, read, readSession };
 }
 
 export const dashboardStatusResource = createDashboardStatusResource();

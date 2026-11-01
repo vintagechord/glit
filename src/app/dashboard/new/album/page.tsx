@@ -7,7 +7,7 @@ export const metadata = pageMetadata({
   enPath: "/en/dashboard/new/album",
 });
 // Served from the CDN; package prices refresh with the catalog cache (and at once on admin edits).
-export const revalidate = 60;
+export const revalidate = 3600;
 export default function AlbumSubmissionPage() {
   return <AlbumApplicationPageView />;
 }

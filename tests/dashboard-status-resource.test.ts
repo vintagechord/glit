@@ -84,6 +84,29 @@ test("a late request cannot replace a newer server snapshot in the cache", async
   assert.equal(f.resource.peek("a")?.albumSubmissions[0].title, "server-newer");
 });
 
+test("a session read names the account from the server and seeds its snapshot without the SDK", async () => {
+  const f = fixture();
+  const pending = f.resource.readSession({ signal: signal() });
+  assert.equal(f.calls[0].url, "/api/dashboard/status");
+  f.calls[0].finish(snapshot("mine"), 200, "me");
+  const result = await pending;
+  assert.equal(result.viewerId, "me");
+  assert.equal(f.resource.peek("me")?.albumSubmissions[0].title, "mine");
+
+  const denied = f.resource.readSession({ signal: signal() });
+  f.calls[1].finish(snapshot("unused"), 401);
+  await assert.rejects(denied, { status: 401 });
+  const anonymous = f.resource.readSession({ signal: signal() });
+  f.calls[2].finish(snapshot("unnamed"), 200, "");
+  await assert.rejects(anonymous, { status: 401 }, "a payload that does not name the account is not a session");
+
+  const controller = new AbortController();
+  const cancelled = f.resource.readSession({ signal: controller.signal });
+  controller.abort();
+  await assert.rejects(cancelled, { name: "AbortError" });
+  assert.equal(f.calls[3].signal.aborted, true);
+});
+
 test("an unauthorized refresh clears the account snapshot", async () => {
   const f = fixture(); f.resource.seed("a", snapshot("private"));
   const refresh = f.resource.read("a", { signal: signal(), bypassCache: true });

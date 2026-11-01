@@ -24,7 +24,7 @@ test.beforeAll(async () => {
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic", define: { "process.env": '{"NODE_ENV":"production","NEXT_PUBLIC_EMAIL_DELIVERY_MODE":"transactional"}' },
       plugins: [{ name: "social-ui-fixture", setup(plugin) {
-        plugin.onResolve({ filter: /^(next\/(navigation|link)|\.\/actions|@\/features\/auth\/actions|\.\/complete-signup-action|@\/features\/track\/track-lookup-modal|@\/components\/site\/footer)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
+        plugin.onResolve({ filter: /^(next\/(navigation|link)|\.\/actions|@\/features\/auth\/actions|\.\/complete-signup-action|@\/features\/track\/track-lookup-modal|@\/lib\/legal-content)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
           "next/navigation": "export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useRouter=()=>({push:href=>window.__fixture.pushes.push(href),refresh(){}});",
           "next/link": "import React from 'react';export default function Link({children,prefetch,...props}){return <a {...props}>{children}</a>}",
@@ -32,7 +32,7 @@ test.beforeAll(async () => {
           "@/features/auth/actions": "export const updateProfileAction=(_,form)=>{window.__fixture.calls.push(Object.fromEntries(form));return new Promise(resolve=>window.__fixture.resolve=resolve)};export const updatePasswordAction=async()=>({});",
           "./complete-signup-action": "export const completeSignupAction=(_,form)=>{window.__fixture.calls.push(Object.fromEntries(form));return new Promise(resolve=>window.__fixture.resolve=resolve)};",
           "@/features/track/track-lookup-modal": "export const TrackLookupModalTrigger=()=>null;",
-          "@/components/site/footer": "export const privacyContent='개인정보 처리 내용';export const termsContent='이용약관 내용';export const refundContent='환불 정책 내용';export const termsContentEn='Terms content';export const privacyContentEn='Privacy content';export const refundContentEn='Refund content';",
+          "@/lib/legal-content": "export const privacyContent='개인정보 처리 내용';export const termsContent='이용약관 내용';export const refundContent='환불 정책 내용';export const termsContentEn='Terms content';export const privacyContentEn='Privacy content';export const refundContentEn='Refund content';",
         }[path]! }));
       } }],
     }),

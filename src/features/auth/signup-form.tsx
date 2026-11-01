@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/components/site/footer";
+import { privacyContent, termsContent, refundContent, termsContentEn, privacyContentEn, refundContentEn } from "@/lib/legal-content";
 import { useModalFocus } from "@/lib/use-modal-focus";
 import { useAuthQuery } from "./auth-query";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";

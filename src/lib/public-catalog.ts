@@ -143,7 +143,7 @@ const loadAlbumPackages = unstable_cache(
     return sortPackagesForDisplay(packages.filter((pkg) => !isTestPackage(pkg.name)));
   },
   ["public-album-packages-v1"],
-  { revalidate: 60, tags: [PUBLIC_CATALOG_CACHE_TAG] },
+  { revalidate: 3600, tags: [PUBLIC_CATALOG_CACHE_TAG] },
 );
 
 async function getAlbumPackages() {

@@ -14,8 +14,11 @@ type SubmissionSummary = HomeReviewPanelProps["albumSubmissions"][number];
 type StationItem = HomeReviewPanelProps["albumStationsMap"][string][number];
 type StationMap = HomeReviewPanelProps["albumStationsMap"];
 
-function buildExampleState() {
-  const now = Date.now();
+// Relative example dates only order the sample rows; nothing in the markup
+// prints them, so the server and the browser may anchor them differently.
+const exampleAnchor = Date.now();
+
+function buildExampleState(now = exampleAnchor) {
   const sampleStations: StationItem[] = [
     {
       id: "sample-1",
@@ -147,40 +150,43 @@ type Viewer =
   | { kind: "guest" }
   | { kind: "member"; userId: string; data: DashboardStatusData | null; failed: boolean };
 
+const panelSlotClass = "min-w-0 w-full h-full lg:min-h-0";
+
 /**
  * The home page is served from the CDN, so the visitor's session is read in
- * the browser after hydration. Guests (no session cookie) get the example
- * without loading the Supabase SDK; members get their live status from
- * /api/dashboard/status, which verifies the session on the server.
+ * the browser. The HTML carries both the guest example and the loading state,
+ * and the inline session script in the root layout lets CSS show the right
+ * one before hydration. Guests (no session cookie) keep the example without
+ * loading the Supabase SDK; members get their live status straight from
+ * /api/dashboard/status, which verifies the session on the server and names
+ * the account, so the SDK is off that path too.
  */
 export function HomeSessionPanel() {
   const [viewer, setViewer] = React.useState<Viewer>({ kind: "checking" });
-  const [example, setExample] = React.useState<ReturnType<typeof buildExampleState> | null>(null);
+  const example = React.useMemo(() => buildExampleState(), []);
 
   React.useEffect(() => {
     const controller = new AbortController();
     const showGuest = () => {
-      if (controller.signal.aborted) return;
-      setExample((current) => current ?? buildExampleState());
-      setViewer({ kind: "guest" });
+      if (!controller.signal.aborted) setViewer({ kind: "guest" });
     };
     const read = async () => {
       if (!hasBrowserAuthCookie()) return showGuest();
-      const supabase = await loadBrowserSupabase();
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) return showGuest();
-      if (controller.signal.aborted) return;
-      setViewer({ kind: "member", userId, data: dashboardStatusResource.peek(userId), failed: false });
       try {
-        const data = await dashboardStatusResource.read(userId, { signal: controller.signal });
-        if (!controller.signal.aborted) setViewer({ kind: "member", userId, data, failed: false });
+        const { viewerId, data } = await dashboardStatusResource.readSession({ signal: controller.signal });
+        if (!controller.signal.aborted) setViewer({ kind: "member", userId: viewerId, data, failed: false });
       } catch (failure) {
         if (controller.signal.aborted) return;
         // A cookie the server no longer accepts is a signed-out visitor.
         if ((failure as { status?: number }).status === 401) return showGuest();
         console.error("[HomeSessionPanel] Failed to load dashboard status:", failure instanceof Error ? failure.message : failure);
-        setViewer((current) => current.kind === "member" && !current.data ? { ...current, failed: true } : current);
+        // The panel's own retry needs the account id, which the SDK reads from the cookie.
+        const supabase = await loadBrowserSupabase();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (controller.signal.aborted) return;
+        const userId = session?.user?.id;
+        if (!userId) return showGuest();
+        setViewer({ kind: "member", userId, data: dashboardStatusResource.peek(userId), failed: true });
       }
     };
     void read().catch(showGuest);
@@ -199,21 +205,28 @@ export function HomeSessionPanel() {
   const albumStations = React.useMemo(() => normalizeStationsMap(memberData?.albumStationsMap), [memberData]);
   const mvStations = React.useMemo(() => normalizeStationsMap(memberData?.mvStationsMap), [memberData]);
 
-  if (viewer.kind === "checking") return <HomeSessionPanelFallback />;
-
-  if (viewer.kind === "guest") {
-    const exampleState = example ?? buildExampleState();
+  if (viewer.kind === "checking" || viewer.kind === "guest") {
+    const resolved = viewer.kind === "guest";
     return (
-      <HomeReviewPanel
-        key="guest"
-        isLoggedIn={false}
-        albumSubmissions={exampleState.albumSubmissions}
-        mvSubmissions={exampleState.mvSubmissions}
-        albumStationsMap={exampleState.albumStationsMap}
-        mvStationsMap={exampleState.mvStationsMap}
-        enableRemoteSync={false}
-        {...panelProps}
-      />
+      <div className="contents">
+        <div data-home-panel={resolved ? "ready" : "guest"} className={panelSlotClass}>
+          <HomeReviewPanel
+            key="guest"
+            isLoggedIn={false}
+            albumSubmissions={example.albumSubmissions}
+            mvSubmissions={example.mvSubmissions}
+            albumStationsMap={example.albumStationsMap}
+            mvStationsMap={example.mvStationsMap}
+            enableRemoteSync={false}
+            {...panelProps}
+          />
+        </div>
+        {resolved ? null : (
+          <div data-home-panel="checking" className={panelSlotClass}>
+            <HomeSessionPanelFallback />
+          </div>
+        )}
+      </div>
     );
   }
 
