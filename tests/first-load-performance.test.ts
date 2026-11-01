@@ -88,3 +88,16 @@ test("static pages stay cached for an hour and the policy texts load on demand",
   assert.doesNotMatch(footer, /^import .*"@\/lib\/legal-content"/m, "the footer must not bundle the policy texts");
   assert.match(footer, /import\("@\/lib\/legal-content"\)/);
 });
+
+test("no source file pins a Supabase project host; the project comes from the environment", async () => {
+  const { readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? walk(path) : /\.(ts|tsx|mjs)$/.test(name) ? [path] : [];
+  });
+  const root = new URL("../", import.meta.url).pathname;
+  const pinned = walk(join(root, "src")).filter((file) => /https:\/\/[a-z0-9]{20}\.supabase\.co/.test(readFileSync(file, "utf8")));
+  assert.deepEqual(pinned, []);
+  assert.match(readSource("vercel.json"), /"icn1"/, "functions run next to the Seoul database");
+});

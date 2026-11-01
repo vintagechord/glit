@@ -37,9 +37,13 @@ export const RATING_IMAGE_MAP: Record<RatingCode, string> = {
   REJECT: getEnvKey("MV_RATING_IMAGE_REJECT_KEY", DEFAULT_RATING_MAP.REJECT),
 };
 
+const supabaseProjectUrl = () =>
+  (process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "").replace(/\/+$/, "");
+
+/** The shared usage guide in this deployment's Supabase project (public "mv" bucket). */
 export const LABEL_GUIDE_KEY = getEnvKey(
   "MV_LABEL_GUIDE_KEY",
-  "https://rwysjsmxtpuqekeltwxi.supabase.co/storage/v1/object/public/mv/mv_guide.pdf",
+  `${supabaseProjectUrl()}/storage/v1/object/public/mv/mv_guide.pdf`,
 );
 
 /** Replacement rating marks live in Supabase Storage next to the usage guide,
