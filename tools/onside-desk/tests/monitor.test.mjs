@@ -217,3 +217,20 @@ test('desk routes keep the Vercel token server-side, open only known links and n
   overall = 'ok'; await api('/api/monitor?refresh=1');
   assert.equal(notes.length, 1, 'recovery does not notify and notifications were turned off');
 });
+
+test('an open app window keeps working after the desk service restarts', async t => {
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-session-test-'));
+  t.after(() => fs.rm(dataRoot, { recursive: true, force: true }));
+  const source = { sourceStatus: () => ({ configured: false }), fetchSubmissions: async () => [], fetchSubmission: async () => ({}) };
+  const monitor = { snapshot: async () => ({ checkedAt: new Date(NOW).toISOString(), overall: 'ok', issues: [], sections: [] }), links: () => ({}) };
+  const start = () => createDesk({ dataRoot, port: 0, source, monitor, openFolder: () => {}, openUrl: () => {}, notify: () => {}, timers: false });
+  const first = await start();
+  const pageToken = first.token;
+  await first.close();
+  const second = await start();
+  t.after(() => second.close());
+  assert.equal(second.token, pageToken, 'the token survives an update or restart');
+  assert.equal((await fs.stat(path.join(dataRoot, 'session.key'))).mode & 0o777, 0o600);
+  const response = await fetch(`http://127.0.0.1:${second.server.address().port}/api/monitor`, { headers: { 'X-Desk-Token': pageToken } });
+  assert.equal(response.status, 200);
+});
