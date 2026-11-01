@@ -1894,7 +1894,7 @@ const exactTranslations: Record<string, string> = {
     "We help you check lookup codes and result files.",
   "조회 코드와 결과 파일 확인을 도와드립니다.":
     "We help you check lookup codes and result files.",
-  "전화 010-8436-9035": "Phone 010-8436-9035",
+  "전화 010-9068-9035": "Phone 010-9068-9035",
   "빠른 이동": "Quick Links",
   "온라인 Review 신청": "Online Review Application",
   "Online Review 신청": "Online Review Application",

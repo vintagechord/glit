@@ -31,7 +31,7 @@ export const APP_CONFIG = {
     PUBLIC_LOGO_FALLBACK ??
     "",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "iamonside@daum.net",
-  supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-8436-9035",
+  supportPhone: process.env.NEXT_PUBLIC_SUPPORT_PHONE ?? "010-9068-9035",
   supportHours:
     process.env.NEXT_PUBLIC_SUPPORT_HOURS ?? "10:00 ~ 18:00 (주말/공휴일 휴무)",
   bankName: process.env.NEXT_PUBLIC_BANK_NAME ?? "국민은행",
