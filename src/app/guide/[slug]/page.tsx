@@ -138,15 +138,9 @@ export default async function ReviewGuidePage({ params }: { params: Promise<{ sl
       ))}
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl font-black text-foreground">{guide.pricing === "mv" ? "뮤직비디오 심의 비용" : guide.pricing === "both" ? "방송국 심의 비용" : "심의 비용"}</h2>
+        <h2 className="font-display text-2xl font-black text-foreground">{guide.pricing === "mv" ? "뮤직비디오 심의 비용" : "음반 심의 비용"}</h2>
         <p className="mt-3 break-keep text-sm leading-7 text-muted-foreground">음반 심의는 앨범 1건, 뮤직비디오 심의는 영상 1건 기준이며 부가세가 포함된 금액입니다. 결제 전 화면에서 선택한 항목과 총액을 다시 확인할 수 있습니다.</p>
-        {guide.pricing !== "mv" && <div className="mt-4"><AlbumPriceTable packages={packages} /></div>}
-        {guide.pricing !== "album" && (
-          <>
-            {guide.pricing === "both" && <h3 className="mt-6 text-lg font-black text-foreground">뮤직비디오 심의</h3>}
-            <div className="mt-4"><MvPriceTable /></div>
-          </>
-        )}
+        {guide.pricing === "album" ? <div className="mt-4"><AlbumPriceTable packages={packages} /></div> : <div className="mt-4"><MvPriceTable /></div>}
       </section>
 
       <section className="mt-10">

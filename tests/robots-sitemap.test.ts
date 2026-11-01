@@ -36,8 +36,11 @@ test("member, operator, payment and token pages stay blocked", () => {
 
 test("search guides are listed, redirects and placeholder pages are not, AI crawlers are blocked", () => {
   const paths = sitemap().map((entry) => new URL(entry.url).pathname);
-  for (const path of ["/guide/album-review", "/guide/mv-review", "/guide/broadcast-review", "/guide/radio-review", "/dashboard/new/album", "/dashboard/new/mv"]) {
+  for (const path of ["/guide/album-review", "/guide/mv-review", "/dashboard/new/album", "/dashboard/new/mv"]) {
     assert.ok(paths.includes(path), `${path} should be in the sitemap`);
+  }
+  for (const merged of ["/guide/broadcast-review", "/guide/radio-review"]) {
+    assert.equal(paths.includes(merged), false, `${merged} is part of the album review guide`);
   }
   assert.equal(paths.includes("/en/apply"), false, "redirecting aliases must not be listed");
   assert.equal(paths.includes("/studio"), false, "the placeholder Studio page is not indexable");
@@ -59,4 +62,18 @@ test("English pages carry the English site name in their titles", async () => {
   const { pageMetadata } = await import("../src/lib/seo");
   assert.deepEqual(pageMetadata({ locale: "en", title: "Log in", description: "x", path: "/login", enPath: "/en/login" }).title, { absolute: "Log in | Onside" });
   assert.equal(pageMetadata({ title: "로그인", description: "x", path: "/login" }).title, "로그인");
+});
+
+test("reviews are classified as album and music video, and the merged guide URLs redirect permanently", async () => {
+  const { REVIEW_GUIDES } = await import("../src/lib/review-guides");
+  assert.deepEqual(REVIEW_GUIDES.map((guide) => guide.slug), ["album-review", "mv-review"]);
+  const album = REVIEW_GUIDES[0];
+  for (const term of ["방송국 심의", "라디오 심의"]) {
+    assert.ok(album.keywords.includes(term), `the album guide keeps the search term ${term}`);
+  }
+  const { default: config } = await import("../next.config");
+  const redirects = await config.redirects!();
+  for (const source of ["/guide/broadcast-review", "/guide/radio-review"]) {
+    assert.deepEqual(redirects.find((rule) => rule.source === source), { source, destination: "/guide/album-review", permanent: true });
+  }
 });

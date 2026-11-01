@@ -42,7 +42,12 @@ export default function NewSubmissionPage() {
   return (
     <div className="page-centered mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card px-4 py-6 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:px-8 sm:py-10">
-        <p className="bauhaus-kicker">심의 신청</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="bauhaus-kicker">심의 신청</p>
+          <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
+            비회원 가능
+          </span>
+        </div>
         <h1 className="font-display mt-4 break-keep text-balance text-2xl font-black leading-tight text-foreground sm:text-4xl">
           무엇을 신청하시나요?
         </h1>
@@ -70,11 +75,6 @@ export default function NewSubmissionPage() {
             </ReliableLink>
           ))}
         </div>
-        <div className="mt-6 flex">
-          <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
-            비회원 가능
-          </span>
-        </div>
         <details className="mt-6 rounded-[8px] border border-border p-4">
           <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>
           <p className="mt-3 text-sm leading-6">공개할 곳, 제출할 방송사·유통사, 요청받은 서류 이름을 확인해주세요. 음원인지 영상인지와 제출처의 요구사항을 기준으로 안내해 드립니다.</p>
@@ -87,7 +87,7 @@ export default function NewSubmissionPage() {
           rel="noopener noreferrer"
           className="underline-offset-4 transition hover:text-foreground hover:underline"
         >
-          기존 사이트 접수
+          Legacy 사이트 접수
         </ReliableLink>
       </div>
     </div>

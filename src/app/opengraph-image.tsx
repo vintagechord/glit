@@ -19,7 +19,7 @@ export default async function OpenGraphImage() {
           <div style={{ fontSize: 76, color: "#111111", lineHeight: 1.15 }}>음반심의 · 뮤직비디오 심의</div>
           <div style={{ fontSize: 76, color: "#111111", lineHeight: 1.15 }}>온라인 접수부터 결과까지</div>
           <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
-            {["KBS·MBC·SBS 방송국 심의", "라디오 심의", "뮤직비디오 등급분류"].map((label, index) => (
+            {["음반 심의 · TV·라디오", "MV 온라인 등급분류", "MV 방송국별 심의"].map((label, index) => (
               <div key={label} style={{ display: "flex", fontSize: 30, padding: "10px 18px", border: "4px solid #111111", background: ["#f2cf27", "#1556a4", "#d9362c"][index], color: index === 0 ? "#111111" : "#ffffff" }}>{label}</div>
             ))}
           </div>

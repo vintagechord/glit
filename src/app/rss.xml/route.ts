@@ -13,7 +13,7 @@ const PUBLISHED = new Date("2026-11-01T00:00:00+09:00").toUTCString();
 export function GET() {
   const origin = getBaseUrl();
   const items = [
-    { title: "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물", path: "/guide", description: "음반 심의, 뮤직비디오 심의, 방송국 심의, 라디오 심의의 절차와 준비물을 안내합니다." },
+    { title: "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물", path: "/guide", description: "음반 심의(TV·라디오 방송국)와 뮤직비디오 심의(온라인·방송국별)의 절차와 준비물을 안내합니다." },
     ...REVIEW_GUIDES.map((guide) => ({ title: guide.title, path: `/guide/${guide.slug}`, description: guide.description })),
     { title: "자주 묻는 질문(FAQ)", path: "/faq", description: "음반 심의와 뮤직비디오 심의에 대해 자주 묻는 질문과 답변입니다." },
   ];
