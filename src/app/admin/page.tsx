@@ -309,6 +309,14 @@ export default async function AdminPage() {
             심의 파일 업로드
           </h2>
         </Link>
+        <Link
+          href="/admin/storage"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <h2 className="text-xl font-semibold text-foreground">
+            저장공간 정리
+          </h2>
+        </Link>
       </div>
     </div>
   );

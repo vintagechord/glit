@@ -546,7 +546,7 @@ export default async function AdminSubmissionDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("submission_files")
-      .select("id, kind, file_path, original_name, mime, size, created_at")
+      .select("id, kind, file_path, original_name, mime, size, created_at, purged_at")
       .eq("submission_id", submissionId)
       .order("created_at", { ascending: false }),
   ]);

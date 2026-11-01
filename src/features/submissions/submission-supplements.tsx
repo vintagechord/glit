@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
-type SupplementFile = { id: string; original_name: string; size_bytes: number; status: string };
+type SupplementFile = { id: string; original_name: string; size_bytes: number; status: string; purged_at?: string | null };
 type Notice = { id: string; state_key: string; attempts: number; last_attempt_at?: string | null; outcome: { email?: string; kakao?: string; emailMessageId?: string; kakaoMessageId?: string; emailQueued?: boolean; emailStatus?: string } };
 type Revision = { id: string; revision_no: number; status: string; note?: string | null; review_note?: string | null; files: SupplementFile[]; notifications?: Notice[] };
 type Request = { id: string; note: string; status: string; created_at: string; revisions: Revision[] };
@@ -189,8 +189,8 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
               </li>)}</ul>
             </details>}
             <ul className="mt-2 space-y-2">{revision.files.map(file => <li key={file.id} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="break-all"><span data-no-translate>{file.original_name}</span> · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {statusLabel(file.status)}</span>
-              {["VERIFIED", "UPLOADED"].includes(file.status) && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
+              <span className="break-all"><span data-no-translate>{file.original_name}</span> · {Math.ceil(file.size_bytes / 1024).toLocaleString()} KB · {file.purged_at ? t("심의 완료 후 삭제됨", "Deleted after review") : statusLabel(file.status)}</span>
+              {!file.purged_at && ["VERIFIED", "UPLOADED"].includes(file.status) && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
                 const result = await api<{ url: string }>({ action: "download", fileId: file.id });
                 const link = document.createElement("a"); link.href = result.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.click();
               })}>{t("파일 열기", "Open File")}</button>}

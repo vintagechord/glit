@@ -36,12 +36,15 @@ export async function GET(
   const admin = createAdminClient();
   const { data: fileRow } = await admin
     .from("submission_files")
-    .select("object_key, file_path, storage_provider")
+    .select("object_key, file_path, storage_provider, purged_at")
     .eq("id", id)
     .maybeSingle();
 
   if (!fileRow) {
     return NextResponse.json({ error: "파일을 찾을 수 없습니다." }, { status: 404 });
+  }
+  if (fileRow.purged_at) {
+    return NextResponse.json({ error: "심의 완료 후 삭제된 파일입니다." }, { status: 410 });
   }
 
   try {
