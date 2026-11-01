@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
-import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-history";
+import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-cursor";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
   supportChatAdminChannelName,

@@ -10,7 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { createClient } from "@/lib/supabase/client";
+import { hasBrowserAuthCookie, loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import {
   GUEST_SUBMISSION_CART_STORAGE_KEY,
   readGuestSubmissionCartEntries,
@@ -168,11 +168,11 @@ export function SiteHeader() {
   }, []);
 
   React.useEffect(() => {
-    const supabase = createClient();
     let active = true;
     let syncing = false;
     let resyncRequested = false;
     let authEventVersion = 0;
+    let unsubscribe: (() => void) | null = null;
 
     const persist = (userId: string | null) => {
       if (!active) return;
@@ -195,6 +195,22 @@ export function SiteHeader() {
       // Ignore storage failures.
     }
 
+    // Guests never download the Supabase SDK: it loads, and starts watching
+    // auth events, only once a session cookie exists.
+    const watchAuthEvents = async () => {
+      const supabase = await loadBrowserSupabase();
+      if (active && !unsubscribe) {
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          authEventVersion += 1;
+          persist(session?.user?.id ?? null);
+        });
+        unsubscribe = () => subscription.unsubscribe();
+      }
+      return supabase;
+    };
+
     const syncSession = async () => {
       if (syncing) {
         resyncRequested = true;
@@ -203,6 +219,11 @@ export function SiteHeader() {
       syncing = true;
       const version = authEventVersion;
       try {
+        if (!hasBrowserAuthCookie()) {
+          persist(null);
+          return;
+        }
+        const supabase = await watchAuthEvents();
         const { data: { session }, error } = await supabase.auth.getSession();
         // An auth event received during this read is newer than its result.
         if (!active || version !== authEventVersion) return;
@@ -240,20 +261,13 @@ export function SiteHeader() {
       }
     };
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      authEventVersion += 1;
-      persist(session?.user?.id ?? null);
-    });
-
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       active = false;
       if (sessionSyncRef.current === syncSession) sessionSyncRef.current = null;
-      subscription.unsubscribe();
+      unsubscribe?.();
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

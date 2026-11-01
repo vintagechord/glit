@@ -17,7 +17,7 @@ import {
   getLocalStationLogoSource,
 } from "@/lib/station-logos";
 import { summarizeTrackResults } from "@/lib/track-results";
-import { createClient } from "@/lib/supabase/client";
+import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
 
 type StationItem = {
@@ -539,10 +539,19 @@ export function HomeReviewPanel({
   const router = useRouter();
   const localePrefix =
     pathname === "/en" || pathname.startsWith("/en/") ? "/en" : "";
-  const supabase = React.useMemo(
-    () => (isLoggedIn ? createClient() : null),
-    [isLoggedIn],
-  );
+  // Realtime updates are for members only; guests never load the SDK.
+  const [supabase, setSupabase] = React.useState<Awaited<ReturnType<typeof loadBrowserSupabase>> | null>(null);
+  React.useEffect(() => {
+    if (!isLoggedIn) {
+      setSupabase(null);
+      return;
+    }
+    let active = true;
+    void loadBrowserSupabase()
+      .then((client) => { if (active) setSupabase(client); })
+      .catch(() => { /* Live updates are optional; the status was already loaded. */ });
+    return () => { active = false; };
+  }, [isLoggedIn]);
   const albumList = albumSubmissions;
   const mvList = mvSubmissions;
   const [tab, setTab] = React.useState<TabKey>(() => {

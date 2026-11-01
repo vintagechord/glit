@@ -1,6 +1,6 @@
 import { pageMetadata, SITE_DESCRIPTION_EN } from "@/lib/seo";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export { default } from "@/app/page";
 

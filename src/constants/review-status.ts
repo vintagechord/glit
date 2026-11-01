@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 // 접수 상태
 export const reviewStatusValues = [
   "DRAFT",
@@ -12,8 +10,6 @@ export const reviewStatusValues = [
 ] as const;
 
 export type ReviewStatus = (typeof reviewStatusValues)[number];
-
-export const reviewStatusEnum = z.enum(reviewStatusValues);
 
 export const reviewStatusOptions: Array<{ value: ReviewStatus; label: string }> =
   [
@@ -41,8 +37,6 @@ export const paymentStatusValues = [
 
 export type PaymentStatus = (typeof paymentStatusValues)[number];
 
-export const paymentStatusEnum = z.enum(paymentStatusValues);
-
 export const paymentStatusOptions: Array<{
   value: PaymentStatus;
   label: string;
@@ -69,8 +63,6 @@ export const stationReviewStatusValues = [
 ] as const;
 
 export type StationReviewStatus = (typeof stationReviewStatusValues)[number];
-
-export const stationReviewStatusEnum = z.enum(stationReviewStatusValues);
 
 export const stationReviewStatusOptions: Array<{
   value: StationReviewStatus;
@@ -116,7 +108,6 @@ export const normalizeStationReviewStatus = (
 // 결과 상태 (전체 접수 요약)
 export const resultStatusValues = ["APPROVED", "REJECTED", "NEEDS_FIX"] as const;
 export type ResultStatus = (typeof resultStatusValues)[number];
-export const resultStatusEnum = z.enum(resultStatusValues);
 export const resultStatusOptions: Array<{ value: ResultStatus; label: string }> =
   [
     { value: "APPROVED", label: "적격" },
