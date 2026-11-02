@@ -32,7 +32,7 @@ test('manual intake requires local authentication and retains source without onl
   assert.equal((await s.api(route,{method:'POST',headers:{Origin:'https://foreign.invalid'},body:'fixture'})).status,403);
   const {id,detail}=await s.create();assert.match(id,/^manual-/);assert.equal(detail.source,'manual');assert.match(detail.tracks[0].id,/^local-/);
   assert.equal(detail.importInfo.extractedText,'원문 전체\nhello');assert.equal(detail.importInfo.bytes,14);
-  assert.equal(detail.importInfo.parserVersion,4);
+  assert.equal(detail.importInfo.parserVersion,5);
   assert.ok(detail.warnings.includes('내용 추출 확인'));
   assert.ok(!detail.warnings.some(w=>/결제|서비스에 업로드/.test(w)));
   await s.desk.sync();assert.equal(s.desk.publicState().cases.filter(c=>c.source==='manual').length,1);
@@ -93,7 +93,9 @@ test('deletion is blocked while a generation is queued or a translation is activ
   let s,id;
   s=await setup(t,{onGenerate:async()=>assert.equal((await s.api(`/api/cases/${id}`,{method:'DELETE'})).status,409),onTranslate:async()=>assert.equal((await s.api(`/api/cases/${id}`,{method:'DELETE'})).status,409)});
   const created=await s.create();id=created.id;s.desk.enqueue(id,'generate');await s.desk.idle();
-  assert.equal((await s.api(`/api/cases/${id}/translate`,{method:'POST',body:JSON.stringify({expectedSourceHash:created.detail.screening.sourceHash})})).status,200);
+  // Generation translated the English lyrics first; the explicit action works from the latest text.
+  assert.equal(s.calls.translate,1);assert.match((await s.desk.detail(id)).tracks[0].lyrics,/번역 : 안녕/);
+  assert.equal((await s.api(`/api/cases/${id}/translate`,{method:'POST',body:JSON.stringify({expectedSourceHash:(await s.desk.detail(id)).screening.sourceHash})})).status,200);
   assert.equal(s.desk.publicState().cases.length,1);
 });
 

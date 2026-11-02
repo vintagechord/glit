@@ -21,7 +21,8 @@ test('safe phrases, section labels, adlibs, English titles and credits do not cr
   assert.equal(result.requiresReview,false);assert.deepEqual(result.findings,[]);
 });
 test('translations are checked per occurrence, preserve supplied translations and flag unclear alignment',()=>{
-  const result=reviewLyrics(album([track('I love you (번역 : 사랑해)\nI love you\nHello world\n(번역 : 안녕 세상아)')]));
+  // A Korean line breaks the run, so the annotation below covers only "Hello world".
+  const result=reviewLyrics(album([track('I love you (번역 : 사랑해)\nI love you\n한국어 가사\nHello world\n(번역 : 안녕 세상아)')]));
   assert.deepEqual(result.findings.filter(f=>f.kind==='translation_missing').map(f=>f.line),[2]);
   const separated=reviewLyrics(album([{...track('I love you\nHello world'),translated_lyrics:'사랑해\n안녕 세상아'}]));
   assert.equal(separated.counts.translation_review,2);assert.equal(separated.counts.translation_missing,0);
@@ -54,31 +55,46 @@ test('parenthesized Korean translation on the next line is preserved without tra
   assert.equal(review.counts.translation_review,0);
   const result=await translateMissingLyrics({detail,serviceUrl:'https://example.invalid',fetchImpl:async()=>{throw new Error('Supplied translations must not trigger a request');}});
   assert.equal(result.translatedCount,0);
-  assert.equal(result.overrides.submission.mv_lyrics,lyrics);
+  assert.deepEqual(result.overrides.submission,{});
 });
 test('ordinary Korean lyrics and ambiguous next-line annotations still require review',()=>{
   const result=reviewLyrics(album([track('Hello world\n다음 가사 원문\nHello 세상 goodbye\n(안녕 세상)\nHello again\n(다시 안녕) 이어지는 별도 가사')]));
   assert.deepEqual(result.findings.filter(f=>f.kind==='translation_missing').map(f=>f.line),[1,3,5]);
 });
-test('explicit translation only fills missing segments, repeats annotations and preserves source metadata',async()=>{
-  const detail=album([track('I love you (번역 : 사랑해)\nHello world\nHello world\nOh, yeah')]);
+test('translation writes one (번역: …) line under each untranslated run and never repeats',async()=>{
+  const detail=album([track('I love you (번역 : 사랑해)\nHello world\nHello world\n\n한국어 가사\nWhere we go\nLook at the road\nOh, yeah')]);
   const before=structuredClone(detail),calls=[];
   const result=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',fetchImpl:async(url,options)=>{
-    calls.push({url,options});assert.deepEqual(JSON.parse(options.body).lines,['Hello world']);return json(['안녕 세상아']);
+    calls.push({url,options});const {lines}=JSON.parse(options.body);
+    assert.deepEqual(lines,['Hello world','Where we go','Look at the road']);
+    return json(['안녕 세상아','어디로 가든','길을 바라봐!']);
   }});
   assert.equal(calls.length,1);assert.equal(calls[0].url,'https://onside.test/api/translate');
   assert.equal(calls[0].options.redirect,'error');assert.equal(calls[0].options.credentials,'omit');
-  assert.equal(result.translatedCount,2);assert.deepEqual(detail,before);
-  assert.equal(result.overrides.tracks[0].lyrics,'I love you (번역 : 사랑해)\nHello world (번역 : 안녕 세상아)\nHello world (번역 : 안녕 세상아)\nOh, yeah');
+  assert.deepEqual(detail,before);
+  assert.equal(result.overrides.tracks[0].lyrics,'I love you (번역 : 사랑해)\nHello world\nHello world\n(번역: 안녕 세상아. 안녕 세상아.)\n\n한국어 가사\nWhere we go\nLook at the road\n(번역: 어디로 가든. 길을 바라봐!)\nOh, yeah');
   assert.equal(result.overrides.tracks[0].original_lyrics,before.tracks[0].lyrics);
-  assert.equal(reviewLyrics({...detail,tracks:result.overrides.tracks}).counts.translation_missing,0);
-  const repeat=await translateMissingLyrics({detail:{...detail,tracks:result.overrides.tracks},serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}});
+  assert.deepEqual(Object.keys(result.overrides.tracks[0]).sort(),['id','lyrics','original_lyrics']);
+  assert.equal(reviewLyrics({...detail,tracks:[{...detail.tracks[0],...result.overrides.tracks[0]}]}).counts.translation_missing,0);
+  const repeat=await translateMissingLyrics({detail:{...detail,tracks:[{...detail.tracks[0],...result.overrides.tracks[0]}]},serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}});
   assert.equal(repeat.translatedCount,0);
+});
+test('a (번역: …) line under a run of foreign lines covers the whole run, not lines across a break',()=>{
+  const block='Where we go\nWe don’t need to know Look at the road\nImma take you faraway We be losing control\n(번역: 어디로 향하는지 알 필요는 없어. 길을 바라봐. 내가 너를 아주 먼 곳으로 데려갈게. 우린 지금 통제력을 잃어가고 있어.)';
+  assert.equal(reviewLyrics(album([track(block)])).counts.translation_missing,0);
+  assert.equal(reviewLyrics(album([track('Where we go\n한국어 가사\nLook at the road\n(번역: 길을 봐)')])).counts.translation_missing,1);
+  assert.equal(reviewLyrics(album([track('Where we go\n\nLook at the road\n(번역: 길을 봐)')])).counts.translation_missing,1);
+});
+test('online lyrics are translated only when generation asks, with only the lyric field overridden',async()=>{
+  const online={submission:{type:'MV_DISTRIBUTION',title:'온라인',mv_lyrics:'Hold me close'}};
+  await assert.rejects(()=>translateMissingLyrics({detail:online,serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}}),/수동 작업/);
+  const result=await translateMissingLyrics({detail:online,serviceUrl:'https://onside.test',allowOnline:true,fetchImpl:async()=>json(['날 꼭 (세게) 안아줘'])});
+  assert.deepEqual(result.overrides.submission,{mv_lyrics:'Hold me close\n(번역: 날 꼭 세게 안아줘.)'});
 });
 test('separate provided translations are never mapped by line number or overwritten',async()=>{
   const detail=album([{...track('Hello world\nI love you'),translated_lyrics:'두 구간의 의미를 합친 번역'}]);
   const result=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}});
-  assert.equal(result.translatedCount,0);assert.deepEqual(result.overrides.tracks,detail.tracks);assert.match(result.warnings[0],/별도 번역/);
+  assert.equal(result.translatedCount,0);assert.deepEqual(result.overrides.tracks,[]);assert.match(result.warnings[0],/별도 번역/);
 });
 test('partial, censored, cancelled or failed translation leaves the case untouched',async()=>{
   for(const fetchImpl of [async()=>json([]),async()=>json(['좋은 말']),async()=>new Response('{}',{status:502}),async()=>{throw new Error('network');}]) {
@@ -92,7 +108,7 @@ test('partial, censored, cancelled or failed translation leaves the case untouch
 test('translation preserves MV original and rejects nonmanual intake or insecure destination',async()=>{
   const detail={source:'manual',submission:{type:'MV_DISTRIBUTION',mv_lyrics:'Hello world'}};
   const result=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',fetchImpl:async()=>json(['안녕 세상아'])});
-  assert.equal(result.overrides.submission.mv_lyrics,'Hello world (번역 : 안녕 세상아)');
+  assert.equal(result.overrides.submission.mv_lyrics,'Hello world\n(번역: 안녕 세상아.)');
   assert.equal(result.overrides.submission.original_lyrics,'Hello world');assert.equal(detail.submission.mv_lyrics,'Hello world');
   await assert.rejects(()=>translateMissingLyrics({detail:album([]),serviceUrl:'http://localhost'}),/HTTPS/);
   await assert.rejects(()=>translateMissingLyrics({detail:{submission:{type:'ALBUM'}},serviceUrl:'https://onside.test'}),/수동 작업/);
@@ -102,7 +118,7 @@ test('cleared editable lyrics and translations do not restore reference or stale
   const detail={source:'manual',submission:{type:'ALBUM'},tracks:[{...track(''),original_lyrics:'Hello world',lyrics_with_translation:'Hello world (번역 : 안녕 세상아)',is_instrumental:true}]};
   assert.equal(reviewLyrics(detail).requiresReview,false);
   const result=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}});
-  assert.equal(result.translatedCount,0);assert.equal(result.overrides.tracks[0].lyrics,'');
+  assert.equal(result.translatedCount,0);assert.deepEqual(result.overrides.tracks,[]);
   const mv={source:'manual',submission:{type:'MV_DISTRIBUTION',mv_lyrics:'',original_lyrics:'Hello world',lyrics_with_translation:'Hello world (번역 : 안녕 세상아)'}};
   assert.equal(reviewLyrics(mv).counts.lyrics_missing,1);assert.equal(reviewLyrics(mv).counts.translation_missing,0);
   assert.equal((await translateMissingLyrics({detail:mv,serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');}})).translatedCount,0);
