@@ -1836,9 +1836,65 @@ export async function deleteProfanityTermFormAction(
   revalidatePath("/en/dashboard/new/album");
 }
 
+const refundSchema = z.object({
+  submissionId: z.string().uuid(),
+  method: z.enum(["CARD_CANCEL", "BANK_TRANSFER", "OTHER"]),
+  note: z.string().trim().max(500).optional(),
+  notifyCustomer: z.boolean(),
+});
+const refundErrors: Record<string, string> = {
+  NOT_REFUNDABLE: "결제 완료 상태인 접수만 환불로 기록할 수 있습니다. 새로고침해 결제 상태를 확인해주세요.",
+  REFUND_METHOD_INVALID: "환불 방법을 선택해주세요.",
+  REFUND_NOTE_INVALID: "환불 메모는 500자 이내로 적어주세요.",
+  SUBMISSION_NOT_FOUND: "접수를 찾을 수 없습니다.",
+};
+
+/** Records a refund already made outside the app (Inicis console cancel or a
+ * bank transfer back). An order refunds as a whole; the customer receives a
+ * fixed notice, and the admin note goes to the admin memo. */
+export async function recordRefundAction(
+  payload: z.infer<typeof refundSchema>,
+): Promise<AdminActionState & { refundedCount?: number }> {
+  const actor = await requireAdminAction();
+  const parsed = refundSchema.safeParse(payload);
+  if (!parsed.success) return { error: "환불 방법과 메모(500자 이내)를 확인해주세요." };
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.rpc("admin_record_refund", {
+    p_submission_id: parsed.data.submissionId,
+    p_actor_user_id: actor.id,
+    p_method: parsed.data.method,
+    p_note: parsed.data.note || null,
+  });
+  if (error) {
+    const code = Object.keys(refundErrors).find((key) => error.message?.includes(key));
+    if (!code) console.error("admin record refund error", { code: error.code });
+    return { error: code ? refundErrors[code] : "환불을 기록하지 못했습니다. 잠시 후 다시 시도해주세요." };
+  }
+  const ids = ((data ?? []) as Array<{ submission_id: string }>).map((row) => String(row.submission_id));
+  revalidatePath("/admin/submissions");
+  revalidatePath("/admin/submissions/detail");
+  for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
+  for (const id of ids) {
+    revalidatePath(`/admin/submissions/${id}`);
+    revalidateUserDashboards(id);
+  }
+  const outcomes = parsed.data.notifyCustomer
+    ? await Promise.all(ids.map((submissionId) => sendSubmissionUpdateNotificationById({
+      submissionId, headline: "결제가 환불 처리되었습니다.",
+      summary: "결제가 환불로 기록되어 심의 진행이 중단되었습니다. 환불 입금은 결제 수단에 따라 수일이 걸릴 수 있으며, 문의는 고객센터로 연락해주세요.",
+      subject: "[onside] 환불 처리 안내",
+    }).catch(() => ({ warning: "환불은 기록되었지만 안내 메일을 보내지 못했습니다." }))))
+    : [];
+  return {
+    message: ids.length > 1 ? `같은 주문으로 결제한 접수 ${ids.length}건을 환불로 기록했습니다.` : "환불로 기록했습니다.",
+    warning: outcomes.find((item) => item?.warning)?.warning,
+    refundedCount: ids.length,
+  };
+}
+
 const adminDeleteErrors: Record<string, string> = {
   PAID_SUBMISSION:
-    "결제 완료된 접수는 삭제할 수 없습니다. 환불했다면 접수 상세에서 결제 상태를 '환불'로 기록한 뒤 삭제해주세요.",
+    "결제 완료된 접수는 삭제할 수 없습니다. 환불했다면 접수 상세의 '환불 처리'에서 환불을 기록한 뒤 삭제해주세요.",
   ORDER_HAS_OTHER_SUBMISSIONS:
     "같은 주문에 묶인 다른 접수가 있습니다. 함께 주문한 접수를 모두 선택해 삭제해주세요.",
   PAYMENT_APPROVAL_IN_PROGRESS:

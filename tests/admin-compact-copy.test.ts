@@ -67,5 +67,8 @@ test("submission detail keeps one workflow status source and operational data", 
   assert.match(source, /const workflowSteps/);
   assert.match(source, /saveSubmissionAdminFormAction/);
   assert.match(source, /latestEvent\.event_type/);
-  assert.match(source, /value: hasPaymentComplete \? "결제 완료" : paymentLabel/);
+  // Step titles name the stage; the line under each never repeats it.
+  assert.match(source, /label: "결제",\s*value: hasPaymentComplete\s*\?/);
+  assert.doesNotMatch(source, /"결제완료"[\s\S]{0,80}"결제 완료"/);
+  assert.doesNotMatch(source, /"신청접수"[\s\S]{0,80}"신청서 접수"/);
 });
