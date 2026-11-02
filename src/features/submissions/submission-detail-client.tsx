@@ -48,6 +48,7 @@ import { downloadEndpointFile } from "@/lib/browser-download";
 import { addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries, rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submission-checkout";
 import { getPaidReviewProgress } from "@/lib/paid-review-progress";
+import { isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 
 type Submission = {
   id: string;
@@ -1071,12 +1072,16 @@ export function SubmissionDetailClient({
                         submission.certificate_original_name?.trim() || null,
                     }
                   : null;
+              // An approved online MV shows its rating, in the rating mark's colors.
+              const mvRating = mvReviewAssets && !mvReviewAssets.rejected && isMvRatingMarkCode(submission.mv_desired_rating)
+                ? submission.mv_desired_rating
+                : null;
               const resultDisplayStatus = mvReviewAssets
                 ? {
-                    label: mvReviewAssets.rejected ? "부적격" : "적격",
+                    label: mvReviewAssets.rejected ? "부적격" : mvRating ? mvReviewAssets.ratingLabel : "적격",
                     tone: mvReviewAssets.rejected
                       ? rejectedDetailResultTone
-                      : approvedDetailResultTone,
+                      : mvRating ? mvRatingChipTone(mvRating) : approvedDetailResultTone,
                   }
                 : currentStatus;
               const shouldOpenResultModal =

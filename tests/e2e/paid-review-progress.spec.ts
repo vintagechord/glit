@@ -67,6 +67,17 @@ test("actual online MV processing is preserved after payment", async ({ page }) 
 });
 
 
+test("an approved online MV result shows its rating in the rating mark's colors", async ({ page }) => {
+  await page.route("**/*", route => route.request().resourceType() === "document"
+    ? route.fulfill({ contentType: "text/html", body: html }) : route.fulfill({ status: 404 }));
+  await page.goto("http://paid-review.fixture.invalid/dashboard/status?type=MV_DISTRIBUTION&completed");
+  const detail = page.getByRole("region", { name: "상세", exact: true });
+  const result = detail.getByRole("button", { name: /^영상물등급위원회 · 15세이상관람가/ });
+  await expect(result).toBeVisible();
+  await expect(result).toHaveClass(/bauhaus-status-chip--rating-15/);
+  await expect(detail.getByRole("button", { name: /^영상물등급위원회 · 적격/ })).toHaveCount(0);
+});
+
 test("a refunded completed submission is neither labeled paid nor offered another payment", async ({ page }) => {
   await page.route("**/*", route => route.request().resourceType() === "document"
     ? route.fulfill({ contentType: "text/html", body: html }) : route.fulfill({ status: 404 }));
@@ -134,7 +145,7 @@ test("populated English MV results and expanded application translate controls w
   });
   await expect.poll(untranslatedText).toEqual([]);
   const detail=page.locator("section").filter({has:page.locator("#submission-form-section")}).first();
-  await detail.getByRole("button",{name:/Korea Media Rating Board.*Approved/}).click();
+  await detail.getByRole("button",{name:/Korea Media Rating Board.*Ages 15 and over/}).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator("[data-no-translate]").filter({hasText:/^필증 원문.pdf$/})).toBeVisible();
   await expect.poll(untranslatedText).toEqual([]);

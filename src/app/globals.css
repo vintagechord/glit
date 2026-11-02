@@ -315,6 +315,27 @@ html[lang="en"] {
     color: #f2cf27;
   }
 
+  /* Online MV results in their rating mark's colors (src/lib/mv-rating-colors.ts). */
+  .bauhaus-status-chip--rating-all {
+    background: #229c56;
+    color: #111111;
+  }
+
+  .bauhaus-status-chip--rating-12 {
+    background: #e9b630;
+    color: #111111;
+  }
+
+  .bauhaus-status-chip--rating-15 {
+    background: #dd7430;
+    color: #111111;
+  }
+
+  .bauhaus-status-chip--rating-19 {
+    background: #d92a35;
+    color: #ffffff;
+  }
+
   .dark .bauhaus-status-chip {
     border-color: var(--bauhaus-shadow);
   }

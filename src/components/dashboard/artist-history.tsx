@@ -180,12 +180,13 @@ function SubmissionManagementRow({
           prefetch={prefetchDetail ? true : false}
           onMouseEnter={() => setPrefetchDetail(true)}
           onFocus={() => setPrefetchDetail(true)}
-          className="col-span-2 flex min-h-11 min-w-0 flex-col justify-center gap-1 rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className="col-span-2 flex min-h-11 min-w-0 items-baseline justify-between gap-3 rounded-[4px] py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
-          <p className={`font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
+          <p className={`min-w-0 flex-1 font-semibold leading-6 [overflow-wrap:anywhere] ${selected ? "text-[#111111]" : "text-foreground"}`}>
             {item.title ? <span data-no-translate>{item.title}</span> : "제목 미입력"}
           </p>
-          <p className={`text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
+          {/* Same line as the title, right-aligned under the delete button. */}
+          <p className={`shrink-0 whitespace-nowrap text-right text-xs ${selected ? "text-[#111111]" : "text-muted-foreground"}`}>
             {formatDate(item.created_at)}
           </p>
         </Link>
@@ -224,28 +225,27 @@ function ArtistCard({
 
   return (
     <div className="@container min-w-0 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-[var(--card)] p-4 shadow-[5px_5px_0_var(--bauhaus-shadow)] transition hover:-translate-y-0.5">
-      <div className="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-center">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        {/* The thumbnail opens the artist page; there is no separate detail button. */}
+        {group.artistId ? (
+          <Link
+            href={`${localePrefix}/dashboard/artists/${encodeURIComponent(group.artistId)}`}
+            aria-label="아티스트 상세"
+            title="아티스트 상세"
+            className="shrink-0 rounded-[8px] transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
+            <Thumbnail name={group.artistName} src={group.thumbnail} />
+          </Link>
+        ) : (
           <Thumbnail name={group.artistName} src={group.thumbnail} />
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <p className="text-base font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
-              <span data-no-translate>{group.artistName}</span>
-            </p>
-            <span className="shrink-0 rounded-full border border-[#111111] bg-[var(--bauhaus-yellow)] px-2 py-0.5 text-[11px] font-black text-[#111111]">
-              {group.submissions.length}
-            </span>
-          </div>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2 @sm:justify-end">
-          {group.artistId ? (
-            <Link
-              href={`${localePrefix}/dashboard/artists/${encodeURIComponent(group.artistId)}`}
-              className={`${outlineControlClass} whitespace-nowrap`}
-            >
-              상세
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-          ) : null}
+        )}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <p className="text-base font-semibold leading-6 text-foreground [overflow-wrap:anywhere]">
+            <span data-no-translate>{group.artistName}</span>
+          </p>
+          <span className="shrink-0 rounded-full border border-[#111111] bg-[var(--bauhaus-yellow)] px-2 py-0.5 text-[11px] font-black text-[#111111]">
+            {group.submissions.length}
+          </span>
         </div>
       </div>
       <div className="mt-4">

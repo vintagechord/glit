@@ -4,7 +4,7 @@ import { loadDeskResults } from "./review-desk";
 import { renderReviewSummaryEmail, type ReviewSummaryEmailContent, type ReviewSummaryEmailRow } from "@/lib/email";
 import { inspectOnlineMvBundleReadiness, type OnlineMvBundleState } from "@/lib/email-attachments";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
-import { broadcastRatingLabels } from "@/lib/broadcast-rating";
+import { broadcastRatingLabels, broadcastRatingValues } from "@/lib/broadcast-rating";
 import { RATING_LABELS, isRatingCode } from "@/lib/mv-assets";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { hasPublishedSubmissionResult } from "@/lib/submission-certificate";
@@ -24,6 +24,9 @@ export type ReviewEmailContext = {
   recipient: string | null;
   link: string;
 };
+const isBroadcastRating = (value: unknown): value is (typeof broadcastRatingValues)[number] =>
+  (broadcastRatingValues as readonly unknown[]).includes(value);
+
 export function maskReviewRecipient(email: string | null) {
   if (!email) return null;
   const [name, domain] = email.split("@");
@@ -40,21 +43,23 @@ export function buildReviewSummaryContent(snapshot: Snapshot, link: string): Rev
     const rating = submission.mv_desired_rating || submission.mv_rating;
     const valid = isRatingCode(rating) && hasPublishedSubmissionResult(submission);
     completedCount = valid ? 1 : 0;
-    rows = [{ name: "영상물등급위원회", status: valid ? RATING_LABELS[rating] : "결과 대기", tone: rating === "REJECT" ? "rejected" : valid ? "approved" : "waiting", detail: valid && rating !== "REJECT" ? "온라인 공개용 뮤직비디오 등급" : null }];
+    rows = [{ name: "영상물등급위원회", status: valid ? RATING_LABELS[rating] : "결과 대기", tone: rating === "REJECT" ? "rejected" : valid ? "approved" : "waiting", detail: valid && rating !== "REJECT" ? "온라인 공개용 뮤직비디오 등급" : null, rating: valid && rating !== "REJECT" ? rating : null }];
   } else {
     rows = snapshot.stations.map(station => {
       const display = getStationReviewDisplayStatus({ ...station.review, station }, { albumTracks: type === "ALBUM" ? snapshot.tracks : undefined, showPartialTrackBreakdown: true });
       if (display.isComplete) completedCount++;
       const tone: ReviewSummaryEmailRow["tone"] = display.key === "APPROVED" ? "approved" : display.key === "REJECTED" ? "rejected" : display.needsAttention ? "attention" : ["IN_REVIEW", "WAITING_RESULT"].includes(display.key) ? "progress" : "waiting";
       let detail: string | null = null;
+      let rating: ReviewSummaryEmailRow["rating"] = null;
       if (type === "ALBUM") {
         const counts = display.summary.counts;
         const parts = [counts.approved ? `${counts.approved}곡 적격` : null, counts.rejected ? `${counts.rejected}곡 부적격` : null, counts.pending ? `${counts.pending}곡 결과 대기` : null].filter(Boolean);
         detail = parts.join(" · ") || (station.trackIds.length ? `심의 대상 ${station.trackIds.length}곡` : null);
       } else if (display.key === "APPROVED") {
         detail = station.review.age_rating ? broadcastRatingLabels[station.review.age_rating] ?? "연령 등급 확인 필요" : "연령 등급 확인 필요";
+        if (isBroadcastRating(station.review.age_rating)) rating = station.review.age_rating;
       }
-      return { name: station.name || station.code || "방송사", status: type === "MV_BROADCAST" && display.key === "APPROVED" ? "적격" : display.label, tone, detail };
+      return { name: station.name || station.code || "방송사", status: type === "MV_BROADCAST" && display.key === "APPROVED" ? "적격" : display.label, tone, detail, rating };
     });
   }
   return {

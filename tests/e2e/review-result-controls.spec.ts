@@ -24,11 +24,13 @@ test.beforeAll(async () => {
         const submission={id:'fixture',title:'결과 버튼 확인 음반',artist_name:'테스트 아티스트',type:'ALBUM',is_oneclick:false,status:'COMPLETED',payment_status:'PAID',amount_krw:10000,created_at:'2026-10-16T00:00:00Z',updated_at:'2026-10-16T00:00:00Z',package:{name:'방송국 3곳',station_count:3,price_krw:10000},album_tracks:tracks};
         const reviews=['APPROVED','REJECTED','APPROVED','SENT'].map((status,index)=>({id:'review-'+index,status,result_note:status==='REJECTED'?'가사 수정 필요':null,track_results:status==='SENT'?[]:tracks.map((t,trackIndex)=>({track_id:t.id,track_no:t.track_no,title:t.track_title,status:index===2&&trackIndex===1?'REJECTED':status})),updated_at:submission.updated_at,station:{id:'station-'+index,name:['KBS','MBC','CBS','SBS'][index],code:['KBS','MBC','CBS','SBS'][index]}}));
         const compactReviews=['NOT_SENT','SENT','APPROVED','REJECTED','NEEDS_FIX','APPROVED'].map((status,index)=>({id:'compact-'+index,status,result_note:status==='REJECTED'?'가사 수정 필요':null,track_results:['APPROVED','REJECTED'].includes(status)?tracks.map((t,trackIndex)=>({track_id:t.id,track_no:t.track_no,title:t.track_title,status:index===5&&trackIndex===1?'REJECTED':status})):[],updated_at:submission.updated_at,station:{id:'station-'+index,name:['KBS','MBC','SBS','YTN','CBS','ARIRANG'][index],code:['KBS','MBC','SBS','YTN','CBS','ARIRANG'][index]}}));
+        const mvSubmission={...submission,id:'mvfixture',title:'결과 등급 확인 뮤직비디오',type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'APPROVED',mv_desired_rating:params.get('rating')||'ALL',album_tracks:[]};
+        const mvReviews=[{id:'mv-review',status:'APPROVED',result_note:null,track_results:[],updated_at:submission.updated_at,station:{id:'kmrb',name:'영상물등급위원회',code:'KMRB'}}];
         const content=mode==='detail'
           ? <SubmissionDetailClient submissionId="fixture" initialSubmission={submission} initialStationReviews={reviews} initialFiles={[]} enableRealtime={false} resultsOnly />
           : mode==='list'
             ? <SubmissionStatusList submissions={[{...submission,station_reviews:reviews}]} />
-            : <HomeReviewPanel isLoggedIn={false} albumSubmissions={[submission]} mvSubmissions={[]} albumStationsMap={{fixture:mode==='compact'?compactReviews:reviews}} mvStationsMap={{}} hideEmptyTabs showDetailLink={false} compact={mode==='compact'} panelMinHeightClassName="" />;
+            : <HomeReviewPanel isLoggedIn={params.get('login')==='1'} albumSubmissions={mode==='mv'?[]:[submission]} mvSubmissions={mode==='mv'?[mvSubmission]:[]} albumStationsMap={{fixture:mode==='compact'?compactReviews:reviews}} mvStationsMap={mode==='mv'?{mvfixture:mvReviews}:{}} hideEmptyTabs showDetailLink={false} compact={mode==='compact'||params.has('compact')} panelMinHeightClassName="" />;
         createRoot(document.getElementById('root')).render(<>{english?<EnglishLanguagePack/>:null}<main style={{padding:16,maxWidth:mode==='compact'?500:1100,margin:'auto'}}>{content}</main></>);
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
@@ -217,5 +219,67 @@ for (const width of [320, 390, 640, 1440]) {
         expect(errors).toEqual([]);
       });
     }
+  }
+}
+
+// The station heading and its update date share one line; the date sits at the table's top right.
+for (const mode of ["home", "compact"]) {
+  for (const width of [320, 640, 1440]) {
+    test(`station update date sits on the heading line in ${mode} at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/*", route => route.request().resourceType() === "document"
+        ? route.fulfill({ contentType: "text/html", body: html }) : route.fulfill({ status: 404 }));
+      await page.goto(`/__review-result-controls?mode=${mode}&theme=light&login=1`);
+      const heading = page.getByText("방송국별 현황", { exact: true });
+      const updated = page.getByLabel(/^Updated /);
+      await expect(updated).toBeVisible();
+      const section = heading.locator("xpath=../../..");
+      const [headingBox, updatedBox, sectionBox] = await Promise.all([heading.boundingBox(), updated.boundingBox(), section.boundingBox()]);
+      expect(headingBox && updatedBox && sectionBox).toBeTruthy();
+      if (!headingBox || !updatedBox || !sectionBox) return;
+      expect(headingBox.height).toBeLessThan(30);
+      expect(Math.abs((updatedBox.y + updatedBox.height / 2) - (headingBox.y + headingBox.height / 2))).toBeLessThan(4);
+      expect(updatedBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
+      const padding = await section.evaluate(element => parseFloat(getComputedStyle(element).paddingRight) + parseFloat(getComputedStyle(element).borderRightWidth));
+      const contentRight = sectionBox.x + sectionBox.width - padding;
+      // Scroll buttons follow the date when they fit and wrap below otherwise; the date never leaves the heading line.
+      const nextButton = page.locator('button[aria-label="다음 방송국 상태"]');
+      const next = await nextButton.isVisible() ? await nextButton.boundingBox() : null;
+      const buttonsBeside = next !== null && next.y < headingBox.y + headingBox.height;
+      if (buttonsBeside) expect(updatedBox.x + updatedBox.width).toBeLessThan(next.x);
+      else expect(Math.abs(updatedBox.x + updatedBox.width - contentRight)).toBeLessThan(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: testInfo.outputPath(`updated-${mode}-${width}.png`), fullPage: true });
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+// An approved online MV shows its rating, painted like the rating mark.
+const ratingChips = {
+  ALL: ["전체관람가", "rgb(34, 156, 86)", "rgb(17, 17, 17)"],
+  "12": ["12세이상관람가", "rgb(233, 182, 48)", "rgb(17, 17, 17)"],
+  "15": ["15세이상관람가", "rgb(221, 116, 48)", "rgb(17, 17, 17)"],
+  "19": ["청소년관람불가", "rgb(217, 42, 53)", "rgb(255, 255, 255)"],
+} as const;
+for (const compact of [false, true]) {
+  for (const [rating, [label, background, color]] of Object.entries(ratingChips)) {
+    test(`online MV result shows the ${rating} rating in its mark colors${compact ? " (compact)" : ""}`, async ({ page }) => {
+      await page.setViewportSize({ width: 640, height: 1000 });
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/*", route => route.request().resourceType() === "document"
+        ? route.fulfill({ contentType: "text/html", body: html }) : route.fulfill({ status: 404 }));
+      await page.goto(`/__review-result-controls?mode=mv&theme=light&rating=${rating}${compact ? "&compact=1" : ""}`);
+      const chip = page.locator(compact ? "[data-station-status]" : "[data-review-result-control]");
+      await expect(chip).toHaveCount(1);
+      await expect(chip).toHaveText(label);
+      expect(await chip.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color })))
+        .toEqual({ background, color });
+      await expect(page.getByText("적격", { exact: true })).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
   }
 }

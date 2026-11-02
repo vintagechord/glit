@@ -20,6 +20,7 @@ import { isRejectedMvResult } from "@/lib/submission-certificate";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
+import { isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 
 type StationItem = {
   id: string;
@@ -265,12 +266,14 @@ function getDisplayStatusForReview(
   if (!mvAssets?.hasRating || !mvAssets.hasResultSignal) {
     return status;
   }
+  // An approved online MV shows its rating, in the rating mark's colors.
+  const rating = !mvAssets.rejected && isMvRatingMarkCode(mvAssets.ratingCode) ? mvAssets.ratingCode : null;
   return {
     ...status,
-    label: mvAssets.rejected ? "부적격" : "적격",
+    label: mvAssets.rejected ? "부적격" : rating ? mvAssets.ratingLabel : "적격",
     tone: mvAssets.rejected
       ? "bauhaus-status-chip--danger"
-      : "bauhaus-status-chip--success",
+      : rating ? mvRatingChipTone(rating) : "bauhaus-status-chip--success",
     summaryText: null,
     isComplete: true,
     needsAttention: mvAssets.rejected,
@@ -465,15 +468,17 @@ function CompactStationRow({
   english: boolean;
 }) {
   const stationName = getStationName(station);
-  const statusClass = status.tone.includes("--danger")
-    ? "bg-[#d9362c] text-white"
-    : status.tone.includes("--success")
-      ? "bg-[#1f7a5a] text-white"
-      : status.needsAttention
-        ? "bg-[#111111] text-[#f2cf27]"
-        : status.key === "WAITING_SUBMISSION"
-          ? "bg-[#f2cf27] text-[#111111]"
-          : "bg-[#1556a4] text-white";
+  const statusClass = status.tone.includes("--rating-")
+    ? status.tone
+    : status.tone.includes("--danger")
+      ? "bg-[#d9362c] text-white"
+      : status.tone.includes("--success")
+        ? "bg-[#1f7a5a] text-white"
+        : status.needsAttention
+          ? "bg-[#111111] text-[#f2cf27]"
+          : status.key === "WAITING_SUBMISSION"
+            ? "bg-[#f2cf27] text-[#111111]"
+            : "bg-[#1556a4] text-white";
   const shortEnglishLabels: Record<string, string> = {
     "접수예정": "Queued", "접수완료": "Received", "심의중": "In review",
     "심의 중": "In review", "적격": "Approved", "부적격": "Rejected",
@@ -1302,14 +1307,15 @@ export function HomeReviewPanel({
 
         {!needsPayment ? (
           <div className={`rounded-[8px] border-2 border-[#111111] bg-white ${sectionPaddingClass} ${stationSectionClass} dark:border-[#f2cf27] dark:bg-[#171717]`}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-foreground">
+            {/* The update date sits on the heading line, at the table's top right. */}
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+              <div className="flex min-w-0 flex-auto items-center justify-between gap-3">
+                <p className="shrink-0 text-sm font-semibold text-foreground">
                   방송국별 현황
                 </p>
                 {isLoggedIn && !needsPayment && latestStationUpdatedAt ? (
                   <p
-                    className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                    className="whitespace-nowrap text-right text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                     title={formatDate(latestStationUpdatedAt)}
                     aria-label={`Updated ${formatDate(latestStationUpdatedAt)}`}
                   >
