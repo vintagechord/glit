@@ -163,3 +163,21 @@ test('storage purge signs one batch with the same request ID in header and JSON'
   for (const ids of [[], many, [id, id], ['../storage'], 'not-a-list']) await assert.rejects(client.purgeStorage(ids), error => error.httpStatus === 400);
   assert.equal(calls.length, 1);
 });
+
+test('guest album intake signs the request ID that becomes the lookup code and checks the reply', async () => {
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(new URL(url).pathname, '/api/internal/review-desk/intake');
+    if (init.method === 'GET') return json({ ok: true, packages: [{ id, name: '13곳 패키지', stationCount: 13, priceKrw: 130000, stations: ['KBS'] }, { id: 'bad' }] });
+    const body = JSON.parse(init.body.toString());
+    assert.equal(body.operation, 'register-guest-album'); assert.equal(body.requestId, init.headers['x-onside-desk-request']); assert.equal(body.guest.name, '홍길동');
+    return json({ ok: true, created: true, submissionId: id, guestToken: body.requestId, trackUrl: `https://onside.example/track/${body.requestId}`, paid: true });
+  });
+  assert.deepEqual((await client.listIntakePackages()).packages, [{ id, name: '13곳 패키지', stationCount: 13, priceKrw: 130000, stations: ['KBS'] }]);
+  const registered = await client.registerGuestAlbum({ packageId: id, paid: true, guest: { name: '홍길동' }, submission: {}, tracks: [] }, { requestId: nonce });
+  assert.deepEqual(registered, { submissionId: id, guestToken: nonce, trackUrl: `https://onside.example/track/${nonce}`, created: true, paid: true });
+  assert.equal(calls.length, 2);
+  const mismatched = mockClient(() => json({ ok: true, submissionId: id, guestToken: '99999999-9999-4999-8999-999999999999', trackUrl: 'https://onside.example/track/x' })).client;
+  await assert.rejects(mismatched.registerGuestAlbum({ guest: {} }, { requestId: nonce }), error => error.code === 'INVALID_INTAKE_RESULT');
+  const insecure = mockClient((url, init) => json({ ok: true, submissionId: id, guestToken: JSON.parse(init.body.toString()).requestId, trackUrl: 'http://onside.example/track/x' })).client;
+  await assert.rejects(insecure.registerGuestAlbum({ guest: {} }, { requestId: nonce }), error => error.code === 'INVALID_INTAKE_RESULT');
+});

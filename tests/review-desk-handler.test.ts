@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createReviewDeskHandlers, createReviewDeskStorageHandlers } from "../src/lib/admin/review-desk-handler";
+import { createReviewDeskHandlers, createReviewDeskIntakeHandlers, createReviewDeskStorageHandlers } from "../src/lib/admin/review-desk-handler";
 import { signDeskRequest } from "../src/lib/admin/review-desk-auth";
 
 const secret = "fixture-only-hmac-secret";
@@ -237,4 +237,75 @@ test("desk storage purge records the desk administrator and accepts at most one 
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).results, [{ submissionId: sid, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }]);
   assert.deepEqual(f.calls.find(call => call.name === "purge")?.input, { ids: [sid], actorId: actor });
+});
+
+const packageId = "55555555-5555-4555-8555-555555555555";
+const intakePath = "/api/internal/review-desk/intake";
+function intakeFixture() {
+  const calls: Array<{ name: string; input?: unknown }> = [];
+  const state = { admin: true, rpcError: null as string | null, packageActive: true };
+  const db = {
+    from(table: string) {
+      const query = {
+        select() { return query; }, eq() { return query; },
+        async maybeSingle() {
+          if (table === "profiles") return { data: { role: state.admin ? "admin" : "user" }, error: null };
+          assert.equal(table, "packages");
+          return { data: state.packageActive ? { price_krw: 130000 } : null, error: null };
+        },
+      };
+      return query;
+    },
+    async rpc(name: string, args: Record<string, unknown>) {
+      assert.equal(name, "admin_register_guest_album");
+      calls.push({ name: "rpc", input: args });
+      return state.rpcError ? { data: null, error: { message: state.rpcError } } : { data: [{ submission_id: sid, created: true }], error: null };
+    },
+  } as unknown as SupabaseClient;
+  const handlers = createReviewDeskIntakeHandlers({ secret: () => secret, createDb: () => db,
+    async listPackages() { calls.push({ name: "packages" }); return [{ id: packageId, name: "13곳 패키지", stationCount: 13, priceKrw: 130000, stations: ["KBS"] }]; },
+    async ensureArtist(name) { calls.push({ name: "artist", input: name }); return "66666666-6666-4666-8666-666666666666"; },
+    trackUrl: (token) => `https://onside.example/track/${token}`,
+    revalidate(id) { calls.push({ name: "revalidate", input: id }); },
+  });
+  return { handlers, state, calls };
+}
+const intakeBody = {
+  operation: "register-guest-album", requestId, packageId, paid: true,
+  guest: { name: "홍길동", phone: "010-0000-0000", email: "guest@example.invalid" },
+  submission: { title: "대리 접수 앨범", artistName: "대리 가수", releaseDate: "2026-11-05", artistType: "GROUP" },
+  tracks: [{ trackTitle: "첫 곡", lyrics: "가사", isTitle: true, broadcastSelected: true }, { trackTitle: "둘째 곡", isTitle: true }],
+};
+
+test("desk intake registers a guest album with the signed request ID as its lookup code", async () => {
+  const f = intakeFixture();
+  assert.equal((await f.handlers.POST(new Request(`https://fixture.invalid${intakePath}`, { method: "POST", body: JSON.stringify(intakeBody) }))).status, 401);
+  f.state.admin = false;
+  assert.equal((await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }))).status, 403);
+  f.state.admin = true;
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...intakeBody, guest: { name: "" } }, { path: intakePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...intakeBody, guest: { name: "홍길동", email: "not-an-email" } }, { path: intakePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...intakeBody, submission: { ...intakeBody.submission, releaseDate: "2026.11.05" } }, { path: intakePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...intakeBody, requestId: stationId }, { path: intakePath }))).status, 400);
+  assert.ok(!f.calls.some(call => call.name === "rpc"));
+  const response = await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, created: true, submissionId: sid, guestToken: requestId, trackUrl: `https://onside.example/track/${requestId}`, paid: true });
+  const args = f.calls.find(call => call.name === "rpc")?.input as Record<string, unknown> & { p_parent: Record<string, unknown>; p_tracks: Array<Record<string, unknown>> };
+  assert.equal(args.p_actor_user_id, actor); assert.equal(args.p_guest_token, requestId); assert.equal(args.p_amount_krw, 130000); assert.equal(args.p_paid, true);
+  assert.equal(args.p_parent.guest_name, "홍길동"); assert.equal(args.p_parent.applicant_name, "홍길동"); assert.equal(args.p_parent.artist_type, "GROUP");
+  assert.equal(args.p_parent.artist_id, "66666666-6666-4666-8666-666666666666");
+  assert.deepEqual(args.p_tracks.map(track => [track.track_title, track.is_title, track.title_role, track.broadcast_selected]), [["첫 곡", true, "MAIN", true], ["둘째 곡", true, "SUB", false]]);
+  assert.deepEqual(f.calls.filter(call => call.name === "revalidate").map(call => call.input), [sid]);
+});
+
+test("desk intake explains package and validation refusals and lists packages", async () => {
+  const f = intakeFixture();
+  f.state.rpcError = "PACKAGE_STATIONS_INVALID";
+  const refused = await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }));
+  assert.equal(refused.status, 400); assert.match((await refused.json()).error, /패키지의 방송사 구성/);
+  f.state.packageActive = false;
+  assert.equal((await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }))).status, 400);
+  const list = await f.handlers.GET(signedRequest("GET", undefined, { path: intakePath }));
+  assert.equal(list.status, 200); assert.equal((await list.json()).packages[0].name, "13곳 패키지");
 });

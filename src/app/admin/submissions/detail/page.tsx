@@ -38,6 +38,7 @@ import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
+import { buildUrl, getBaseUrl } from "@/lib/url";
 
 export const metadata = {
   title: "접수 상세 관리",
@@ -477,6 +478,16 @@ export default async function AdminSubmissionDetailPage({
     );
   }
 
+  // Guest submissions (including admin-registered ones) are followed with a
+  // lookup code; the admin may need to pass the code and link on again.
+  const guestLookup = submission.user_id
+    ? null
+    : await supabase.from("submissions").select("guest_token").eq("id", submission.id).maybeSingle()
+      .then(({ data }) => {
+        const code = typeof data?.guest_token === "string" ? data.guest_token.trim() : "";
+        return code.length >= 8 ? { code, url: buildUrl(`/track/${encodeURIComponent(code)}`, getBaseUrl()) } : null;
+      }, () => null);
+
   const hasGuestColumns =
     submission.guest_name !== undefined ||
     submission.guest_company !== undefined ||
@@ -905,7 +916,7 @@ export default async function AdminSubmissionDetailPage({
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
             />
           ) : null}
-          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
+          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} />
         </div>
       </div>
 
@@ -1478,6 +1489,17 @@ export default async function AdminSubmissionDetailPage({
                     {submission.guest_email ?? submission.applicant_email ?? "-"}
                   </span>
                 </p>
+                {guestLookup ? (
+                  <div className="mt-3 space-y-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] p-3 text-[#111111]">
+                    <p className="text-[11px] font-black">비회원 결과 조회</p>
+                    <p className="text-[11px]">조회 코드</p>
+                    <p className="select-all break-all font-mono text-xs font-bold">{guestLookup.code}</p>
+                    <p className="text-[11px]">결과 페이지</p>
+                    <a href={guestLookup.url} target="_blank" rel="noreferrer" className="block select-all break-all font-mono text-xs font-bold underline underline-offset-2">
+                      {guestLookup.url}
+                    </a>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="mt-3 space-y-2 text-[13px] text-muted-foreground">

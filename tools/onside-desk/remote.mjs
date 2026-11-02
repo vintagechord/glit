@@ -94,7 +94,7 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
   };
   async function request(id, { method = 'GET', query, body = Buffer.alloc(0), contentType, idempotencyId, signal, timeout = 120_000 } = {}) {
     const config = readConfig();
-    const url = new URL(`/api/internal/review-desk/${id === 'health' || id === 'storage' ? id : submissionId(id)}`, config.origin);
+    const url = new URL(`/api/internal/review-desk/${['health', 'storage', 'intake'].includes(id) ? id : submissionId(id)}`, config.origin);
     if (query) for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, value === null ? '' : String(value));
     const timestamp = String(clock()), nonce = requestId(idempotencyId);
     const signed = { method, path: url.pathname + url.search, timestamp, requestId: nonce, actorId: config.actorId, body };
@@ -199,5 +199,24 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     if (!data || !Array.isArray(data.results)) throw new RemoteReviewError('삭제 결과를 확인하지 못했습니다. 목록을 새로고침해 처리 여부를 확인해 주세요.', 502, 'INVALID_PURGE_RESULT');
     return data;
   }
-  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage };
+  /** 관리자 대리 접수: active album packages for registering an emailed album as a guest submission. */
+  async function listIntakePackages({ signal } = {}) {
+    const data = await jsonBody(await request('intake', { signal, timeout: 30_000 }));
+    if (!data || !Array.isArray(data.packages)) throw new RemoteReviewError('접수 패키지를 불러오지 못했습니다. 서비스 배포 상태를 확인해 주세요.', 502, 'INVALID_INTAKE_PACKAGES');
+    return { packages: data.packages.filter(item => item && UUID.test(String(item.id))).map(item => ({ id: String(item.id), name: text(item.name) || '패키지', stationCount: Number(item.stationCount) || 0, priceKrw: Number(item.priceKrw) || 0, stations: Array.isArray(item.stations) ? item.stations.map(text).filter(Boolean) : [] })) };
+  }
+  /** Registers a guest album; the request ID becomes the customer's lookup code, so retries return the same submission. */
+  async function registerGuestAlbum(payload, { requestId: requestedId, signal } = {}) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new RemoteReviewError('접수 정보를 확인해 주세요.', 400, 'INVALID_INTAKE');
+    const nonce = requestId(requestedId);
+    const body = Buffer.from(JSON.stringify({ ...payload, operation: 'register-guest-album', requestId: nonce }));
+    if (body.length > JSON_LIMIT) throw new RemoteReviewError('접수 내용이 너무 큽니다.', 413, 'INTAKE_TOO_LARGE');
+    const data = await jsonBody(await request('intake', { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 60_000 }));
+    if (!data || !UUID.test(String(data.submissionId)) || data.guestToken !== nonce || typeof data.trackUrl !== 'string') throw new RemoteReviewError('접수 등록 결과를 확인하지 못했습니다. 같은 화면에서 다시 등록하면 중복 없이 확인합니다.', 502, 'INVALID_INTAKE_RESULT');
+    let trackUrl;
+    try { trackUrl = new URL(data.trackUrl); } catch { trackUrl = null; }
+    if (!trackUrl || trackUrl.protocol !== 'https:' && !options.allowInsecureLocalhost) throw new RemoteReviewError('결과 페이지 주소를 확인하지 못했습니다.', 502, 'INVALID_INTAKE_RESULT');
+    return { submissionId: String(data.submissionId), guestToken: nonce, trackUrl: trackUrl.href, created: data.created === true, paid: data.paid === true };
+  }
+  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, listIntakePackages, registerGuestAlbum };
 }

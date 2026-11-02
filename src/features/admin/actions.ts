@@ -1836,10 +1836,19 @@ export async function deleteProfanityTermFormAction(
   revalidatePath("/en/dashboard/new/album");
 }
 
+const adminDeleteErrors: Record<string, string> = {
+  PAID_SUBMISSION:
+    "결제 완료된 접수는 삭제할 수 없습니다. 환불했다면 접수 상세에서 결제 상태를 '환불'로 기록한 뒤 삭제해주세요.",
+  ORDER_HAS_OTHER_SUBMISSIONS:
+    "같은 주문에 묶인 다른 접수가 있습니다. 함께 주문한 접수를 모두 선택해 삭제해주세요.",
+  PAYMENT_APPROVAL_IN_PROGRESS:
+    "카드 결제 승인을 확인 중인 접수입니다. 결제 내역에서 승인 여부를 먼저 정리한 뒤 삭제해주세요.",
+};
+
 export async function deleteSubmissionsAction(
   payload: z.infer<typeof deleteSubmissionsSchema>,
 ): Promise<AdminActionState> {
-  await requireAdminAction();
+  const actor = await requireAdminAction();
   const parsed = deleteSubmissionsSchema.safeParse(payload);
   if (!parsed.success) {
     return { error: "삭제할 접수 ID를 확인해주세요." };
@@ -1848,18 +1857,20 @@ export async function deleteSubmissionsAction(
   const supabase = await createAdminClient();
   const ids = Array.from(new Set(parsed.data.ids));
   const b2ObjectRefs = await loadSubmissionB2ObjectRefs(supabase, ids);
-  const { data: deletedRows, error } = await supabase
-    .from("submissions")
-    .delete()
-    .in("id", ids)
-    .select("id");
+  // Orders keep their history; the function detaches unpaid orders first.
+  const { data: deletedRows, error } = await supabase.rpc("admin_delete_submissions", {
+    p_submission_ids: ids,
+    p_actor_user_id: actor.id,
+  });
 
   if (error) {
-    console.error("admin delete submissions error", error);
-    return { error: "접수 삭제에 실패했습니다." };
+    const code = Object.keys(adminDeleteErrors).find((key) => error.message?.includes(key));
+    if (!code) console.error("admin delete submissions error", error);
+    return { error: code ? adminDeleteErrors[code] : "접수 삭제에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 
-  const deletedIds = (deletedRows ?? []).map((row) => String(row.id));
+  const deletedIds = ((deletedRows ?? []) as Array<{ submission_id: string }>).map((row) => String(row.submission_id));
+  if (!deletedIds.length) return { error: "삭제할 접수를 찾지 못했습니다. 목록을 새로고침해주세요." };
   if (deletedIds.length > 0 && b2ObjectRefs.length > 0) {
     after(() =>
       cleanupDeletedSubmissionB2Objects(supabase, b2ObjectRefs, deletedIds),
@@ -1877,27 +1888,6 @@ export async function deleteSubmissionsAction(
   });
 
   return { message: "접수가 삭제되었습니다." };
-}
-
-export async function deleteSubmissionsFormAction(
-  formData: FormData,
-): Promise<void> {
-  const ids = String(formData.get("ids") ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-  const redirectTo = safeAdminRedirectPath(
-    String(formData.get("redirectTo") ?? ""),
-    "/admin/submissions",
-  );
-
-  const result = await deleteSubmissionsAction({ ids });
-  if (result.error) {
-    console.error(result.error);
-    return;
-  }
-
-  redirect(redirectTo);
 }
 
 export async function deleteArtistAction(
