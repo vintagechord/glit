@@ -10,7 +10,8 @@ import { pipeline } from 'node:stream/promises';
 import { Transform, Readable } from 'node:stream';
 import { createRemoteReviewClient } from './remote.mjs';
 import { createSiteMonitor, notificationText, worst } from './monitor.mjs';
-import { upgradeManualMvCases } from './manual-upgrade.mjs';
+import { upgradeManualMvCases, upgradeManualReferenceCleanup } from './manual-upgrade.mjs';
+import { needsLyricsTranslation } from './manual-translation.mjs';
 import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings } from './core.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +70,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const outputRoot = path.join(dataRoot, '신청별 자료');
   await fs.mkdir(outputRoot, { recursive: true, mode: 0o700 });
   await upgradeManualMvCases({ store, outputRoot, importer });
+  await upgradeManualReferenceCleanup({ store, outputRoot, importer });
   const token = await sessionToken(dataRoot);
   let connected = false, syncPromise, queue = Promise.resolve(), closing = false;
   const shutdown = new AbortController();
@@ -84,7 +86,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.6.0' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.7.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -119,7 +121,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const dir = path.join(caseDir(id), '기준파일'); await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     try {
       const originalPath = path.join(dir, originalName); await fs.writeFile(originalPath, body, { flag: 'wx', mode: 0o600 });
-      const importInfo = { parserVersion: 4, filename: originalName, format: imported.format, warnings: imported.warnings || [], extractedText: imported.extractedText, importedAt: timestamp, bytes: body.length, sha256: await sha256(originalPath) };
+      const importInfo = { parserVersion: 5, filename: originalName, format: imported.format, warnings: imported.warnings || [], extractedText: imported.extractedText, importedAt: timestamp, bytes: body.length, sha256: await sha256(originalPath) };
       await fs.writeFile(path.join(dir, '추출 원문.txt'), imported.extractedText, { mode: 0o600 });
       const parsed = { source: 'manual', submission, tracks, stations: [], stationReviews: [], files: [], assets: [], warnings: [] };
       store.data.cases[id] = { source: 'manual', submission, detail: parsed, importInfo, local: { stage: 'CHECKING', notes: '', dueDate: '', checklist: {} }, generations: [], downloads: [], attachments: [], history: [], fetchedAt: timestamp };
@@ -249,8 +251,27 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     await store.save();
     return { count: results.length, warnings: message ? message.split('\n') : [], failed: errors.length };
   }
+  /** Review documents always carry Korean under foreign lyrics: untranslated
+   * runs are translated first and saved as this case's lyric edits. */
+  async function translateBeforeGeneration(id, current, job) {
+    if (!needsLyricsTranslation(current)) return { current, warnings: [] };
+    const item = getCase(id);
+    job.message = '미번역 가사를 번역하는 중'; await store.save();
+    try {
+      const result = await translator({ detail: current, serviceUrl: process.env.ONSIDE_DESK_SERVICE_URL, signal: shutdown.signal, allowOnline: true });
+      if (!(result.translatedCount > 0)) return { current, warnings: result.warnings || [] };
+      item.local = validateLocalPatch({ overrides: result.overrides, ...(item.source === 'manual' ? { reviewAcknowledgedRevision: '' } : {}) }, item.local, current.tracks.map(t => t.id));
+      if (item.source === 'manual') { item.submission.updated_at = now(); item.detail.submission.updated_at = item.submission.updated_at; }
+      store.audit(id, 'translate', `자료 생성 전에 미번역 가사 ${result.translatedCount}줄을 번역해 원문 아래 (번역: …)으로 넣었습니다.`);
+      await store.save();
+      return { current: await detail(id), warnings: result.warnings || [] };
+    } catch (error) {
+      return { current, warnings: [`미번역 가사를 자동 번역하지 못했습니다. ${safeError(error)} 번역을 확인한 뒤 자료를 다시 생성하세요.`] };
+    }
+  }
   async function generate(id, job) {
-    const current = await detail(id, true);
+    const translation = await translateBeforeGeneration(id, await detail(id, true), job);
+    const current = translation.current;
     const item = getCase(id);
     const generatedOverrides = JSON.stringify(item.local.overrides || {});
     const generationId = `${new Date().toISOString().replace(/[:.]/g, '-')}_${randomUUID().slice(0, 8)}`;
@@ -259,7 +280,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     job.message = '신청 내용과 가사로 문서를 생성하는 중'; await store.save();
     try {
       const result = await generator({ ...current, ...(item.source === 'manual' ? { files: current.localAttachments || [] } : {}), outputDir: dir, settings: store.data.settings });
-      const warnings = [...new Set([...current.warnings, ...(result.warnings || [])])];
+      const warnings = [...new Set([...current.warnings, ...translation.warnings, ...(result.warnings || [])])];
       if (!store.data.settings.managerName || !store.data.settings.managerPhone) warnings.push('앱 설정에서 심의 담당자 이름·연락처를 입력하고 다시 생성하세요.');
       const album = current.submission.type === 'ALBUM';
       const artifactList = (result.artifacts || []).map(a => ({ name: a.name, type: a.type, bytes: a.bytes }));
@@ -434,7 +455,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.6.0' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.7.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];

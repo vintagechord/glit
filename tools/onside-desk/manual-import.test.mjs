@@ -177,3 +177,18 @@ if (process.env.ONSIDE_WRITE_MANUAL_FIXTURES === '1') {
   await fs.writeFile(path.join(directory,'album.docx'),albumFixture());await fs.writeFile(path.join(directory,'mv.hwpx'),mvFixture());
   await fs.writeFile(path.join(directory,'album.hwp'),hwpFixture(['테스트 - 테스트 앨범','01. 노래 (타이틀)','(작사: 작사가 작곡: 작곡가 편곡: 편곡가)','첫 줄','Fuck this night','마지막 줄','02.노래 (Inst.)','(곡: 작곡가 편곡: 편곡가)','가사 없음.']));
 }
+
+test('label qualifier lines and applicant guidance never become values or lyrics', async () => {
+  // A converted Word form flattens cells into lines: the qualifier sits between label and value.
+  const body = docx([
+    '온사이드 뮤직비디오 심의대행 요청서', '음반명', '말랑말랑 해', '아티스트', '(한글 및 영문)', 'jihajoochajang', '사업자등록번호', '(없을시 미기입)', '778-81-03109',
+    '곡명(한글 및 영문)', '말랑말랑 해 (fluffy fluffy)', '작사자', '이준', '작곡자', '이준', '가사', '말랑말랑해', 'Hold me close', '',
+    '작성하신 신청서를  HYPERLINK "mailto:onside17@daum.net" onside17@daum.net으로 보내주시면 해당 내용으로 심의가 진행됩니다. 기타 문의사항은 이메일 또는 010-8436-9035로 연락주세요.',
+    '', '페이지　 /',
+  ].map(p).join(''));
+  const result = await importReferenceDocument({ body, filename: '뮤비요청서.docx', type: 'MV_DISTRIBUTION' });
+  assert.equal(result.submission.artist_name, 'jihajoochajang');
+  assert.doesNotMatch(JSON.stringify(result.submission), /한글 및 영문\)"|작성하신 신청서|HYPERLINK|페이지\s*\//);
+  assert.match(result.submission.mv_lyrics, /Hold me close$/);
+  assert.match(result.extractedText, /작성하신 신청서를/);
+});

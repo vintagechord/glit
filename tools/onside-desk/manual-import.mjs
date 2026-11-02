@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { extractDocxBlocks, structureExtractedFile, DOMParser, readBoundedZip } from './manual-document-parser.mjs';
 import { extractHwpBlocks, readCompoundStreams, OLE_SIGNATURE } from './manual-ole.mjs';
+import { cleanLyricRecord, isLabelHint, isReferenceBoilerplateLine, stripReferenceBoilerplate } from './reference-cleanup.mjs';
 
 const MAX_BYTES = 20 * 1024 * 1024, MAX_TEXT = 600000;
 const execFileAsync = promisify(execFile);
@@ -158,8 +159,17 @@ function isFieldBlock(block) {
   const text = block.text.trim(), label = text.match(/^([^:：\t]{1,30})\s*[:：\t]/)?.[1];
   return !!(canonical(text) || extraFields.get(key(text)) || (label && (canonical(label) || extraFields.get(key(label)))) || numbered(text) || creditLine(text));
 }
+// Submission guidance and page footers stay in extractedText but never reach fields or lyrics.
+function withoutBoilerplate(blocks) {
+  return blocks.flatMap((block) => {
+    if (block.cells) return [{ ...block, cells: block.cells.map((cell) => ({ ...cell, text: stripReferenceBoilerplate(cell.text) ?? cell.text })) }];
+    if (!isReferenceBoilerplateLine(block.text) && !block.text.split('\n').some(isReferenceBoilerplateLine)) return [block];
+    const text = stripReferenceBoilerplate(block.text);
+    return text.trim() ? [{ ...block, text }] : [];
+  });
+}
 function normalizeBlocks(result, type, warnings) {
-  const input = result.blocks.flatMap((block) => {
+  const input = withoutBoilerplate(result.blocks).flatMap((block) => {
     if (block.cells || !block.text.includes('\n')) return [block];
     const first = canonical(block.text.split(/[:：]/)[0]);
     return first && !['가사','번역가사'].includes(first) ? block.text.split('\n').map((text,index) => ({...block,text,location:`${block.location}/line:${index+1}`})) : [block];
@@ -238,11 +248,13 @@ function normalizeBlocks(result, type, warnings) {
     }
     const only = canonical(text), extraOnly=extraFields.get(key(text));
     if (only === '가사' || only === '번역가사') { flush(); lyricField = only; lyricLocation = location; lyricBuffer = []; activeTrack = true; continue; }
-    if (only && input[index+1] && !isFieldBlock(input[index+1])) {
-      flush(); output.push(row(only,formValue(only,input[++index].text,warnings),location)); if (only === '곡명') activeTrack = true; continue;
+    // A qualifier line such as "(한글 및 영문)" belongs to the label above; the value follows it.
+    const valueIndex = (only || extraOnly) && input[index+1] && !input[index+1].cells && isLabelHint(input[index+1].text) ? index + 2 : index + 1;
+    if (only && input[valueIndex] && !isFieldBlock(input[valueIndex])) {
+      flush(); index = valueIndex; output.push(row(only,formValue(only,input[index].text,warnings),location)); if (only === '곡명') activeTrack = true; continue;
     }
-    if (extraOnly && multilineExtras.has(extraOnly)) { flush(); bufferedExtraField = extraOnly; extraBuffer = []; continue; }
-    if(extraOnly && input[index+1] && !isFieldBlock(input[index+1])) {flush();extraValue(extraOnly,input[++index].text);continue;}
+    if (extraOnly && multilineExtras.has(extraOnly)) { flush(); bufferedExtraField = extraOnly; extraBuffer = []; if (valueIndex > index + 1) index++; continue; }
+    if(extraOnly && input[valueIndex] && !isFieldBlock(input[valueIndex])) {flush();index = valueIndex;extraValue(extraOnly,input[index].text);continue;}
     if (/^(?:※|참고\s*[:：]|안내\s*[:：]|접수일자\s*[:：])/.test(text)) { flush(); output.push(block); continue; }
     if (extraBuffer) { extraBuffer.push(block.text); continue; }
     const number = numbered(text);
@@ -312,5 +324,5 @@ export async function importReferenceDocument({ body, filename, type = 'ALBUM' }
     if (album.declaredTrackCount && album.declaredTrackCount !== tracks.length) warnings.push(`원문의 곡 수(${album.declaredTrackCount})와 읽은 트랙 수(${tracks.length})가 다릅니다. 누락·중복 여부를 확인해 주세요.`);
     for (const track of tracks) if (!track.lyrics?.trim() && !track.is_instrumental) warnings.push(`${track.track_no}번 ${track.track_title || '(제목 미입력)'}: 가사가 없습니다. 가사를 입력하거나 원문의 Inst./MR 표기를 확인해 주세요.`);
   } else if (!submission.mv_lyrics.trim()) warnings.push('뮤직비디오 가사가 없습니다. 보존된 원문을 보고 가사를 입력해 주세요.');
-  return { submission, tracks:type==='ALBUM'?tracks:[], extractedText, warnings:[...new Set(warnings)], format:result.format };
+  return { submission:cleanLyricRecord(submission), tracks:type==='ALBUM'?tracks.map(cleanLyricRecord):[], extractedText, warnings:[...new Set(warnings)], format:result.format };
 }

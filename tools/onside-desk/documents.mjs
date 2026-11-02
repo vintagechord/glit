@@ -1,3 +1,4 @@
+import { cleanLyricRecord } from './reference-cleanup.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -225,7 +226,9 @@ async function countPages(file,qaDir,settings) {
 }
 export async function generateDocuments({submission,source,tracks=[],stations=[],stationReviews=[],files=[],outputDir,settings={}}) {
   if(!submission || !['ALBUM','MV_DISTRIBUTION','MV_BROADCAST'].includes(submission.type)) throw new Error('지원하지 않는 심의 유형입니다.');
-  submission={...submission,source:source||submission.source||'online'};
+  // Applicant guidance and page footers from a reference form never reach a document.
+  submission={...cleanLyricRecord(submission),source:source||submission.source||'online'};
+  tracks=(tracks||[]).map(cleanLyricRecord);
   if(!outputDir || !path.isAbsolute(outputDir)) throw new Error('자료 저장 위치는 절대 경로여야 합니다.');
   outputDir=path.resolve(outputDir);
   await fs.mkdir(outputDir,{recursive:true,mode:0o700});

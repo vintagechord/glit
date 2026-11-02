@@ -63,15 +63,30 @@ function adjacentTranslation(tail,singleSpanLine) {
 }
 
 /** Source spans that actually lack an adjacent supplied translation. No guessing. */
+// "(번역: …)" on its own line right under a run of foreign lyric lines
+// translates the whole run, e.g. three English lines and one Korean line.
+const blockAnnotation=/^\s*[（(]\s*(?:번역|해석)\s*[:：]/;
+function blockAnnotated(source,lineStart,foreignLines) {
+  let end=source.indexOf('\n',lineStart);
+  while(end>=0) {
+    const start=end+1,next=source.indexOf('\n',start),line=source.slice(start,next<0?source.length:next).replace(/\r$/,'');
+    if(!line.trim()) return false;
+    if(blockAnnotation.test(line)) return true;
+    if(!foreignLines.has(start)) return false;
+    end=next;
+  }
+  return false;
+}
 export function untranslatedLyricSpans(lyrics) {
   const source=value(lyrics),all=findForeignLyricsSpans(source).filter(span=>!sectionLabel.test(excerpt(source,span.start)));
   const lineCounts=new Map();
   for(const span of all) {const start=source.lastIndexOf('\n',span.start)+1;lineCounts.set(start,(lineCounts.get(start)||0)+1);}
   return all.filter(span=>{
-    const tail=source.slice(span.end);
-    if(adjacentTranslation(tail,lineCounts.get(source.lastIndexOf('\n',span.start)+1)===1)) return false;
+    const tail=source.slice(span.end),lineStart=source.lastIndexOf('\n',span.start)+1;
+    if(adjacentTranslation(tail,lineCounts.get(lineStart)===1)) return false;
     // Explicit but empty/invalid annotations are supplied content for manual review.
-    return !/^[ \t]*(?:[（([{]\s*)?(?:번역|해석)\s*[:：]/.test(tail);
+    if(/^[ \t]*(?:[（([{]\s*)?(?:번역|해석)\s*[:：]/.test(tail)) return false;
+    return !blockAnnotated(source,lineStart,lineCounts);
   });
 }
 
@@ -133,11 +148,12 @@ export function reviewLyrics({submission={},source,tracks=[]}={}) {
     if(source.length>limited.length) add('incomplete',track,'lyrics',source,null,`미번역 확인은 처음 ${SCREENING_LIMITS.charactersPerField.toLocaleString('ko-KR')}자까지 수행했습니다. 이후 가사도 직접 확인하세요.`);
     const spans=findForeignLyricsSpans(limited).filter(span=>!sectionLabel.test(excerpt(limited,span.start)));
     const lineCounts=new Map();for(const span of spans) {const line=linesAt(limited,span.start);lineCounts.set(line,(lineCounts.get(line)||0)+1);}
-    const warnedLines=new Set();
+    const warnedLines=new Set(),foreignStarts=new Set(spans.map(span=>limited.lastIndexOf('\n',span.start)+1));
     for(const span of spans) {
       const tail=limited.slice(span.end);
       const annotation=adjacentTranslation(tail,lineCounts.get(linesAt(limited,span.start))===1);
       if(annotation&&isUsableLyricsTranslation(annotation.translation,span.source)) continue;
+      if(!annotation&&blockAnnotated(limited,limited.lastIndexOf('\n',span.start)+1,foreignStarts)) continue;
       const line=linesAt(limited,span.start);
       if(warnedLines.has(line)) continue;
       warnedLines.add(line);
