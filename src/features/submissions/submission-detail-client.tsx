@@ -997,12 +997,27 @@ export function SubmissionDetailClient({
       </ol>
     </div>
   );
+  const latestStationUpdate = (renderStationReviews ?? [])
+    .map((review) => review.updated_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
   const renderStationReviewSection = () => (
     <div id="station-review-section" className={detailPanelClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className={detailKickerClass}>
           방송국별 현황
         </p>
+        {/* Phones show one latest update here instead of a date on every row. */}
+        {latestStationUpdate ? (
+          <p
+            className="text-right text-[11px] font-semibold uppercase tracking-normal text-muted-foreground sm:hidden"
+            aria-label={`Updated ${formatDateTime(latestStationUpdate)}`}
+          >
+            Updated{" "}
+            <span className="text-foreground/72">{formatDateTime(latestStationUpdate)}</span>
+          </p>
+        ) : null}
       </div>
       {submission.result_status || submission.result_memo ? (
         <div className="mt-4 rounded-[8px] border border-border bg-background p-4">
@@ -1116,13 +1131,13 @@ export function SubmissionDetailClient({
                   key={review.id}
                   className="min-w-0 rounded-[8px] border-2 border-[#111111] bg-background p-3 text-sm shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
                 >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div
                       className="flex min-w-0 items-center gap-3"
                       title={stationName}
                     >
                       <StationLogoWithFallback station={review.station} />
-                      <div className="min-w-0">
+                      <div className="hidden min-w-0 sm:block">
                         <p
                           className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                           title={formatDateTime(review.updated_at)}
@@ -1139,6 +1154,7 @@ export function SubmissionDetailClient({
                       label={resultDisplayStatus.label}
                       tone={resultDisplayStatus.tone}
                       summary={trackSummaryLine}
+                      className="w-auto"
                       onClick={handleResultClick}
                       aria-label={[stationName, resultDisplayStatus.label, trackSummaryLine].filter(Boolean).join(" · ")}
                     />
@@ -1435,7 +1451,9 @@ export function SubmissionDetailClient({
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
               {submission.artist_name ? <span data-no-translate>{submission.artist_name}</span> : (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
             </p>
-            <div className="mt-6 w-full rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27]">
+            {/* Once paid, phones go from the title straight to the station table;
+                the application form stays reachable from its own section below. */}
+            <div className={`mt-6 w-full rounded-[8px] border-2 border-[#111111] bg-white/85 p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#111111]/55 dark:shadow-[4px_4px_0_#f2cf27] ${isPaymentDone ? "hidden sm:block" : ""}`}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                   현재 상태
@@ -1486,7 +1504,7 @@ export function SubmissionDetailClient({
       </section>
 
       {isPaymentDone ? (
-        <div className="mt-8">
+        <div className="mt-5 sm:mt-8">
           {renderStationReviewSection()}
           {submission.type === "ALBUM" && hasAllExpectedStationResults ? (
             <div className="mt-6"><BroadcastSupportPanel submission={submission} stationReviews={stationReviews} isEnglish={localePrefix === "/en"} /></div>
