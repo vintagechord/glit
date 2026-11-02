@@ -7,6 +7,8 @@ import type { saveManagedStationReview, saveManagedStationReviews, saveManagedOn
 import type { saveManagedCertificate } from "./certificate-save";
 import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/server-upload-limit";
 import type { getReviewSummaryEmailPreviewById, sendReviewSummaryNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
+import type { loadPurgeCandidates, purgeCustomerFiles } from "./customer-file-purge";
+import { PURGE_BATCH_LIMIT } from "./customer-file-purge-limits";
 
 const uuid = z.string().uuid();
 const revision = z.string().datetime({ offset: true });
@@ -42,18 +44,21 @@ type Dependencies = {
 };
 type Context = { params: Promise<{ id: string }> };
 
+/** Signed bytes first, then a live administrator role, before any DB work. */
+async function authenticateDeskAdmin(deps: Pick<Dependencies, "secret" | "createDb">, request: Request, body: Buffer) {
+  const identity = verifyDeskRequest(request, body, deps.secret());
+  if (!identity) return { error: failure(401, "Mac 연동 인증을 확인하지 못했습니다.") } as const;
+  const db = deps.createDb();
+  const { data: actor, error } = await db.from("profiles").select("role").eq("user_id", identity.actorId).maybeSingle();
+  if (error) return { error: failure(503, "관리자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.") } as const;
+  if (actor?.role !== "admin") return { error: failure(403, "관리자 권한이 필요합니다.") } as const;
+  return { db, ...identity } as const;
+}
+
 /** The route and its synthetic tests share these handlers. No DB or mail
  * operation is reachable until the signed bytes and live administrator role pass. */
 export function createReviewDeskHandlers(deps: Dependencies) {
-  async function authenticate(request: Request, body: Buffer) {
-    const identity = verifyDeskRequest(request, body, deps.secret());
-    if (!identity) return { error: failure(401, "Mac 연동 인증을 확인하지 못했습니다.") } as const;
-    const db = deps.createDb();
-    const { data: actor, error } = await db.from("profiles").select("role").eq("user_id", identity.actorId).maybeSingle();
-    if (error) return { error: failure(503, "관리자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.") } as const;
-    if (actor?.role !== "admin") return { error: failure(403, "관리자 권한이 필요합니다.") } as const;
-    return { db, ...identity } as const;
-  }
+  const authenticate = (request: Request, body: Buffer) => authenticateDeskAdmin(deps, request, body);
   async function finish(db: SupabaseClient, id: string, changed: boolean, notification: SubmissionNotificationOutcome | null, extras: Record<string, unknown> = {}) {
     try { deps.revalidate(id); } catch { /* A committed save remains successful. */ }
     const snapshot = await deps.loadSnapshot(db, id).catch(() => null);
@@ -78,7 +83,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         ]);
         const schemaReady = !protocol.error && protocol.data?.protocol === DESK_PROTOCOL_VERSION && !station.error && !outbox.error;
         return jsonResponse({ ok: schemaReady, protocol: DESK_PROTOCOL_VERSION, schemaReady,
-          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true },
+          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true },
           ...(schemaReady ? {} : { error: "심의 연동 서비스 업데이트가 아직 완료되지 않았습니다." }),
         }, schemaReady ? 200 : 503);
       }
@@ -154,6 +159,46 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         notification.error ?? "이메일 미리보기를 다시 확인해주세요.", notification.errorCode);
       return finish(auth.db, id, false, notification);
     } catch (error) { return requestFailure(error); }
+  }
+  return { GET, POST };
+}
+
+const purgeBody = z.object({ operation: z.literal("purge"), submissionIds: z.array(uuid).min(1).max(PURGE_BATCH_LIMIT), requestId: uuid });
+type StorageDependencies = Pick<Dependencies, "secret" | "createDb"> & {
+  loadCandidates: typeof loadPurgeCandidates;
+  purge: typeof purgeCustomerFiles;
+};
+const storageFailure = (error: unknown) => error instanceof Error && error.name === "B2ConfigError"
+  ? failure(500, "파일 저장소 설정을 확인할 수 없습니다.")
+  : error && typeof error === "object" && "status" in error && error.status === 413
+    ? failure(413, "입력 데이터가 허용 크기를 초과했습니다.")
+    : failure(500, "삭제 대상을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+
+/** The Mac desk's 저장공간 정리: the same candidates and purge as /admin/storage.
+ * Object keys never leave the service; the desk only sees what it lists. */
+export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
+  async function GET(request: Request) {
+    try {
+      const auth = await authenticateDeskAdmin(deps, request, await readBoundedDeskBody(request, 0));
+      if (auth.error) return auth.error;
+      const items = (await deps.loadCandidates(auth.db)).map((candidate) => ({
+        submissionId: candidate.submissionId, title: candidate.title, artistName: candidate.artistName, type: candidate.type,
+        refunded: candidate.refunded, finishedAt: candidate.finishedAt, fileCount: candidate.files.length, totalBytes: candidate.totalBytes,
+      }));
+      return jsonResponse({ ok: true, items, batchLimit: PURGE_BATCH_LIMIT });
+    } catch (error) { return storageFailure(error); }
+  }
+  async function POST(request: Request) {
+    try {
+      const bytes = await readBoundedDeskBody(request, 64 * 1024);
+      const auth = await authenticateDeskAdmin(deps, request, bytes);
+      if (auth.error) return auth.error;
+      if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
+      const parsed = purgeBody.safeParse(await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null));
+      if (!parsed.success) return failure(400, `삭제할 신청을 1~${PURGE_BATCH_LIMIT}건씩 보내주세요.`);
+      if (parsed.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
+      return jsonResponse({ ok: true, results: await deps.purge(auth.db, parsed.data.submissionIds, auth.actorId) });
+    } catch (error) { return storageFailure(error); }
   }
   return { GET, POST };
 }
