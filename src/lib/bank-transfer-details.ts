@@ -3,6 +3,10 @@
 export const BANK_DEPOSITOR_NAME_MAX = 40;
 export const BANK_DEPOSIT_MAX_DAYS = 14;
 export const BANK_DEPOSIT_DEFAULT_DAYS = 3;
+/** Re-paying a bank order (cancel the deposit request and choose card or bank
+ * again) from the order history. Hidden for now because customers mistook the
+ * button for a required step; set to true to bring the button and its copy back. */
+export const BANK_ORDER_REPAY_ENABLED: boolean = false;
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
