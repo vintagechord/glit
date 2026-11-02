@@ -1,6 +1,5 @@
 /** Fill colors of the rating marks in public/media/mv-ratings (18 uses the
- * 19 mark), with a text color that keeps AA contrast on each fill. The
- * `.bauhaus-status-chip--rating-*` classes in globals.css use the same values. */
+ * 19 mark), with a text color that keeps AA contrast on each fill. */
 export const MV_RATING_MARK_COLORS = {
   ALL: { background: "#229c56", color: "#111111" },
   "12": { background: "#e9b630", color: "#111111" },
@@ -14,6 +13,18 @@ export type MvRatingMarkCode = keyof typeof MV_RATING_MARK_COLORS;
 export const isMvRatingMarkCode = (value: unknown): value is MvRatingMarkCode =>
   typeof value === "string" && Object.hasOwn(MV_RATING_MARK_COLORS, value);
 
-/** Status-chip modifier that paints a result in its rating mark's colors. */
-export const mvRatingChipTone = (code: MvRatingMarkCode) =>
-  `bauhaus-status-chip--rating-${code === "18" ? "19" : code.toLowerCase()}`;
+// Written out in full so Tailwind generates every class; a globals.css rule
+// for these chips did not reach the production stylesheet.
+const MV_RATING_CHIP_TONES: Record<MvRatingMarkCode, string> = {
+  ALL: "bg-[#229c56] text-[#111111] dark:bg-[#229c56] dark:text-[#111111]",
+  "12": "bg-[#e9b630] text-[#111111] dark:bg-[#e9b630] dark:text-[#111111]",
+  "15": "bg-[#dd7430] text-[#111111] dark:bg-[#dd7430] dark:text-[#111111]",
+  "18": "bg-[#d92a35] text-white dark:bg-[#d92a35] dark:text-white",
+  "19": "bg-[#d92a35] text-white dark:bg-[#d92a35] dark:text-white",
+};
+
+/** Chip classes that paint a result in its rating mark's colors. */
+export const mvRatingChipTone = (code: MvRatingMarkCode) => MV_RATING_CHIP_TONES[code];
+
+export const isMvRatingChipTone = (tone: string) =>
+  Object.values(MV_RATING_CHIP_TONES).includes(tone);

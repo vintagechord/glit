@@ -20,7 +20,7 @@ import { isRejectedMvResult } from "@/lib/submission-certificate";
 import { summarizeTrackResults } from "@/lib/track-results";
 import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
-import { isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
+import { isMvRatingChipTone, isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 
 type StationItem = {
   id: string;
@@ -468,7 +468,7 @@ function CompactStationRow({
   english: boolean;
 }) {
   const stationName = getStationName(station);
-  const statusClass = status.tone.includes("--rating-")
+  const statusClass = isMvRatingChipTone(status.tone)
     ? status.tone
     : status.tone.includes("--danger")
       ? "bg-[#d9362c] text-white"
