@@ -74,7 +74,7 @@ test("an approved online MV result shows its rating in the rating mark's colors"
   const detail = page.getByRole("region", { name: "상세", exact: true });
   const result = detail.getByRole("button", { name: /^영상물등급위원회 · 15세이상관람가/ });
   await expect(result).toBeVisible();
-  await expect(result).toHaveClass(/bauhaus-status-chip--rating-15/);
+  await expect(result).toHaveClass(/bg-\[#dd7430\]/);
   await expect(detail.getByRole("button", { name: /^영상물등급위원회 · 적격/ })).toHaveCount(0);
 });
 
