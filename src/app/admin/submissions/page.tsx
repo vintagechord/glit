@@ -661,10 +661,7 @@ export default async function AdminSubmissionsPage({
                       >
                         상세보기
                       </Link>
-                      <AdminDeleteButton
-                        ids={[submission.id]}
-                        className="inline-flex h-9 items-center justify-center rounded-[8px] border-2 border-rose-200/80 bg-background px-3 text-[11px] font-black text-rose-600 transition hover:border-rose-500 hover:bg-rose-500/10 hover:text-rose-700"
-                      />
+                      <AdminDeleteButton ids={[submission.id]} />
                     </div>
                   </div>
                 </div>

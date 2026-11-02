@@ -89,4 +89,7 @@ SQL
 wait "$order_bank_pid"
 # Open-day fixes: stale claim expiry, bank depositor details, guest draft adoption, empty draft purge.
 order_psql < "$order_sql_root/tests/sql/open-fixes.sql"
+# Administrator deletion detaches unpaid orders and refuses paid ones.
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261102170000_admin_delete_submissions.sql"
+order_psql < "$order_sql_root/tests/sql/admin-delete-submissions.sql"
 echo "Submission orders SQL checks passed; disposable container will be removed."

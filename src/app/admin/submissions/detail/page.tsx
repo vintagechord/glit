@@ -905,7 +905,7 @@ export default async function AdminSubmissionDetailPage({
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
             />
           ) : null}
-          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} className="rounded-full border border-rose-200/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700" />
+          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} />
         </div>
       </div>
 

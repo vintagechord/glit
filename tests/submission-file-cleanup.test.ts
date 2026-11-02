@@ -193,17 +193,16 @@ test("admin hard-delete cleanup uses only database-confirmed deleted IDs", () =>
     "export async function deleteSubmissionsAction",
   );
   const actionEnd = source.indexOf(
-    "export async function deleteSubmissionsFormAction",
+    "export async function deleteArtistAction",
     actionStart,
   );
   const action = source.slice(actionStart, actionEnd);
 
   const authIndex = action.indexOf("await requireAdminAction()");
   const loadIndex = action.indexOf("loadSubmissionB2ObjectRefs(");
-  const deleteIndex = action.indexOf('.from("submissions")', loadIndex);
-  const confirmedIdsIndex = action.indexOf(
-    "const deletedIds = (deletedRows ?? [])",
-  );
+  // One transaction detaches unpaid orders and deletes; it returns deleted IDs.
+  const deleteIndex = action.indexOf('rpc("admin_delete_submissions"', loadIndex);
+  const confirmedIdsIndex = action.indexOf("const deletedIds = ");
   const cleanupIndex = action.indexOf(
     "cleanupDeletedSubmissionB2Objects(",
   );
@@ -211,7 +210,7 @@ test("admin hard-delete cleanup uses only database-confirmed deleted IDs", () =>
   assert.ok(authIndex >= 0);
   assert.ok(loadIndex > authIndex);
   assert.ok(deleteIndex > loadIndex);
-  assert.match(action, /\.delete\(\)[\s\S]*\.select\("id"\)/);
+  assert.match(action, /p_actor_user_id: actor\.id/);
   assert.ok(confirmedIdsIndex > deleteIndex);
   assert.ok(cleanupIndex > confirmedIdsIndex);
   assert.match(
