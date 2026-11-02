@@ -16,7 +16,7 @@ import {
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
-import { formatDateTime } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
 import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults } from "@/lib/track-results";
@@ -29,6 +29,7 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
+import { AdminRefundPanel } from "@/components/admin/refund-panel";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
@@ -569,13 +570,25 @@ export default async function AdminSubmissionDetailPage({
   const { data: currentOrderRaw } = currentOrderId
     ? await supabase
       .from("submission_orders")
-      .select("id, status, payment_method, depositor_name, deposit_due_at, amount_krw")
+      .select("id, status, payment_method, depositor_name, deposit_due_at, amount_krw, refunded_at")
       .eq("id", currentOrderId)
       .maybeSingle()
     : { data: null };
   const currentOrder = currentOrderRaw as {
-    id: string; status: string; payment_method: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null;
+    id: string; status: string; payment_method: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null; refunded_at: string | null;
   } | null;
+  // The refund panel lists every application paid in the same order and
+  // warns when a cash receipt was issued for it.
+  const [orderItemsResult, cashReceiptResult] = currentOrderId && ["PAID", "REFUNDED"].includes(submission.payment_status ?? "")
+    ? await Promise.all([
+      supabase.from("submission_order_items").select("title, submission_id").eq("order_id", currentOrderId),
+      supabase.from("submission_order_cash_receipts").select("status").eq("order_id", currentOrderId).maybeSingle(),
+    ])
+    : [{ data: null }, { data: null }];
+  const orderTitles = ((orderItemsResult.data ?? []) as Array<{ title: string | null; submission_id: string | null }>)
+    .filter((item) => item.submission_id)
+    .map((item) => item.title?.trim() || "제목 미입력");
+  const cashReceiptIssued = (cashReceiptResult.data as { status?: string } | null)?.status === "ISSUED";
   const depositDueDate = formatDepositDue(currentOrder?.deposit_due_at);
   const depositDueLabel = depositDueDate
     ? `${depositDueDate}${currentOrder?.status === "BANK_PENDING" && isDepositOverdue(currentOrder.deposit_due_at) ? " (기한 지남)" : ""}`
@@ -792,9 +805,9 @@ export default async function AdminSubmissionDetailPage({
             : "APPLICATION_RECEIVED";
   const stationResultProgressLabel =
     reviews.length > 0
-      ? `${completedReviewCount}/${reviews.length} 결과`
+      ? `${reviews.length}곳 중 ${completedReviewCount}곳 반영`
       : "결과 대기";
-  const finalReviewStepLabel = "결과 등록";
+  const finalReviewStepLabel = "결과";
   const finalReviewStepValue = isMvSubmission
     ? isMvDistribution
       ? isMvRejected
@@ -804,15 +817,15 @@ export default async function AdminSubmissionDetailPage({
           : hasMvResultGrade
             ? `${mvRatingLabel(submission.mv_desired_rating)} · 필증 대기`
             : hasMvReceptionStarted
-              ? "결과 등급 선택"
-              : "접수 후 결과 등록"
+              ? "등급 선택 전"
+              : "접수 후 입력"
       : hasResultPublished
         ? resultStatusLabelMap[
             submission.result_status as keyof typeof resultStatusLabelMap
           ] ?? "결과 등록 완료"
         : hasMvReceptionStarted
-          ? "결과 입력 대기"
-          : "접수 후 결과 등록"
+          ? "입력 전"
+          : "접수 후 입력"
     : reviews.length > 0
       ? stationResultProgressLabel
       : "결과 대기";
@@ -834,41 +847,40 @@ export default async function AdminSubmissionDetailPage({
     state: "done" | "active" | "pending";
   }> = [
     {
-      label: isMvSubmission ? "신청 완료" : "신청접수",
-      value: hasRequiredBasics ? "신청서 접수" : "정보 보완 필요",
+      label: "신청",
+      value: hasRequiredBasics ? `${formatDate(submission.created_at)} 접수` : "제목·아티스트 보완 필요",
       state: hasRequiredBasics ? "done" : "active",
     },
     {
-      label: "결제완료",
-      value: hasPaymentComplete ? "결제 완료" : paymentLabel,
-      state: hasPaymentComplete ? "done" : "active",
+      label: "결제",
+      value: hasPaymentComplete
+        ? [submission.payment_method ? paymentMethodLabels[submission.payment_method] ?? submission.payment_method : null,
+          submission.amount_krw ? `${formatCurrency(submission.amount_krw)}원` : null].filter(Boolean).join(" · ") || "확인됨"
+        : paymentLabel,
+      state: hasPaymentComplete ? "done" : submission.payment_status === "REFUNDED" ? "pending" : "active",
     },
     {
-      label: isMvSubmission ? "접수 진행" : "심의진행",
-      value: isMvSubmission
-        ? hasResultPublished
-          ? "접수 진행 완료"
-          : hasMvReceptionStarted
-            ? "접수 진행 중"
-            : hasPaymentComplete
-              ? "접수 준비"
-              : "결제 완료 후 진행"
-        : hasAlbumResultNotified
-          ? "심의 진행 완료"
-          : hasAlbumReviewInProgress
-            ? "방송사별 심의 진행 중"
-            : hasPaymentComplete
-              ? "심의 진행 준비"
-              : "결제 완료 후 진행",
-      state: isMvSubmission
+      label: isMvDistribution ? "영등위 접수" : "방송사 접수",
+      value: !hasPaymentComplete
+        ? "결제 확인 후 시작"
+        : isMvDistribution
+          ? hasResultPublished
+            ? "결과 수신"
+            : hasMvReceptionStarted
+              ? "심의 중"
+              : "접수 준비"
+          : reviews.length > 0
+            ? `${reviews.length}곳 중 ${stationSubmittedCount}곳`
+            : "접수 준비",
+      state: isMvDistribution
         ? hasResultPublished
           ? "done"
           : hasPaymentComplete || hasMvReceptionStarted
             ? "active"
             : "pending"
-        : hasAlbumResultNotified
+        : hasAllStationsSubmitted || hasAlbumResultNotified || (isMvSubmission && hasResultPublished)
           ? "done"
-          : hasPaymentComplete || hasAlbumReviewInProgress
+          : hasPaymentComplete || hasAlbumReviewInProgress || hasMvReceptionStarted
             ? "active"
             : "pending",
     },
@@ -987,7 +999,7 @@ export default async function AdminSubmissionDetailPage({
                   {step.state === "done"
                     ? "완료"
                     : step.state === "active"
-                      ? "확인"
+                      ? "진행 중"
                       : "대기"}
                 </span>
               </div>
@@ -1048,6 +1060,16 @@ export default async function AdminSubmissionDetailPage({
               />
             </div>
           </div>
+
+          <AdminRefundPanel
+            submissionId={submission.id}
+            paymentStatus={submission.payment_status}
+            paymentMethod={currentOrder?.payment_method ?? submission.payment_method}
+            amountKrw={currentOrder?.amount_krw ?? submission.amount_krw}
+            orderTitles={orderTitles}
+            cashReceiptIssued={cashReceiptIssued}
+            refundedAt={currentOrder?.refunded_at ?? null}
+          />
 
           <form
             action={saveSubmissionAdminFormAction}

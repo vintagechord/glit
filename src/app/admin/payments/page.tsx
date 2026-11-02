@@ -100,7 +100,7 @@ export default async function AdminPaymentsPage({ searchParams }: {
       {savedNotice ? <p role="status" className="mt-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">{savedNotice}{params.savedWarning ? ` (${params.savedWarning})` : ""}</p> : null}
       {params.saved === "error" ? <p role="alert" className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">{params.savedError || "처리하지 못했습니다."}</p> : null}
       <p className="mt-5 rounded-xl border border-border p-4 text-sm">
-        승인 확인 필요 건은 이니시스 관리자 거래 내역과 신청·주문 상태를 먼저 대조해주세요. 확인 전에는 재결제를 안내하지 마세요. 대조가 끝난 APPROVAL_UNCERTAIN 건은 아래 행에서 승인·미승인을 기록할 수 있습니다. 환불은 접수 상세의 결제 상태에서 ‘환불’로 기록합니다(PG·계좌 환불 실행은 별도).
+        승인 확인 필요 건은 이니시스 관리자 거래 내역과 신청·주문 상태를 먼저 대조해주세요. 확인 전에는 재결제를 안내하지 마세요. 대조가 끝난 APPROVAL_UNCERTAIN 건은 아래 행에서 승인·미승인을 기록할 수 있습니다. 환불은 이니시스 관리자 취소나 계좌 송금으로 먼저 처리한 뒤, 접수 상세의 ‘환불 처리’에서 기록합니다.
         {" "}<Link href="/admin/submissions?type=ALL&payment=REFUNDED" className="font-semibold underline underline-offset-2">환불로 기록된 신청 확인</Link>
         {" "}(PG 취소 완료 여부는 별도 대조)
       </p>
