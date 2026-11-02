@@ -1302,14 +1302,15 @@ export function HomeReviewPanel({
 
         {!needsPayment ? (
           <div className={`rounded-[8px] border-2 border-[#111111] bg-white ${sectionPaddingClass} ${stationSectionClass} dark:border-[#f2cf27] dark:bg-[#171717]`}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-foreground">
+            {/* The update date sits on the heading line, at the table's top right. */}
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+              <div className="flex min-w-0 flex-auto items-center justify-between gap-3">
+                <p className="shrink-0 text-sm font-semibold text-foreground">
                   방송국별 현황
                 </p>
                 {isLoggedIn && !needsPayment && latestStationUpdatedAt ? (
                   <p
-                    className="mt-1 text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                    className="whitespace-nowrap text-right text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
                     title={formatDate(latestStationUpdatedAt)}
                     aria-label={`Updated ${formatDate(latestStationUpdatedAt)}`}
                   >

@@ -28,7 +28,7 @@ test.beforeAll(async () => {
           ? <SubmissionDetailClient submissionId="fixture" initialSubmission={submission} initialStationReviews={reviews} initialFiles={[]} enableRealtime={false} resultsOnly />
           : mode==='list'
             ? <SubmissionStatusList submissions={[{...submission,station_reviews:reviews}]} />
-            : <HomeReviewPanel isLoggedIn={false} albumSubmissions={[submission]} mvSubmissions={[]} albumStationsMap={{fixture:mode==='compact'?compactReviews:reviews}} mvStationsMap={{}} hideEmptyTabs showDetailLink={false} compact={mode==='compact'} panelMinHeightClassName="" />;
+            : <HomeReviewPanel isLoggedIn={params.get('login')==='1'} albumSubmissions={[submission]} mvSubmissions={[]} albumStationsMap={{fixture:mode==='compact'?compactReviews:reviews}} mvStationsMap={{}} hideEmptyTabs showDetailLink={false} compact={mode==='compact'} panelMinHeightClassName="" />;
         createRoot(document.getElementById('root')).render(<>{english?<EnglishLanguagePack/>:null}<main style={{padding:16,maxWidth:mode==='compact'?500:1100,margin:'auto'}}>{content}</main></>);
       ` },
       bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
@@ -217,5 +217,40 @@ for (const width of [320, 390, 640, 1440]) {
         expect(errors).toEqual([]);
       });
     }
+  }
+}
+
+// The station heading and its update date share one line; the date sits at the table's top right.
+for (const mode of ["home", "compact"]) {
+  for (const width of [320, 640, 1440]) {
+    test(`station update date sits on the heading line in ${mode} at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/*", route => route.request().resourceType() === "document"
+        ? route.fulfill({ contentType: "text/html", body: html }) : route.fulfill({ status: 404 }));
+      await page.goto(`/__review-result-controls?mode=${mode}&theme=light&login=1`);
+      const heading = page.getByText("방송국별 현황", { exact: true });
+      const updated = page.getByLabel(/^Updated /);
+      await expect(updated).toBeVisible();
+      const section = heading.locator("xpath=../../..");
+      const [headingBox, updatedBox, sectionBox] = await Promise.all([heading.boundingBox(), updated.boundingBox(), section.boundingBox()]);
+      expect(headingBox && updatedBox && sectionBox).toBeTruthy();
+      if (!headingBox || !updatedBox || !sectionBox) return;
+      expect(headingBox.height).toBeLessThan(30);
+      expect(Math.abs((updatedBox.y + updatedBox.height / 2) - (headingBox.y + headingBox.height / 2))).toBeLessThan(4);
+      expect(updatedBox.x).toBeGreaterThan(headingBox.x + headingBox.width);
+      const padding = await section.evaluate(element => parseFloat(getComputedStyle(element).paddingRight) + parseFloat(getComputedStyle(element).borderRightWidth));
+      const contentRight = sectionBox.x + sectionBox.width - padding;
+      // Scroll buttons follow the date when they fit and wrap below otherwise; the date never leaves the heading line.
+      const nextButton = page.locator('button[aria-label="다음 방송국 상태"]');
+      const next = await nextButton.isVisible() ? await nextButton.boundingBox() : null;
+      const buttonsBeside = next !== null && next.y < headingBox.y + headingBox.height;
+      if (buttonsBeside) expect(updatedBox.x + updatedBox.width).toBeLessThan(next.x);
+      else expect(Math.abs(updatedBox.x + updatedBox.width - contentRight)).toBeLessThan(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: testInfo.outputPath(`updated-${mode}-${width}.png`), fullPage: true });
+      expect(errors).toEqual([]);
+    });
   }
 }
