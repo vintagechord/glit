@@ -36,6 +36,20 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
   const labelId = React.useId();
 
   React.useEffect(() => () => controller.current?.abort(), []);
+  // Customers only see this panel when a supplement request exists. If the
+  // check fails, the panel stays visible so a pending request is not hidden.
+  const [presence, setPresence] = React.useState<"checking" | "none" | "some" | "unknown">(admin ? "some" : "checking");
+  React.useEffect(() => {
+    if (admin) return;
+    const abort = new AbortController();
+    void api<{ requests: Request[] }>(undefined, abort.signal).then((result) => {
+      setRequests(result.requests); setLoaded(true);
+      setPresence(result.requests.length ? "some" : "none");
+    }, () => { if (!abort.signal.aborted) setPresence("unknown"); });
+    return () => abort.abort();
+    // The check runs once per submission; api() reads only stable props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, submissionId, guestToken]);
 
   async function api<T>(body?: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
     const response = await fetch(endpoint, {
@@ -142,6 +156,8 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
     UPLOADED: t("파일 전송 완료", "File Uploaded"), ABORTED: t("전송 취소", "Cancelled"),
   }[status] ?? t("상태 확인 중", "Checking Status"));
   const delivery = (status?: string, email = false, outcome?: Notice["outcome"]) => outcome?.emailStatus === "uncertain" ? t("업체 접수 여부 확인 필요", "Provider Acceptance Needs Review") : outcome?.emailQueued ? t("자동 재시도 예정", "Automatic Retry Scheduled") : status === "API_ACCEPTED" ? t("발송 업체 접수", "Accepted by Provider") : status === "SKIPPED" ? email && getEmailDeliveryMode() === "manual" ? t("자동 이메일 보류·별도 안내 필요", "Automatic Email Deferred; Notify Separately") : t("설정·수신처 확인 필요", "Configuration or Recipient Needed") : status === "FAILED" ? t("실패·재시도 필요", "Failed; Retry Needed") : t("응답 확인 필요", "Response Needs Checking");
+
+  if (presence === "checking" || presence === "none") return null;
 
   return <section className="my-6 rounded-xl border border-border bg-card p-4 sm:p-6" aria-labelledby={labelId}>
     <h2 id={labelId} className="text-lg font-bold">{t("보완 요청·제출 내역", "Supplement Requests and Submissions")}</h2>

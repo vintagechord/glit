@@ -56,17 +56,22 @@ export default function NewSubmissionPage() {
             <ReliableLink
               key={card.href}
               href={card.href}
-              className={`group flex min-w-0 flex-col rounded-[10px] border-2 p-4 sm:p-6 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] ${card.tone}`}
+              // Phones: compact row with the button on the right; larger screens keep the tall card.
+              className={`group flex min-w-0 items-center gap-3 rounded-[10px] border-2 p-4 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] sm:flex-col sm:items-stretch sm:gap-0 sm:p-6 ${card.tone}`}
             >
-              <card.icon className="h-7 w-7" aria-hidden="true" />
-              <p className="mt-3 text-sm font-black tracking-normal">
-                {card.meta}
-              </p>
-              <h2 className="mt-4 break-keep text-balance text-2xl font-black leading-snug tracking-normal sm:text-[28px]">
-                {reviewServices[index].title}
-              </h2>
-              <p className="mb-6 mt-3 text-sm font-semibold leading-6">{reviewServices[index].purpose}</p>
-              <div className="mt-auto inline-flex w-fit items-center gap-2 border-2 border-current bg-white px-4 py-2 text-sm font-black text-[#111111]">
+              <div className="min-w-0 flex-1 sm:flex sm:flex-col">
+                <div className="flex items-center gap-2 sm:block">
+                  <card.icon className="h-5 w-5 shrink-0 sm:h-7 sm:w-7" aria-hidden="true" />
+                  <p className="text-xs font-black tracking-normal sm:mt-3 sm:text-sm">
+                    {card.meta}
+                  </p>
+                </div>
+                <h2 className="mt-1.5 break-keep text-balance text-lg font-black leading-snug tracking-normal sm:mt-4 sm:text-[28px]">
+                  {reviewServices[index].title}
+                </h2>
+                <p className="mt-1 text-xs font-semibold leading-5 sm:mb-6 sm:mt-3 sm:text-sm sm:leading-6">{reviewServices[index].purpose}</p>
+              </div>
+              <div className="inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap border-2 border-current bg-white px-3 py-2 text-xs font-black text-[#111111] sm:mt-auto sm:gap-2 sm:px-4 sm:text-sm">
                 신청하기
                 <span className="transition-transform duration-200 group-hover:translate-x-1">
                   →

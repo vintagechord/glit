@@ -26,7 +26,9 @@ test.beforeAll(async () => {
         const compactReviews=['NOT_SENT','SENT','APPROVED','REJECTED','NEEDS_FIX','APPROVED'].map((status,index)=>({id:'compact-'+index,status,result_note:status==='REJECTED'?'가사 수정 필요':null,track_results:['APPROVED','REJECTED'].includes(status)?tracks.map((t,trackIndex)=>({track_id:t.id,track_no:t.track_no,title:t.track_title,status:index===5&&trackIndex===1?'REJECTED':status})):[],updated_at:submission.updated_at,station:{id:'station-'+index,name:['KBS','MBC','SBS','YTN','CBS','ARIRANG'][index],code:['KBS','MBC','SBS','YTN','CBS','ARIRANG'][index]}}));
         const mvSubmission={...submission,id:'mvfixture',title:'결과 등급 확인 뮤직비디오',type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'APPROVED',mv_desired_rating:params.get('rating')||'ALL',album_tracks:[]};
         const mvReviews=[{id:'mv-review',status:'APPROVED',result_note:null,track_results:[],updated_at:submission.updated_at,station:{id:'kmrb',name:'영상물등급위원회',code:'KMRB'}}];
-        const content=mode==='detail'
+        const content=mode==='page'
+          ? <SubmissionDetailClient submissionId="fixture" initialSubmission={{...submission,status:'IN_PROGRESS'}} initialStationReviews={reviews.map((review,index)=>({...review,updated_at:index===1?'2026-10-18T03:00:00Z':review.updated_at}))} initialFiles={[]} enableRealtime={false} initialDataComplete />
+          : mode==='detail'
           ? <SubmissionDetailClient submissionId="fixture" initialSubmission={submission} initialStationReviews={reviews} initialFiles={[]} enableRealtime={false} resultsOnly />
           : mode==='list'
             ? <SubmissionStatusList submissions={[{...submission,station_reviews:reviews}]} />
@@ -279,6 +281,55 @@ for (const compact of [false, true]) {
       expect(await chip.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color })))
         .toEqual({ background, color });
       await expect(page.getByText("적격", { exact: true })).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+// The customer result page on phones: no status card once paid, one update
+// date beside the station heading, and each result beside its logo.
+for (const width of [390, 1280]) {
+  for (const supplements of [0, 1]) {
+    test(`result page layout at ${width}px with ${supplements ? "a" : "no"} supplement request`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1200 });
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/*", route => {
+        const request = route.request();
+        if (request.resourceType() === "document") return route.fulfill({ contentType: "text/html", body: html });
+        if (new URL(request.url()).pathname.endsWith("/supplements")) {
+          return route.fulfill({ contentType: "application/json", body: JSON.stringify({ requests: supplements ? [{ id: "request-1", note: "가사 파일을 다시 보내주세요.", status: "OPEN", created_at: "2026-10-17T00:00:00Z", revisions: [] }] : [] }) });
+        }
+        return route.fulfill({ status: 404 });
+      });
+      await page.goto(`/__review-result-controls?mode=page&theme=light`);
+      const heading = page.getByText("방송국별 현황", { exact: true });
+      await expect(heading).toBeVisible();
+      await expect(page.getByRole("heading", { name: "보완 요청·제출 내역" })).toHaveCount(supplements);
+      const phone = width < 640;
+      await expect(page.getByText("현재 상태", { exact: true })).toBeVisible({ visible: !phone });
+      const section = page.locator("#station-review-section");
+      const headingDate = section.getByLabel(/^Updated /).first();
+      if (phone) {
+        await expect(headingDate).toBeVisible();
+        await expect(headingDate).toContainText("2026. 10. 18.");
+        const headingBox = (await heading.boundingBox())!, dateBox = (await headingDate.boundingBox())!;
+        expect(Math.abs((dateBox.y + dateBox.height / 2) - (headingBox.y + headingBox.height / 2))).toBeLessThan(4);
+      } else {
+        await expect(headingDate).toBeHidden();
+      }
+      const rows = section.locator("[data-review-result-control]");
+      await expect(rows.first()).toBeVisible();
+      for (const control of await rows.all()) {
+        const row = control.locator("xpath=..");
+        const logo = (await row.locator(":scope > div").first().boundingBox())!;
+        const box = (await control.boundingBox())!;
+        expect(box.x).toBeGreaterThan(logo.x + logo.width);
+        expect(Math.abs((box.y + box.height / 2) - (logo.y + logo.height / 2))).toBeLessThan(phone ? 12 : 40);
+        await expect(row.locator("p", { hasText: /^Updated/ })).toBeVisible({ visible: !phone });
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.screenshot({ path: testInfo.outputPath(`result-page-${width}-${supplements}.png`), fullPage: true });
       expect(errors).toEqual([]);
     });
   }
