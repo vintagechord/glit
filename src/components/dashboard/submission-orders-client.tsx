@@ -16,7 +16,7 @@ import {
   SUBMISSION_ORDERS_UPDATED_EVENT, toGuestTokensBySubmissionId,
 } from "@/lib/guest-submission-cart";
 import type { SubmissionOrder, SubmissionOrderItem, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
-import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
+import { BANK_ORDER_REPAY_ENABLED, formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import type { CashReceiptSummary } from "@/lib/cash-receipts";
 import { OrderCashReceiptPanel } from "./order-cash-receipt-panel";
 
@@ -225,7 +225,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
             </ul>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p></div>
-              {order.canReturnToCart && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : "결제하기"}</button>}
+              {order.canReturnToCart && (BANK_ORDER_REPAY_ENABLED || order.status !== "BANK_PENDING") && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : "결제하기"}</button>}
             </div>
             {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[var(--bauhaus-blue)] bg-background p-4">
               <p className="flex items-center gap-2 text-xs font-black"><Landmark size={15} aria-hidden />입금 계좌</p>
@@ -238,7 +238,9 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                 {formatDepositDue(order.depositDueAt) && <><dt className="text-muted-foreground">예정일</dt><dd className={isDepositOverdue(order.depositDueAt) ? "font-black text-[var(--bauhaus-red)]" : ""}>{formatDepositDue(order.depositDueAt)}{isDepositOverdue(order.depositDueAt) ? " · 기한 지남" : ""}</dd></>}
               </dl>
               <p className="mt-3 text-xs leading-5 text-muted-foreground">{isDepositOverdue(order.depositDueAt)
-                ? "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 입금하거나 결제하기에서 다시 신청해주세요."
+                ? BANK_ORDER_REPAY_ENABLED
+                  ? "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 입금하거나 결제하기에서 다시 신청해주세요."
+                  : "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 위 계좌로 입금해주세요."
                 : "입금자명이 다르면 입금 확인이 늦어질 수 있습니다. 이미 입금했다면 입금 확인을 기다려주세요."}</p>
             </div>}
             <OrderCashReceiptPanel order={order} guestTokens={userId ? {} : guestTokens} onChanged={updateCashReceipt} />

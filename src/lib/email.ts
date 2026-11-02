@@ -1,5 +1,6 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
+import { BANK_ORDER_REPAY_ENABLED } from "@/lib/bank-transfer-details";
 import type { EmailAttachmentRef } from "@/lib/email-attachments";
 import { formatDateTime } from "@/lib/format";
 
@@ -388,7 +389,7 @@ export async function sendOrderBankTransferEmail(
             <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">주문내역 보기</a>
             <a href="${escapeHtml(siteLink)}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
           </div>
-          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금이 확인되면 결제 완료 안내 메일을 보내드리고 진행상황이 자동으로 업데이트됩니다. 입금자명이 신청자명과 다르면 ${safeSupport}로 알려주세요. 아직 입금하지 않았다면 주문내역에서 결제 수단을 다시 선택할 수 있습니다.</p>
+          <p style="margin:14px 0 0;font-size:12px;color:#64748b;line-height:1.6;">입금이 확인되면 결제 완료 안내 메일을 보내드리고 진행상황이 자동으로 업데이트됩니다. 입금자명이 신청자명과 다르면 ${safeSupport}로 알려주세요.${BANK_ORDER_REPAY_ENABLED ? " 아직 입금하지 않았다면 주문내역에서 결제 수단을 다시 선택할 수 있습니다." : ""}</p>
           <p style="margin:6px 0 0;font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(progressLink)}</p>
         </div>
       </div>

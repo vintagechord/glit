@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import type { SubmissionCartItem } from "../../src/lib/submission-cart";
 import type { SubmissionOrder, SubmissionOrderStatus } from "../../src/lib/submission-orders-types";
 import { GUEST_SUBMISSION_CART_STORAGE_KEY, GUEST_SUBMISSION_ORDERS_STORAGE_KEY } from "../../src/lib/guest-submission-cart";
+import { BANK_ORDER_REPAY_ENABLED } from "../../src/lib/bank-transfer-details";
 
 const ids = Array.from({ length: 12 }, (_, index) => `11111111-1111-4111-8111-${String(index + 1).padStart(12, "0")}`);
 const orderIds = Array.from({ length: 12 }, (_, index) => `22222222-2222-4222-8222-${String(index + 1).padStart(12, "0")}`);
@@ -150,7 +151,7 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
 const expectClean = (harness: Harness) => { expect(harness.errors).toEqual([]); expect(harness.unexpected).toEqual([]); };
 const navigation = (page: Page) => page.evaluate(() => (window as unknown as { __commerceNavigation?: string[] }).__commerceNavigation ?? []);
 const stored = (page: Page, key: string) => page.evaluate(key => JSON.parse(localStorage.getItem(key) || "[]") as { submissionId: string; guestToken: string }[], key);
-const returnButtonContrast = (page: Page) => returnButton(page).evaluate(element => {
+const returnButtonContrast = (page: Page, id = orderIds[0]) => returnButton(page, id).evaluate(element => {
   const style = getComputedStyle(element);
   const canvas = document.createElement("canvas"); canvas.width = 1; canvas.height = 1;
   const context = canvas.getContext("2d")!;
@@ -294,14 +295,15 @@ test.describe("isolated commerce account fixtures", () => {
     orders[5] = { ...orders[5], returnedAt: "2026-09-08T01:00:00Z", canReturnToCart: false, items: orders[5].items.map(value => ({ ...value, submissionId: null })) };
     const harness = await mount(page, { view: "orders", orders, identity });
     await expect(page.getByRole("article")).toHaveCount(8); await expect(orderRow(page, orderIds[0])).toContainText("입금 계좌");
-    expect(await returnButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+    await expect(returnButton(page, orderIds[0])).toHaveCount(BANK_ORDER_REPAY_ENABLED ? 1 : 0);
+    expect(await returnButtonContrast(page, orderIds[1])).toBeGreaterThanOrEqual(4.5);
     await page.evaluate(() => document.documentElement.classList.add("dark"));
-    expect(await returnButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+    expect(await returnButtonContrast(page, orderIds[1])).toBeGreaterThanOrEqual(4.5);
     await page.evaluate(() => document.documentElement.classList.remove("dark"));
     await expect(orderRow(page, orderIds[2])).toContainText("25 USD");
     await expect(orderRow(page, orderIds[5])).toContainText("기존 주문 이력은 보관됩니다."); await expect(orderRow(page, orderIds[5]).getByRole("link")).toHaveCount(0);
     for (const index of [3, 5, 6, 7]) await expect(returnButton(page, orderIds[index])).toHaveCount(0);
-    await expect(payment(page)).toHaveCount(4); await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toHaveCount(0);
+    await expect(payment(page)).toHaveCount(BANK_ORDER_REPAY_ENABLED ? 4 : 3); await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "진행", exact: true })).toHaveCount(0);
     for (const [label, count] of [["대기", 4], ["완료", 1], ["실패·취소", 3], ["전체", 8]] as const) {
       await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("article")).toHaveCount(count);
@@ -311,6 +313,7 @@ test.describe("isolated commerce account fixtures", () => {
     expect(harness.writes).toHaveLength(0); expectClean(harness);
   });
   for (const identity of ["member-a", null]) test(`${identity ?? "guest"}: grouped bank return can cancel, reject, then return exactly once`, async ({ page }, testInfo) => {
+    test.skip(!BANK_ORDER_REPAY_ENABLED, "Bank order re-pay is hidden (BANK_ORDER_REPAY_ENABLED).");
     const width = identity ? 1280 : 390; await page.setViewportSize({ width, height: 900 });
     const harness = await mount(page, { view: "orders", orders: [bankGroup()], items: [item(2)], identity });
     let dialog = await confirmReturn(page); await expect(dialog).toContainText("이미 입금한 주문을 다시 결제하면 이중 납부가 됩니다.");
@@ -428,6 +431,10 @@ test.describe("live commerce routes with mocked data and writes", () => {
     await page.getByRole("button", { name: "무통장 입금", exact: true }).click(); await fillBankDetails(page); await page.getByRole("button", { name: "입금 신청", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/mypage/orders\\?focus=${ids[0]}$`));
     await expect(orderRow(page, orderIds[0])).toContainText("입금 계좌"); expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toEqual([]);
+    if (!BANK_ORDER_REPAY_ENABLED) {
+      await expect(returnButton(page)).toHaveCount(0); expect(harness.writes.map(write => write.path)).toEqual(["/api/cart/bank"]); expectClean(harness);
+      return;
+    }
     const dialog = await confirmReturn(page); await dialog.getByRole("button", { name: "결제하기", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/mypage/cart\\?step=payment&items=${encodeURIComponent(ids.slice(0, 2).join(","))}$`));
     for (const id of ids.slice(0, 2)) await expect(select(page, id)).toBeDisabled();
@@ -437,10 +444,14 @@ test.describe("live commerce routes with mocked data and writes", () => {
     await page.setViewportSize({ width: 390, height: 900 });
     const harness = await mount(page, { view: "orders", orders: [bankGroup(), order(2, "CARD_PENDING", { canReturnToCart: false }), order(3, "PAID"), order(4, "FAILED")], live: true });
     await expect(page.getByRole("article")).toHaveCount(4); await expect(returnButton(page, orderIds[2])).toHaveCount(0);
-    expect(await returnButtonContrast(page)).toBeGreaterThanOrEqual(4.5);
+    await expect(returnButton(page)).toHaveCount(BANK_ORDER_REPAY_ENABLED ? 1 : 0);
+    expect(await returnButtonContrast(page, orderIds[4])).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: testInfo.outputPath("orders-390.png"), fullPage: true, animations: "disabled" });
-    const dialog = await confirmReturn(page); await page.screenshot({ path: testInfo.outputPath("orders-return-confirm-390.png"), fullPage: true, animations: "disabled" });
-    await dialog.getByRole("button", { name: "취소", exact: true }).click(); expect(harness.writes).toHaveLength(0);
+    if (BANK_ORDER_REPAY_ENABLED) {
+      const dialog = await confirmReturn(page); await page.screenshot({ path: testInfo.outputPath("orders-return-confirm-390.png"), fullPage: true, animations: "disabled" });
+      await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    }
+    expect(harness.writes).toHaveLength(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390); expectClean(harness);
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.screenshot({ path: testInfo.outputPath("orders-1280.png"), fullPage: true, animations: "disabled" });
