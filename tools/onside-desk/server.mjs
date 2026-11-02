@@ -80,11 +80,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const safeError = error => error?.message && !/(?:eyJ[A-Za-z0-9_-]{20}|https?:|secret|credential|Bearer)/i.test(error.message) ? error.message.slice(0, 500) : '작업에 실패했습니다. 연결 설정과 저장 공간을 확인한 뒤 다시 시도하세요.';
   function summary(item) {
     const s = item.source === 'manual' ? applyOverrides(item.detail, item.local).submission : item.submission;
-    return { id: s.id, source: item.source || 'online', deletedAt: item.deletedAt || null, purgePending: !!item.purgeRequestedAt, type: s.type, title: s.title, artist_name: s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged };
+    return { id: s.id, source: item.source || 'online', online: !!item.online?.submissionId, deletedAt: item.deletedAt || null, purgePending: !!item.purgeRequestedAt, type: s.type, title: s.title, artist_name: s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged };
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.5.0' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.6.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -106,7 +106,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const effective = applyOverrides(base, item.local);
     const screening = item.source === 'manual' ? await reviewer(effective) : undefined;
     return { ...effective, sourceSubmission: item.detail.submission, local: item.local, generations: item.generations || [], localAttachments: item.attachments || [], downloads: item.downloads || [], history: item.history || [], fetchedAt: item.fetchedAt, warnings: [...caseWarnings(base, item.local), ...(offlineWarning ? [offlineWarning] : [])], sourceChanged: !!item.sourceChanged,
-      ...(item.source === 'manual' ? { importInfo: item.importInfo, screening: { ...screening, acknowledged: !!screening?.sourceHash && item.local.reviewAcknowledgedRevision === screening.sourceHash } } : {}) };
+      ...(item.source === 'manual' ? { online: item.online || null, importInfo: item.importInfo, screening: { ...screening, acknowledged: !!screening?.sourceHash && item.local.reviewAcknowledgedRevision === screening.sourceHash } } : {}) };
   }
   async function importManual(body, filename, type) {
     if (!['ALBUM', 'MV_DISTRIBUTION', 'MV_BROADCAST'].includes(type)) throw Object.assign(new Error('음반 또는 뮤비 작업 유형을 선택하세요.'), { status: 400 });
@@ -138,8 +138,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       try {
         const submissions = await source.fetchSubmissions();
         const toGenerate = [];
+        const linked = new Map(Object.values(store.data.cases).filter(c => c.online?.submissionId).map(c => [c.online.submissionId, c]));
         for (const submission of submissions) {
           if (Object.hasOwn(store.data.purgedCases, submission.id)) continue;
+          const owner = linked.get(submission.id);
+          if (owner) { Object.assign(owner.online, { status: submission.status, payment_status: submission.payment_status, updated_at: submission.updated_at }); continue; }
           const old = store.data.cases[submission.id];
           if (!old) {
             store.data.cases[submission.id] = { submission, local: { stage: 'RECEIVED', notes: '', dueDate: '', checklist: {} }, generations: [], downloads: [], attachments: [], history: [] };
@@ -340,10 +343,72 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     if (!size) throw Object.assign(new Error('기준파일을 선택하세요.'), { status: 400 });
     return Buffer.concat(chunks);
   }
-  function requireOnlineCase(id) {
+  /** The service submission behind a case: an online case itself, or the guest submission a manual album was registered as. */
+  function remoteCaseId(id) {
     const item = getCase(id);
-    if (item.source === 'manual') throw Object.assign(new Error('관리자 수동 작업은 온라인 신청과 연동하지 않습니다.'), { status: 409, code: 'MANUAL_CASE_LOCAL_ONLY' });
-    return item;
+    if (item.source !== 'manual') return id;
+    if (item.online?.submissionId) return item.online.submissionId;
+    throw Object.assign(new Error('관리자 수동 작업은 온라인 결과 페이지를 만든 뒤 결과를 저장할 수 있습니다. 신청 정보 탭에서 비회원 접수로 등록하세요.'), { status: 409, code: 'MANUAL_CASE_LOCAL_ONLY' });
+  }
+  const registering = new Set();
+  const cut = (value, max) => { const text = typeof value === 'string' ? value.trim() : value === null || value === undefined ? '' : String(value).trim(); return text ? text.slice(0, max) : null; };
+  function isoDate(value) {
+    const match = String(value || '').trim().match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?$/);
+    if (!match) return null;
+    const [year, month, day] = match.slice(1).map(Number), date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
+  }
+  function intakePayload(effective, input) {
+    const s = effective.submission || {}, wbs = new Set((s.wbs_track_numbers || []).map(Number));
+    const artistType = /그룹|밴드|듀오|팀|group|band|duo/i.test(s.artist_type || '') ? 'GROUP' : /솔로|개인|solo/i.test(s.artist_type || '') ? 'SOLO' : null;
+    const tracks = (effective.tracks || []).filter(track => cut(track.track_title, 300)).map(track => ({
+      trackTitle: cut(track.track_title, 300), performer: cut(track.performer, 300), featuring: cut(track.featuring, 300), composer: cut(track.composer, 300),
+      lyricist: cut(track.lyricist, 300), arranger: cut(track.arranger, 300), lyrics: cut(track.lyrics, 30000), translatedLyrics: cut(track.translated_lyrics, 30000),
+      isTitle: !!track.is_title, broadcastSelected: wbs.has(Number(track.track_no)),
+    }));
+    return {
+      packageId: input.packageId, paid: input.paid,
+      guest: { name: input.guestName, phone: input.guestPhone || null, email: input.guestEmail || null },
+      submission: {
+        title: cut(s.title, 200), artistName: cut(s.artist_name, 200), artistNameEn: cut(s.artist_name_en, 200), releaseDate: isoDate(s.release_date),
+        genre: cut(s.genre, 100), distributor: cut(s.distributor || s.distributor_name, 200), productionCompany: cut(s.production_company, 200),
+        previousRelease: cut(s.previous_release, 500), artistType, artistMembers: cut(s.members || s.artist_members, 1000),
+        applicantName: cut(s.applicant_name, 80), applicantEmail: cut(s.applicant_email, 200), applicantPhone: cut(s.applicant_phone, 40),
+        adminMemo: '관리자 수동 작업(심의 데스크)에서 등록한 비회원 접수',
+      },
+      tracks,
+    };
+  }
+  /** 관리자 대리 접수: registers a manual album case as a guest submission with a result page and lookup code. */
+  async function registerOnline(id, input) {
+    const item = getCase(id);
+    if (item.source !== 'manual') throw Object.assign(new Error('온라인 신청은 이미 서비스에 등록되어 있습니다.'), { status: 409 });
+    if (item.online?.submissionId) return { online: item.online, detail: await detail(id) };
+    const effective = applyOverrides(item.detail, item.local);
+    if (effective.submission?.type !== 'ALBUM') throw Object.assign(new Error('음반 수동 작업만 비회원 접수로 등록할 수 있습니다.'), { status: 400 });
+    const guestName = cut(input?.guestName, 80), guestPhone = cut(input?.guestPhone, 40), guestEmail = cut(input?.guestEmail, 200);
+    if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(String(input?.packageId || ''))) throw Object.assign(new Error('심의 패키지를 선택하세요.'), { status: 400 });
+    if (!guestName) throw Object.assign(new Error('고객 이름을 입력하세요.'), { status: 400 });
+    if (guestEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) throw Object.assign(new Error('고객 이메일 형식을 확인하세요.'), { status: 400 });
+    if (typeof input?.paid !== 'boolean') throw Object.assign(new Error('결제 상태를 선택하세요.'), { status: 400 });
+    const payload = intakePayload(effective, { packageId: input.packageId, paid: input.paid, guestName, guestPhone, guestEmail });
+    if (!payload.submission.title || !payload.submission.artistName) throw Object.assign(new Error('앨범 제목과 아티스트명을 먼저 입력하세요. 자료 준비 → 문서 정보 수정에서 보완할 수 있습니다.'), { status: 400 });
+    if (!payload.tracks.length) throw Object.assign(new Error('곡 제목이 있는 트랙이 1곡 이상 필요합니다.'), { status: 400 });
+    if (registering.has(id)) throw Object.assign(new Error('등록하고 있습니다. 잠시 후 다시 확인하세요.'), { status: 409, code: 'INTAKE_BUSY' });
+    registering.add(id);
+    try {
+      // Keep the request ID until it succeeds: it is the lookup code, so a retry returns the same submission.
+      item.onlineRequest ||= { requestId: randomUUID(), startedAt: now() };
+      await store.save();
+      const result = await remote.registerGuestAlbum(payload, { requestId: item.onlineRequest.requestId });
+      item.online = { submissionId: result.submissionId, guestToken: result.guestToken, trackUrl: result.trackUrl, paid: result.paid, registeredAt: now(), status: result.paid ? 'PRE_REVIEW' : 'SUBMITTED', payment_status: result.paid ? 'PAID' : 'UNPAID' };
+      delete item.onlineRequest;
+      const twin = store.data.cases[result.submissionId];
+      if (twin && twin.source !== 'manual' && !twin.generations?.length && !twin.attachments?.length) delete store.data.cases[result.submissionId];
+      store.audit(id, 'online', `온사이드에 비회원 음반 접수로 등록하고 결과 페이지를 만들었습니다${result.paid ? ' (결제 완료로 등록)' : ' (고객 결제 대기)'}.`);
+      await store.save();
+      return { online: item.online, detail: await detail(id) };
+    } finally { registering.delete(id); }
   }
   async function afterRemoteSave(id, result, label) {
     const item = getCase(id); item.detailStale = true;
@@ -369,7 +434,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.5.0' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.6.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -389,6 +454,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       }
       if (url.pathname === '/api/connection' && req.method === 'GET') return sendJSON(res, 200, await remote.health());
       if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await remote.listStorage());
+      if (url.pathname === '/api/intake/packages' && req.method === 'GET') return sendJSON(res, 200, await remote.listIntakePackages());
       if (url.pathname === '/api/storage/purge' && req.method === 'POST') return sendJSON(res, 200, await purgeStorage(await readJSON(req)));
       if (url.pathname === '/api/sync' && req.method === 'POST') return sendJSON(res, 200, await sync());
       if (url.pathname === '/api/settings' && req.method === 'POST') { store.data.settings = validateSettings(await readJSON(req), store.data.settings); await store.save(); return sendJSON(res, 200, { settings: store.data.settings }); }
@@ -426,14 +492,14 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       }
       const resultAsset = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)\/result-assets\/(ratingImage|usageGuide|certificate)$/);
       if (resultAsset && req.method === 'GET') {
-        const [, id, kind] = resultAsset; requireOnlineCase(id);
-        const asset = await remote.downloadAsset(id, kind);
+        const [, id, kind] = resultAsset;
+        const asset = await remote.downloadAsset(remoteCaseId(id), kind);
         res.setHeader('Content-Type', asset.contentType || 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName(asset.filename || kind))}`);
         if (asset.contentLength && /^\d+$/.test(String(asset.contentLength))) res.setHeader('Content-Length', asset.contentLength);
         return await pipeline(Readable.fromWeb(asset.body), res);
       }
-      const route = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)(?:\/(local|generate|download|open|attachments|results|certificate|email-preview|reference|translate|restore))?$/);
+      const route = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)(?:\/(local|generate|download|open|attachments|results|certificate|email-preview|reference|translate|restore|register-online|open-online))?$/);
       if (!route) return sendJSON(res, 404, { error: '요청을 찾을 수 없습니다.' });
       const [, id, action] = route; const item = getCase(id, action === 'restore' || req.method === 'DELETE');
       if (!action && req.method === 'DELETE') {
@@ -463,7 +529,12 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         }
         return sendJSON(res, 200, { detail: await detail(id), translatedCount: result.translatedCount || 0, warnings: result.warnings || [] });
       }
-      if (['results', 'email-preview', 'certificate'].includes(action)) requireOnlineCase(id);
+      const rid = ['results', 'email-preview', 'certificate'].includes(action) ? remoteCaseId(id) : id;
+      if (action === 'register-online' && req.method === 'POST') return sendJSON(res, 200, await registerOnline(id, await readJSON(req)));
+      if (action === 'open-online' && req.method === 'POST') {
+        if (!item.online?.trackUrl || !/^https:\/\//.test(item.online.trackUrl)) return sendJSON(res, 404, { error: '온라인 결과 페이지가 없습니다.' });
+        openUrl(item.online.trackUrl); return sendJSON(res, 200, { opened: true });
+      }
       if (action === 'reference' && req.method === 'GET') {
         if (item.source !== 'manual' || !item.importInfo?.filename) return sendJSON(res, 404, { error: '수동 작업 기준파일을 찾을 수 없습니다.' });
         const file = childPath(caseDir(id), '기준파일', item.importInfo.filename);
@@ -471,14 +542,19 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(item.importInfo.filename)}`);
         return await pipeline(createReadStream(file), res);
       }
-      if (action === 'results' && req.method === 'GET') return sendJSON(res, 200, await remote.getResults(id));
-      if (action === 'email-preview' && req.method === 'GET') return sendJSON(res, 200, await remote.getEmailPreview(id));
+      if (action === 'results' && req.method === 'GET') {
+        const snapshot = await remote.getResults(rid);
+        // Asset links point at the local case, which for a registered manual album is not the service ID.
+        if (rid !== id) for (const asset of snapshot.assets?.items || []) if (asset.downloadUrl) asset.downloadUrl = asset.downloadUrl.replace(`/api/cases/${rid}/`, `/api/cases/${id}/`);
+        return sendJSON(res, 200, snapshot);
+      }
+      if (action === 'email-preview' && req.method === 'GET') return sendJSON(res, 200, await remote.getEmailPreview(rid));
       if (action === 'results' && req.method === 'POST') {
-        const result = await remote.saveResults(id, await readJSON(req));
+        const result = await remote.saveResults(rid, await readJSON(req));
         return sendJSON(res, 200, await afterRemoteSave(id, result, '서비스 심의 결과를 저장했습니다.'));
       }
       if (action === 'certificate' && req.method === 'POST') {
-        const result = await remote.uploadCertificate(id, { body: await readCertificate(req), filename: url.searchParams.get('filename'), expectedUpdatedAt: url.searchParams.get('expectedUpdatedAt'), requestId: url.searchParams.get('requestId') });
+        const result = await remote.uploadCertificate(rid, { body: await readCertificate(req), filename: url.searchParams.get('filename'), expectedUpdatedAt: url.searchParams.get('expectedUpdatedAt'), requestId: url.searchParams.get('requestId') });
         return sendJSON(res, 200, await afterRemoteSave(id, result, '영등위 필증을 서비스에 등록했습니다.'));
       }
       if (action === 'local' && req.method === 'PATCH') {

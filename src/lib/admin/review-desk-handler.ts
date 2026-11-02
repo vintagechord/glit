@@ -9,6 +9,8 @@ import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/server-upload-limit";
 import type { getReviewSummaryEmailPreviewById, sendReviewSummaryNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
 import type { loadPurgeCandidates, purgeCustomerFiles } from "./customer-file-purge";
 import { PURGE_BATCH_LIMIT } from "./customer-file-purge-limits";
+import { buildGuestAlbumIntakeRecord, guestAlbumIntakeFailure, guestAlbumIntakeSchema, type listGuestAlbumIntakePackages } from "./guest-album-intake";
+import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
 
 const uuid = z.string().uuid();
 const revision = z.string().datetime({ offset: true });
@@ -83,7 +85,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         ]);
         const schemaReady = !protocol.error && protocol.data?.protocol === DESK_PROTOCOL_VERSION && !station.error && !outbox.error;
         return jsonResponse({ ok: schemaReady, protocol: DESK_PROTOCOL_VERSION, schemaReady,
-          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true },
+          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true, guestAlbumIntake: true },
           ...(schemaReady ? {} : { error: "심의 연동 서비스 업데이트가 아직 완료되지 않았습니다." }),
         }, schemaReady ? 200 : 503);
       }
@@ -199,6 +201,59 @@ export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
       if (parsed.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
       return jsonResponse({ ok: true, results: await deps.purge(auth.db, parsed.data.submissionIds, auth.actorId) });
     } catch (error) { return storageFailure(error); }
+  }
+  return { GET, POST };
+}
+
+type IntakeDependencies = Pick<Dependencies, "secret" | "createDb"> & {
+  listPackages: typeof listGuestAlbumIntakePackages;
+  ensureArtist: (name: string) => Promise<string | null>;
+  trackUrl: (guestToken: string) => string;
+  revalidate: (submissionId: string) => void;
+};
+
+/** 관리자 대리 접수: the desk registers an emailed album review as a guest
+ * submission. The signed request ID becomes the guest lookup code, so a
+ * retried request returns the submission it already created. */
+export function createReviewDeskIntakeHandlers(deps: IntakeDependencies) {
+  async function GET(request: Request) {
+    try {
+      const auth = await authenticateDeskAdmin(deps, request, await readBoundedDeskBody(request, 0));
+      if (auth.error) return auth.error;
+      return jsonResponse({ ok: true, packages: await deps.listPackages(auth.db) });
+    } catch { return failure(500, "패키지 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."); }
+  }
+  async function POST(request: Request) {
+    try {
+      const bytes = await readBoundedDeskBody(request, 3 * 1024 * 1024);
+      const auth = await authenticateDeskAdmin(deps, request, bytes);
+      if (auth.error) return auth.error;
+      if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
+      const parsed = guestAlbumIntakeSchema.safeParse(await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null));
+      if (!parsed.success) return failure(400, "접수 정보를 확인해주세요. 앨범 제목·아티스트·고객 이름과 곡 제목이 필요하고, 이메일과 발매일 형식이 맞아야 합니다.");
+      const input = parsed.data;
+      if (input.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
+      const { data: pkg, error: packageError } = await auth.db.from("packages").select("price_krw").eq("id", input.packageId).eq("is_active", true).maybeSingle();
+      if (packageError) return failure(503, "패키지 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      if (!pkg) return failure(400, "선택한 패키지를 사용할 수 없습니다. 패키지를 다시 선택해주세요.");
+      const artistId = await deps.ensureArtist(input.submission.artistName).catch(() => null);
+      const record = buildGuestAlbumIntakeRecord(input, artistId);
+      const { data, error } = await auth.db.rpc("admin_register_guest_album", {
+        p_actor_user_id: auth.actorId, p_guest_token: input.requestId, p_package_id: input.packageId,
+        p_amount_krw: getAlbumReviewPriceKrw(Number(pkg.price_krw)), p_paid: input.paid, p_parent: record.parent, p_tracks: record.tracks,
+      });
+      if (error) {
+        const known = guestAlbumIntakeFailure(error.message);
+        return known ? failure(known[0], known[1]) : failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as { submission_id?: string; created?: boolean } | null;
+      if (!row?.submission_id) return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      try { deps.revalidate(row.submission_id); } catch { /* The submission exists; pages refresh on their own. */ }
+      return jsonResponse({ ok: true, created: row.created === true, submissionId: row.submission_id, guestToken: input.requestId, trackUrl: deps.trackUrl(input.requestId), paid: input.paid });
+    } catch (error) {
+      if (error && typeof error === "object" && "status" in error && error.status === 413) return failure(413, "입력 데이터가 허용 크기를 초과했습니다.");
+      return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
   }
   return { GET, POST };
 }

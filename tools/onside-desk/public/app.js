@@ -112,7 +112,7 @@ function filteredCases() {
 }
 function listMarkup() {
   const list = filteredCases();
-  return list.length ? list.map(c => `<div class="case-list-item"><button class="case-card${ui.selected === c.id ? ' selected' : ''}" data-case="${e(c.id)}" aria-pressed="${ui.selected === c.id}"><span class="case-top"><span class="type-label ${typeClass(c.type)}">${c.type === 'ALBUM' ? '◉' : '▷'} ${e(TYPE[c.type] || c.type)}</span><span class="case-date">${e(formatDate(c.created_at))}</span></span><span class="case-title">${e(value(c.title))}</span><span class="case-artist">${e(value(c.artist_name, '아티스트 미입력'))}</span><span class="case-bottom">${isManual(c) ? `<span class="badge ${stageClass(stageOf(c))}">${e(STAGES[stageOf(c)] || '신규 접수')}</span><span class="badge neutral">수동 작업</span>` : `<span class="badge ${['COMPLETED','RESULT_READY'].includes(c.status) ? 'blue' : ''}">${e(label(c.payment_status === 'PAID' && c.status === 'SUBMITTED' ? 'PRE_REVIEW' : c.status))}</span>${c.payment_status === 'PAID' ? '<span class="badge neutral">결제 완료</span>' : `<span class="badge amber">${e(label(c.payment_status))}</span>`}`}<span class="case-indicator">${c.sourceChanged ? '새 변경' : c.latestGeneration ? '자료 있음' : `#${e(shortId(c.id))}`}</span></span>${c.local?.dueDate ? `<span class="case-deadline">처리 목표 ${e(c.local.dueDate)}</span>` : ''}</button><button class="case-delete inline-link" data-delete-case="${e(c.id)}" aria-label="${e(value(c.title))} 목록에서 삭제">목록에서 삭제</button></div>`).join('') : `<div class="empty-list">표시할 신청이 없습니다.<br>${ui.nav === 'manual' ? '기준파일을 넣어 새 작업을 시작하세요.' : '필터를 변경하거나 신청을 동기화해 주세요.'}</div>`;
+  return list.length ? list.map(c => `<div class="case-list-item"><button class="case-card${ui.selected === c.id ? ' selected' : ''}" data-case="${e(c.id)}" aria-pressed="${ui.selected === c.id}"><span class="case-top"><span class="type-label ${typeClass(c.type)}">${c.type === 'ALBUM' ? '◉' : '▷'} ${e(TYPE[c.type] || c.type)}</span><span class="case-date">${e(formatDate(c.created_at))}</span></span><span class="case-title">${e(value(c.title))}</span><span class="case-artist">${e(value(c.artist_name, '아티스트 미입력'))}</span><span class="case-bottom">${isManual(c) ? `<span class="badge ${stageClass(stageOf(c))}">${e(STAGES[stageOf(c)] || '신규 접수')}</span><span class="badge neutral">수동 작업</span>${c.online ? '<span class="badge blue">결과 페이지 연동</span>' : ''}` : `<span class="badge ${['COMPLETED','RESULT_READY'].includes(c.status) ? 'blue' : ''}">${e(label(c.payment_status === 'PAID' && c.status === 'SUBMITTED' ? 'PRE_REVIEW' : c.status))}</span>${c.payment_status === 'PAID' ? '<span class="badge neutral">결제 완료</span>' : `<span class="badge amber">${e(label(c.payment_status))}</span>`}`}<span class="case-indicator">${c.sourceChanged ? '새 변경' : c.latestGeneration ? '자료 있음' : `#${e(shortId(c.id))}`}</span></span>${c.local?.dueDate ? `<span class="case-deadline">처리 목표 ${e(c.local.dueDate)}</span>` : ''}</button><button class="case-delete inline-link" data-delete-case="${e(c.id)}" aria-label="${e(value(c.title))} 목록에서 삭제">목록에서 삭제</button></div>`).join('') : `<div class="empty-list">표시할 신청이 없습니다.<br>${ui.nav === 'manual' ? '기준파일을 넣어 새 작업을 시작하세요.' : '필터를 변경하거나 신청을 동기화해 주세요.'}</div>`;
 }
 function casesScreen() {
   const statuses = ['SUBMITTED','PRE_REVIEW','WAITING_PAYMENT','IN_PROGRESS','RESULT_READY','COMPLETED'];
@@ -151,10 +151,44 @@ async function importManualReference() {
     toast('기준파일을 가져왔습니다. 추출된 정보와 가사 검토사항을 확인해 주세요.');
   } catch (error) { if (message?.isConnected) message.textContent = error.message || '파일을 읽지 못했습니다.'; throw error; } finally { ui.importing = false; if (fieldset?.isConnected) fieldset.disabled = false; }
 }
+const canUseResults = d => !isManual(d) || !!d?.online?.submissionId;
+const ONLINE_STATUS = { SUBMITTED: '접수 완료', PRE_REVIEW: '자료 확인 중', IN_PROGRESS: '심의 진행 중', RESULT_READY: '결과 확인 가능', COMPLETED: '심의 완료' };
+/** 관리자 대리 접수: a manual album becomes a guest submission with a result page and lookup code. */
+function onlineIntakeMarkup(d) {
+  const s = d.submission, online = d.online;
+  if (online?.submissionId) {
+    return `<section class="section-block online-intake linked"><div class="section-top"><h3>온라인 결과 페이지</h3><span>${e(formatDate(online.registeredAt, true))} 등록</span></div>
+      <div class="notice good">비회원 음반 접수로 등록되었습니다. 아래 주소와 조회 코드를 고객에게 전달하세요. 고객은 결과 페이지에서 방송사별 결과를 확인하고, 조회 코드는 온사이드 ‘결과 조회 → 비회원 조회 코드’에도 입력할 수 있습니다.</div>
+      <div class="online-link-row"><span class="label">결과 페이지</span><code class="online-value">${e(online.trackUrl)}</code><button class="button secondary small" data-action="copy-online-url">주소 복사</button><button class="button secondary small" data-action="open-online">열기 ↗</button></div>
+      <div class="online-link-row"><span class="label">조회 코드</span><code class="online-value">${e(online.guestToken)}</code><button class="button secondary small" data-action="copy-online-code">코드 복사</button></div>
+      <div class="online-link-row"><span class="label">서비스 상태</span><span><span class="badge neutral">${e(ONLINE_STATUS[online.status] || online.status || '확인 중')}</span> <span class="badge ${online.payment_status === 'PAID' ? '' : 'amber'}">${e(online.payment_status === 'PAID' ? '결제 완료' : '결제 대기 · 고객이 결과 페이지에서 결제')}</span></span></div>
+      <p class="helper">방송사별 결과는 <button class="inline-link" data-tab="results">심의 결과</button> 탭이나 웹 관리자에서 저장하면 고객 결과 페이지에 바로 반영됩니다. 등록 후 이 Mac에서 바꾼 곡·가사 정보는 온라인 접수에 반영되지 않습니다.</p></section><hr class="section-divider">`;
+  }
+  if (s.type !== 'ALBUM') return '';
+  const packages = ui.intakePackages?.packages;
+  const options = packages?.length ? `<option value="">패키지를 선택하세요</option>${packages.map(p => `<option value="${e(p.id)}">${e(p.name)} · 방송사 ${e(p.stationCount)}곳 · ${e(Number(p.priceKrw).toLocaleString('ko-KR'))}원</option>`).join('')}` : `<option value="">${ui.intakePackagesError ? '패키지를 불러오지 못했습니다' : '패키지를 불러오는 중…'}</option>`;
+  const tracks = (d.tracks || []).filter(t => String(t.track_title || '').trim()).length;
+  return `<section class="section-block online-intake"><div class="section-top"><h3>온라인 결과 페이지 만들기</h3><span>비회원 대리 접수</span></div>
+    <p class="helper">고객이 메일 등으로 보낸 음반 심의를 관리자가 대신 비회원으로 접수합니다. 등록하면 결과 페이지 주소와 조회 코드가 만들어지고, 웹 관리자 접수 목록에도 나타납니다. 이 작업의 곡 ${tracks}곡과 현재 입력된 신청 정보가 그대로 등록됩니다.</p>
+    ${ui.intakePackagesError ? `<div class="notice error">${e(ui.intakePackagesError)} <button class="inline-link" data-action="reload-intake-packages">다시 불러오기</button></div>` : ''}
+    <form id="online-register-form" class="online-register-form"><label class="field full"><span>심의 패키지 (신청 방송사)</span><select name="packageId" required>${options}</select></label>
+    <div class="field-grid"><label class="field"><span>고객 이름 (필수)</span><input name="guestName" required maxlength="80" value="${e(s.applicant_name || '')}"></label><label class="field"><span>연락처</span><input name="guestPhone" maxlength="40" value="${e(s.applicant_phone || '')}"></label><label class="field full"><span>이메일</span><input name="guestEmail" type="email" maxlength="200" value="${e(s.applicant_email || '')}"></label></div>
+    <fieldset class="online-paid"><legend>결제</legend><label><input type="radio" name="paid" value="true" checked> 입금 확인 완료 · 결제 완료로 등록</label><label><input type="radio" name="paid" value="false"> 결제 전 · 고객이 결과 페이지에서 결제</label></fieldset>
+    <p class="helper">결제 완료로 등록하고 이메일이 있으면 결과 페이지 주소와 조회 코드가 담긴 접수 안내 메일이 고객에게 자동 발송됩니다. 이메일을 비워 두면 메일은 보내지 않습니다. 결과 메일도 이 이메일로 보낼 수 있습니다.</p>
+    <div class="button-row"><button class="button primary" type="submit"${packages?.length ? '' : ' disabled'}>비회원 접수로 등록하고 결과 페이지 만들기</button></div></form></section><hr class="section-divider">`;
+}
+async function loadIntakePackages(force = false) {
+  if (ui.intakePackagesLoading || (ui.intakePackages && !force)) return;
+  ui.intakePackagesLoading = true; ui.intakePackagesError = '';
+  try { ui.intakePackages = await api('/api/intake/packages'); }
+  catch (error) { ui.intakePackages = null; ui.intakePackagesError = error.status === 0 ? '데스크 서비스에 연결하지 못했습니다.' : error.message; }
+  finally { ui.intakePackagesLoading = false; if (isManual(ui.detail) && !ui.detail.online && ui.tab === 'overview') detailRender(); }
+}
 function manualOverviewMarkup(d) {
   const s = d.submission, info = d.importInfo || {}, count = d.screening?.findings?.length || 0;
-  return `<div class="notice good"><strong>관리자 수동 신청</strong><p>기준파일과 작업 자료는 이 Mac에 보관됩니다. 서비스 신청이나 고객 결과 페이지에 자동 등록되지 않습니다.</p></div>
-    <section class="section-block"><div class="section-top"><h3>기준파일에서 가져온 신청</h3><button class="inline-link" data-action="edit-manual">정보 수정하기 →</button></div><div class="field-grid">${fieldValue('발매일', s.release_date)}${fieldValue('장르', s.genre)}${fieldValue('제작사', s.production_company || s.mv_production_company)}${fieldValue('유통·배급사', s.distributor || s.mv_distribution_company)}${fieldValue('신청자', s.applicant_name)}${fieldValue('연락처', s.applicant_phone)}${fieldValue('이메일', s.applicant_email, true)}${s.type !== 'ALBUM' ? `${fieldValue('감독',s.mv_director)}${fieldValue('주연',s.mv_lead_actor)}${fieldValue('상영 시간',s.mv_runtime)}${fieldValue('줄거리',s.mv_storyline,true)}` : ''}</div></section>
+  if (s.type === 'ALBUM' && !d.online && !ui.intakePackages && !ui.intakePackagesLoading && !ui.intakePackagesError) void loadIntakePackages();
+  return `<div class="notice good"><strong>관리자 수동 신청</strong><p>기준파일과 작업 자료는 이 Mac에 보관됩니다.${d.online ? ' 온사이드에 비회원 접수로 등록되어 결과 페이지와 연동됩니다.' : s.type === 'ALBUM' ? ' 고객 결과 페이지가 필요하면 아래에서 비회원 접수로 등록하세요.' : ' 서비스 신청이나 고객 결과 페이지에 자동 등록되지 않습니다.'}</p></div>
+    ${onlineIntakeMarkup(d)}<section class="section-block"><div class="section-top"><h3>기준파일에서 가져온 신청</h3><button class="inline-link" data-action="edit-manual">정보 수정하기 →</button></div><div class="field-grid">${fieldValue('발매일', s.release_date)}${fieldValue('장르', s.genre)}${fieldValue('제작사', s.production_company || s.mv_production_company)}${fieldValue('유통·배급사', s.distributor || s.mv_distribution_company)}${fieldValue('신청자', s.applicant_name)}${fieldValue('연락처', s.applicant_phone)}${fieldValue('이메일', s.applicant_email, true)}${s.type !== 'ALBUM' ? `${fieldValue('감독',s.mv_director)}${fieldValue('주연',s.mv_lead_actor)}${fieldValue('상영 시간',s.mv_runtime)}${fieldValue('줄거리',s.mv_storyline,true)}` : ''}</div></section>
     <hr class="section-divider"><section class="section-block"><div class="section-top"><h3>가사·자료 검토</h3><button class="inline-link" data-tab="review">검토사항 보기 →</button></div><p class="helper">${count ? `${count}개의 확인사항이 있습니다. 욕설·의심 표현과 번역 상태를 원문과 대조해 주세요.` : '현재 자동 점검에서 확인사항이 발견되지 않았습니다. 원문과 최종 제출 자료를 검수해 주세요.'}</p></section>${referenceMarkup(info)}`;
 }
 function referenceMarkup(info = {}) {
@@ -205,7 +239,7 @@ function detailMarkup() {
   const serviceSubmission = { ...(d.sourceSubmission || d.submission), ...(ui.tab === 'results' && ui.resultData?.caseId === ui.selected ? ui.resultData.submission : {}) };
   const manual = isManual(d);
   const s = manual || ui.tab === 'documents' ? d.submission : serviceSubmission, running = jobs().filter(j => j.caseId === ui.selected && activeJob(j));
-  return `<div class="detail-header"><div class="detail-kicker"><span class="type-label ${typeClass(s.type)}">${e(TYPE_EN[s.type] || s.type)}</span><span class="detail-id">#${e(shortId(s.id))}</span><button class="inline-link delete-detail" data-delete-case="${e(s.id)}">목록에서 삭제</button></div><h2 class="detail-title">${e(value(s.title))}</h2><p class="detail-artist">${e(value(s.artist_name))} <span>·</span> ${e(TYPE[s.type] || s.type)}</p><div class="detail-statuses">${manual ? `<span class="label">이 Mac의 수동 작업</span><span class="badge ${stageClass(stageOf(d))}">${e(STAGES[stageOf(d)] || '신규 접수')}</span>` : `<span class="label">온사이드</span><span class="badge neutral">${e(label(s.payment_status === 'PAID' && s.status === 'SUBMITTED' ? 'PRE_REVIEW' : s.status))}</span><span class="badge ${s.payment_status === 'PAID' ? '' : 'amber'}">${e(label(s.payment_status))}</span>`}</div></div>${preparationWarnings(d)}<div class="tabs" role="tablist">${[['overview','신청 정보'],['documents','자료 준비'],[manual ? 'review' : 'results',manual ? '검토사항' : '심의 결과'],['notes','작업 메모']].map(([key,name]) => `<button class="tab${ui.tab === key ? ' active' : ''}" role="tab" aria-selected="${ui.tab === key}" data-tab="${key}">${name}</button>`).join('')}</div>${running.length ? `<div class="job-inline"><span class="busy-label"><span class="spinner"></span>${e(running[0].message || '작업을 진행하고 있습니다.')}</span></div>` : ''}<div class="tab-content">${ui.tab === 'overview' ? overviewMarkup(d) : ui.tab === 'documents' ? documentsMarkup(d) : ui.tab === 'review' && manual ? manualReviewMarkup(d) : ui.tab === 'results' && !manual ? resultsMarkup(d) : notesMarkup(d)}</div>`;
+  return `<div class="detail-header"><div class="detail-kicker"><span class="type-label ${typeClass(s.type)}">${e(TYPE_EN[s.type] || s.type)}</span><span class="detail-id">#${e(shortId(s.id))}</span><button class="inline-link delete-detail" data-delete-case="${e(s.id)}">목록에서 삭제</button></div><h2 class="detail-title">${e(value(s.title))}</h2><p class="detail-artist">${e(value(s.artist_name))} <span>·</span> ${e(TYPE[s.type] || s.type)}</p><div class="detail-statuses">${manual ? `<span class="label">이 Mac의 수동 작업</span><span class="badge ${stageClass(stageOf(d))}">${e(STAGES[stageOf(d)] || '신규 접수')}</span>` : `<span class="label">온사이드</span><span class="badge neutral">${e(label(s.payment_status === 'PAID' && s.status === 'SUBMITTED' ? 'PRE_REVIEW' : s.status))}</span><span class="badge ${s.payment_status === 'PAID' ? '' : 'amber'}">${e(label(s.payment_status))}</span>`}</div></div>${preparationWarnings(d)}<div class="tabs" role="tablist">${[['overview','신청 정보'],['documents','자료 준비'],...(manual ? [['review','검토사항']] : []),...(canUseResults(d) ? [['results','심의 결과']] : []),['notes','작업 메모']].map(([key,name]) => `<button class="tab${ui.tab === key ? ' active' : ''}" role="tab" aria-selected="${ui.tab === key}" data-tab="${key}">${name}</button>`).join('')}</div>${running.length ? `<div class="job-inline"><span class="busy-label"><span class="spinner"></span>${e(running[0].message || '작업을 진행하고 있습니다.')}</span></div>` : ''}<div class="tab-content">${ui.tab === 'overview' ? overviewMarkup(d) : ui.tab === 'documents' ? documentsMarkup(d) : ui.tab === 'review' && manual ? manualReviewMarkup(d) : ui.tab === 'results' && canUseResults(d) ? resultsMarkup(d) : notesMarkup(d)}</div>`;
 }
 function detailRender() { const panel = document.getElementById('detail-panel'); if (panel) panel.innerHTML = detailMarkup(); }
 function fieldValue(name, val, wide = false) { return `<div class="field-value${wide ? ' wide' : ''}"><span class="label">${e(name)}</span><span class="value">${e(value(val))}</span></div>`; }
@@ -394,7 +428,7 @@ async function refresh(initial = false) {
   try {
     const previousJobs = ui.data?.jobs || [], previousCases = ui.data?.cases || [], next = await api('/api/state'); ui.data = next; headerRender();
     if (ui.selected && next.trashCases?.some(c => c.id === ui.selected)) { ++ui.requestSequence; ++ui.resultSequence; clearEmailPreview(); ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.resultData = null; ui.dirty = false; render(); }
-    if (initial) render(); else if (['queue','trash'].includes(ui.nav)) render(); else if (['cases','manual'].includes(ui.nav)) { renderList(); const done = previousJobs.some(j => j.caseId === ui.selected && activeJob(j) && next.jobs?.find(n => n.id === j.id && !activeJob(n))); const changedGeneration = ui.selected && (next.cases?.find(c => c.id === ui.selected)?.latestGeneration?.id || null) !== (ui.detail?.generations?.at(-1)?.id || null); const previousCase = previousCases.find(c => c.id === ui.selected), nextCase = next.cases?.find(c => c.id === ui.selected); const sourceUpdated = previousCase && nextCase && (previousCase.updated_at !== nextCase.updated_at || previousCase.status !== nextCase.status); if ((done || changedGeneration || sourceUpdated) && !ui.dirty && !ui.publishing && !ui.translating) await loadDetail(ui.selected, false); if (ui.tab === 'results' && !isManual(ui.detail) && !ui.dirty && !ui.publishing) await loadResults(false); }
+    if (initial) render(); else if (['queue','trash'].includes(ui.nav)) render(); else if (['cases','manual'].includes(ui.nav)) { renderList(); const done = previousJobs.some(j => j.caseId === ui.selected && activeJob(j) && next.jobs?.find(n => n.id === j.id && !activeJob(n))); const changedGeneration = ui.selected && (next.cases?.find(c => c.id === ui.selected)?.latestGeneration?.id || null) !== (ui.detail?.generations?.at(-1)?.id || null); const previousCase = previousCases.find(c => c.id === ui.selected), nextCase = next.cases?.find(c => c.id === ui.selected); const sourceUpdated = previousCase && nextCase && (previousCase.updated_at !== nextCase.updated_at || previousCase.status !== nextCase.status); if ((done || changedGeneration || sourceUpdated) && !ui.dirty && !ui.publishing && !ui.translating) await loadDetail(ui.selected, false); if (ui.tab === 'results' && canUseResults(ui.detail) && !ui.dirty && !ui.publishing) await loadResults(false); }
   } catch (error) {
     if (initial) screen.innerHTML = `${heading('데스크에 연결할 수 없습니다','프로그램이 실행 중인지 확인하고 다시 시도해 주세요.')}<div class="notice error">${e(error.message)}</div><button class="button primary" data-action="retry">다시 연결</button>`;
     else globalAlert(`프로그램 연결 확인: ${error.message}. 저장된 화면을 유지하고 있습니다.`);
@@ -404,7 +438,7 @@ function schedulePoll() { clearTimeout(ui.pollTimer); ui.pollTimer = setTimeout(
 async function loadDetail(id, showLoading = true) {
   const sequence = ++ui.requestSequence; ui.selected = id; if (showLoading) { ui.loadingDetail = true; detailRender(); renderList(); }
   if (ui.detail?.submission?.id !== id) { clearEmailPreview(); ui.resultData = null; ui.resultNotice = null; ui.resultError = ''; ui.resultStationId = null; ui.resultDirtyForm = null; ui.bulkSelected = []; ui.bulkStatus = 'NOT_SENT'; ui.bulkAgeRating = ''; ui.certificateFile = null; ui.translationNotice = null; }
-  try { const detail = await api(`/api/cases/${encodeURIComponent(id)}`); if (sequence !== ui.requestSequence) return; ui.detail = detail; ui.savedDetail = structuredClone(detail); ui.loadingDetail = false; detailRender(); if (ui.tab === 'results' && !isManual(detail)) await loadResults(true); }
+  try { const detail = await api(`/api/cases/${encodeURIComponent(id)}`); if (sequence !== ui.requestSequence) return; ui.detail = detail; ui.savedDetail = structuredClone(detail); ui.loadingDetail = false; detailRender(); if (ui.tab === 'results' && canUseResults(detail)) await loadResults(true); }
   catch (err) { if (sequence !== ui.requestSequence) return; ui.loadingDetail = false; toast(err.message, true); if (!ui.detail || ui.detail.submission?.id !== id) ui.detail = null; detailRender(); }
 }
 async function saveLocal(patch, message = '저장했습니다.', shouldRender = true, preserveDirty = false) {
@@ -675,6 +709,10 @@ async function action(name, button) {
     else if (name === 'monitor-refresh') await loadMonitor(true);
     else if (name === 'monitor-open') await api('/api/monitor/open', { method: 'POST', body: { target: button?.dataset.target || '' } });
     else if (name === 'monitor-clear-token') { const result = await api('/api/monitor/settings', { method: 'POST', body: { vercelToken: null } }); ui.monitor = { ...ui.monitor, ...result }; monitorScreen(); toast('Vercel 토큰을 삭제했습니다.'); }
+    else if (name === 'copy-online-url') { await navigator.clipboard.writeText(ui.detail?.online?.trackUrl || ''); toast('결과 페이지 주소를 복사했습니다.'); }
+    else if (name === 'copy-online-code') { await navigator.clipboard.writeText(ui.detail?.online?.guestToken || ''); toast('조회 코드를 복사했습니다.'); }
+    else if (name === 'open-online') await api(apiPath('/open-online'), { method: 'POST', body: {} });
+    else if (name === 'reload-intake-packages') await loadIntakePackages(true);
     else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; await loadStorage(); }
     else if (name === 'storage-purge') await purgeStorage();
     else if (name === 'backup') { const backup = await api('/api/backup', { method: 'POST', body: {} }); toast(backup.message || '관리 내역과 생성 문서를 백업했습니다.'); await refresh(); }
@@ -695,7 +733,7 @@ document.addEventListener('click', async event => {
     const id = button.dataset.case || button.dataset.historyCase; if (previousNav !== ui.nav || !document.getElementById('detail-panel') || ui.nav === 'manual') render(); await loadDetail(id); return;
   }
   if (button.dataset.filter) { ui.filter = button.dataset.filter; document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('active', b.dataset.filter === ui.filter)); renderList(); return; }
-  if (button.dataset.tab) { if (!(await discardEdits())) return; ui.dirty = false; ui.tab = button.dataset.tab; detailRender(); if (ui.tab === 'results' && !isManual(ui.detail)) await loadResults(true); return; }
+  if (button.dataset.tab) { if (!(await discardEdits())) return; ui.dirty = false; ui.tab = button.dataset.tab; detailRender(); if (ui.tab === 'results' && canUseResults(ui.detail)) await loadResults(true); return; }
   if (button.dataset.docTab) { if (!(await discardEdits())) return; ui.dirty = false; ui.docTab = button.dataset.docTab; detailRender(); return; }
   if (button.dataset.resultStation) { if (!(await discardEdits())) return; ui.dirty = false; ui.resultStationId = button.dataset.resultStation; detailRender(); updateRatingRequired(); return; }
   if (button.dataset.artifact) { button.disabled = true; try { await downloadArtifact(button.dataset.generation, button.dataset.artifact); } catch (error) { toast(error.message, true); } finally { button.disabled = false; } }
@@ -735,10 +773,24 @@ document.addEventListener('change', async event => {
   } catch (error) { toast(error.message, true); el.disabled = false; }
 });
 document.addEventListener('submit', async event => {
-  const form = event.target; if (!['manual-import-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form','monitor-settings-form'].includes(form.id)) return; event.preventDefault();
+  const form = event.target; if (!['online-register-form','manual-import-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form','monitor-settings-form'].includes(form.id)) return; event.preventDefault();
   const button = form.querySelector('button[type="submit"]'); button.disabled = true;
   try {
     const data = new FormData(form);
+    if (form.id === 'online-register-form') {
+      const pkg = ui.intakePackages?.packages?.find(p => p.id === data.get('packageId')), paid = data.get('paid') === 'true';
+      if (!pkg) { toast('심의 패키지를 선택하세요.', true); return; }
+      const dialog = document.getElementById('confirm-dialog'); if (dialog.open) return;
+      document.getElementById('confirm-title').textContent = '비회원 접수로 등록할까요?';
+      document.getElementById('confirm-message').textContent = `‘${value(ui.detail.submission.title)}’을 ${pkg.name}(방송사 ${pkg.stationCount}곳, ${Number(pkg.priceKrw).toLocaleString('ko-KR')}원)으로 온사이드에 등록하고 결과 페이지를 만듭니다. ${paid ? '결제 완료로 등록합니다.' : '고객이 결과 페이지에서 결제하도록 결제 대기로 등록합니다.'} 웹 관리자 접수 목록에도 나타납니다.`;
+      dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = '등록'; dialog.returnValue = ''; dialog.showModal();
+      const confirmed = await new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+      dialog.querySelector('[value=cancel]').textContent = '계속 편집'; dialog.querySelector('[value=confirm]').textContent = '변경 버리기';
+      if (!confirmed) return;
+      const result = await api(apiPath('/register-online'), { method: 'POST', body: { packageId: pkg.id, paid, guestName: String(data.get('guestName') || ''), guestPhone: String(data.get('guestPhone') || ''), guestEmail: String(data.get('guestEmail') || '') } });
+      ui.detail = result.detail; ui.savedDetail = structuredClone(result.detail); ui.dirty = false; detailRender(); await refresh();
+      toast('비회원 접수로 등록했습니다. 결과 페이지 주소와 조회 코드를 고객에게 전달하세요.'); return;
+    }
     if (form.id === 'manual-import-form') { await importManualReference(); return; }
     if (form.id === 'monitor-settings-form') {
       const token = String(data.get('vercelToken') || '').trim();
