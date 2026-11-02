@@ -2979,9 +2979,9 @@ export function translateValue(value: string): string {
   }
   const ratingNotice = /^(전체관람가|12세이상관람가|15세이상관람가|청소년관람불가|심의불가) 결과 통보 완료$/.exec(normalized);
   if (ratingNotice) return preserveWhitespace(value, `${exactTranslations[ratingNotice[1]]} result notified`);
-  const stationStatus = /^(.*?)\s*·\s*(적격|부적격|보완 요청|접수예정|접수완료)$/.exec(normalized);
+  const stationStatus = /^(.*?)\s*·\s*(적격|부적격|보완 요청|접수예정|접수완료|전체관람가|12세이상관람가|15세이상관람가|청소년관람불가)$/.exec(normalized);
   if (stationStatus) return preserveWhitespace(value, `${translateValue(stationStatus[1])} · ${translateValue(stationStatus[2])}`);
-  const stationResult = /^(.*?) (적격|부적격|보완 요청) 결과 보기$/.exec(normalized);
+  const stationResult = /^(.*?) (적격|부적격|보완 요청|전체관람가|12세이상관람가|15세이상관람가|청소년관람불가) 결과 보기$/.exec(normalized);
   if (stationResult) return preserveWhitespace(value, `View ${stationResult[1]} result: ${exactTranslations[stationResult[2]]}`);
   const cached = phraseTranslationCache.get(value);
   if (cached !== undefined) return cached;

@@ -1,6 +1,7 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
 import { BANK_ORDER_REPAY_ENABLED } from "@/lib/bank-transfer-details";
+import { MV_RATING_MARK_COLORS, type MvRatingMarkCode } from "@/lib/mv-rating-colors";
 import type { EmailAttachmentRef } from "@/lib/email-attachments";
 import { formatDateTime } from "@/lib/format";
 
@@ -553,7 +554,7 @@ export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions 
   });
 }
 
-export type ReviewSummaryRatingCode = "ALL" | "12" | "15" | "18" | "19";
+export type ReviewSummaryRatingCode = MvRatingMarkCode;
 export type ReviewSummaryEmailRow = {
   name: string;
   status: string;
@@ -593,21 +594,12 @@ export function renderReviewSummaryEmail(content: ReviewSummaryEmailContent) {
     attention: { background: "#f2cf27", color: "#111111" },
     rejected: { background: "#d9362c", color: "#ffffff" },
   };
-  // Fills of the rating marks in public/media/mv-ratings (18 uses the 19 mark);
-  // the text color keeps AA contrast on each fill.
-  const ratingColors: Record<ReviewSummaryRatingCode, { background: string; color: string }> = {
-    ALL: { background: "#229c56", color: "#111111" },
-    "12": { background: "#e9b630", color: "#111111" },
-    "15": { background: "#dd7430", color: "#111111" },
-    "18": { background: "#d92a35", color: "#ffffff" },
-    "19": { background: "#d92a35", color: "#ffffff" },
-  };
   const badge = (label: string, color: { background: string; color: string }, large = false) =>
     `<span style="display:inline-block;padding:${large ? "7px 14px" : "4px 9px"};border:2px solid #111111;border-radius:4px;background:${color.background};color:${color.color};font-size:${large ? 18 : 12}px;font-weight:800;line-height:1.4;">${escapeHtml(label)}</span>`;
   const online = content.kind === "MV_DISTRIBUTION";
   const rows = content.rows.map((row, index) => {
     const border = index ? "1px solid #ded9cd" : "0";
-    const ratingColor = row.rating ? ratingColors[row.rating] : null;
+    const ratingColor = row.rating ? MV_RATING_MARK_COLORS[row.rating] : null;
     const name = `<div style="font-size:15px;font-weight:700;color:#111111;">${escapeHtml(row.name)}</div>`;
     // The online result is the rating itself: show it large under the name.
     if (online && ratingColor) {
