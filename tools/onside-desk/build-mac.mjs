@@ -12,7 +12,7 @@ const resources = path.join(bundle, 'Contents', 'Resources');
 const payload = path.join(resources, 'app');
 await fs.mkdir(payload, { recursive: true });
 await fs.mkdir(path.join(bundle, 'Contents', 'MacOS'), { recursive: true });
-for (const name of ['server.mjs', 'core.mjs', 'source.mjs', 'remote.mjs', 'monitor.mjs', 'documents.mjs', 'manual-upgrade.mjs', 'manual-import.mjs', 'manual-ole.mjs', 'manual-document-parser.mjs', 'screening.mjs', 'screening-engine.mjs', 'manual-translation.mjs', 'public', 'templates', 'README.md']) await fs.cp(path.join(here, name), path.join(payload, name), { recursive: true });
+for (const name of ['server.mjs', 'core.mjs', 'source.mjs', 'remote.mjs', 'monitor.mjs', 'documents.mjs', 'manual-upgrade.mjs', 'manual-import.mjs', 'manual-ole.mjs', 'manual-document-parser.mjs', 'screening.mjs', 'screening-engine.mjs', 'manual-translation.mjs', 'reference-cleanup.mjs', 'public', 'templates', 'README.md']) await fs.cp(path.join(here, name), path.join(payload, name), { recursive: true });
 await fs.writeFile(path.join(payload, 'package.json'), JSON.stringify({ name: 'onside-review-desk', version: '2.7.0', private: true, type: 'module' }, null, 2));
 const copied = new Set();
 async function copyPackage(name, from) {
