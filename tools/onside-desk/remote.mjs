@@ -4,6 +4,8 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 const UUID = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 const ASSET_KINDS = new Set(['ratingImage', 'usageGuide', 'certificate']);
 const JSON_LIMIT = 3 * 1024 * 1024;
+// Must match PURGE_BATCH_LIMIT in src/lib/admin/customer-file-purge-limits.ts.
+export const STORAGE_PURGE_BATCH = 10;
 // The web app runs on Vercel Functions (4.5MB request bodies); certificates stay at 4MB.
 const CERTIFICATE_LIMIT = 4 * 1024 * 1024;
 const ASSET_LIMIT = 25 * 1024 * 1024;
@@ -92,7 +94,7 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
   };
   async function request(id, { method = 'GET', query, body = Buffer.alloc(0), contentType, idempotencyId, signal, timeout = 120_000 } = {}) {
     const config = readConfig();
-    const url = new URL(`/api/internal/review-desk/${id === 'health' ? id : submissionId(id)}`, config.origin);
+    const url = new URL(`/api/internal/review-desk/${id === 'health' || id === 'storage' ? id : submissionId(id)}`, config.origin);
     if (query) for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, value === null ? '' : String(value));
     const timestamp = String(clock()), nonce = requestId(idempotencyId);
     const signed = { method, path: url.pathname + url.search, timestamp, requestId: nonce, actorId: config.actorId, body };
@@ -174,5 +176,28 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     const fallback = kind === 'ratingImage' ? '등급이미지.png' : kind === 'usageGuide' ? '등급표기_사용안내.pdf' : '영등위_필증.pdf';
     return { body, filename: filenameFromHeaders(response.headers, fallback), contentType, contentLength };
   }
-  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset };
+  /** 저장공간 정리: finished or refunded submissions whose customer uploads can be purged. */
+  async function listStorage({ signal } = {}) {
+    const data = await jsonBody(await request('storage', { signal, timeout: 60_000 }));
+    if (!data || !Array.isArray(data.items)) throw new RemoteReviewError('저장공간 정리 대상을 불러오지 못했습니다. 서비스 배포 상태를 확인해 주세요.', 502, 'INVALID_STORAGE_LIST');
+    const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    const items = data.items.filter(item => item && UUID.test(String(item.submissionId))).map(item => ({
+      submissionId: String(item.submissionId), title: typeof item.title === 'string' ? item.title : null, artistName: typeof item.artistName === 'string' ? item.artistName : null,
+      type: typeof item.type === 'string' ? item.type : null, refunded: item.refunded === true, finishedAt: typeof item.finishedAt === 'string' ? item.finishedAt : null,
+      fileCount: count(item.fileCount), totalBytes: count(item.totalBytes),
+    }));
+    return { items };
+  }
+  /** Permanently deletes customer uploads (all B2 versions) for one batch; the service re-checks eligibility. */
+  async function purgeStorage(submissionIds, { requestId: requestedId, signal } = {}) {
+    if (!Array.isArray(submissionIds) || !submissionIds.length || submissionIds.length > STORAGE_PURGE_BATCH || new Set(submissionIds).size !== submissionIds.length) throw new RemoteReviewError(`삭제할 신청을 1~${STORAGE_PURGE_BATCH}건씩 선택해 주세요.`, 400, 'INVALID_PURGE_BATCH');
+    const ids = submissionIds.map(submissionId);
+    const nonce = requestId(requestedId);
+    const body = Buffer.from(JSON.stringify({ operation: 'purge', submissionIds: ids, requestId: nonce }));
+    // Deleting every version of large videos can take minutes; the service allows 300 s.
+    const data = await jsonBody(await request('storage', { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 300_000 }));
+    if (!data || !Array.isArray(data.results)) throw new RemoteReviewError('삭제 결과를 확인하지 못했습니다. 목록을 새로고침해 처리 여부를 확인해 주세요.', 502, 'INVALID_PURGE_RESULT');
+    return data;
+  }
+  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage };
 }

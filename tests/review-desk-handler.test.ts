@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createReviewDeskHandlers } from "../src/lib/admin/review-desk-handler";
+import { createReviewDeskHandlers, createReviewDeskStorageHandlers } from "../src/lib/admin/review-desk-handler";
 import { signDeskRequest } from "../src/lib/admin/review-desk-auth";
 
 const secret = "fixture-only-hmac-secret";
@@ -181,4 +181,60 @@ test("signed bulk saves return one refreshed snapshot and never send mail", asyn
   const saved=f.calls.find(c=>c.name==="bulk-stations")!.input as Record<string,unknown>;assert.equal(saved.actorUserId,actor);assert.equal(saved.submissionId,sid);
   f.state.saveError="CONFLICT";
   assert.equal((await f.handlers.POST(signedRequest("POST",input),context)).status,409);
+});
+
+function storageFixture() {
+  const calls: Array<{ name: string; input?: unknown }> = [];
+  const state = { admin: true, b2Missing: false };
+  const db = { from(table: string) {
+    const query = { select() { return query; }, eq() { return query; }, async maybeSingle() { assert.equal(table, "profiles"); return { data: { role: state.admin ? "admin" : "user" }, error: null }; } };
+    return query;
+  } } as unknown as SupabaseClient;
+  const handlers = createReviewDeskStorageHandlers({ secret: () => secret, createDb() { calls.push({ name: "db" }); return db; },
+    async loadCandidates() {
+      calls.push({ name: "candidates" });
+      if (state.b2Missing) throw Object.assign(new Error("B2 env missing"), { name: "B2ConfigError" });
+      return [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, finishedAt: revision,
+        files: [{ source: "upload" as const, id: "file", objectKey: "submissions/private-user/video.mp4", sizeBytes: 438_000_000 }], totalBytes: 438_000_000 }];
+    },
+    async purge(_db, ids, actorId) {
+      calls.push({ name: "purge", input: { ids, actorId } });
+      return ids.map((submissionId) => ({ submissionId, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }));
+    },
+  });
+  return { handlers, state, calls };
+}
+const storagePath = "/api/internal/review-desk/storage";
+
+test("desk storage list is signed, admin-only and never returns object keys", async () => {
+  const f = storageFixture();
+  assert.equal((await f.handlers.GET(new Request(`https://fixture.invalid${storagePath}`))).status, 401);
+  f.state.admin = false;
+  assert.equal((await f.handlers.GET(signedRequest("GET", undefined, { path: storagePath }))).status, 403);
+  assert.ok(!f.calls.some(call => call.name === "candidates"));
+  f.state.admin = true;
+  const response = await f.handlers.GET(signedRequest("GET", undefined, { path: storagePath }));
+  assert.equal(response.status, 200);
+  const text = await response.text();
+  assert.doesNotMatch(text, /objectKey|submissions\/private-user/);
+  assert.deepEqual(JSON.parse(text), { ok: true, batchLimit: 10, items: [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, finishedAt: revision, fileCount: 1, totalBytes: 438_000_000 }] });
+  f.state.b2Missing = true;
+  const missing = await f.handlers.GET(signedRequest("GET", undefined, { path: storagePath }));
+  assert.equal(missing.status, 500); assert.equal((await missing.json()).error, "파일 저장소 설정을 확인할 수 없습니다.");
+});
+
+test("desk storage purge records the desk administrator and accepts at most one batch", async () => {
+  const f = storageFixture();
+  const body = { operation: "purge", submissionIds: [sid], requestId };
+  const tampered = signedRequest("POST", body, { path: storagePath });
+  assert.equal((await f.handlers.POST(new Request(tampered.url, { method: "POST", headers: tampered.headers, body: JSON.stringify({ ...body, submissionIds: [stationId] }) }))).status, 401);
+  assert.equal((await f.handlers.POST(signedRequest("POST", body, { path: storagePath, contentType: "text/plain" }))).status, 415);
+  const tooMany = { ...body, submissionIds: Array.from({ length: 11 }, (_, index) => `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`) };
+  assert.equal((await f.handlers.POST(signedRequest("POST", tooMany, { path: storagePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, requestId: stationId }, { path: storagePath }))).status, 400);
+  assert.ok(!f.calls.some(call => call.name === "purge"));
+  const response = await f.handlers.POST(signedRequest("POST", body, { path: storagePath }));
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).results, [{ submissionId: sid, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }]);
+  assert.deepEqual(f.calls.find(call => call.name === "purge")?.input, { ids: [sid], actorId: actor });
 });

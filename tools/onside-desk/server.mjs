@@ -75,6 +75,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const caseDir = id => childPath(outputRoot, id);
   const activeOperations = new Map();
   let emptyingTrash = false;
+  let purgingStorage = false;
   const getCase = (id, includeDeleted = false) => { const item = Object.hasOwn(store.data.cases, id) && store.data.cases[id]; if (!item) throw Object.assign(new Error('신청 내역을 찾을 수 없습니다. 먼저 동기화하세요.'), { status: 404 }); if (item.deletedAt && !includeDeleted) throw Object.assign(new Error('휴지통으로 이동한 신청입니다. 복원한 뒤 작업하세요.'), { status: 410, code: 'CASE_DELETED' }); return item; };
   const safeError = error => error?.message && !/(?:eyJ[A-Za-z0-9_-]{20}|https?:|secret|credential|Bearer)/i.test(error.message) ? error.message.slice(0, 500) : '작업에 실패했습니다. 연결 설정과 저장 공간을 확인한 뒤 다시 시도하세요.';
   function summary(item) {
@@ -83,7 +84,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.4.2' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.5.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -197,6 +198,23 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       }
       return { ok: failedCases.length === 0, deletedCount, failedCases };
     } finally { emptyingTrash = false; }
+  }
+  /** 저장공간 정리: one service batch at a time; the service re-checks every submission. */
+  async function purgeStorage(input) {
+    if (purgingStorage) throw Object.assign(new Error('저장공간을 정리하고 있습니다. 끝난 뒤 다시 시도하세요.'), { status: 409, code: 'STORAGE_BUSY' });
+    purgingStorage = true;
+    try {
+      const result = await remote.purgeStorage(input?.submissionIds, { requestId: input?.requestId });
+      let recorded = false;
+      for (const item of result.results) {
+        if (!item?.deletedFiles || !Object.hasOwn(store.data.cases, item.submissionId)) continue;
+        const megabytes = Math.max(1, Math.round(Number(item.freedBytes || 0) / 1024 ** 2));
+        store.audit(item.submissionId, 'storage', `서비스 저장소의 고객 업로드 파일 ${item.deletedFiles}개(${megabytes}MB)를 삭제했습니다.`);
+        recorded = true;
+      }
+      if (recorded) await store.save();
+      return result;
+    } finally { purgingStorage = false; }
   }
   async function download(id, job) {
     const current = await detail(id, true);
@@ -351,7 +369,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.4.2' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.5.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -370,6 +388,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         return sendJSON(res, 201, await importManual(await readReference(req), filename, url.searchParams.get('type') || 'ALBUM'));
       }
       if (url.pathname === '/api/connection' && req.method === 'GET') return sendJSON(res, 200, await remote.health());
+      if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await remote.listStorage());
+      if (url.pathname === '/api/storage/purge' && req.method === 'POST') return sendJSON(res, 200, await purgeStorage(await readJSON(req)));
       if (url.pathname === '/api/sync' && req.method === 'POST') return sendJSON(res, 200, await sync());
       if (url.pathname === '/api/settings' && req.method === 'POST') { store.data.settings = validateSettings(await readJSON(req), store.data.settings); await store.save(); return sendJSON(res, 200, { settings: store.data.settings }); }
       if (url.pathname === '/api/backup' && req.method === 'POST') return sendJSON(res, 200, await backup());

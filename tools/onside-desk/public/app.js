@@ -303,16 +303,85 @@ async function loadMonitor(force = false) {
     clearTimeout(ui.monitorTimer); if (ui.nav === 'monitor') ui.monitorTimer = setTimeout(() => { if (ui.nav === 'monitor') void loadMonitor(false); }, ui.monitorError ? 10_000 : 60_000);
   }
 }
+const STORAGE_AGES = [['0', '전체'], ['30', '30일 경과'], ['90', '90일 경과'], ['180', '180일 경과']];
+const STORAGE_BATCH = 10;
+const storageItems = () => ui.storage?.items || [];
+const total = (items, key) => items.reduce((sum, item) => sum + (Number(item[key]) || 0), 0);
+function storageVisible() {
+  const days = Number(ui.storageAge || 0); if (!days) return storageItems();
+  const cutoff = Date.now() - days * 86_400_000;
+  return storageItems().filter(item => item.finishedAt && new Date(item.finishedAt).getTime() <= cutoff);
+}
+const storageChosen = () => storageVisible().filter(item => ui.storageSelected?.has(item.submissionId));
+function storageResultsMarkup() {
+  const results = ui.storageResults; if (!results) return '';
+  const failures = results.filter(item => !item.ok);
+  return `<div class="notice ${failures.length ? 'error' : 'good'}" role="status"><strong>${results.length}건 처리 · 파일 ${total(results, 'deletedFiles')}개 삭제 · ${e(fileSize(total(results, 'freedBytes')) || '0 B')} 확보${failures.length ? ` · ${failures.length}건 확인 필요` : ''}</strong>${failures.length ? `<ul>${failures.map(item => `<li>${e(ui.storageTitles?.[item.submissionId] || shortId(item.submissionId))}: ${e(item.error || '삭제하지 못했습니다.')}</li>`).join('')}</ul>` : ''}</div>`;
+}
+function storageSelectionText() { const chosen = storageChosen(); return `선택 ${chosen.length}건 · 파일 ${total(chosen, 'fileCount')}개 · ${fileSize(total(chosen, 'totalBytes')) || '0 B'}`; }
+function storageBody() {
+  if (!ui.storage) return ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>정리 대상을 확인하고 있습니다</h1><p>심의가 끝났거나 환불된 신청을 온사이드에서 불러옵니다.</p></div>`;
+  const visible = storageVisible(), chosen = storageChosen(), running = !!ui.storageProgress, age = ui.storageAge || '0';
+  const rows = visible.map(item => `<tr><td><input type="checkbox" data-storage-select="${e(item.submissionId)}" aria-label="${e(value(item.title, '제목 미입력'))} 선택"${ui.storageSelected?.has(item.submissionId) ? ' checked' : ''}${running ? ' disabled' : ''}></td><td><strong>${e(value(item.title, '제목 미입력'))}</strong><small>${e(value(item.artistName, '아티스트 미입력'))} · ${e(shortId(item.submissionId))}</small></td><td>${e(TYPE[item.type] || item.type || '—')}</td><td>${item.refunded ? '<span class="badge red">환불</span>' : '<span class="badge">심의 완료</span>'}<small>${e(formatDate(item.finishedAt))}</small></td><td>${e(item.fileCount)}개</td><td>${e(fileSize(item.totalBytes) || '0 B')}</td></tr>`).join('');
+  return `${storageResultsMarkup()}${ui.storagePurgeError ? `<div class="notice error" role="alert">${e(ui.storagePurgeError)}</div>` : ''}${ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : ''}<section class="panel"><div class="panel-head"><div class="filters storage-filters" role="group" aria-label="결과·환불 후 경과 기간">${STORAGE_AGES.map(([days, text]) => `<button class="filter${age === days ? ' active' : ''}" data-storage-age="${days}" aria-pressed="${age === days}"${running ? ' disabled' : ''}>${text}</button>`).join('')}</div><span class="muted tiny">대상 ${visible.length}건 · ${e(fileSize(total(visible, 'totalBytes')) || '0 B')}</span></div>${visible.length ? `<div class="table-wrap"><table class="jobs-table storage-table"><thead><tr><th><input type="checkbox" data-storage-all aria-label="목록 전체 선택"${visible.length && chosen.length === visible.length ? ' checked' : ''}${running ? ' disabled' : ''}></th><th>신청</th><th>유형</th><th>결과·환불</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">지금 삭제할 수 있는 고객 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="storage-selection">${e(storageSelectionText())}</span><button class="button danger" data-action="storage-purge"${!chosen.length || running ? ' disabled' : ''}>${running ? `삭제 중… ${ui.storageProgress.done}/${ui.storageProgress.total}건` : '선택한 고객 파일 영구 삭제'}</button></div></section>`;
+}
+function storageScreen() {
+  screen.innerHTML = `${heading('저장공간 정리', '심의가 끝났거나 환불된 신청에서 고객이 올린 파일만 온사이드 저장소(B2)에서 영구 삭제해 용량을 확보합니다. 웹 관리자의 저장공간 정리와 같은 기준으로 처리합니다.', `<button class="button secondary" data-action="storage-refresh"${ui.storageLoading || ui.storageProgress ? ' disabled' : ''}>${ui.storageLoading ? '불러오는 중…' : '목록 새로고침'}</button>`)}<div class="storage-notes"><div class="notice error"><strong>삭제되는 파일</strong><br>고객이 올린 음원·영상·가사·신청서·기타 파일과 보완 제출 파일. 파일의 모든 버전까지 지워 실제 용량이 줄어듭니다. 되돌릴 수 없습니다.</div><div class="notice good"><strong>유지되는 것</strong><br>영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 “보관 종료로 삭제됨”으로 표시됩니다.</div></div><div class="notice">결과가 모두 나온 결제 완료 신청과 환불된 신청만 나옵니다. 방송국 결과가 남았거나 보완 요청이 진행 중인 신청, 결과 등급이 공개되지 않은 온라인 MV는 나오지 않습니다. 이 Mac에 내려받은 원본 파일은 지우지 않습니다. Backblaze 콘솔에서 직접 지우지 말고 여기서 정리하세요.</div><div id="storage-body">${storageBody()}</div>`;
+  if (!ui.storage && !ui.storageLoading && !ui.storageError) void loadStorage();
+}
+function updateStorageSelection() {
+  const chosen = storageChosen(), visible = storageVisible(), running = !!ui.storageProgress;
+  const summary = document.getElementById('storage-selection'); if (summary) summary.textContent = storageSelectionText();
+  const button = document.querySelector('[data-action="storage-purge"]'); if (button && !running) button.disabled = !chosen.length;
+  const all = document.querySelector('[data-storage-all]'); if (all) all.checked = visible.length > 0 && chosen.length === visible.length;
+}
+async function loadStorage() {
+  if (ui.storageLoading) return;
+  ui.storageLoading = true; ui.storageError = ''; if (ui.nav === 'storage') storageScreen();
+  try {
+    ui.storage = await api('/api/storage');
+    const ids = new Set(storageItems().map(item => item.submissionId));
+    ui.storageSelected = new Set([...(ui.storageSelected || [])].filter(id => ids.has(id)));
+  } catch (error) { ui.storage = null; ui.storageError = `정리 대상을 불러오지 못했습니다. ${error.status === 0 ? '데스크 서비스에 연결하지 못했습니다.' : error.message}`; }
+  finally { ui.storageLoading = false; if (ui.nav === 'storage') storageScreen(); }
+}
+async function purgeStorage() {
+  const chosen = storageChosen(); if (!chosen.length || ui.storageProgress) return;
+  const dialog = document.getElementById('confirm-dialog'); if (dialog.open) return;
+  document.getElementById('confirm-title').textContent = '고객 파일을 영구 삭제할까요?';
+  document.getElementById('confirm-message').textContent = `선택한 ${chosen.length}건의 고객 업로드 파일 ${total(chosen, 'fileCount')}개(${fileSize(total(chosen, 'totalBytes')) || '0 B'})를 온사이드 저장소에서 영구 삭제합니다. 필증·연령등급 이미지·표기 가이드와 신청·결과 기록은 유지됩니다. 삭제한 파일은 되돌릴 수 없습니다.`;
+  dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = `${chosen.length}건 영구 삭제`; dialog.returnValue = ''; dialog.showModal();
+  dialog.querySelector('[value=cancel]').focus();
+  const confirmed = await new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+  dialog.querySelector('[value=cancel]').textContent = '계속 편집'; dialog.querySelector('[value=confirm]').textContent = '변경 버리기';
+  if (!confirmed) return;
+  const ids = chosen.map(item => item.submissionId), collected = [];
+  ui.storageTitles = Object.fromEntries(chosen.map(item => [item.submissionId, value(item.title, '제목 미입력')]));
+  ui.storageResults = null; ui.storagePurgeError = ''; ui.storageProgress = { done: 0, total: ids.length }; if (ui.nav === 'storage') storageScreen();
+  try {
+    for (let index = 0; index < ids.length; index += STORAGE_BATCH) {
+      const batch = ids.slice(index, index + STORAGE_BATCH);
+      const result = await api('/api/storage/purge', { method: 'POST', body: { submissionIds: batch } });
+      collected.push(...result.results);
+      ui.storageProgress = { done: Math.min(index + batch.length, ids.length), total: ids.length }; if (ui.nav === 'storage') storageScreen();
+    }
+  } catch (error) { ui.storagePurgeError = `${error.message} 처리된 건은 아래 결과에 반영되며, 남은 건은 목록에서 다시 시도할 수 있습니다.`; }
+  finally {
+    ui.storageResults = collected; ui.storageProgress = null; ui.storageSelected = new Set();
+    toast(ui.storagePurgeError ? '일부 삭제를 완료하지 못했습니다. 결과를 확인해 주세요.' : `고객 파일 ${total(collected, 'deletedFiles')}개를 삭제해 ${fileSize(total(collected, 'freedBytes')) || '0 B'}를 확보했습니다.`, !!ui.storagePurgeError || collected.some(item => !item.ok));
+    await loadStorage();
+  }
+}
 function render() {
   if (ui.nav === 'manual' && ui.detail && !isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
   if (ui.nav === 'cases' && isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
-  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', queue: '작업 현황', monitor: '사이트 관리', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
+  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', queue: '작업 현황', monitor: '사이트 관리', storage: '저장공간 정리', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
   document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('active', b.dataset.nav === ui.nav));
   document.querySelectorAll('[data-manual-type]').forEach(b => b.classList.toggle('active', ui.nav === 'manual' && b.dataset.manualType === ui.manualType));
   document.getElementById('manual-subnav').hidden = ui.nav !== 'manual';
-  document.getElementById('refresh-top').hidden = ui.nav === 'manual' || ui.nav === 'monitor';
+  document.getElementById('refresh-top').hidden = ['manual', 'monitor', 'storage'].includes(ui.nav);
   if (ui.nav !== 'monitor') clearTimeout(ui.monitorTimer);
-  ({cases:casesScreen, manual:manualScreen, queue:queueScreen, monitor:monitorScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
+  ({cases:casesScreen, manual:manualScreen, queue:queueScreen, monitor:monitorScreen, storage:storageScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
   if (ui.nav === 'monitor' && ui.monitor) void loadMonitor(false);
 }
 function headerRender() {
@@ -606,6 +675,8 @@ async function action(name, button) {
     else if (name === 'monitor-refresh') await loadMonitor(true);
     else if (name === 'monitor-open') await api('/api/monitor/open', { method: 'POST', body: { target: button?.dataset.target || '' } });
     else if (name === 'monitor-clear-token') { const result = await api('/api/monitor/settings', { method: 'POST', body: { vercelToken: null } }); ui.monitor = { ...ui.monitor, ...result }; monitorScreen(); toast('Vercel 토큰을 삭제했습니다.'); }
+    else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; await loadStorage(); }
+    else if (name === 'storage-purge') await purgeStorage();
     else if (name === 'backup') { const backup = await api('/api/backup', { method: 'POST', body: {} }); toast(backup.message || '관리 내역과 생성 문서를 백업했습니다.'); await refresh(); }
     else if (name === 'copy-info') { await navigator.clipboard.writeText(copyText(effective())); toast('입력용 정보를 복사했습니다.'); }
   } catch (error) { toast(error.message, true); } finally { if (button?.isConnected) button.disabled = false; updateResultControls(); }
@@ -615,6 +686,7 @@ document.addEventListener('click', async event => {
   if (button.dataset.deleteCase) { event.preventDefault(); await deleteCase(button.dataset.deleteCase); return; }
   if (button.dataset.restoreCase) { event.preventDefault(); await restoreCase(button.dataset.restoreCase); return; }
   if (button.dataset.removeTrack) { event.preventDefault(); try { removeLocalTrack(button.dataset.removeTrack); } catch (error) { toast(error.message, true); } return; }
+  if (button.dataset.storageAge) { ui.storageAge = button.dataset.storageAge; storageScreen(); return; }
   if (button.dataset.action) { event.preventDefault(); await action(button.dataset.action, button); return; }
   if (button.dataset.manualType) { if (!(await discardEdits())) return; ui.dirty = false; ui.nav = 'manual'; ui.manualType = button.dataset.manualType; ui.stage = 'all'; ui.query = ''; ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.referenceFile = null; ui.importOpen = true; render(); return; }
   if (button.dataset.nav) { if (!(await discardEdits())) return; ui.dirty = false; ui.stage = 'all'; ui.query = ''; ui.nav = button.dataset.nav; render(); window.scrollTo(0,0); return; }
@@ -634,6 +706,8 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', async event => {
   const el = event.target;
+  if (el.dataset.storageSelect) { ui.storageSelected ||= new Set(); if (el.checked) ui.storageSelected.add(el.dataset.storageSelect); else ui.storageSelected.delete(el.dataset.storageSelect); updateStorageSelection(); return; }
+  if (el.hasAttribute('data-storage-all')) { ui.storageSelected = el.checked ? new Set(storageVisible().map(item => item.submissionId)) : new Set(); document.querySelectorAll('[data-storage-select]').forEach(box => { box.checked = el.checked; }); updateStorageSelection(); return; }
   if (el.closest('#bulk-station-form')) { ui.dirty = true; ui.resultDirtyForm = 'bulk-station-form'; clearEmailPreview(true); updateBulkControls(el); if (!ui.bulkSelected.length) ui.dirty = false; updateResultControls(); return; }
   if (el.closest('#station-result-form, #online-result-form, #certificate-form')) { ui.dirty = true; ui.resultDirtyForm = el.closest('form').id; clearEmailPreview(true); updateResultControls(); }
   if (el.closest('#station-result-form') && el.name === 'status') { el.closest('form').dataset.applyOverallStatus = 'true'; updateRatingRequired(); const next = ['APPROVED','REJECTED'].includes(el.value) ? el.value : 'PENDING'; el.closest('form').querySelectorAll('[name^=trackResult_]').forEach(field => { field.value = next; }); }

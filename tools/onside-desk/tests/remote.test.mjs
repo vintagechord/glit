@@ -138,3 +138,28 @@ test('oversized and non-JSON service responses fail safely', async () => {
   await assert.rejects(mockClient(() => new Response('<html>deployment error</html>')).client.health(), error => error.code === 'INVALID_REMOTE_RESPONSE');
   await assert.rejects(mockClient(() => new Response('{}', { headers: { 'Content-Length': String(4 * 1024 * 1024) } })).client.health(), error => error.code === 'RESPONSE_TOO_LARGE');
 });
+
+test('storage list is a signed read that keeps only listed fields', async () => {
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(new URL(url).pathname, '/api/internal/review-desk/storage'); assert.equal(init.method, 'GET');
+    return json({ ok: true, items: [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634, objectKey: 'submissions/private/video.mp4' }, { submissionId: 'not-an-id', title: 'x' }] });
+  });
+  const result = await client.listStorage();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(result.items, [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634 }]);
+  await assert.rejects(mockClient(() => json({ ok: true })).client.listStorage(), error => error.code === 'INVALID_STORAGE_LIST');
+});
+
+test('storage purge signs one batch with the same request ID in header and JSON', async () => {
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(new URL(url).pathname, '/api/internal/review-desk/storage'); assert.equal(init.method, 'POST');
+    const body = JSON.parse(init.body.toString());
+    assert.deepEqual(body, { operation: 'purge', submissionIds: [id], requestId: init.headers['x-onside-desk-request'] });
+    return json({ ok: true, results: [{ submissionId: id, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438763634 }] });
+  });
+  assert.equal((await client.purgeStorage([id], { requestId: nonce })).results[0].deletedFiles, 1);
+  assert.equal(calls[0].init.headers['x-onside-desk-request'], nonce);
+  const many = Array.from({ length: 11 }, (_, index) => `22222222-2222-4222-8222-${String(index).padStart(12, '0')}`);
+  for (const ids of [[], many, [id, id], ['../storage'], 'not-a-list']) await assert.rejects(client.purgeStorage(ids), error => error.httpStatus === 400);
+  assert.equal(calls.length, 1);
+});

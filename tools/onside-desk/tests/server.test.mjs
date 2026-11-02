@@ -121,3 +121,20 @@ test('email preview requires local authentication and never mutates or queues ma
   assert.deepEqual(await (await s.api(route)).json(), preview); assert.equal(previews, 1);
   assert.equal(s.desk.store.data.cases[id].history.length, 1);
 });
+test('storage purge stays behind the local token, runs one batch at a time and records local history', async t => {
+  let release, purges = 0;
+  const remote = { configured: () => true,
+    listStorage: async () => ({ items: [{ submissionId: id, title: '검증 앨범', fileCount: 2, totalBytes: 2 * 1024 ** 2 }] }),
+    purgeStorage: async ids => { purges++; await new Promise(resolve => { release = resolve; }); return { ok: true, results: ids.map(submissionId => ({ submissionId, ok: true, deletedFiles: 2, failedFiles: 0, freedBytes: 2 * 1024 ** 2 })) }; } };
+  const s = await setup(t, { remote }); await s.desk.sync();
+  assert.equal((await fetch(s.url + '/api/storage')).status, 403);
+  assert.equal((await (await s.api('/api/storage')).json()).items[0].submissionId, id);
+  assert.equal((await fetch(s.url + '/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) })).status, 403);
+  const first = s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) });
+  while (!release) await new Promise(resolve => setTimeout(resolve, 5));
+  const busy = await s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) });
+  assert.equal(busy.status, 409); assert.equal((await busy.json()).code, 'STORAGE_BUSY');
+  release();
+  assert.equal((await first).status, 200); assert.equal(purges, 1);
+  assert.match(s.desk.store.data.cases[id].history[0].message, /고객 업로드 파일 2개\(2MB\)/);
+});
