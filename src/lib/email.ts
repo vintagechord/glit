@@ -553,11 +553,15 @@ export async function sendSignupVerificationEmail(payload: EmailDeliveryOptions 
   });
 }
 
+export type ReviewSummaryRatingCode = "ALL" | "12" | "15" | "18" | "19";
 export type ReviewSummaryEmailRow = {
   name: string;
   status: string;
   tone: "waiting" | "progress" | "approved" | "attention" | "rejected";
   detail?: string | null;
+  /** Age rating drawn in the colors of its rating mark: the online result
+   * itself, or the broadcast rating shown in `detail`. */
+  rating?: ReviewSummaryRatingCode | null;
 };
 export type ReviewSummaryEmailContent = {
   title: string;
@@ -581,34 +585,56 @@ export function renderReviewSummaryEmail(content: ReviewSummaryEmailContent) {
   const subject = `[onside] 심의 현황 안내 — ${title.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").slice(0, 160)}`;
   const updated = new Date(content.updatedAt);
   const dateLabel = Number.isNaN(updated.getTime()) ? "최신 저장 내용 기준" : new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(updated);
+  // Solid Onside status colors (no pastels), matching brandStatusTones.
   const colors: Record<ReviewSummaryEmailRow["tone"], { background: string; color: string }> = {
-    waiting: { background: "#ebe7de", color: "#5c5951" },
-    progress: { background: "#e6edf7", color: "#1556a4" },
-    approved: { background: "#dceee5", color: "#1f7a5a" },
-    attention: { background: "#fff0d3", color: "#8c580a" },
-    rejected: { background: "#fae2df", color: "#a72820" },
+    waiting: { background: "#fffdf8", color: "#111111" },
+    progress: { background: "#1556a4", color: "#ffffff" },
+    approved: { background: "#1f7a5a", color: "#ffffff" },
+    attention: { background: "#f2cf27", color: "#111111" },
+    rejected: { background: "#d9362c", color: "#ffffff" },
   };
+  // Fills of the rating marks in public/media/mv-ratings (18 uses the 19 mark);
+  // the text color keeps AA contrast on each fill.
+  const ratingColors: Record<ReviewSummaryRatingCode, { background: string; color: string }> = {
+    ALL: { background: "#229c56", color: "#111111" },
+    "12": { background: "#e9b630", color: "#111111" },
+    "15": { background: "#dd7430", color: "#111111" },
+    "18": { background: "#d92a35", color: "#ffffff" },
+    "19": { background: "#d92a35", color: "#ffffff" },
+  };
+  const badge = (label: string, color: { background: string; color: string }, large = false) =>
+    `<span style="display:inline-block;padding:${large ? "7px 14px" : "4px 9px"};border:2px solid #111111;border-radius:4px;background:${color.background};color:${color.color};font-size:${large ? 18 : 12}px;font-weight:800;line-height:1.4;">${escapeHtml(label)}</span>`;
+  const online = content.kind === "MV_DISTRIBUTION";
   const rows = content.rows.map((row, index) => {
-    const color = colors[row.tone] ?? colors.waiting;
+    const border = index ? "1px solid #ded9cd" : "0";
+    const ratingColor = row.rating ? ratingColors[row.rating] : null;
+    const name = `<div style="font-size:15px;font-weight:700;color:#111111;">${escapeHtml(row.name)}</div>`;
+    // The online result is the rating itself: show it large under the name.
+    if (online && ratingColor) {
+      return `<tr><td colspan="2" style="padding:17px 18px;border-top:${border};vertical-align:top;">
+        ${name}${row.detail ? `<div style="margin-top:6px;font-size:12px;line-height:1.6;color:#625e54;">${escapeHtml(row.detail)}</div>` : ""}
+        <div style="margin-top:12px;">${badge(row.status, ratingColor, true)}</div>
+      </td></tr>`;
+    }
+    const detail = !row.detail ? ""
+      : ratingColor ? `<div style="margin-top:8px;">${badge(row.detail, ratingColor)}</div>`
+        : `<div style="margin-top:6px;font-size:12px;line-height:1.6;color:#625e54;">${escapeHtml(row.detail)}</div>`;
     return `<tr>
-      <td style="padding:17px 18px;border-top:${index ? "1px solid #ded9cd" : "0"};vertical-align:top;font-size:15px;font-weight:700;color:#111111;">
-        ${escapeHtml(row.name)}${row.detail ? `<div style="margin-top:6px;font-size:12px;font-weight:400;line-height:1.6;color:#625e54;">${escapeHtml(row.detail)}</div>` : ""}
-      </td>
-      <td style="padding:17px 18px;border-top:${index ? "1px solid #ded9cd" : "0"};vertical-align:top;text-align:right;white-space:nowrap;">
-        <span style="display:inline-block;padding:5px 10px;border-radius:4px;background:${color.background};color:${color.color};font-size:12px;font-weight:700;line-height:1.5;">${escapeHtml(row.status)}</span>
-      </td>
+      <td style="padding:17px 18px;border-top:${border};vertical-align:top;">${name}${detail}</td>
+      <td style="padding:17px 18px;border-top:${border};vertical-align:top;text-align:right;white-space:nowrap;">${badge(row.status, colors[row.tone] ?? colors.waiting)}</td>
     </tr>`;
   }).join("");
-  const online = content.kind === "MV_DISTRIBUTION";
   const summary = online
     ? "영상물등급위원회 심의 결과를 확인해주세요."
     : "신청하신 방송사별 심의 현황을 한 번에 정리했습니다. 진행 중인 항목도 함께 확인하실 수 있습니다.";
   const attachments = content.attachmentCount === 3 ? `<tr><td style="padding:0 28px 24px;">
-    <table role="presentation" style="width:100%;border-collapse:collapse;border:1px solid #c6dacd;background:#eef6f0;"><tr><td style="padding:17px 18px;">
-      <p style="margin:0 0 9px;font-size:13px;font-weight:700;color:#1f7a5a;">함께 보내드리는 파일 · 3개</p>
-      <p style="margin:0;font-size:13px;line-height:1.9;color:#283c30;">등급 이미지<br>등급 표시 사용 예시 PDF<br>영등위 발급 심의필증</p>
-      <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#536358;">세 파일은 메일에 첨부되어 있으며, 아래 결과 페이지에서도 다운로드하실 수 있습니다.</p>
-    </td></tr></table>
+    <table role="presentation" style="width:100%;border-collapse:collapse;border:2px solid #111111;background:#fffdf8;">
+      <tr><td style="padding:11px 18px;border-bottom:2px solid #111111;background:#1556a4;font-size:13px;font-weight:800;color:#ffffff;">함께 보내드리는 파일 · 3개</td></tr>
+      <tr><td style="padding:15px 18px 17px;">
+        <p style="margin:0;font-size:13px;font-weight:700;line-height:1.9;color:#111111;">1. 등급 이미지<br>2. 등급 표시 사용 예시 PDF<br>3. 영등위 발급 심의필증</p>
+        <p style="margin:10px 0 0;font-size:12px;line-height:1.6;color:#625e54;">세 파일은 메일에 첨부되어 있으며, 아래 결과 페이지에서도 다운로드하실 수 있습니다.</p>
+      </td></tr>
+    </table>
   </td></tr>` : "";
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f7f5ef;color:#111111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">
