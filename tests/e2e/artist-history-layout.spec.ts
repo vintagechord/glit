@@ -86,10 +86,23 @@ for (const width of [320, 390, 1024, 1440]) test(`history cards balance controls
       expect(title.y).toBeGreaterThanOrEqual(Math.max(status.y + status.height, remove.y + remove.height));
       expect(Math.abs(title.x - checkbox.x)).toBeLessThan(1);
       expect(title.width).toBeGreaterThan(bounds.width - 20);
+      // The date shares the title's first line, right-aligned under the delete button.
+      const [name, date] = await Promise.all([row.getByRole("link").last().locator("p").first().boundingBox(), row.getByRole("link").last().locator("p").last().boundingBox()]);
+      expect(name && date).toBeTruthy();
+      if (name && date) {
+        expect(Math.abs(date.x + date.width - (remove.x + remove.width))).toBeLessThan(1);
+        expect(date.y).toBeLessThan(name.y + 12);
+        expect(date.x).toBeGreaterThanOrEqual(name.x + name.width);
+      }
     }
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // Artist thumbnails open the artist page; the separate detail button is gone.
+  const artistLinks = page.getByRole("link", { name: "아티스트 상세", exact: true });
+  await expect(artistLinks).toHaveCount(2);
+  await expect(artistLinks.first()).toHaveAttribute("href", "/dashboard/artists/fixture-artist-2");
+  await expect(page.getByRole("link", { name: "상세", exact: true })).toHaveCount(0);
   const cards = page.locator('[class~="@container"]');
   const cardBounds = await Promise.all((await cards.all()).map(card => card.boundingBox()));
   const sameTop = (a: number, b: number) => Math.abs(cardBounds[a]!.y - cardBounds[b]!.y) < 1;
