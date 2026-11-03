@@ -32,6 +32,7 @@ import {
   type SupportChatMessage,
 } from "@/lib/support-chat";
 import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type ChatView = "home" | "conversations" | "thread";
 
@@ -1030,7 +1031,7 @@ export function ChatbotWidget() {
         ) : null}
 
         {error ? (
-          <div className="mt-4 rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600">
+          <div className={`mt-4 rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
             {error}
           </div>
         ) : null}
@@ -1051,7 +1052,7 @@ export function ChatbotWidget() {
       </div>
 
       {error ? (
-        <div className="mx-5 mb-3 rounded-[8px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600">
+        <div className={`mx-5 mb-3 rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
           {error}
         </div>
       ) : null}
@@ -1163,7 +1164,7 @@ export function ChatbotWidget() {
                 role="menuitem"
                 onClick={() => void leaveConversation()}
                 disabled={leaving}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-[#d9362c] transition hover:bg-red-500/10 disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-bold text-[#d9362c] transition hover:bg-[#d9362c] hover:text-white disabled:opacity-60"
               >
                 {leaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -1191,7 +1192,7 @@ export function ChatbotWidget() {
 
       <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-background px-4 py-2">
         <span className="inline-flex items-center gap-2 text-xs font-black text-foreground">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="h-2 w-2 rounded-full bg-[#1f7a5a]" />
           {statusLabel}
         </span>
         <span className="text-[11px] font-semibold text-muted-foreground">
@@ -1200,7 +1201,7 @@ export function ChatbotWidget() {
       </div>
 
       {error ? (
-        <div className="border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-600">
+        <div className={`border-b-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
           {error}
         </div>
       ) : null}

@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { resolveUncertainPaymentFormAction } from "@/features/admin/actions";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const fieldClass =
   "min-h-10 w-full rounded-lg border border-border bg-background px-3 text-xs text-foreground";
@@ -20,11 +21,11 @@ export function UncertainPaymentResolver({ orderId }: { orderId: string }) {
           ? "이니시스 관리자 화면에서 이 주문번호의 승인(TID)을 확인했습니까? 결제 완료로 처리하고 고객에게 결제 완료 안내를 보냅니다."
           : "이니시스 관리자 화면에서 이 주문번호가 승인되지 않았음을 확인했습니까? 주문을 실패로 처리하고 고객이 다시 결제할 수 있게 됩니다."
       }
-      className="mt-2 grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 dark:border-amber-500/40 dark:bg-amber-500/10"
+      className={`mt-2 grid gap-2 rounded-lg border-2 p-2 ${brandStatusTones.warning}`}
       aria-label={`주문 ${orderId} 승인 확인 처리`}
     >
       <input type="hidden" name="orderId" value={orderId} />
-      <label className="text-[11px] font-semibold text-foreground">
+      <label className="text-[11px] font-semibold">
         이니시스 확인 결과
         <select
           name="outcome"
@@ -37,18 +38,18 @@ export function UncertainPaymentResolver({ orderId }: { orderId: string }) {
         </select>
       </label>
       {outcome === "APPROVED" ? (
-        <label className="text-[11px] font-semibold text-foreground">
+        <label className="text-[11px] font-semibold">
           승인 TID
           <input name="pgTid" required minLength={5} maxLength={64} pattern="[A-Za-z0-9_-]+" placeholder="이니시스 거래 TID" className={`${fieldClass} mt-1 font-mono`} />
         </label>
       ) : null}
-      <label className="text-[11px] font-semibold text-foreground">
+      <label className="text-[11px] font-semibold">
         메모(선택)
         <input name="adminMemo" maxLength={500} placeholder="대조한 거래 내역·담당자" className={`${fieldClass} mt-1`} />
       </label>
       <button
         type="submit"
-        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-foreground bg-foreground px-3 text-xs font-semibold text-background"
+        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#111111] bg-[#111111] px-3 text-xs font-semibold text-white"
       >
         {outcome === "APPROVED" ? "승인 확인 저장" : "미승인 확인 저장"}
       </button>

@@ -7,6 +7,7 @@ import { ImageUp, RotateCcw } from "lucide-react";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type RatingAsset = {
   code: "ALL" | "12" | "15" | "19";
@@ -300,12 +301,12 @@ export function MvRatingAssetsManager() {
       )}
 
       {notice ? (
-        <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-xs text-emerald-800">
+        <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
           {notice}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+        <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           {error}
         </div>
       ) : null}

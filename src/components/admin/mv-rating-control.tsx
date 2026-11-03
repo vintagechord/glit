@@ -6,6 +6,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const ratingOptions = [
   { value: "", label: "결과 미입력" },
@@ -173,12 +174,12 @@ export function MvRatingControl({
         </button>
       </div>
       {notice ? (
-        <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-xs text-emerald-800">
+        <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
           {notice}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+        <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           {error}
         </div>
       ) : null}

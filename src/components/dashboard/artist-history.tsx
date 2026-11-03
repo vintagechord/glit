@@ -262,7 +262,7 @@ function ArtistCard({
           ) : (
             <div
               key={`${group.artistName}-${item.title ?? "unknown"}`}
-              className="flex items-center justify-between gap-3 border-t border-red-500/40 py-3 text-sm font-bold text-[var(--bauhaus-red)]"
+              className="flex items-center justify-between gap-3 border-t-2 border-[#d9362c] py-3 text-sm font-bold text-[var(--bauhaus-red)]"
             >
               <span className="truncate">
                 ID가 없는 항목입니다. 관리자에게 문의해주세요.
