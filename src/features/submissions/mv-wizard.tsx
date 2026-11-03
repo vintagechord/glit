@@ -29,6 +29,7 @@ import {
 import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
+  LyricsTranslationError,
   requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import {
@@ -2535,7 +2536,9 @@ export function MvWizard({
       console.error(error);
       setLyricsToolNotice({
         type: "error",
-        message: "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        message:
+          (error instanceof LyricsTranslationError && error.userMessage) ||
+          "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       });
     } finally {
       setIsTranslatingLyrics(false);

@@ -2040,6 +2040,8 @@ Object.assign(exactTranslations, {
   "번역할 가사를 먼저 입력해주세요.": "Enter the lyrics you want to translate first.",
   "한국어 외 언어 가사를 찾지 못했습니다. 번역 대상을 확인해주세요.": "No non-Korean lyrics were found. Check the text to translate.",
   "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.": "Automatic translation failed. Please try again shortly.",
+  "자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.": "Too many automatic translation requests. Please try again shortly.",
+  "가사가 한 번에 번역 가능한 범위를 넘었습니다. 가사를 나누어 번역해주세요.": "The lyrics exceed what can be translated at once. Translate them in parts.",
   "원음방송 심의는 3곡까지만 선택할 수 있습니다.": "Select no more than three tracks for WBS review.",
   "현재 파일 업로드가 끝난 뒤 추가해주세요.": "Wait for the current upload to finish before adding another file.",
   "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.": "Your application is being prepared. Please try again shortly. If uploads remain unavailable, you can also apply through the previous Onside site.",

@@ -91,11 +91,15 @@ export const buildInlineTranslatedLyrics = (
 export class LyricsTranslationError extends Error {
   readonly translations: string[];
   readonly failedIndexes: number[];
-  constructor(translations: string[], failedIndexes: number[], message = "자동번역을 완료하지 못한 구간이 있습니다. 일부 결과를 확인하고 다시 시도해주세요.") {
-    super(message);this.name = "LyricsTranslationError";
-    this.translations = translations;this.failedIndexes = failedIndexes;
+  /** Set when the wizards should show this message instead of their generic one. */
+  readonly userMessage: string | null;
+  constructor(translations: string[], failedIndexes: number[], userMessage?: string) {
+    super(userMessage ?? "자동번역을 완료하지 못한 구간이 있습니다. 일부 결과를 확인하고 다시 시도해주세요.");this.name = "LyricsTranslationError";
+    this.translations = translations;this.failedIndexes = failedIndexes;this.userMessage = userMessage ?? null;
   }
 }
+
+const RATE_LIMITED_MESSAGE = "자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
 
 // Preserve the existing free browser route when the server provider cannot
 // connect. Validation/rate-limit errors never take this path. No new provider
@@ -136,6 +140,8 @@ export const requestLyricsTranslations = async (
   const context = truncateLyricsContext(options.context ?? lines.join("\n"));
   const batches = lyricsTranslationBatches(unique, LYRICS_TRANSLATION_LIMITS.apiSegments, LYRICS_TRANSLATION_LIMITS.total);
   let nextBatch = 0;
+  // A 429 is the per-address limit: its Korean explanation reaches the user.
+  let rateLimitedMessage: string | null = null;
   await Promise.allSettled(Array.from({length: Math.min(2, batches.length)}, async () => {
     while (nextBatch < batches.length && !signal.aborted) {
       let pending = batches[nextBatch++];
@@ -160,6 +166,9 @@ export const requestLyricsTranslations = async (
           }
           retryable = response.ok || response.status >= 500;
           browserFallback = [502, 503].includes(response.status);
+          if (response.status === 429) {
+            rateLimitedMessage = typeof payload?.error === "string" && payload.error.trim() ? payload.error.trim() : RATE_LIMITED_MESSAGE;
+          }
         } catch { browserFallback = !signal.aborted; }
         pending = pending.filter(text => !results.has(text));
         if (browserFallback && pending.length && !signal.aborted) {
@@ -179,6 +188,6 @@ export const requestLyricsTranslations = async (
   }));
   const translations = prepared.map(chunks => chunks.length && chunks.every(chunk => results.has(chunk)) ? chunks.map(chunk => results.get(chunk)!).join(" ") : "");
   const failedIndexes = lines.flatMap((line, index) => line.trim() && !isUsableLyricsTranslation(translations[index], line, target) ? [index] : []);
-  if (failedIndexes.length || signal.aborted) throw new LyricsTranslationError(translations, failedIndexes);
+  if (failedIndexes.length || signal.aborted) throw new LyricsTranslationError(translations, failedIndexes, rateLimitedMessage ?? undefined);
   return translations;
 };

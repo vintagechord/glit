@@ -65,7 +65,9 @@ test("API rate/size limits are not bypassed and malformed or echoed translations
   let calls=0;
   t.mock.method(globalThis,"fetch",async(input:RequestInfo|URL)=>{calls++;assert.equal(input,"/api/translate");return Response.json({error:"limited"},{status:429})});
   await assert.rejects(requestLyricsTranslations(["Foreign source"]),LyricsTranslationError);assert.equal(calls,1);
-  await assert.rejects(requestLyricsTranslations(["A".repeat(60001)]),LyricsTranslationError);assert.equal(calls,1);
+  await assert.rejects(requestLyricsTranslations(["A".repeat(60001)]),error=>{
+    assert.ok(error instanceof LyricsTranslationError);assert.match(error.userMessage??"",/가사를 나누어 번역/);return true;
+  });assert.equal(calls,1);
   t.mock.method(globalThis,"fetch",async()=>Response.json({translations:["Foreign source"]}));
   await assert.rejects(requestLyricsTranslations(["Foreign source"]),LyricsTranslationError);
   t.mock.method(globalThis,"fetch",async()=>Response.json({translations:["번역","추가"]}));
@@ -73,6 +75,24 @@ test("API rate/size limits are not bypassed and malformed or echoed translations
   // An error response with an inexplicably complete payload is not success.
   t.mock.method(globalThis,"fetch",async()=>Response.json({translations:["완료 번역"]},{status:502}));
   await assert.rejects(requestLyricsTranslations(["Foreign source"]),LyricsTranslationError);
+});
+
+test("a per-address 429 surfaces the server's message; provider failures keep the generic one",async(t)=>{
+  const serverMessage="자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+  t.mock.method(globalThis,"fetch",async()=>Response.json({error:serverMessage},{status:429}));
+  await assert.rejects(requestLyricsTranslations(["Foreign source"]),error=>{
+    assert.ok(error instanceof LyricsTranslationError);assert.equal(error.userMessage,serverMessage);assert.equal(error.message,serverMessage);return true;
+  });
+  t.mock.method(globalThis,"fetch",async()=>new Response("Too Many Requests",{status:429}));
+  await assert.rejects(requestLyricsTranslations(["Foreign source"]),error=>{
+    assert.ok(error instanceof LyricsTranslationError);assert.equal(error.userMessage,serverMessage);return true;
+  });
+  for(const status of [400,413,500]){
+    t.mock.method(globalThis,"fetch",async()=>Response.json({error:"Translation request is too large"},{status}));
+    await assert.rejects(requestLyricsTranslations(["Foreign source"]),error=>{
+      assert.ok(error instanceof LyricsTranslationError);assert.equal(error.userMessage,null);return true;
+    });
+  }
 });
 
 test("browser preserves the existing Google path only for server provider failures or network errors",async(t)=>{
