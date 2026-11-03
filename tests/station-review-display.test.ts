@@ -110,3 +110,30 @@ test("broadcast ratings are station-specific final labels without changing album
   assert.equal(getStationReviewDisplayStatus({ status: "NEEDS_FIX", age_rating: "19" }).label, "보완 요청");
   assert.equal(getStationReviewDisplayStatus({ status: "REJECTED", age_rating: "19" }).label, "부적격");
 });
+
+test("multi-song stations read 적격 or N곡 부적격 without a per-song breakdown once finished", () => {
+  const allClear = getStationReviewDisplayStatus(
+    { status: "APPROVED", track_results: [{ status: "APPROVED" }, { status: "APPROVED" }, { status: "APPROVED" }] },
+    { showPartialTrackBreakdown: true },
+  );
+  assert.equal(allClear.label, "적격");
+  assert.equal(allClear.summaryText, null);
+
+  const partial = getStationReviewDisplayStatus(
+    { status: "APPROVED", track_results: [{ status: "APPROVED" }, { status: "REJECTED" }, { status: "APPROVED" }] },
+    { showPartialTrackBreakdown: true },
+  );
+  assert.equal(partial.key, "PARTIAL");
+  assert.equal(partial.label, "1곡 부적격");
+  assert.equal(partial.tone, "bauhaus-status-chip--danger");
+  assert.equal(partial.summaryText, null);
+
+  const allRejected = getStationReviewDisplayStatus(
+    { status: "SENT", track_results: [{ status: "REJECTED" }, { status: "REJECTED" }] },
+    { showPartialTrackBreakdown: true },
+  );
+  assert.equal(allRejected.label, "2곡 부적격");
+
+  // A single song keeps the plain label.
+  assert.equal(getStationReviewDisplayStatus({ status: "SENT", track_results: [{ status: "REJECTED" }] }).label, "부적격");
+});

@@ -406,7 +406,9 @@ test.describe("isolated commerce account fixtures", () => {
     expect(harness.reads.map(read => read.offset)).toEqual([0]);
     harness.orders[0] = { ...harness.orders[0], status: "REVIEW_REQUIRED" };
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
-    await expect(orderRow(page, orderIds[0])).toContainText("확인 필요");
+    // REVIEW_REQUIRED reads "결제 확인 중" with the do-not-pay-again guidance since #76.
+    await expect(orderRow(page, orderIds[0])).toContainText("결제 확인 중");
+    await expect(orderRow(page, orderIds[0])).toContainText("다시 결제하지 마세요");
     expect(harness.reads.map(read => read.offset)).toEqual([0, 0]);
     expectClean(harness);
   });

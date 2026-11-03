@@ -92,6 +92,9 @@ export function buildStationTrackSummaryText(
   return parts.join(separator);
 }
 
+/** Station label when some songs of a multi-song album were rejected. */
+export const buildRejectedSongsLabel = (rejected: number) => `${rejected}곡 부적격`;
+
 export function getStationReviewDisplayStatus(
   review: StationDisplayInput,
   options: { showPartialTrackBreakdown?: boolean; albumTracks?: AlbumTrackMeta[] | null } = {},
@@ -139,8 +142,20 @@ export function getStationReviewDisplayStatus(
     return statusMap.WAITING_SUBMISSION;
   })();
 
+  // Album results read per station (owner decision 2026-11-03): an all-clear
+  // station says only "적격", and any rejected song turns the station into
+  // "N곡 부적격", whose popup lists the reasons. The per-song breakdown stays
+  // only while results are still arriving.
+  const rejectedSongs =
+    (base.key === "PARTIAL" || base.key === "REJECTED") &&
+    summary.counts.total > 1 &&
+    summary.counts.rejected > 0
+      ? { label: buildRejectedSongsLabel(summary.counts.rejected), tone: statusMap.REJECTED.tone }
+      : null;
   const summaryText =
-    (summary.counts.approved > 0 || summary.counts.rejected > 0) && options.showPartialTrackBreakdown
+    summary.counts.pending > 0 &&
+    (summary.counts.approved > 0 || summary.counts.rejected > 0) &&
+    options.showPartialTrackBreakdown
       ? buildStationTrackSummaryText(summary.counts, " / ")
       : null;
 
@@ -149,6 +164,7 @@ export function getStationReviewDisplayStatus(
     ...(base.key === "APPROVED" && review.age_rating && broadcastRatingLabels[review.age_rating]
       ? { label: broadcastRatingLabels[review.age_rating] }
       : {}),
+    ...(rejectedSongs ?? {}),
     summary,
     summaryText,
   };

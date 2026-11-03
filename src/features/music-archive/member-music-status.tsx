@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { ArchiveCommand, ArchiveRelease, ArchiveTask, ArchiveTrack } from "@/lib/music-archive/model";
@@ -9,7 +10,9 @@ import { buildArchiveReviewEntryHref } from "@/lib/music-archive/review-entry-ur
 import { additionalStationReviewTracks, unreviewedArchiveTracks } from "@/lib/music-archive/reviews";
 import type { LibraryDetail } from "./types";
 import { Button, External, Modal, panelClass } from "./ui";
+import { ReviewResultControl } from "@/components/review-result-control";
 import { MusicStatusBadge } from "./music-status-badge";
+import { groupReviewRecordsByStation, type ReviewStationRow } from "./review-stations";
 import { OnsideResultPopup } from "./onside-result-popup";
 import { MemberRecordEditor } from "./member-record-editor";
 import { CopyrightCreditDetails, trackCopyrightCredits } from "./track-credits";
@@ -105,7 +108,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">{labels[tab]}</h3><MusicStatusBadge status={tab === "review" ? reviewSummary : registered ? (tab === "karaoke" ? "수록 정보 있음" : "등록 정보 있음") : tab === "copyright" && credits.length ? "저작자 정보 있음" : records.length ? "확인 필요" : "등록 정보 없음"} /></div>
     {tab === "review" ? <>
       {onside.length > 0 ? <div className="flex justify-end"><Button primary onClick={() => setShowResult(true)}>심의 결과 보기</Button></div> : <>
-        {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
+        {records.length > 0 && <ReviewStationList rows={groupReviewRecordsByStation(records, tracks)} showTrackTitles={!track && tracks.length > 1} onEdit={(task) => setEditing({ initial: task })} />}
         <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4"><Button primary={!!finishedReviewIds.size} disabled={busy || !entryTracks.length} onClick={() => setEditing({})}>심의 내역 직접 입력</Button></div>
       </>}
       {onside.length > 0 && <div className="space-y-2 rounded-xl border border-border p-4"><p className="text-sm font-bold">진행 내역·보완 자료 확인</p>{onside.map(item => <Link key={item.submissionId} href={`${localePrefix}/dashboard/submissions/${item.submissionId}`} className="flex min-h-11 items-center justify-between gap-2 text-sm underline underline-offset-4"><span>{["COMPLETED", "APPROVED", "REJECTED"].includes(item.status) ? "심의 결과와 방송사별 처리 내역" : "신청 진행·결제·자료 보완"}</span><ExternalLink className="h-4 w-4 shrink-0" aria-hidden /></Link>)}</div>}
@@ -135,6 +138,35 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
     {showResult && <OnsideResultPopup submissionIds={submissionIds} onClose={() => setShowResult(false)} title="심의 결과" localePrefix={localePrefix} />}
     {showGuide && tab !== "review" && <Modal title={`${labels[tab]} 방법`} onClose={() => setShowGuide(false)}><ol className="list-decimal space-y-3 pl-5 text-sm leading-6">{tab === "copyright" ? <><li>가입한 저작권 협회에서 작품명과 저작자 정보를 확인하세요.</li><li>등록되지 않은 작품은 협회 안내에 따라 작품 등록을 신청하세요.</li><li>등록이 완료되면 작품번호와 저작자 정보를 여기에 저장하세요.</li></> : tab === "performer" ? <><li>음실련에서 본인의 참여 음원과 실연 정보를 확인하세요.</li><li>미등록 음원은 참여자·역할과 함께 실연 정보 등록을 신청하세요.</li><li>등록 완료 후 확인번호와 참여 정보를 여기에 저장하세요.</li></> : <><li>TJ 또는 금영에서 곡명과 가수로 수록 여부를 확인하세요.</li><li>수록되지 않은 곡은 해당 업체의 신청 안내에 따라 진행하세요.</li><li>실제 수록되면 업체별 곡번호를 여기에 저장하세요.</li></>}</ol><div className="flex flex-wrap gap-4">{institutions[tab].map((institution) => { const guide = guides.find((item) => item.id === institution.id && item.visible); return <External key={institution.id} href={guide?.url || institution.fallback}>{institution.label} 안내</External>; })}</div></Modal>}
   </section>;
+}
+
+function StationMark({ agency, src }: { agency: string; src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) return <span className="inline-flex h-11 w-[112px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-border/60 bg-white p-1.5"><Image src={src} alt={agency} width={132} height={48} className="h-full w-full object-contain" unoptimized loading="lazy" onError={() => setFailed(true)} /></span>;
+  return <span className="inline-flex min-h-11 w-[112px] shrink-0 items-center justify-center break-words rounded-[4px] border border-[#111111] bg-white p-1 text-center text-xs font-black leading-tight text-[#111111]">{agency}</span>;
+}
+
+/** Station rows like the live status panel; the popup keeps per-song records editable. */
+function ReviewStationList({ rows, showTrackTitles, onEdit }: { rows: ReviewStationRow[]; showTrackTitles: boolean; onEdit: (task: ArchiveTask) => void }) {
+  const [openAgency, setOpenAgency] = useState<string | null>(null);
+  const open = rows.find((row) => row.agency === openAgency);
+  return <>
+    <ul aria-label="방송사별 심의 결과" className="grid gap-2 sm:grid-cols-2">{rows.map((row) => <li key={row.agency} className="flex items-center justify-between gap-3 rounded-[8px] border-2 border-[#111111] bg-white p-2 dark:border-[#f2cf27] dark:bg-[#171717]">
+      <StationMark agency={row.agency} src={row.logoSrc} />
+      <ReviewResultControl label={row.label} tone={row.tone} summary={row.summary} className="w-auto" aria-label={[row.agency, row.label, row.summary].filter(Boolean).join(" · ")} onClick={() => setOpenAgency(row.agency)} />
+    </li>)}</ul>
+    {open && <Modal title={`${open.agency} 심의 결과`} onClose={() => setOpenAgency(null)}>
+      <ul className="divide-y divide-border">{open.entries.map(({ task, track }) => <li key={task.id} className="flex items-start justify-between gap-3 py-3 text-sm">
+        <div className="min-w-0 space-y-1">
+          {showTrackTitles && track && <p className="break-words font-bold">{track.trackNumber}. {track.title}{track.version ? ` (${track.version})` : ""}</p>}
+          <MusicStatusBadge status={taskLabel(task, "review")} />
+          {task.completedDate && <p className="text-muted-foreground">{task.completedDate}</p>}
+          {task.memo && ["ineligible", "rejected"].includes(task.result) && <p className="whitespace-pre-wrap break-words"><span className="font-semibold">부적격 사유: </span>{task.memo}</p>}
+        </div>
+        <button type="button" onClick={() => { setOpenAgency(null); onEdit(task); }} className="min-h-10 shrink-0 px-2 text-xs font-semibold underline underline-offset-4">수정</button>
+      </li>)}</ul>
+    </Modal>}
+  </>;
 }
 
 function Record({ task, tab, trackTitle, onEdit }: { task: ArchiveTask; tab: MemberMusicTab; trackTitle?: string; onEdit: () => void }) {
