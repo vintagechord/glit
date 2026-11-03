@@ -35,3 +35,17 @@ test("scheduled mail worker requires its own credential, rejects outage and reco
   assert.equal((await api.POST(request("a".repeat(64)))).status, 503);
   assert.ok(api.calls.some(v => typeof v === "object" && v !== null && "last_error" in v && v.last_error === true));
 });
+
+test("the scheduler token check compares digests, not the token text", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../supabase/migrations/", import.meta.url);
+  const latest = readdirSync(dir).filter(name => name.endsWith(".sql")).sort()
+    .filter(name => /create or replace function public\.authorize_email_worker\(/.test(readFileSync(new URL(name, dir), "utf8"))).at(-1);
+  assert.equal(latest, "20261103160100_email_worker_token_digest.sql");
+  const sql = readFileSync(new URL(latest!, dir), "utf8");
+  assert.match(sql, /extensions\.digest\(token, 'sha256'\) = extensions\.digest\(p_token, 'sha256'\)/);
+  assert.doesNotMatch(sql, /token = p_token/);
+  assert.match(sql, /security invoker set search_path = ''/);
+  assert.match(sql, /revoke all on function public\.authorize_email_worker\(text\) from public, anon, authenticated;/);
+  assert.match(sql, /grant execute on function public\.authorize_email_worker\(text\) to service_role;/);
+});
