@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (path: string) =>
@@ -19,6 +19,10 @@ test("English member pages carry their own English, non-indexed tab titles", () 
     "src/app/en/mypage/credits/page.tsx",
     "src/app/en/mypage/music/page.tsx",
     "src/app/en/mypage/music/results/[id]/page.tsx",
+    "src/app/en/mypage/orders/page.tsx",
+    "src/app/en/complete-signup/page.tsx",
+    "src/app/en/confirm-email/page.tsx",
+    "src/app/en/reset-password/page.tsx",
   ]) {
     const source = read(path);
     assert.doesNotMatch(source, /export \{ metadata \} from "@\/app\/(?!en\/)/, path);
@@ -27,6 +31,24 @@ test("English member pages carry their own English, non-indexed tab titles", () 
     assert.match(source, /robots: \{ index: false, follow: false \}/, path);
   }
   assert.match(read("src/app/mypage/submissions/[id]/page.tsx"), /title: "심의 상세"/);
+});
+
+test("no English page falls back to the Korean title suffix or metadata", () => {
+  const pages = readdirSync(new URL("../src/app/en", import.meta.url), { recursive: true, encoding: "utf8" })
+    .filter((path) => path.endsWith("page.tsx"))
+    .map((path) => `src/app/en/${path}`);
+  assert.ok(pages.length > 40);
+  for (const path of pages) {
+    const source = read(path);
+    assert.doesNotMatch(source, /export \{[^}]*\bmetadata\b[^}]*\} from "@\/app\/(?!en\/)/, path);
+    assert.doesNotMatch(source, /export \* from/, path);
+    if (!/export (const metadata|async function generateMetadata)/.test(source)) {
+      // Pages without metadata only redirect.
+      if (!/export \{[^}]*\bmetadata\b[^}]*\} from "@\/app\/en\//.test(source)) assert.match(source, /redirect/, path);
+      continue;
+    }
+    assert.match(source, /locale: "en"|title: \{ absolute: "[^"가-힣]* \| Onside" \}|absoluteTitle: true/, path);
+  }
 });
 
 test("the English archive result page keeps its links under /en", () => {
