@@ -125,3 +125,31 @@ test('status never returns credentials, sanitization is recursive', () => {
   assert.equal(JSON.stringify(sourceStatus(env)).includes('test-server-key'), false);
   assert.deepEqual(sanitizeRecord({ nested: [{ access_token: 'secret', title: '앨범' }], guest_token: 'secret' }), { nested: [{ title: '앨범' }] });
 });
+
+test('with the Cloudflare link configured, originals come through the Worker with a link the Worker accepts', async () => {
+  const { handle } = await import('../../services/files-cdn/src/index.mjs');
+  const secret = 'desk-fixture-signing-secret-of-32-chars!';
+  const cdnEnv = { ...env, FILES_CDN_BASE_URL: 'https://onside-files.example.workers.dev', FILES_CDN_SIGNING_SECRET: secret };
+  const workerEnv = { B2_S3_ENDPOINT: 'https://s3.us-west-004.backblazeb2.com', B2_REGION: 'us-west-004', B2_BUCKET: 'onside', B2_KEY_ID: 'kid', B2_APPLICATION_KEY: 'key', FILES_SIGNING_SECRET: secret };
+  const payload = Buffer.from('cloudflare 경유 음원');
+  const upstream = [];
+  const fetchImpl = async (url, init) => {
+    assert.equal(new URL(url).origin, 'https://onside-files.example.workers.dev');
+    assert.equal(init.redirect, 'error');
+    // Run the real Worker against a fake B2 so the signed link is verified end to end.
+    return handle(new Request(url), workerEnv, { fetchImpl: async (b2Url, b2Init) => { upstream.push({ b2Url, method: b2Init.method }); return new Response(payload, { headers: { 'content-length': String(payload.length) } }); } });
+  };
+  const source = createSource({ env: cdnEnv, fetchImpl, s3Client: { send: async () => { throw new Error('direct B2 must not be used'); } } });
+  assert.equal(sourceStatus(cdnEnv).downloadsVia, 'cloudflare');
+  assert.equal(sourceStatus({ ...cdnEnv, B2_KEY_ID: '', B2_APPLICATION_KEY: '' }).downloadsConfigured, true);
+  const directory = await mkdtemp(join(tmpdir(), 'onside-source-cdn-'));
+  try {
+    const result = await source.downloadAsset({ objectKey: 'submissions/곡 01.wav', storage: 'b2', bucket: 'onside', size: payload.length, original_name: '곡 01.wav' }, join(directory, 'song.wav'));
+    assert.equal(result.bytes, payload.length);
+    assert.deepEqual(await readFile(join(directory, 'song.wav')), payload);
+    assert.deepEqual(upstream, [{ b2Url: 'https://s3.us-west-004.backblazeb2.com/onside/submissions/%EA%B3%A1%2001.wav', method: 'GET' }]);
+    const capped = createSource({ env: cdnEnv, fetchImpl: async () => new Response('limit', { status: 503 }) });
+    await assert.rejects(capped.downloadAsset({ objectKey: 'submissions/a.wav', storage: 'b2', bucket: 'onside' }, join(directory, 'a.wav')), /하루 다운로드 한도/);
+    assert.deepEqual(await readdir(directory), ['song.wav']);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

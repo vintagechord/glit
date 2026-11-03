@@ -1,7 +1,7 @@
 /** Read-only service adapter. Never import this module in browser code. */
 import { createClient } from '@supabase/supabase-js';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, link, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -21,7 +21,19 @@ function configuration(env) {
     endpoint: text(env.B2_S3_ENDPOINT), region: text(env.B2_REGION), bucket: text(env.B2_BUCKET),
     keyId: text(env.B2_KEY_ID), applicationKey: text(env.B2_APPLICATION_KEY),
     prefix: `${text(env.B2_PREFIX).replace(/^\/+|\/+$/g, '') || 'submissions'}/`,
+    // Downloads through the Onside Cloudflare Worker: B2 egress to Cloudflare is
+    // free and does not use the account's daily download cap.
+    cdnBase: text(env.FILES_CDN_BASE_URL).replace(/\/+$/, ''), cdnSecret: text(env.FILES_CDN_SIGNING_SECRET),
   };
+}
+const cdnConfigured = config => config.cdnSecret.length >= 32 && /^https:\/\/[^/?#]+$/.test(config.cdnBase);
+const base64Url = value => Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/** Same signed link as the service (src/lib/file-cdn.ts); the Worker verifies it. */
+export function signCdnDownloadUrl(config, key, filename, now = Date.now()) {
+  const name = String(filename || key.split('/').at(-1) || 'file').replace(/[\r\n]/g, ' ').slice(0, 300);
+  const expires = Math.floor(now / 1000) + 60 * 60;
+  const signature = base64Url(createHmac('sha256', config.cdnSecret).update(['onside-file-v1', key, String(expires), name, ''].join('\n')).digest());
+  return `${config.cdnBase}/f/${base64Url(key)}?${new URLSearchParams({ e: String(expires), n: base64Url(name), t: '', s: signature })}`;
 }
 
 function validateHttps(value, label) {
@@ -39,10 +51,11 @@ export function sourceStatus(env = process.env) {
   if (!config.url) missing.push('SUPABASE_URL');
   if (!config.key) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   const databaseConfigured = missing.length === 0;
-  for (const [key, name] of [['endpoint', 'B2_S3_ENDPOINT'], ['region', 'B2_REGION'], ['bucket', 'B2_BUCKET'], ['keyId', 'B2_KEY_ID'], ['applicationKey', 'B2_APPLICATION_KEY']]) {
+  const viaCdn = cdnConfigured(config);
+  for (const [key, name] of viaCdn ? [['bucket', 'B2_BUCKET']] : [['endpoint', 'B2_S3_ENDPOINT'], ['region', 'B2_REGION'], ['bucket', 'B2_BUCKET'], ['keyId', 'B2_KEY_ID'], ['applicationKey', 'B2_APPLICATION_KEY']]) {
     if (!config[key]) missing.push(name);
   }
-  return { configured: databaseConfigured, databaseConfigured, downloadsConfigured: missing.length === 0, mode: 'read-only', missing };
+  return { configured: databaseConfigured, databaseConfigured, downloadsConfigured: missing.length === 0, downloadsVia: viaCdn ? 'cloudflare' : 'b2', mode: 'read-only', missing };
 }
 
 /** A transport guard makes all writes fail even if future adapter code is changed. */
@@ -215,11 +228,26 @@ export function createSource({ env = process.env, fetchImpl = globalThis.fetch, 
     } else {
       if (!key.startsWith(config.prefix) || (asset.bucket && asset.bucket !== config.bucket)) throw new Error('온사이드 신청 폴더 밖의 파일은 내려받을 수 없습니다.');
       if (!sourceStatus(env).downloadsConfigured) throw new Error('음원·영상 다운로드 연결 설정이 없습니다.');
-      if (!b2) b2 = s3Client || new S3Client({ endpoint: validateHttps(config.endpoint, 'B2'), region: config.region, forcePathStyle: true, credentials: { accessKeyId: config.keyId, secretAccessKey: config.applicationKey } });
-      try {
-        const object = await b2.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal });
-        body = object.Body; expectedLength = object.ContentLength;
-      } catch (error) { throw sourceError('첨부파일 다운로드', error); }
+      if (cdnConfigured(config)) {
+        validateHttps(config.cdnBase, 'Cloudflare 다운로드');
+        let response;
+        try { response = await fetchImpl(signCdnDownloadUrl(config, key, asset.original_name), { method: 'GET', redirect: 'error', signal: abortSignal }); }
+        catch (error) { throw sourceError('첨부파일 다운로드', error); }
+        if (!response.ok || !response.body) {
+          const reason = response.status === 503 ? '파일 저장소의 하루 다운로드 한도에 도달했습니다. 잠시 후 다시 시도해주세요.' : response.status === 404 ? '저장소에서 파일을 찾을 수 없습니다.' : `첨부파일을 내려받지 못했습니다 (HTTP ${response.status}).`;
+          await response.body?.cancel?.().catch?.(() => {});
+          throw new Error(reason);
+        }
+        body = Readable.fromWeb(response.body);
+        const contentLength = response.headers.get('content-length');
+        expectedLength = contentLength == null ? null : Number(contentLength);
+      } else {
+        if (!b2) b2 = s3Client || new S3Client({ endpoint: validateHttps(config.endpoint, 'B2'), region: config.region, forcePathStyle: true, credentials: { accessKeyId: config.keyId, secretAccessKey: config.applicationKey } });
+        try {
+          const object = await b2.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal });
+          body = object.Body; expectedLength = object.ContentLength;
+        } catch (error) { throw sourceError('첨부파일 다운로드', error); }
+      }
     }
     if (!body || (expectedLength ?? asset.size ?? 0) > MAXIMUM_ASSET_BYTES) {
       body?.destroy?.();
