@@ -8,6 +8,7 @@ import { AdminListPager, adminListRange, parseAdminListPage } from "@/components
 import { KaraokeFileButton } from "@/features/karaoke/karaoke-file-button";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "노래방 등록 관리",
@@ -157,7 +158,7 @@ export default async function AdminKaraokePage({
 
       <div className="mt-6 space-y-4">
         {requestsError ? (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p className="font-semibold">요청 목록을 불러오지 못했습니다.</p>
             <details className="mt-1">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>

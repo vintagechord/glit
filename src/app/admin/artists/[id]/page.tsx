@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/format";
 import { updateArtistAction } from "@/features/admin/actions";
 import { ArtistEditorForm } from "@/components/admin/artist-editor-form";
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "아티스트 상세",
@@ -38,7 +39,7 @@ export default async function AdminArtistDetailPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <h1 className="font-display text-2xl text-foreground">아티스트 상세</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           잘못된 아티스트 ID입니다.
         </p>
         <details className="mt-3 text-xs text-muted-foreground">
@@ -74,7 +75,7 @@ export default async function AdminArtistDetailPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <h1 className="font-display text-2xl text-foreground">아티스트 상세</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           아티스트 정보를 불러올 수 없습니다.
         </p>
         <details className="mt-3 text-xs text-muted-foreground">
@@ -150,7 +151,7 @@ export default async function AdminArtistDetailPage({
               />
             </div>
           ) : (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-[#1f7a5a] text-lg font-bold text-white">
               {(artist.name || "A").charAt(0).toUpperCase()}
             </div>
           )}

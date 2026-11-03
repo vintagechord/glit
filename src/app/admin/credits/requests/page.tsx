@@ -18,6 +18,7 @@ import {
 } from "@/lib/credits";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -375,13 +376,13 @@ export default async function AdminCreditRequestsPage({
       </div>
 
       {errorFlag ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           요청 상태를 저장하지 못했습니다.
         </div>
       ) : null}
 
       {magazineCountResult.error || studioCountResult.error ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           요청 건수 집계 중 오류가 발생했습니다.
         </div>
       ) : null}
@@ -418,7 +419,7 @@ export default async function AdminCreditRequestsPage({
         </div>
 
         {magazineResult.error ? (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p className="font-semibold">매거진 요청을 불러오지 못했습니다.</p>
             <details className="mt-1">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>
@@ -558,7 +559,7 @@ export default async function AdminCreditRequestsPage({
         </div>
 
         {studioResult.error ? (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p className="font-semibold">서비스 요청을 불러오지 못했습니다.</p>
             <details className="mt-1">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>

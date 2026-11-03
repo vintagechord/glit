@@ -10,6 +10,7 @@ import {
 } from "@/lib/support-inquiries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +54,9 @@ const statusOptions: SupportInquiryStatus[] = [
 ];
 
 const statusTone: Record<SupportInquiryStatus, string> = {
-  NEW: "border-[#111111] bg-[#f2cf27] text-[#111111]",
-  REVIEWING: "border-[#1556a4]/30 bg-[#1556a4]/10 text-[#1556a4]",
-  ANSWERED: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700",
+  NEW: brandStatusTones.warning,
+  REVIEWING: brandStatusTones.progress,
+  ANSWERED: brandStatusTones.success,
   CLOSED: "border-border bg-muted text-muted-foreground",
 };
 
@@ -176,14 +177,14 @@ export default async function AdminInquiriesPage({
       </div>
 
       {errorFlag ? (
-        <div className="mt-6 rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
+        <div className={`mt-6 rounded-[10px] border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           문의 상태를 저장하지 못했습니다.
         </div>
       ) : null}
 
       <div className="mt-6 space-y-4">
         {error ? (
-          <div className="rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
+          <div className={`rounded-[10px] border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p>문의 목록을 불러오지 못했습니다.</p>
             <details className="mt-1 font-normal">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>

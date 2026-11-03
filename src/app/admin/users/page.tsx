@@ -4,6 +4,7 @@ import { AdminListPager, adminListRange, parseAdminListPage } from "@/components
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDateTime } from "@/lib/format";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "회원 관리",
@@ -161,7 +162,7 @@ export default async function AdminUsersPage({
       )}
 
       {error && (
-        <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <div className={`mt-6 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           <p className="font-semibold">회원 정보를 불러오지 못했습니다.</p>
           <details className="mt-1 text-xs">
             <summary className="cursor-pointer font-semibold">오류 상세</summary>

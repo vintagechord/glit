@@ -8,6 +8,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ADMIN_CHAT_PAGE_SIZE, loadAdminChatConversationRows } from "@/features/chat/admin-chat-list";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ export default async function AdminChatPage() {
       </h1>
 
       {error ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           <p className="font-semibold">채팅 목록을 불러오지 못했습니다.</p>
           <details className="mt-1">
             <summary className="cursor-pointer font-semibold">오류 상세</summary>

@@ -5,6 +5,7 @@ import { upsertCreditRewardFormAction } from "@/features/credits/actions";
 import { isRetiredCreditReward, type CreditReward } from "@/lib/credits";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "크레딧 서비스 관리",
@@ -146,7 +147,7 @@ export default async function AdminCreditsPage({
       </div>
 
       {errorFlag ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           {errorFlag === "retired_reward"
             ? "운영이 종료된 서비스는 다시 노출할 수 없습니다."
             : "저장하지 못했습니다. 입력값을 확인해주세요."}

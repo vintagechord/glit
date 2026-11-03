@@ -16,6 +16,7 @@ import {
 } from "@/features/admin/actions";
 import { SubmissionFilesPanel } from "@/features/submissions/submission-files-panel";
 import { SubmissionSupplements } from "@/features/submissions/submission-supplements";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
@@ -312,7 +313,7 @@ export default async function AdminSubmissionDetailPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           접수 ID가 없습니다.
         </p>
         <div className="mt-3 flex gap-3">
@@ -338,7 +339,7 @@ export default async function AdminSubmissionDetailPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           접수 ID 형식이 올바르지 않습니다.
         </p>
         <div className="mt-3 flex gap-3">
@@ -365,7 +366,7 @@ export default async function AdminSubmissionDetailPage({
   const renderSubmissionNotFound = (reason?: string | null) => (
     <div className="mx-auto w-full max-w-4xl px-6 py-12">
       <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
-      <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+      <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
         해당 ID의 접수를 찾을 수 없습니다.
       </p>
       <div className="mt-3 flex gap-3">
@@ -454,7 +455,7 @@ export default async function AdminSubmissionDetailPage({
     return (
       <div className="mx-auto w-full max-w-4xl px-6 py-12">
         <h1 className="font-display text-2xl text-foreground">접수 상세</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           서버 오류로 접수 정보를 불러오지 못했습니다.
         </p>
         <details className="mt-3 text-xs text-muted-foreground">
@@ -902,12 +903,12 @@ export default async function AdminSubmissionDetailPage({
     <div className="mx-auto w-full max-w-6xl px-6 py-12 text-[15px] leading-relaxed sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
       {!isSaveError && saveMessage ? <AdminSaveToast message={saveMessage} /> : null}
       {isSaveError && errorMessage ? (
-        <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className={`mb-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           {errorMessage}
         </div>
       ) : null}
       {isSaveWarning && warningMessage ? (
-        <div className="mb-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-3 text-sm text-black">
+        <div className={`mb-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.warning}`}>
           저장 경고: {warningMessage}
         </div>
       ) : null}
@@ -941,8 +942,8 @@ export default async function AdminSubmissionDetailPage({
 
       {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submission.id} admin /> : null}
       {!isMvSubmission && isOneclick ? (
-        <div className="mt-6 rounded-2xl border border-[#1556a4]/30 bg-[#1556a4]/5 p-5 text-sm">
-          <p className="font-semibold text-foreground">발매된 음반 · URL 접수</p>
+        <div className="mt-6 rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-card p-5 text-sm">
+          <p className={`inline-flex rounded-md border-2 px-2 py-1 font-semibold ${brandStatusTones.progress}`}>발매된 음반 · URL 접수</p>
           <p className="mt-2 leading-6 text-muted-foreground">
             추가금 없이 접수된 발매 음반입니다. 심의자료 다운로드를 누르면 멜론·지니 링크에서 앨범 정보와 가사를 수집해 신청서 ZIP을 만듭니다.
           </p>

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { UncertainPaymentResolver } from "@/components/admin/uncertain-payment-resolver";
 import { requireAdminPage } from "@/lib/admin/page-auth";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime, formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -105,8 +106,8 @@ export default async function AdminPaymentsPage({ searchParams }: {
           접수 관리
         </Link>
       </div>
-      {savedNotice ? <p role="status" className="mt-5 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">{savedNotice}{params.savedWarning ? ` (${params.savedWarning})` : ""}</p> : null}
-      {params.saved === "error" ? <p role="alert" className="mt-5 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">{params.savedError || "처리하지 못했습니다."}</p> : null}
+      {savedNotice ? <p role="status" className={`mt-5 rounded-xl border-2 p-4 text-sm font-semibold ${brandStatusTones.success}`}>{savedNotice}{params.savedWarning ? ` (${params.savedWarning})` : ""}</p> : null}
+      {params.saved === "error" ? <p role="alert" className={`mt-5 rounded-xl border-2 p-4 text-sm font-semibold ${brandStatusTones.danger}`}>{params.savedError || "처리하지 못했습니다."}</p> : null}
       <p className="mt-5 rounded-xl border border-border p-4 text-sm">
         승인 확인 필요 건은 이니시스 관리자 거래 내역과 신청·주문 상태를 먼저 대조해주세요. 확인 전에는 재결제를 안내하지 마세요. 대조가 끝난 APPROVAL_UNCERTAIN 건은 아래 행에서 승인·미승인을 기록할 수 있습니다. 환불은 이니시스 관리자 취소나 계좌 송금으로 먼저 처리한 뒤, 접수 상세의 ‘환불 처리’에서 기록합니다.
         {" "}<Link href="/admin/submissions?type=ALL&payment=REFUNDED" className="font-semibold underline underline-offset-2">환불로 기록된 신청 확인</Link>
@@ -119,7 +120,7 @@ export default async function AdminPaymentsPage({ searchParams }: {
       <p className="mt-3 text-sm text-muted-foreground">{page}페이지 · {error ? "집계 확인 필요" : `전체 ${count ?? 0}건`} · 페이지당 최대 {pageSize}건</p>
 
       {error ? (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 px-4 py-3 text-sm ${brandStatusTones.danger}`}>
           <p className="font-semibold">결제 내역을 불러오지 못했습니다.</p>
           <p className="mt-1">{archived ? "보관 목록은 마이그레이션 20261103132000 적용 후 표시됩니다." : "잠시 후 다시 불러오고, 문제가 계속되면 관리자 로그를 확인해주세요."}</p>
         </div>

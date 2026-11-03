@@ -7,6 +7,7 @@ import { Download, FileCheck2, UploadCloud } from "lucide-react";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { PendingOverlay } from "@/components/ui/pending-overlay";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 
@@ -401,7 +402,7 @@ export default function AdminFilesPage() {
                   <p className="mt-1 break-all">{selectedSubmission.id}</p>
                 </details>
               </div>
-              <span className="rounded-full border border-[#1556a4]/30 bg-[#1556a4]/10 px-3 py-1 text-xs font-black text-[#1556a4]">
+              <span className={`rounded-full border-2 px-3 py-1 text-xs font-black ${brandStatusTones.progress}`}>
                 {selectedSubmission.ratingLabel ?? "등급 미설정"}
               </span>
             </div>
@@ -494,12 +495,12 @@ export default function AdminFilesPage() {
         </label>
 
         {notice ? (
-          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-800">
+          <div className={`rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.success}`}>
             {notice}
           </div>
         ) : null}
         {error ? (
-          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm font-semibold text-rose-700">
+          <div className={`rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
             {error}
           </div>
         ) : null}
