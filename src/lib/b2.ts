@@ -17,6 +17,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
 
 import { knownDownloadContentType } from "@/lib/upload-file-types";
+import { getFileCdnConfig, signFileCdnUrl } from "@/lib/file-cdn";
 
 export class B2ConfigError extends Error {
   constructor(message: string) {
@@ -278,6 +279,17 @@ export async function presignGetUrl(
 ) {
   const { client, bucket, signExpiry } = getB2Config();
   const filename = options.filename?.trim() || downloadNameFromObjectKey(objectKey);
+  // Through Cloudflare when configured: B2 egress to Cloudflare is free and
+  // does not use up the account's daily download cap.
+  const cdn = getFileCdnConfig();
+  if (cdn) {
+    return signFileCdnUrl(cdn, {
+      objectKey,
+      filename,
+      contentType: knownDownloadContentType(filename) ?? knownDownloadContentType(objectKey) ?? null,
+      expiresInSeconds: clampExpirySeconds(expiresIn, signExpiry, 7 * 24 * 60 * 60),
+    });
+  }
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: objectKey,
