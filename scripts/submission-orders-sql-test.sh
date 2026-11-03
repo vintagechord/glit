@@ -95,4 +95,11 @@ order_psql < "$order_sql_root/tests/sql/admin-delete-submissions.sql"
 # Recording refunds made in the Inicis console or by bank transfer.
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261102190000_admin_record_refund.sql"
 order_psql < "$order_sql_root/tests/sql/admin-record-refund.sql"
+# Staff notes move to the administrator-only memo table (its policy needs is_admin).
+order_psql <<'SQL'
+create or replace function public.is_admin() returns boolean language sql stable as
+$$ select exists(select 1 from public.profiles where user_id=auth.uid() and role='admin') $$;
+SQL
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261103160000_submission_admin_memos.sql"
+order_psql < "$order_sql_root/tests/sql/submission-admin-memos.sql"
 echo "Submission orders SQL checks passed; disposable container will be removed."
