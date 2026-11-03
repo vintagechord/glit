@@ -5,6 +5,7 @@ import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 
 import { createKaraokePromotionRecommendationAction } from "@/features/karaoke/actions";
+import { isAllowedKaraokeUpload, karaokeUploadTypeError } from "@/lib/upload-file-types";
 import { safeRandomUUID } from "@/lib/uuid";
 
 type PromotionSummary = {
@@ -90,6 +91,13 @@ export function KaraokeCreditPanel({
     if (!selected) {
       setRecommendationFile(null);
       setRecommendationUpload({ name: "", progress: 0, status: "idle" });
+      return;
+    }
+    if (!isAllowedKaraokeUpload("karaoke_recommendation", selected.name, selected.type)) {
+      event.target.value = "";
+      setRecommendationFile(null);
+      setRecommendationUpload({ name: "", progress: 0, status: "idle" });
+      setNotice({ error: karaokeUploadTypeError("karaoke_recommendation") });
       return;
     }
     setNotice({});

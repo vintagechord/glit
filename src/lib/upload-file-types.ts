@@ -13,6 +13,9 @@ type UploadFormat = {
 const formats: Record<string, UploadFormat> = {
   wav: { contentType: "audio/wav", mimes: [], family: "audio" },
   mp3: { contentType: "audio/mpeg", mimes: [], family: "audio" },
+  m4a: { contentType: "audio/mp4", mimes: [], family: "audio" },
+  aac: { contentType: "audio/aac", mimes: [], family: "audio" },
+  flac: { contentType: "audio/flac", mimes: [], family: "audio" },
   zip: { contentType: "application/zip", mimes: ["multipart/x-zip"], family: "document" },
   hwp: { contentType: "application/x-hwp", mimes: [], family: "document" },
   doc: { contentType: "application/msword", mimes: [], family: "document" },
@@ -30,6 +33,8 @@ const formats: Record<string, UploadFormat> = {
   png: { contentType: "image/png", mimes: ["image/png", "image/x-png"] },
   webp: { contentType: "image/webp", mimes: ["image/webp"] },
   gif: { contentType: "image/gif", mimes: ["image/gif"] },
+  heic: { contentType: "image/heic", mimes: ["image/heic", "image/heif", "image/heic-sequence"] },
+  heif: { contentType: "image/heif", mimes: ["image/heif", "image/heic", "image/heif-sequence"] },
   txt: { contentType: "text/plain; charset=utf-8", mimes: ["text/plain"] },
   lrc: { contentType: "text/plain; charset=utf-8", mimes: ["text/plain"] },
 };
@@ -43,6 +48,31 @@ const kindExtensions: Record<UploadKind, ReadonlySet<string>> = {
   video: new Set(["mp4", "mov", "wmv", "mpg", "mpeg", "m4v", ...applicationFormExtensions]),
   etc: new Set(["pdf", "jpg", "jpeg", "png", "webp", "txt", ...applicationFormExtensions]),
 };
+
+export type KaraokeUploadScope = "karaoke_request" | "karaoke_recommendation";
+
+const imageExtensions: readonly string[] = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
+
+/** Extensions the karaoke forms send through /api/uploads/presign: a request
+ * attaches the song or reference material, a recommendation its proof
+ * screenshot (accept="image/*"). These skip the completion signature check,
+ * but downloads are always attachments typed from the extension. */
+const karaokeExtensions: Record<KaraokeUploadScope, ReadonlySet<string>> = {
+  karaoke_request: new Set([
+    "wav", "mp3", "m4a", "aac", "flac", "zip", "mp4", "mov",
+    "pdf", "txt", "lrc", ...applicationFormExtensions, ...imageExtensions,
+  ]),
+  karaoke_recommendation: new Set(imageExtensions),
+};
+
+/** File input accept list matching a karaoke scope. */
+export const karaokeUploadAccept = (scope: KaraokeUploadScope) =>
+  [...karaokeExtensions[scope]].map((extension) => `.${extension}`).join(",");
+
+export const karaokeUploadTypeError = (scope: KaraokeUploadScope) =>
+  scope === "karaoke_recommendation"
+    ? "추천 인증샷은 이미지 파일(JPG/PNG/WEBP/GIF/HEIC)만 업로드할 수 있습니다."
+    : "음원(WAV/MP3/M4A/AAC/FLAC), 영상(MP4/MOV), 문서(PDF/HWP/DOC/DOCX/TXT/LRC), 이미지 또는 ZIP 파일만 업로드할 수 있습니다.";
 
 const genericMimes = new Set(["", "application/octet-stream", "binary/octet-stream"]);
 
@@ -89,6 +119,17 @@ export function isAllowedSubmissionUpload(
 ) {
   const extension = uploadFileExtension(filename);
   if (!extension || !kindExtensions[kind].has(extension)) return false;
+  return isDeclaredMimeCompatible(formats[extension], mimeType);
+}
+
+/** The same extension-plus-declared-type rule for the karaoke scopes. */
+export function isAllowedKaraokeUpload(
+  scope: KaraokeUploadScope,
+  filename?: string | null,
+  mimeType?: string | null,
+) {
+  const extension = uploadFileExtension(filename);
+  if (!extension || !karaokeExtensions[scope].has(extension)) return false;
   return isDeclaredMimeCompatible(formats[extension], mimeType);
 }
 

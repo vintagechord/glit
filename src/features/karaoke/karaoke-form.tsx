@@ -10,6 +10,11 @@ import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
+import {
+  isAllowedKaraokeUpload,
+  karaokeUploadAccept,
+  karaokeUploadTypeError,
+} from "@/lib/upload-file-types";
 
 import {
   createKaraokeRequestAction,
@@ -91,6 +96,10 @@ export function KaraokeForm({
       setNotice({
         error: `파일 용량은 ${karaokeUploadMaxMb}MB 이하만 가능합니다.`,
       });
+      return;
+    }
+    if (!isAllowedKaraokeUpload("karaoke_request", selected.name, selected.type)) {
+      setNotice({ error: karaokeUploadTypeError("karaoke_request") });
       return;
     }
     setNotice({});
@@ -573,6 +582,7 @@ export function KaraokeForm({
               <span className="sr-only">파일 첨부</span>
               <input
                 type="file"
+                accept={karaokeUploadAccept("karaoke_request")}
                 onChange={onFileChange}
                 disabled={isGuest}
                 className="hidden"

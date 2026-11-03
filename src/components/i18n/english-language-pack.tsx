@@ -2047,6 +2047,8 @@ Object.assign(exactTranslations, {
   "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.": "Your application is being prepared. Please try again shortly. If uploads remain unavailable, you can also apply through the previous Onside site.",
   "빈 파일은 업로드할 수 없습니다. 파일을 확인해주세요.": "Empty files cannot be uploaded. Check the file and try again.",
   "WAV, MP3, ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.": "Upload WAV, MP3, ZIP, or application files in HWP, DOC, or DOCX format.",
+  "추천 인증샷은 이미지 파일(JPG/PNG/WEBP/GIF/HEIC)만 업로드할 수 있습니다.": "Recommendation proof must be an image file (JPG, PNG, WEBP, GIF or HEIC).",
+  "음원(WAV/MP3/M4A/AAC/FLAC), 영상(MP4/MOV), 문서(PDF/HWP/DOC/DOCX/TXT/LRC), 이미지 또는 ZIP 파일만 업로드할 수 있습니다.": "Upload audio (WAV, MP3, M4A, AAC, FLAC), video (MP4, MOV), documents (PDF, HWP, DOC, DOCX, TXT, LRC), images or ZIP files only.",
   "파일 업로드 중 오류가 발생했습니다.": "An error occurred while uploading the file.",
   "사업자등록증은 PDF, JPG, PNG, WEBP 파일로 첨부해주세요.": "Attach your business registration certificate as a PDF, JPG, PNG, or WEBP file.",
   "사업자등록증 업로드 중 오류가 발생했습니다.": "We could not upload the business registration certificate.",

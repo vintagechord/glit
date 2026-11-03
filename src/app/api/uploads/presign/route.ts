@@ -14,6 +14,7 @@ import {
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { isAllowedKaraokeUpload, karaokeUploadTypeError } from "@/lib/upload-file-types";
 
 const schema = z.object({
   submissionId: z.string().uuid(),
@@ -86,6 +87,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "파일 용량이 허용 한도를 초과했습니다." },
       { status: 413 },
+    );
+  }
+  // Extension plus a declared type that fits it, as the submission uploads.
+  if (!isAllowedKaraokeUpload(scope, filename, mimeType)) {
+    return NextResponse.json(
+      { error: karaokeUploadTypeError(scope) },
+      { status: 400 },
     );
   }
 
