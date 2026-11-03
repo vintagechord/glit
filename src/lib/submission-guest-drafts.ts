@@ -171,10 +171,15 @@ export const readGuestDraftLeftovers = (
     const slot = parseSlot(storage.getItem(getGuestDraftSlotKey(kind)));
     const parked = readParkedSlots(storage, kind);
     const activeRefs = getGuestDraftSlotRefs(kind, slot);
-    const resumeRefs =
-      activeRefs.length > 0
-        ? activeRefs
-        : getGuestDraftSlotRefs(kind, parked[parked.length - 1] ?? null);
+    // An id without its own token may still belong to the type's guest token.
+    const activeIds = (kind === "album" ? (Array.isArray(slot?.ids) ? slot.ids : []) : [slot?.id])
+      .filter((id): id is string => typeof id === "string" && uuidPattern.test(id));
+    const resumeIds =
+      activeIds.length > 0
+        ? activeIds
+        : getGuestDraftSlotRefs(kind, parked[parked.length - 1] ?? null).map(
+            (ref) => ref.submissionId,
+          );
     const allRefs = [
       ...activeRefs,
       ...parked.flatMap((candidate) => getGuestDraftSlotRefs(kind, candidate)),
@@ -187,7 +192,7 @@ export const readGuestDraftLeftovers = (
         : undefined;
     if (!guestToken && allRefs.length === 0) return null;
     return {
-      ids: resumeRefs.map((ref) => ref.submissionId),
+      ids: Array.from(new Set(resumeIds)),
       guestToken,
       guestTokensBySubmissionId: Object.fromEntries(
         allRefs.map((ref) => [ref.submissionId, ref.guestToken]),

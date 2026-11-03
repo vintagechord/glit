@@ -1073,7 +1073,7 @@ export function AlbumWizard({
           });
           setCurrentSubmissionId(json.submissionId);
           setCheckpointInitialDataIsServerState(false);
-          setCurrentServerUpdatedAt(json.updatedAt ?? new Date().toISOString());
+          setCurrentServerUpdatedAt(new Date().toISOString());
           return json.submissionId;
         }
         const message =
