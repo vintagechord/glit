@@ -74,7 +74,11 @@ test("guest lookup and footer policies keep focus inside and return it to the op
   await page.goto("/login");
   await assertModalFocus(page, page.getByRole("main").getByRole("button", { name: "비회원 조회", exact: true }));
   await page.locator("footer").getByText("약관/정책", { exact: false }).click();
-  await assertModalFocus(page, page.locator("footer").getByRole("button", { name: "이용약관", exact: true }));
+  // A real link for visitors without JavaScript; a plain click opens the modal.
+  const termsLink = page.locator("footer").getByRole("link", { name: "이용약관", exact: true });
+  await expect(termsLink).toHaveAttribute("href", "/terms");
+  await assertModalFocus(page, termsLink);
+  await expect(page).toHaveURL(/\/login$/);
   await page.goto("/support");
   await assertModalFocus(page, page.getByRole("button", { name: "1:1 문의", exact: true }));
 });

@@ -1,6 +1,3 @@
-"use client";
-
-import * as React from "react";
 import {
   Building2,
   CreditCard,
@@ -11,6 +8,7 @@ import {
   Radio,
 } from "lucide-react";
 
+import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { APP_CONFIG } from "@/lib/config";
 
 const services = [
@@ -20,34 +18,15 @@ const services = [
   { label: "제작 지원", detail: "CD · 가사집 · DVD", icon: Disc3 },
 ];
 
+// Hidden only while scripts run (data-js comes from the inline layout script)
+// and motion is welcome, so visitors without JavaScript still see the cards.
 const revealBaseClass =
-  "opacity-0 translate-y-6 transition-all duration-700 ease-out will-change-transform data-[reveal-state=visible]:opacity-100 data-[reveal-state=visible]:translate-y-0";
+  "transition-all duration-700 ease-out will-change-transform motion-safe:[html[data-js]_&[data-reveal-state=hidden]]:opacity-0 motion-safe:[html[data-js]_&[data-reveal-state=hidden]]:translate-y-6 motion-reduce:transition-none";
 
 export function AboutRevealSection() {
-  React.useEffect(() => {
-    const elements = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-reveal]")
-    );
-    if (!elements.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          entry.target.setAttribute("data-reveal-state", "visible");
-          observer.unobserve(entry.target);
-        });
-      },
-      { threshold: 0.2, rootMargin: "0px 0px -10% 0px" }
-    );
-
-    elements.forEach((element) => observer.observe(element));
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <section className="grid gap-4 md:grid-cols-[1fr_1fr]">
+      <ScrollRevealObserver selector="[data-reveal]" />
       <div
         data-reveal
         data-reveal-state="hidden"
