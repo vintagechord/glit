@@ -57,7 +57,7 @@ async function mount(page: Page, mixed: boolean, withCredits = false) {
   return { writes, errors, data };
 }
 
-test("participation-only albums show every imported song without enabling unverified track actions at 390px", async ({ page }, testInfo) => {
+test("participation-only albums show every imported song and allow only explicit review entry at 390px", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const harness = await mount(page, false);
   await expect(page.getByText("2026-10-01 · 2곡", { exact: true })).toBeVisible();
@@ -67,7 +67,9 @@ test("participation-only albums show every imported song without enabling unveri
   await expect(songs).toContainText("첫 번째 수록곡");
   await expect(songs).toContainText("함께 부른 수록곡");
   await expect(page.getByLabel("관리할 음악", { exact: true }).locator("option")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeDisabled();
+  // Owner decision 2026-11-03: review results may be entered for such albums;
+  // the member chooses the tracks, so nothing is claimed until they save.
+  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeEnabled();
   await expect(page.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(harness.writes).toEqual([]); expect(harness.errors).toEqual([]);
@@ -104,7 +106,7 @@ test("unmanaged participation credits show every role without inferring artist o
   await expect(songs.getByRole("listitem")).toHaveCount(2);
   await expect(songs).not.toContainText("숨긴 저작자");
   await expect(page.getByLabel("관리할 음악", { exact: true }).locator("option")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "심의 내역 직접 입력", exact: true })).toBeEnabled();
   await expect(page.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveCount(0);
 
   await page.getByRole("navigation", { name: "음악 관리 탭" }).getByRole("button", { name: "저작권 등록", exact: true }).click();

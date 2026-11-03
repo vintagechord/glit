@@ -45,6 +45,13 @@ function taskLabel(task: ArchiveTask, tab: MemberMusicTab) {
   return task.status === "not_started" ? "미등록" : "확인 필요";
 }
 
+/** Records can only belong to managed tracks, so claim unmanaged chosen tracks before saving. */
+export function withManagedEntryTracks(commands: ArchiveCommand[], entryTracks: ArchiveTrack[]): ArchiveCommand[] {
+  const unmanaged = new Set(entryTracks.filter((item) => !item.managed).map((item) => item.id));
+  const claimed = [...new Set(commands.flatMap((command) => command.type === "save_tasks" ? command.trackIds : []))].filter((id) => unmanaged.has(id));
+  return [...claimed.map((trackId): ArchiveCommand => ({ type: "update_track", trackId, patch: { managed: true } })), ...commands];
+}
+
 export function memberReviewStatus(detail: LibraryDetail, releaseId: string, trackId?: string): string {
   const tracks = detail.library.data.tracks.filter((item) => item.releaseId === releaseId && (!trackId || item.id === trackId) && item.managed && !item.excluded && !item.mergedInto);
   const trackIds = new Set(tracks.map((item) => item.id));
@@ -72,6 +79,12 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
   const data = detail.library.data;
   const visibleTracks = (track ? [track] : data.tracks.filter((item) => item.releaseId === release.id)).filter((item) => !item.excluded && !item.mergedInto);
   const tracks = visibleTracks.filter((item) => item.managed);
+  // An import can match none of an album's tracks to this artist (for example
+  // when the artist is credited only as a writer). Review results can still be
+  // entered directly (owner request 2026-11-03): the member picks the tracks,
+  // and saving marks only those as managed. Nothing is inferred automatically,
+  // and registration tabs keep requiring confirmed tracks.
+  const entryTracks = tab === "review" && !tracks.length ? visibleTracks : tracks;
   const trackIds = new Set(tracks.map((item) => item.id));
   const records = latestRecords(data.tasks.filter((item) => trackIds.has(item.trackId) && matchesTab(item, tab)));
   const onside = (detail.onsideReviews ?? []).filter((item) => item.releaseId === release.id && (!track || !item.trackIds.length || item.trackIds.includes(track.id)));
@@ -93,7 +106,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
     {tab === "review" ? <>
       {onside.length > 0 ? <div className="flex justify-end"><Button primary onClick={() => setShowResult(true)}>심의 결과 보기</Button></div> : <>
         {records.length > 0 && <div className="space-y-3">{records.map((item) => <Record key={item.id} task={item} tab={tab} trackTitle={!track ? tracks.find((track) => track.id === item.trackId)?.title : undefined} onEdit={() => setEditing({ initial: item })} />)}</div>}
-        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4"><Button primary={!!finishedReviewIds.size} disabled={busy || !tracks.length} onClick={() => setEditing({})}>심의 내역 직접 입력</Button></div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4"><Button primary={!!finishedReviewIds.size} disabled={busy || !entryTracks.length} onClick={() => setEditing({})}>심의 내역 직접 입력</Button></div>
       </>}
       {onside.length > 0 && <div className="space-y-2 rounded-xl border border-border p-4"><p className="text-sm font-bold">진행 내역·보완 자료 확인</p>{onside.map(item => <Link key={item.submissionId} href={`${localePrefix}/dashboard/submissions/${item.submissionId}`} className="flex min-h-11 items-center justify-between gap-2 text-sm underline underline-offset-4"><span>{["COMPLETED", "APPROVED", "REJECTED"].includes(item.status) ? "심의 결과와 방송사별 처리 내역" : "신청 진행·결제·자료 보완"}</span><ExternalLink className="h-4 w-4 shrink-0" aria-hidden /></Link>)}</div>}
       {pendingTracks.length > 0 && <div className="space-y-3 rounded-xl border border-border bg-background p-4">
@@ -118,7 +131,7 @@ export function MemberMusicStatus({ detail, release, track, tab, guides, busy, r
       })}</div>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><button type="button" className="min-h-10 text-xs text-muted-foreground underline underline-offset-4" onClick={() => setShowGuide(true)}>등록 방법</button><div className="ml-auto flex flex-wrap justify-end gap-2">{tab === "copyright" && <Button disabled={busy} onClick={() => { void onRefreshMetadata().catch(() => {}); }}><RefreshCw className="h-4 w-4" aria-hidden />저작자 정보 다시 가져오기</Button>}<Button primary disabled={busy || !tracks.length} onClick={() => setEditing({})}>{tab === "karaoke" ? "수록 정보 입력" : "등록 정보 입력"}</Button></div></div>
     </>}
-    {editing && <Modal title={tab === "review" && !editing.initial ? "심의 내역 직접 입력" : `${tab === "review" ? "심의 내역" : tab === "karaoke" ? "수록 정보" : "등록 정보"} ${editing.initial ? "수정" : "입력"}`} onClose={() => { if (!busy) setEditing(null); }}><MemberRecordEditor tab={tab} tracks={tracks} data={data} initial={editing.initial} busy={busy} onCancel={() => setEditing(null)} onSave={async (commands) => { await onSave({ action: "commands", commands }); setEditing(null); }} /></Modal>}
+    {editing && <Modal title={tab === "review" && !editing.initial ? "심의 내역 직접 입력" : `${tab === "review" ? "심의 내역" : tab === "karaoke" ? "수록 정보" : "등록 정보"} ${editing.initial ? "수정" : "입력"}`} onClose={() => { if (!busy) setEditing(null); }}><MemberRecordEditor tab={tab} tracks={entryTracks} data={data} initial={editing.initial} busy={busy} onCancel={() => setEditing(null)} onSave={async (commands) => { await onSave({ action: "commands", commands: withManagedEntryTracks(commands, entryTracks) }); setEditing(null); }} /></Modal>}
     {showResult && <OnsideResultPopup submissionIds={submissionIds} onClose={() => setShowResult(false)} title="심의 결과" localePrefix={localePrefix} />}
     {showGuide && tab !== "review" && <Modal title={`${labels[tab]} 방법`} onClose={() => setShowGuide(false)}><ol className="list-decimal space-y-3 pl-5 text-sm leading-6">{tab === "copyright" ? <><li>가입한 저작권 협회에서 작품명과 저작자 정보를 확인하세요.</li><li>등록되지 않은 작품은 협회 안내에 따라 작품 등록을 신청하세요.</li><li>등록이 완료되면 작품번호와 저작자 정보를 여기에 저장하세요.</li></> : tab === "performer" ? <><li>음실련에서 본인의 참여 음원과 실연 정보를 확인하세요.</li><li>미등록 음원은 참여자·역할과 함께 실연 정보 등록을 신청하세요.</li><li>등록 완료 후 확인번호와 참여 정보를 여기에 저장하세요.</li></> : <><li>TJ 또는 금영에서 곡명과 가수로 수록 여부를 확인하세요.</li><li>수록되지 않은 곡은 해당 업체의 신청 안내에 따라 진행하세요.</li><li>실제 수록되면 업체별 곡번호를 여기에 저장하세요.</li></>}</ol><div className="flex flex-wrap gap-4">{institutions[tab].map((institution) => { const guide = guides.find((item) => item.id === institution.id && item.visible); return <External key={institution.id} href={guide?.url || institution.fallback}>{institution.label} 안내</External>; })}</div></Modal>}
   </section>;
