@@ -48,6 +48,14 @@ async function open(page: Page, query: string) {
 test("a paid order group is recorded as refunded only after the admin confirms the money went back", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 600, height: 1000 });
   await open(page, "status=PAID&group&receipt");
+  // Refunds are rare, so the form starts folded and opens on demand.
+  const toggle = page.getByRole("button", { name: "환불 처리 펼치기" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByText("환불이 필요할 때 펼쳐서 기록합니다.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "환불 완료로 기록" })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: /실제 환불/ })).toHaveCount(0);
+  await toggle.click();
+  await expect(page.getByRole("button", { name: "환불 처리 접기" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByText("같은 주문으로 결제한 2건이 함께 환불로 기록됩니다.")).toBeVisible();
   await expect(page.getByText(/현금영수증이 발급되어 있습니다/)).toBeVisible();
   await expect(page.getByRole("radio", { name: /계좌 송금/ })).toBeChecked();
@@ -78,4 +86,14 @@ test("refunded and unpaid submissions show a record or nothing", async ({ page }
   await expect(page.getByText(/현금영수증이 발급되어 있습니다/)).toBeVisible();
   await open(page, "status=UNPAID");
   await expect(page.getByText("환불 처리")).toHaveCount(0);
+});
+
+test("the folded refund form opens and closes again without losing the entered note", async ({ page }) => {
+  await open(page, "status=PAID");
+  await page.getByRole("button", { name: "환불 처리 펼치기" }).click();
+  await page.getByPlaceholder(/이니시스 취소 처리/).fill("이니시스 취소");
+  await page.getByRole("button", { name: "환불 처리 접기" }).click();
+  await expect(page.getByPlaceholder(/이니시스 취소 처리/)).toHaveCount(0);
+  await page.getByRole("button", { name: "환불 처리 펼치기" }).click();
+  await expect(page.getByPlaceholder(/이니시스 취소 처리/)).toHaveValue("이니시스 취소");
 });

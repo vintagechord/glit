@@ -29,6 +29,7 @@ import { loadSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
+import { loadSubmissionCustomerEmails } from "@/lib/admin/submission-emails";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { AdminRefundPanel } from "@/components/admin/refund-panel";
@@ -282,6 +283,8 @@ export default async function AdminSubmissionDetailPage({
         return "안내 이메일 재발송을 요청했습니다.";
       case "notification_error":
         return "안내 이메일 재발송을 요청하지 못했습니다.";
+      case "email_retry":
+        return "메일 재발송을 대기열에 등록했습니다. 자동 처리 후 이메일 발송 내역에서 상태를 확인해주세요.";
       case "album_info":
         return "신청서 항목이 저장되었습니다.";
       case "album_info_unchanged":
@@ -763,6 +766,9 @@ export default async function AdminSubmissionDetailPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  // The detail page lists only this submission's customer mail; the full
+  // outbox lives under 메일 발송 내역 in the admin menu.
+  const customerEmails = await loadSubmissionCustomerEmails(supabase, submission.id);
   const reviews = stationReviews ?? [];
   const isStationSubmittedStatus = (status?: string | null) => {
     const normalized = normalizeStationReviewStatus(status);
@@ -1338,6 +1344,9 @@ export default async function AdminSubmissionDetailPage({
             submissionId={submission.id}
             lastNotifiedAt={submission.result_notified_at}
             lastCustomerEmail={lastCustomerEmail ? { operation: String(lastCustomerEmail.operation), at: String(lastCustomerEmail.accepted_at ?? lastCustomerEmail.created_at) } : null}
+            customerEmails={customerEmails.emails}
+            customerEmailsUnavailable={customerEmails.error}
+            returnTo={adminSubmissionListHref}
           />
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">

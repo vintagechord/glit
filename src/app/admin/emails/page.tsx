@@ -1,15 +1,11 @@
 import Link from "next/link";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EMAIL_STATUS_LABELS as labels } from "@/lib/admin/submission-emails";
 import { retryEmailAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "이메일 발송 관리" };
-
-const labels: Record<string, string> = {
-  pending: "발송 대기", sending: "발송 처리 중", retry: "자동 재시도 대기",
-  accepted: "메일 서버 접수", uncertain: "접수 여부 확인 필요", failed: "발송 실패", expired: "유효 기간 종료",
-};
+export const metadata = { title: "메일 발송 내역" };
 type MailRow = { id: string; recipient_email: string; subject: string; status: string; attempt_count: number; created_at: string; next_attempt_at: string | null; last_error_reason: string | null };
 const time = (value: string | null) => value ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value)) : "—";
 async function queueIsDelayed(oldest: string | null | undefined, lastFinished: string | null | undefined) {
@@ -33,8 +29,8 @@ export default async function EmailAdminPage({ searchParams }: { searchParams: P
   const workerHealthy = worker.data?.enabled && !worker.data.last_error && !delayed;
   return <div className="mx-auto max-w-6xl px-6 py-12">
     <Link href="/admin" className="text-sm underline">관리자 홈</Link>
-    <h1 className="mt-4 text-3xl font-black">이메일 발송 관리</h1>
-    <p className="mt-3 text-sm text-muted-foreground">메일 서버 접수는 수신함 도착과 다릅니다. 실패한 메일은 자동 재시도하며, 접수 여부가 불확실하면 중복 발송 방지를 위해 확인을 기다립니다. 인증 링크가 만료된 메일은 이용자가 새로 요청해야 합니다.</p>
+    <h1 className="mt-4 text-3xl font-black">메일 발송 내역</h1>
+    <p className="mt-3 text-sm text-muted-foreground">온사이드가 보낸 전체 메일입니다. 한 접수의 고객 메일만 보려면 접수 상세의 ‘이메일 발송 내역’을 여세요. 메일 서버 접수는 수신함 도착과 다릅니다. 실패한 메일은 자동 재시도하며, 접수 여부가 불확실하면 중복 발송 방지를 위해 확인을 기다립니다. 인증 링크가 만료된 메일은 이용자가 새로 요청해야 합니다.</p>
     <div className="my-5 rounded-lg border p-4 text-sm">
       <p>자동 재시도: {workerHealthy ? "사용 중" : "확인 필요"} · 최근 처리 완료: {time(worker.data?.last_finished_at ?? null)}</p>
       <p className="mt-2">대기 {Number(counts.pending ?? 0) + Number(counts.retry ?? 0)}건 · 확인 필요 {Number(counts.uncertain ?? 0)}건 · 실패 {Number(counts.failed ?? 0)}건</p>

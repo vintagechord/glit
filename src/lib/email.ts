@@ -262,7 +262,7 @@ export async function sendSubmissionReceiptEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] ${kindLabel} 접수 완료 안내`, html, operation: "submission receipt" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: `[onside] ${kindLabel} 접수 완료 안내`, html, operation: "submission receipt", submissionId: payload.submissionId });
 }
 
 export async function sendResultEmail(

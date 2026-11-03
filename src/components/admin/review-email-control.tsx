@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { retryEmailAction } from "@/app/admin/emails/actions";
+import { CUSTOMER_EMAIL_OPERATION_LABELS, EMAIL_STATUS_LABELS, SUBMISSION_CUSTOMER_EMAIL_LIMIT, type SubmissionCustomerEmail } from "@/lib/admin/submission-emails";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type EmailPreview = {
@@ -13,12 +15,31 @@ const customerEmailLabels: Record<string, string> = {
   "review result": "결과 안내", "submission update": "진행·상태 안내", "payment completed": "결제 완료 안내",
 };
 
-export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerEmail }: {
+const seoulTime = (value: string | null) => value
+  ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value))
+  : "—";
+const retryableStatuses = new Set(["failed", "uncertain", "retry"]);
+
+export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerEmail, customerEmails = [], customerEmailsUnavailable = false, returnTo = "" }: {
   submissionId: string; lastNotifiedAt?: string | null;
   /** Newest accepted customer mail of any kind for this application. */
   lastCustomerEmail?: { operation: string; at: string } | null;
+  /** Mail sent to this submission's customer only (never staff notices). */
+  customerEmails?: SubmissionCustomerEmail[];
+  customerEmailsUnavailable?: boolean;
+  /** The admin list filter to keep after a retry redirects back here. */
+  returnTo?: string;
 }) {
   const router = useRouter();
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+  React.useEffect(() => {
+    // A retry redirects back with #customer-emails, and the supplement history
+    // links to it; open the list whenever that anchor is targeted.
+    const openFromHash = () => { if (window.location.hash === "#customer-emails") setHistoryOpen(true); };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, []);
   const [preview, setPreview] = React.useState<EmailPreview | null>(null);
   const [busy, setBusy] = React.useState<"preview" | "send" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -71,7 +92,53 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
         <button type="button" onClick={loadPreview} disabled={busy !== null} className="rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background disabled:opacity-50">
           {busy === "preview" ? "미리보기 준비 중…" : "이메일 발송 · 현재 결과 확인"}
         </button>
-        <a href="/admin/emails" className="text-sm underline">이메일 발송 내역</a>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((value) => !value)}
+          aria-expanded={historyOpen}
+          aria-controls="customer-emails"
+          className="text-sm font-semibold underline underline-offset-4"
+        >
+          이메일 발송 내역 ({customerEmails.length}{customerEmails.length >= SUBMISSION_CUSTOMER_EMAIL_LIMIT ? "+" : ""}건) {historyOpen ? "▲" : "▼"}
+        </button>
+      </div>
+      <div id="customer-emails" className="scroll-mt-24">
+      {historyOpen ? (
+        <div className="mt-4 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            이 접수의 고객에게 보낸 메일만 표시합니다. 관리자 알림 메일은 빠지며, 온사이드 전체 메일은 관리자 홈의 ‘메일 발송 내역’에서 확인합니다. 메일 서버 접수는 수신함 도착과 다릅니다.
+          </p>
+          {customerEmailsUnavailable ? <p role="alert" className="text-xs text-rose-700">발송 내역을 불러오지 못했습니다. 잠시 후 새로고침해주세요.</p> : null}
+          {!customerEmailsUnavailable && customerEmails.length === 0 ? <p className="text-xs text-muted-foreground">이 접수로 고객에게 보낸 메일 기록이 없습니다. 발송 기록은 최근 30일간 보관합니다.</p> : null}
+          <ul className="divide-y divide-border/50">
+            {customerEmails.map((mail) => (
+              <li key={mail.id} className="py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold">{CUSTOMER_EMAIL_OPERATION_LABELS[mail.operation] ?? mail.operation}</span>
+                  <span className={`rounded-[6px] border-2 border-[#111111] px-2 py-0.5 text-[11px] font-black ${mail.status === "accepted" ? "bg-[#1f8a4c] text-white" : ["failed", "expired"].includes(mail.status) ? "bg-[#d9362c] text-white" : mail.status === "uncertain" ? "bg-[#f2cf27] text-[#111111]" : "bg-white text-[#111111]"}`}>
+                    {EMAIL_STATUS_LABELS[mail.status] ?? mail.status}
+                  </span>
+                </div>
+                <p className="mt-1 break-all text-xs text-foreground">{mail.subject}</p>
+                <p className="mt-1 break-all text-xs text-muted-foreground">
+                  {mail.recipient} · 요청 {seoulTime(mail.createdAt)}{mail.acceptedAt ? ` · 접수 ${seoulTime(mail.acceptedAt)}` : ""} · 시도 {mail.attempts}회{mail.status === "retry" ? ` · 예정 ${seoulTime(mail.nextAttemptAt)}` : ""}
+                </p>
+                {retryableStatuses.has(mail.status) ? (
+                  <form action={retryEmailAction} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="id" value={mail.id} />
+                    <input type="hidden" name="submissionId" value={submissionId} />
+                    <input type="hidden" name="returnTo" value={returnTo} />
+                    {mail.status === "uncertain" ? (
+                      <label className="flex max-w-md gap-2 text-xs"><input type="checkbox" name="allowUncertain" required />이미 메일이 도착했을 수 있으며, 재발송하면 중복 수신될 수 있음을 확인했습니다.</label>
+                    ) : null}
+                    <button type="submit" className="rounded-[8px] border-2 border-[#111111] bg-white px-3 py-1 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white">재발송 예약</button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       </div>
       {preview ? (
         <div className="mt-4 space-y-3">
