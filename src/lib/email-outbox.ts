@@ -27,6 +27,15 @@ export type EmailOutboxStore = {
 };
 type Deliver = (message: EmailMessage, expectedProvider: EmailProvider, replyTo?: string | null) => Promise<EmailAttemptResult>;
 
+/** Worst-case wall time of one claimed send: the submission read and three
+ * 20-second B2 reads (email-attachments.ts), the relay's 65-second attempt
+ * (email-transport.ts) and the 20-second receipt RPC, about 165 seconds. It
+ * stays inside the 180-second claim lease (claim_email_outbox). A scheduled
+ * drain claims a row only while this much time is left before its deadline,
+ * so every claimed row records its own outcome before the function stops
+ * and no lease is left to expire into "uncertain". */
+export const EMAIL_SEND_BUDGET_MS = 170_000;
+
 const dbFailure = () => new Error("Email outbox storage unavailable");
 const arrayResult = <T>(data: unknown): T[] => Array.isArray(data) ? data as T[] : [];
 function createDatabaseStore(): EmailOutboxStore {
@@ -144,15 +153,24 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
         return rowResult(row, message.includeMessageId);
       }
     },
-    async drain({ limit = 5 }: { limit?: number } = {}) {
+    /** Claims up to `limit` rows, `batchSize` at a time. With a `deadline`
+     * (epoch ms) no batch is claimed once less than EMAIL_SEND_BUDGET_MS is
+     * left; rows already claimed always finish. */
+    async drain({ limit = 5, batchSize, deadline }: { limit?: number; batchSize?: number; deadline?: number } = {}) {
       const summary = { claimed: 0, accepted: 0, retry: 0, uncertain: 0, failed: 0, expired: 0 };
       if (getEmailDeliveryMode() !== "transactional") return summary;
-      const rows = await store.claim(Math.min(20, Math.max(1, Math.floor(limit))));
-      summary.claimed = rows.length;
-      await Promise.all(rows.map(async (row) => {
-        const result = await sendClaimed(row);
-        if (result.status && result.status in summary && result.status !== "pending" && result.status !== "sending") summary[result.status as "accepted" | "retry" | "uncertain" | "failed" | "expired"]++;
-      }));
+      const total = Math.min(20, Math.max(1, Math.floor(limit)));
+      const batch = Math.min(total, Math.max(1, Math.floor(batchSize ?? total)));
+      while (summary.claimed < total) {
+        if (deadline !== undefined && deadline - now() < EMAIL_SEND_BUDGET_MS) break;
+        const rows = await store.claim(Math.min(batch, total - summary.claimed));
+        if (!rows.length) break;
+        summary.claimed += rows.length;
+        await Promise.all(rows.map(async (row) => {
+          const result = await sendClaimed(row);
+          if (result.status && result.status in summary && result.status !== "pending" && result.status !== "sending") summary[result.status as "accepted" | "retry" | "uncertain" | "failed" | "expired"]++;
+        }));
+      }
       return summary;
     },
   };
@@ -161,7 +179,7 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
 export async function enqueueAndSendEmail(message: EmailMessage, provider: EmailProvider, replyTo: string | undefined, deliver: Deliver) {
   return createEmailOutboxService({ store: createDatabaseStore(), deliver }).enqueueAndSend(message, provider, replyTo);
 }
-export async function drainEmailOutbox(options: { limit?: number } = {}) {
+export async function drainEmailOutbox(options: { limit?: number; batchSize?: number; deadline?: number } = {}) {
   const { sendEmailAttempt } = await import("@/lib/email-transport");
   return createEmailOutboxService({ store: createDatabaseStore(), deliver: sendEmailAttempt }).drain(options);
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { createEmailOutboxService, type EmailOutboxRow, type EmailOutboxStats, type EmailOutboxStore } from "../src/lib/email-outbox";
+import { createEmailOutboxService, EMAIL_SEND_BUDGET_MS, type EmailOutboxRow, type EmailOutboxStats, type EmailOutboxStore } from "../src/lib/email-outbox";
 import { sendEmailAttempt, sendTransactionalEmail, setEmailOutboxTestDispatcher, type EmailAttemptResult, type EmailMessage } from "../src/lib/email-transport";
 
 const message: EmailMessage = { to: "recipient@example.invalid", subject: "Fixture", html: "<p>private-token</p>", operation: "submission update", idempotencyKey: "same-event", includeMessageId: true };
@@ -127,6 +127,43 @@ test("enqueue failure sends nothing and auth content uses a short expiry", async
     assert.equal(Date.parse(auth.rows.get(result.outboxId!)!.expires_at) - auth.now(), 600_000);
     const invalid = await auth.service.enqueueAndSend({ ...message, expiresAt: "invalid" }, "supabase-smtp");
     assert.equal(invalid.ok, false); assert.equal(auth.rows.size, 1);
+  });
+});
+
+test("scheduled drains claim in batches only while a worst-case send fits before the deadline", async () => {
+  await withEnv(async () => {
+    // The budget covers attachment reads, the relay attempt and the receipt
+    // inside the 180-second claim lease.
+    assert.ok(EMAIL_SEND_BUDGET_MS >= 20_000 + 3 * 20_000 + 65_000 + 20_000);
+    assert.ok(EMAIL_SEND_BUDGET_MS < 180_000);
+    let sends = 0;
+    const f = fixture(async () => { sends++; f.advance(40_000); return accepted; });
+    for (let index = 0; index < 8; index++) {
+      await f.store.enqueue({ idempotency_key: `key-${index}`, provider: "supabase-smtp", recipient_email: "recipient@example.invalid", subject: "Fixture", html: "<p>x</p>", reply_to: null, operation: "submission update", expires_at: new Date(f.now() + 3_600_000).toISOString() });
+    }
+    // 285 s of budget: the first batch starts with plenty of time, each batch
+    // of three sends advances the clock by 120 s, and no batch starts with
+    // less than EMAIL_SEND_BUDGET_MS left.
+    const deadline = f.now() + 285_000;
+    const summary = await f.service.drain({ limit: 9, batchSize: 3, deadline });
+    assert.equal(summary.claimed, 3);
+    assert.equal(summary.accepted, 3);
+    assert.equal(sends, 3);
+    assert.deepEqual(f.calls.filter(call => call === "claim:batch").length, 1);
+    assert.ok(deadline - f.now() < EMAIL_SEND_BUDGET_MS);
+    assert.equal([...f.rows.values()].filter(row => row.status === "sending").length, 0, "no claimed row is left to expire into uncertain");
+
+    // With time to spare, batches continue until the limit is reached.
+    const quick = fixture(async () => accepted);
+    for (let index = 0; index < 8; index++) {
+      await quick.store.enqueue({ idempotency_key: `quick-${index}`, provider: "supabase-smtp", recipient_email: "recipient@example.invalid", subject: "Fixture", html: "<p>x</p>", reply_to: null, operation: "submission update", expires_at: new Date(quick.now() + 3_600_000).toISOString() });
+    }
+    const all = await quick.service.drain({ limit: 7, batchSize: 3, deadline: quick.now() + 285_000 });
+    assert.equal(all.claimed, 7);
+    assert.equal(quick.calls.filter(call => call === "claim:batch").length, 3);
+    // A deadline already inside the budget claims nothing.
+    const late = await quick.service.drain({ limit: 9, batchSize: 3, deadline: quick.now() + EMAIL_SEND_BUDGET_MS - 1 });
+    assert.equal(late.claimed, 0);
   });
 });
 
