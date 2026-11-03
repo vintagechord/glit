@@ -8,7 +8,9 @@ import {
   clearMultipartResumeState,
   loadMultipartResumeState,
   saveMultipartResumeState,
-  runMultipartWorkers,
+  requestWithRetry,
+  type SignedPartUrls,
+  uploadMultipartParts,
 } from "@/lib/multipart-upload-client";
 import * as React from "react";
 import { Info } from "lucide-react";
@@ -265,6 +267,8 @@ const uploadMaxBytes = MEDIA_UPLOAD_MAX_BYTES;
 // The server-streamed fallback is bound by the Vercel 4.5MB request limit.
 const directUploadMaxBytes = SERVER_UPLOAD_MAX_BYTES;
 const albumMultipartThresholdBytes = 32 * 1024 * 1024;
+// Completing a multi-gigabyte upload can take longer than a small API call.
+const completionTimeoutMs = 60_000;
 const uploadMaxLabel = MEDIA_UPLOAD_MAX_LABEL;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
@@ -1620,6 +1624,16 @@ export function AlbumWizard({
 
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const uploadInProgress = uploads.some((upload) => upload.status === "uploading");
+  // Closing or reloading the tab stops a transfer, so ask first while one runs.
+  React.useEffect(() => {
+    if (!uploadInProgress) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [uploadInProgress]);
 
   const addFiles = (selected: File[]) => {
     if (uploadInProgress) {
@@ -1804,9 +1818,6 @@ export function AlbumWizard({
     }
   };
 
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-
   const getMultipartConcurrency = () => {
     if (
       typeof navigator !== "undefined" &&
@@ -1848,42 +1859,38 @@ export function AlbumWizard({
   const buildMultipartResumeKey = (submissionId: string, file: File) =>
     `album-multipart:${submissionId}:${file.name}:${file.size}:${file.lastModified}`;
 
-  const presignMultipartParts = async (params: {
+  const signMultipartParts = async (params: {
     grantId: string;
     resumeKey: string;
     submissionId: string;
     key: string;
     uploadId: string;
     partNumbers: number[];
-  }) => {
-    const urlMap = new Map<number, string>();
-    for (let index = 0; index < params.partNumbers.length; index += 100) {
-      const partNumbers = params.partNumbers.slice(index, index + 100);
-      const response = await fetchWithTimeout("/api/uploads/multipart/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          grantId: params.grantId,
-          submissionId: params.submissionId,
-          key: params.key,
-          uploadId: params.uploadId,
-          partNumbers,
-          guestToken: isGuest ? currentGuestTokenRef.current : undefined,
-        }),
-      });
-      const json = (await response.json().catch(() => ({}))) as {
-        urls?: Array<{ partNumber: number; url: string }>;
-        error?: string;
-      };
-      if (!response.ok || !json.urls) {
-        if ([400, 403, 409, 410].includes(response.status)) {
-          clearMultipartResumeState(params.resumeKey);
-        }
-        throw new Error(json.error || "업로드 URL을 생성할 수 없습니다.");
+  }): Promise<SignedPartUrls> => {
+    const response = await fetchWithTimeout("/api/uploads/multipart/presign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grantId: params.grantId,
+        submissionId: params.submissionId,
+        key: params.key,
+        uploadId: params.uploadId,
+        partNumbers: params.partNumbers,
+        guestToken: isGuest ? currentGuestTokenRef.current : undefined,
+      }),
+    });
+    const json = (await response.json().catch(() => ({}))) as {
+      urls?: Array<{ partNumber: number; url: string }>;
+      expiresInSeconds?: number;
+      error?: string;
+    };
+    if (!response.ok || !json.urls) {
+      if ([400, 403, 409, 410].includes(response.status)) {
+        clearMultipartResumeState(params.resumeKey);
       }
-      json.urls.forEach((item) => urlMap.set(item.partNumber, item.url));
+      throw Object.assign(new Error(json.error || "업로드 URL을 생성할 수 없습니다."), { status: response.status });
     }
-    return urlMap;
+    return { urls: json.urls, expiresInSeconds: json.expiresInSeconds };
   };
 
   const uploadMultipartAudioFile = async (
@@ -1964,17 +1971,6 @@ export function AlbumWizard({
       onProgress(Math.min(100, Math.round((totalLoaded / file.size) * 100)));
     }
 
-    const urlMap =
-      partsToUpload.length > 0
-        ? await presignMultipartParts({
-            grantId,
-            resumeKey,
-            submissionId,
-            key,
-            uploadId,
-            partNumbers: partsToUpload,
-          })
-        : new Map<number, string>();
     const partProgress = new Map<number, number>();
     const partsResult: Array<{ partNumber: number; etag: string } | null> =
       Array.from({ length: partCount }, () => null);
@@ -1985,65 +1981,45 @@ export function AlbumWizard({
       }
     });
 
-    const uploadPart = async (partNumber: number) => {
-      const start = (partNumber - 1) * partSize;
-      const end = Math.min(start + partSize, file.size);
-      const blob = file.slice(start, end);
-      for (let attempt = 0; attempt <= 5; attempt += 1) {
-        let url = urlMap.get(partNumber);
-        if (!url) {
-          const refreshed = await presignMultipartParts({
-            grantId,
-            resumeKey,
-            submissionId,
-            key,
-            uploadId,
-            partNumbers: [partNumber],
-          });
-          url = refreshed.get(partNumber);
-          if (url) urlMap.set(partNumber, url);
+    await uploadMultipartParts({
+      partNumbers: partsToUpload,
+      concurrency: getMultipartConcurrency(),
+      sign: (partNumbers) =>
+        signMultipartParts({ grantId, resumeKey, submissionId, key, uploadId, partNumbers }),
+      putPart: async (partNumber, url) => {
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, file.size);
+        const etagRaw = await putBlobWithProgress(
+          url,
+          file.slice(start, end),
+          (loaded, total) => {
+            const previous = partProgress.get(partNumber) ?? 0;
+            const boundedLoaded = Math.min(loaded, total);
+            partProgress.set(partNumber, boundedLoaded);
+            totalLoaded += boundedLoaded - previous;
+            onProgress(
+              Math.min(100, Math.round((totalLoaded / file.size) * 100)),
+            );
+          },
+        );
+        const etag = etagRaw?.replace(/\"/g, "") ?? "";
+        if (!etag) {
+          throw new Error("ETag를 확인할 수 없습니다. CORS 설정을 확인해주세요.");
         }
-        if (!url) throw new Error("업로드 URL을 생성할 수 없습니다.");
-        try {
-          const etagRaw = await putBlobWithProgress(
-            url,
-            blob,
-            (loaded, total) => {
-              const previous = partProgress.get(partNumber) ?? 0;
-              const boundedLoaded = Math.min(loaded, total);
-              partProgress.set(partNumber, boundedLoaded);
-              totalLoaded += boundedLoaded - previous;
-              onProgress(
-                Math.min(100, Math.round((totalLoaded / file.size) * 100)),
-              );
-            },
-          );
-          const etag = etagRaw?.replace(/\"/g, "") ?? "";
-          if (!etag) {
-            throw new Error("ETag를 확인할 수 없습니다. CORS 설정을 확인해주세요.");
-          }
-          uploadedParts[partNumber] = etag;
-          partsResult[partNumber - 1] = { partNumber, etag };
-          saveMultipartResumeState(resumeKey, {
-            grantId,
-            uploadId,
-            key,
-            partSize,
-            parts: uploadedParts,
-            createdAt: Date.now(),
-          });
-          return;
-        } catch (error) {
-          urlMap.delete(partNumber);
-          if (attempt >= 5) throw error;
-          await sleep(Math.min(2_000, 400 * 2 ** attempt));
-        }
-      }
-    };
+        uploadedParts[partNumber] = etag;
+        partsResult[partNumber - 1] = { partNumber, etag };
+        saveMultipartResumeState(resumeKey, {
+          grantId,
+          uploadId,
+          key,
+          partSize,
+          parts: uploadedParts,
+          createdAt: Date.now(),
+        });
+      },
+    });
 
-    await runMultipartWorkers(partsToUpload, getMultipartConcurrency(), uploadPart);
-
-    const completeResponse = await fetchWithTimeout("/api/uploads/multipart/complete", {
+    const completeResponse = await requestWithRetry(() => fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2060,7 +2036,7 @@ export function AlbumWizard({
         kind: "AUDIO",
         guestToken: isGuest ? currentGuestTokenRef.current : undefined,
       }),
-    });
+    }, completionTimeoutMs));
     const completeJson = (await completeResponse.json().catch(() => ({}))) as {
       key?: string;
       error?: string;
@@ -2083,7 +2059,7 @@ export function AlbumWizard({
     const submissionId = requireSubmissionId();
     const mimeType = file.type || "application/octet-stream";
     const completeUpload = async (objectKey: string) => {
-      const completeRes = await fetchWithTimeout("/api/uploads/complete", {
+      const completeRes = await requestWithRetry(() => fetchWithTimeout("/api/uploads/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2095,7 +2071,7 @@ export function AlbumWizard({
           sizeBytes: file.size,
           guestToken: isGuest ? currentGuestTokenRef.current : undefined,
         }),
-      });
+      }, completionTimeoutMs));
       const completeJson = (await completeRes.json().catch(() => ({}))) as {
         key?: string;
         error?: string;

@@ -11,7 +11,7 @@ export const state={};
 export function reset(){
   calls.length=0;
   Object.assign(state,{
-    bytes:new TextEncoder().encode('RIFF1234WAVEdata'),object:false,uploadAborted:false,headError:false,ownerError:null,
+    bytes:new TextEncoder().encode('RIFF1234WAVEdata'),object:false,uploadAborted:false,headError:false,readsRefused:false,ownerError:null,
     completeFailure:null,stageFailure:null,markFailure:null,receiptReadFailure:false,stageBarrier:null,
     stage:null,live:null,partCount:2,
     grant:{id,submission_id:id,owner_key:'user:fixture-owner',upload_id:'fixture-upload',object_key:'submissions/fixture/test.wav',
@@ -22,6 +22,11 @@ export function reset(){
 reset();
 export const client={send:async command=>{
   calls.push({name:command.constructor.name});
+  if(command.constructor.name==='ListObjectsV2Command'){
+    return {Contents:state.object?[{Key:command.input.Prefix,Size:state.bytes.length,ETag:'listed-etag'}]:[]};
+  }
+  // B2 under a daily download/Class B cap: every read is refused with 403.
+  if(state.readsRefused)throw Object.assign(new Error('UnknownError'),{name:'403',$metadata:{httpStatusCode:403}});
   if(command.constructor.name==='HeadObjectCommand'){
     if(state.headError)throw new Error('HEAD transport failure');
     if(!state.object)throw Object.assign(new Error('missing'),{name:'NotFound'});
@@ -68,7 +73,7 @@ type Fixture = {
   POST: (request: Request) => Promise<Response>;
   reset: () => void;
   state: {
-    bytes: Uint8Array; object: boolean; uploadAborted: boolean; headError: boolean; ownerError: string | null;
+    bytes: Uint8Array; object: boolean; uploadAborted: boolean; headError: boolean; readsRefused: boolean; ownerError: string | null;
     completeFailure: string | null; stageFailure: string | null; markFailure: string | null;
     receiptReadFailure: boolean; stageBarrier: (() => Promise<void>) | null;
     stage: Receipt | null; live: Receipt | null;
@@ -219,4 +224,30 @@ test("a rejected first completion retires the grant: upload id aborted and assem
     assert.equal(api.state.object,false,`${failure}: no orphan object is left in B2`);
     assert.equal(api.calls.filter(call=>call.name==='retire').length,1,failure);
   }
+});
+
+test("a B2 read cap does not fail an upload: size comes from a listing and the container check is deferred", async () => {
+  const api=await handlerFixture();
+  api.reset();api.state.grant.declared_size_bytes=api.state.bytes.length;api.state.readsRefused=true;
+  const response=await api.POST(request(api));
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.equal(body.verification.signature,"deferred");
+  assert.equal(body.contentLength,api.state.bytes.length);
+  assert.equal(api.state.grant.status,"COMPLETED");assert.ok(api.state.stage);
+  assert.ok(api.calls.some(call=>call.name==='ListObjectsV2Command'));
+  // The same request replays once reads work again.
+  api.state.readsRefused=false;
+  assert.equal((await api.POST(request(api))).status,200);
+  assert.equal(api.calls.filter(call=>call.name==='provider-complete').length,1);
+});
+
+test("under a B2 read cap a wrong listed size or a missing object is still refused", async () => {
+  const api=await handlerFixture();
+  api.reset();api.state.readsRefused=true;api.state.grant.declared_size_bytes=api.state.bytes.length+1;
+  assert.equal((await api.POST(request(api))).status,400);
+  assert.equal(api.state.stage,null);
+  api.reset();api.state.readsRefused=true;api.state.grant.declared_size_bytes=api.state.bytes.length;api.state.completeFailure='before';
+  assert.equal((await api.POST(request(api))).status,503);
+  assert.equal(api.state.stage,null);assert.equal(api.state.grant.status,'COMPLETING');
 });

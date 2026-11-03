@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
 import { B2ConfigError, getB2Config } from "@/lib/b2";
@@ -18,7 +17,7 @@ import {
   shouldStageSubmissionUpload,
 } from "@/lib/submission-upload-access";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
+import { readStoredObjectSize, UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
 import { deleteUnreferencedUploadObject } from "@/lib/upload-object-references";
 import { getUploadPutGrant, markUploadPutGrantCompleted } from "@/lib/upload-put-grants";
 
@@ -176,15 +175,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { client, bucket } = getB2Config();
-    const head = await client.send(
-      new HeadObjectCommand({
-        Bucket: bucket,
-        Key: normalizedKey,
-      }),
-    );
-
-    const contentLength = head.ContentLength ?? 0;
+    // HEAD, or a listing of the key when B2 refuses reads under a daily cap.
+    const head = await readStoredObjectSize(normalizedKey);
+    const contentLength = head.size;
     if (contentLength !== sizeBytes) {
       // A caller's incorrect declared size cannot authorize deleting an
       // existing staged/live object, including during a payment-state race.
@@ -203,6 +196,14 @@ export async function POST(request: Request) {
     // allowlist required an extension and is refused like a mismatch.
     const signature = await verifyUploadedObjectSignature(normalizedKey, grant.original_name);
     if (signature === "unsupported") throw new UnsupportedUploadContentError();
+    if (head.checkedBy === "listing" || signature === "deferred") {
+      console.warn("[Upload][complete] storage reads refused (B2 daily cap); accepted on listed size", {
+        submissionIdHash: getStorageLogId(submissionId),
+        objectKeyId: getStorageLogId(normalizedKey),
+        sizeCheckedBy: head.checkedBy,
+        signature,
+      });
+    }
     const admin = createAdminClient();
     const payload = {
       submission_id: submissionId,
@@ -246,7 +247,7 @@ export async function POST(request: Request) {
       kind: normalizedKind,
       objectKeyId: getStorageLogId(normalizedKey),
       sizeBytes,
-      etagId: head.ETag ? getStorageLogId(head.ETag) : null,
+      etagId: head.etag ? getStorageLogId(head.etag) : null,
       userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(submission?.guest_token ?? guestToken),
       tookMs: Date.now() - startedAt,
@@ -256,7 +257,7 @@ export async function POST(request: Request) {
       ok: true,
       verified: signature === "matched",
       verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
-      etag: head.ETag,
+      etag: head.etag,
       contentLength,
       attachmentId: null,
       stagingId,

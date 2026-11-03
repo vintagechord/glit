@@ -2,9 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   clearMultipartResumeState,
+  isFinalUploadError,
   loadMultipartResumeState,
+  MULTIPART_SIGN_BATCH,
+  multipartRetryDelayMs,
+  requestWithRetry,
   runMultipartWorkers,
   saveMultipartResumeState,
+  uploadMultipartParts,
   type MultipartResumeState,
 } from "../src/lib/multipart-upload-client";
 
@@ -89,4 +94,107 @@ test("multipart workers upload each requested part once with bounded concurrency
   });
   assert.equal(peak, 2);
   assert.deepEqual(parts.sort(), [1, 2, 3, 4, 5]);
+});
+
+// A 4GB file in 20MB parts, sent over a connection slow enough that one part
+// takes 30 seconds: the whole upload takes far longer than a signed URL lives.
+test("a slow 4GB upload signs parts in batches just in time and never PUTs to an expired URL", async () => {
+  const partCount = Math.ceil((4 * 1024 ** 3) / (20 * 1024 ** 2));
+  const lifetimeSeconds = 1_200;
+  let clock = 0;
+  const issuedAt = new Map<string, number>();
+  const batches: number[][] = [];
+  const sent: number[] = [];
+  await uploadMultipartParts({
+    partNumbers: Array.from({ length: partCount }, (_, index) => index + 1),
+    concurrency: 3,
+    now: () => clock,
+    sleep: async () => undefined,
+    waitForOnline: async () => undefined,
+    sign: async (partNumbers) => {
+      batches.push(partNumbers);
+      const urls = partNumbers.map((partNumber) => {
+        const url = `https://b2.invalid/part-${partNumber}?signed=${clock}`;
+        issuedAt.set(url, clock);
+        return { partNumber, url };
+      });
+      return { urls, expiresInSeconds: lifetimeSeconds };
+    },
+    putPart: async (partNumber, url) => {
+      assert.ok(clock - issuedAt.get(url)! < lifetimeSeconds * 1_000, `part ${partNumber} used an expired URL`);
+      clock += 30_000;
+      sent.push(partNumber);
+    },
+  });
+  assert.equal(partCount, 205);
+  assert.deepEqual([...sent].sort((a, b) => a - b), Array.from({ length: partCount }, (_, index) => index + 1));
+  assert.ok(batches.every((batch) => batch.length <= MULTIPART_SIGN_BATCH));
+  // Far fewer signing requests than parts, well inside the per-IP limit.
+  assert.ok(batches.length <= 20, `signed ${batches.length} times`);
+});
+
+test("a failed part is retried with a fresh URL after growing pauses", async () => {
+  const pauses: number[] = [];
+  const signed: number[][] = [];
+  let failures = 2;
+  const used: string[] = [];
+  await uploadMultipartParts({
+    partNumbers: [1, 2],
+    concurrency: 1,
+    sleep: async (ms) => { pauses.push(ms); },
+    waitForOnline: async () => undefined,
+    sign: async (partNumbers) => {
+      signed.push(partNumbers);
+      return { urls: partNumbers.map((partNumber) => ({ partNumber, url: `u${partNumber}-${signed.length}` })), expiresInSeconds: 3_600 };
+    },
+    putPart: async (partNumber, url) => {
+      used.push(url);
+      if (partNumber === 1 && failures-- > 0) throw new Error("Upload failed (network/CORS)");
+    },
+  });
+  assert.deepEqual(pauses, [1_000, 2_000]);
+  assert.deepEqual(used, ["u1-1", "u1-2", "u1-3", "u2-1"]);
+  assert.equal(multipartRetryDelayMs(8), 30_000);
+});
+
+test("a refused or expired grant stops at once instead of retrying", async () => {
+  let attempts = 0;
+  await assert.rejects(uploadMultipartParts({
+    partNumbers: [1, 2, 3],
+    concurrency: 2,
+    sleep: async () => undefined,
+    waitForOnline: async () => undefined,
+    sign: async () => {
+      attempts += 1;
+      throw Object.assign(new Error("업로드 유효 시간이 만료되었습니다. 다시 시작해주세요."), { status: 410 });
+    },
+    putPart: async () => undefined,
+  }), /만료/);
+  assert.ok(attempts <= 2);
+  assert.equal(isFinalUploadError(Object.assign(new Error("busy"), { status: 429 })), false);
+  assert.equal(isFinalUploadError(Object.assign(new Error("server"), { status: 503 })), false);
+  assert.equal(isFinalUploadError(new TypeError("Failed to fetch")), false);
+});
+
+test("completion requests are repeated after network errors, 429 and 5xx, but not after a refusal", async () => {
+  const noWait = { sleep: async () => undefined, waitForOnline: async () => undefined };
+  const answers: Array<number | Error> = [new TypeError("Failed to fetch"), 503, 429, 200];
+  let calls = 0;
+  const ok = await requestWithRetry(async () => {
+    const answer = answers[calls++];
+    if (answer instanceof Error) throw answer;
+    return new Response("{}", { status: answer });
+  }, noWait);
+  assert.equal(ok.status, 200);
+  assert.equal(calls, 4);
+
+  calls = 0;
+  const refused = await requestWithRetry(async () => { calls += 1; return new Response("{}", { status: 409 }); }, noWait);
+  assert.equal(refused.status, 409);
+  assert.equal(calls, 1);
+
+  calls = 0;
+  const stillDown = await requestWithRetry(async () => { calls += 1; return new Response("{}", { status: 503 }); }, { ...noWait, delaysMs: [1, 1] });
+  assert.equal(stillDown.status, 503);
+  assert.equal(calls, 3);
 });

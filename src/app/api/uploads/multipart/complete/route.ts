@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { HeadObjectCommand, type HeadObjectCommandOutput } from "@aws-sdk/client-s3";
 import { z } from "zod";
 
 import {
@@ -20,12 +19,11 @@ import { readBoundedJsonBody } from "@/lib/request-body";
 import {
   B2ConfigError,
   completeMultipartUpload,
-  getB2Config,
 } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageLogId } from "@/lib/guest-storage-owner";
-import { UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
+import { readStoredObjectSize, type StoredObjectSize, UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
 import { multipartCompletionManifest, isMissingUploadObject, MultipartCompletionPendingError, MultipartCompletionConflictError } from "@/lib/multipart-upload-completion";
 import {
   getSubmissionUploadBlockMessage,
@@ -157,9 +155,9 @@ export async function POST(request: Request) {
     }
     if (!["START", "COMPLETING", "COMPLETED"].includes(String(completionState))) throw new MultipartCompletionPendingError();
     completionGrant = grant;
-    const { client, bucket } = getB2Config();
-    const readHead = () => client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-    let head: HeadObjectCommandOutput | null = null;
+    // HEAD, or a listing of the key when B2 refuses reads under a daily cap.
+    const readHead = () => readStoredObjectSize(key);
+    let head: StoredObjectSize | null = null;
     if (completionState !== "START") {
       try { head = await readHead(); }
       catch (cause) { if (!isMissingUploadObject(cause)) throw cause; }
@@ -182,7 +180,7 @@ export async function POST(request: Request) {
         throw new MultipartCompletionPendingError();
       }
     }
-    const contentLength = head.ContentLength ?? 0;
+    const contentLength = head.size;
     if (contentLength !== grant.declared_size_bytes) {
       if (completionState !== "COMPLETED") await retireFailedGrant(grant);
       completionGrant = null;
@@ -192,6 +190,10 @@ export async function POST(request: Request) {
     // Every extension init allows has a container check; a grant whose name
     // has none predates that rule and is refused rather than trusted.
     if (signature === "unsupported") throw new UnsupportedUploadContentError();
+    if (head.checkedBy === "listing" || signature === "deferred") {
+      console.warn("[Upload][multipart][complete] storage reads refused (B2 daily cap); accepted on listed size", {
+        submissionIdHash: getStorageLogId(submissionId), objectKeyId: getStorageLogId(key), sizeCheckedBy: head.checkedBy, signature });
+    }
     let stagingId: string | null = null;
     let existing: VerifiedUploadRow | null = null;
     const readReceipt = async () => {
@@ -248,10 +250,10 @@ export async function POST(request: Request) {
     }
     completionGrant = null;
     console.info("[Upload][multipart][complete] ok", { submissionIdHash: getStorageLogId(submissionId), objectKeyId: getStorageLogId(key), sizeBytes,
-      etagId: head.ETag ? getStorageLogId(head.ETag) : null, userIdHash: user?.id ? getStorageLogId(user.id) : null,
+      etagId: head.etag ? getStorageLogId(head.etag) : null, userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(submission?.guest_token ?? guestToken), tookMs: Date.now() - startedAt });
     return NextResponse.json({ ok: true, verified: signature === "matched", verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
-      etag: head.ETag, contentLength, attachmentId: null, stagingId, staged, key, submissionId });
+      etag: head.etag, contentLength, attachmentId: null, stagingId, staged, key, submissionId });
   } catch (error) {
     const rejectedContent = error instanceof UploadSignatureMismatchError || error instanceof UnsupportedUploadContentError;
     if (rejectedContent && completionGrant) await retireFailedGrant(completionGrant);
