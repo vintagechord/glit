@@ -74,6 +74,16 @@ import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields }
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
+import {
+  parkGuestDraftSlot,
+  readGuestDraftLeftovers,
+  restoreParkedGuestDraftSlot,
+  retainGuestDraftLeftovers,
+} from "@/lib/submission-guest-drafts";
+import {
+  recordSubmissionVersion,
+  REUSED_DRAFT_LOAD_ERROR,
+} from "@/lib/submission-version";
 import { useSubmissionStepScroll } from "./use-submission-step-scroll";
 
 declare global {
@@ -169,6 +179,7 @@ type MvCheckpointSnapshot = {
 type MvCheckpointController = {
   runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
   markSaved: (snapshot?: MvCheckpointSnapshot, savedAt?: number) => void;
+  markConflict: (error: string) => void;
   clear: () => void;
 };
 
@@ -467,6 +478,10 @@ export function MvWizard({
   const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
     null,
   );
+  // The row version (updated_at) this tab last loaded or saved. Every save
+  // sends it so an older tab cannot replace newer edits.
+  const submissionVersionsRef = React.useRef(new Map<string, string>());
+  const reusedDraftAttemptRef = React.useRef<string | null>(null);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [currentServerUpdatedAt, setCurrentServerUpdatedAt] =
@@ -886,8 +901,47 @@ export function MvWizard({
           submissionId?: string;
           guestToken?: string;
           error?: string;
+          reused?: boolean;
+          updatedAt?: string | null;
         };
+        if (res.ok && json?.submissionId && json.reused) {
+          // The server handed back a draft that already holds saved content.
+          // It must load through the resume prompt: treated as new, autosave
+          // would write this blank form over it. A second miss for the same
+          // draft stops here instead of looping between the two requests.
+          const reusedId = json.submissionId;
+          const retryResume =
+            reusedDraftAttemptRef.current !== reusedId || options?.force;
+          reusedDraftAttemptRef.current = reusedId;
+          if (retryResume) {
+            if (readDraftStorage()?.id !== reusedId) {
+              if (isGuest) {
+                parkGuestDraftSlot(window.localStorage, "mv", {
+                  cartSubmissionIds: [],
+                });
+              }
+              writeDraftStorage({
+                id: reusedId,
+                guestToken: isGuest
+                  ? json.guestToken ?? guestTokenRef.current
+                  : null,
+                mvType,
+              });
+            }
+            draftInitAttemptedRef.current = false;
+            resumePromptHandledRef.current = false;
+            setResumeChecked(false);
+            return null;
+          }
+          setDraftError(REUSED_DRAFT_LOAD_ERROR);
+          return null;
+        }
         if (res.ok && json?.submissionId) {
+          recordSubmissionVersion(
+            submissionVersionsRef.current,
+            json.submissionId,
+            json.updatedAt,
+          );
           if (isGuest && json.guestToken) {
             guestTokenRef.current = json.guestToken;
             if (typeof window !== "undefined") {
@@ -949,6 +1003,7 @@ export function MvWizard({
     mvType,
     onlineBaseSelected,
     onlineOptions,
+    readDraftStorage,
     tvStations,
     writeDraftStorage,
   ]);
@@ -2133,6 +2188,11 @@ export function MvWizard({
     );
 
     const restoredSubmissionId = String(draft.id ?? "");
+    recordSubmissionVersion(
+      submissionVersionsRef.current,
+      restoredSubmissionId,
+      draft.updated_at,
+    );
     submissionIdRef.current = restoredSubmissionId;
     if (restoredSubmissionId) {
       setCheckpointSeed({
@@ -2241,27 +2301,14 @@ export function MvWizard({
     let cancelled = false;
     // Drafts written as a guest in this browser are adopted by the account
     // after login; otherwise they would stay invisible until logout.
-    const readGuestLeftovers = () => {
-      if (isGuest || typeof window === "undefined") return null;
-      try {
-        const raw = window.localStorage.getItem("onside:draft:mv:guest");
-        const parsedRaw = raw ? JSON.parse(raw) as { id?: string; guestToken?: string } : null;
-        const token = window.localStorage.getItem("onside:guest-token:mv:guest") ?? parsedRaw?.guestToken ?? undefined;
-        if (!token) return null;
-        return { id: parsedRaw?.id, guestToken: token };
-      } catch {
-        return null;
-      }
-    };
-    const clearGuestLeftovers = () => {
-      try {
-        window.localStorage.removeItem("onside:draft:mv:guest");
-        window.localStorage.removeItem("onside:guest-token:mv:guest");
-      } catch {
-        // ignore storage errors
-      }
-    };
+    const readGuestLeftovers = () =>
+      isGuest ? null : readGuestDraftLeftovers(window.localStorage, "mv");
     const run = async () => {
+      // A draft parked while a cart item was edited comes back once the
+      // locator slot is free again.
+      if (isGuest && !isFromDraftsTab) {
+        restoreParkedGuestDraftSlot(window.localStorage, "mv");
+      }
       const stored = readDraftStorage();
       const guestLeftovers = readGuestLeftovers();
       if (!isFromDraftsTab && !stored?.id && !guestLeftovers) {
@@ -2270,7 +2317,7 @@ export function MvWizard({
       }
       const storedGuestToken =
         stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
-      const requestedIds = [stored?.id, guestLeftovers?.id].filter((id): id is string => Boolean(id));
+      const requestedIds = [stored?.id, ...(guestLeftovers?.ids ?? [])].filter((id): id is string => Boolean(id));
       try {
         const res = await fetchWithTimeout("/api/submissions/drafts", {
           method: "POST",
@@ -2279,14 +2326,27 @@ export function MvWizard({
             type: "MV",
             ids: requestedIds.length > 0 ? Array.from(new Set(requestedIds)) : undefined,
             guestToken: isGuest ? storedGuestToken : guestLeftovers?.guestToken,
+            guestTokensBySubmissionId: isGuest
+              ? undefined
+              : guestLeftovers?.guestTokensBySubmissionId,
           }),
         });
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
           claimedIds?: string[];
+          claimFailed?: boolean;
+          retainedGuestTokens?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
-        if (guestLeftovers && res.ok) clearGuestLeftovers();
+        // Forget guest credentials only after the account really adopted
+        // them; a failed claim or a draft mid-save keeps its token.
+        if (guestLeftovers && res.ok && json && !json.claimFailed) {
+          retainGuestDraftLeftovers(
+            window.localStorage,
+            "mv",
+            json.retainedGuestTokens ?? [],
+          );
+        }
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);
@@ -2867,6 +2927,7 @@ export function MvWizard({
           : source;
         const result = await saveMvSubmissionAction({
           submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(submissionId),
           amountKrw: sourceAmount,
           selectedStationIds: sourceStationIds,
           selectedStationCodes: sourceSelectedCodes,
@@ -2938,8 +2999,16 @@ export function MvWizard({
           applicationFormMode: source.applicationFormMode,
           externalApplicationForm: source.applicationFormMode === "upload",
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            mvCheckpointControllerRef.current?.markConflict(result.error);
+          }
           if (foreground) setNotice({ error: result.error });
           return false;
         }
@@ -3034,6 +3103,7 @@ export function MvWizard({
       }
       const result = await saveMvSubmissionAction({
         submissionId,
+        expectedUpdatedAt: submissionVersionsRef.current.get(submissionId),
         amountKrw: totalAmount,
         selectedStationIds,
         selectedStationCodes,
@@ -3105,8 +3175,16 @@ export function MvWizard({
         applicationFormMode,
         externalApplicationForm: isDownloadedApplicationFlow,
       });
+      recordSubmissionVersion(
+        submissionVersionsRef.current,
+        submissionId,
+        result.updatedAt,
+      );
 
       if (result.error) {
+        if (result.conflict) {
+          mvCheckpointControllerRef.current?.markConflict(result.error);
+        }
         setNotice({ error: result.error });
         return;
       }
@@ -3670,6 +3748,8 @@ export function MvWizard({
         error={mvCheckpoint.error}
         hasRecovery={Boolean(mvCheckpoint.recovery)}
         hasPrevious={Boolean(mvCheckpoint.previous)}
+        conflict={mvCheckpoint.conflict}
+        onReload={() => window.location.reload()}
         onRetry={mvCheckpoint.retry}
         onRecover={recoverMvCheckpoint}
         onDiscardRecovery={mvCheckpoint.discardRecovery}

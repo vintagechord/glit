@@ -261,8 +261,13 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   // A member who presents the guest tokens kept by this browser adopts the
   // drafts written before login. Only unpaid, unordered DRAFT/PRE_REVIEW rows
-  // move; the exact-token rule is enforced by the service-role RPC.
+  // move; the exact-token rule is enforced by the service-role RPC. The RPC
+  // skips a row whose save is in flight, so the browser must keep exactly the
+  // tokens that still own an unclaimed draft (retainedGuestTokens) and must
+  // keep everything when the claim itself failed (claimFailed).
   let claimedIds: string[] = [];
+  let claimFailed = false;
+  let retainedGuestTokens: string[] = [];
   const presentedGuestTokens = Array.from(
     new Set([...guestTokens, ...(parsed.data.guestToken ? [parsed.data.guestToken] : [])]),
   );
@@ -272,13 +277,39 @@ export async function POST(request: Request) {
       { p_user_id: user.id, p_guest_tokens: presentedGuestTokens },
     );
     if (claimError) {
+      claimFailed = true;
       console.warn("[Drafts] guest draft claim failed", { code: claimError.code, message: claimError.message });
     } else {
       claimedIds = ((claimedRows ?? []) as Array<{ submission_id?: string | null }>)
         .map((row) => String(row.submission_id ?? ""))
         .filter(Boolean);
+      const { data: unclaimedRows, error: unclaimedError } = await admin
+        .from("submissions")
+        .select("guest_token")
+        .is("user_id", null)
+        .in("guest_token", presentedGuestTokens)
+        .in("status", ["DRAFT", "PRE_REVIEW"])
+        .or("payment_status.is.null,payment_status.eq.UNPAID")
+        .is("current_order_id", null)
+        .is("user_deleted_at", null)
+        .limit(100);
+      if (unclaimedError) {
+        claimFailed = true;
+        console.warn("[Drafts] unclaimed guest draft check failed", { code: unclaimedError.code });
+      } else {
+        retainedGuestTokens = Array.from(
+          new Set(
+            ((unclaimedRows ?? []) as Array<{ guest_token?: string | null }>)
+              .map((row) => String(row.guest_token ?? ""))
+              .filter(Boolean),
+          ),
+        );
+      }
     }
   }
+  const claimResult = user?.id && presentedGuestTokens.length > 0
+    ? { claimedIds, claimFailed, retainedGuestTokens }
+    : { claimedIds };
   let selectClause =
     parsed.data.type === "ALBUM" ? selectAlbumColumns : selectMvColumns;
   let submissionResult: {
@@ -350,9 +381,8 @@ export async function POST(request: Request) {
       code: submissionResult.error.code,
       message: submissionResult.error.message,
     });
-    if (isGuest) {
-      return NextResponse.json({ ok: true, drafts: [] });
-    }
+    // An empty success here would read as "no saved draft" and let the
+    // wizard start over on a token that still owns one.
     return NextResponse.json({ error: "임시 저장 정보를 불러올 수 없습니다." }, { status: 500 });
   }
 
@@ -414,7 +444,7 @@ export async function POST(request: Request) {
     .map((row) => String(row.id ?? ""))
     .filter(Boolean);
   if (submissionIds.length === 0) {
-    return NextResponse.json({ ok: true, drafts: [], claimedIds });
+    return NextResponse.json({ ok: true, drafts: [], ...claimResult });
   }
 
   const drafts = submissions ?? [];
@@ -560,7 +590,7 @@ export async function POST(request: Request) {
     station_reviews: stationReviewsBySubmission.get(String(draft.id)) ?? [],
   }));
 
-  return NextResponse.json({ ok: true, drafts: payload });
+  return NextResponse.json({ ok: true, drafts: payload, ...claimResult });
 }
 
 export async function DELETE(request: Request) {

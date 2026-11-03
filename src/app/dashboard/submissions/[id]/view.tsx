@@ -108,6 +108,37 @@ type SubmissionRow = {
     | null;
 };
 
+// Error and empty states render on the server, before the English language
+// pack runs, so the /en mirror needs its own copy.
+const detailCopy = {
+  ko: {
+    invalidTitle: "유효하지 않은 접수 ID입니다.",
+    invalidBody: "URL에 접수 ID가 포함되어 있는지 확인해주세요.",
+    requestId: "요청 ID",
+    noInput: "입력 없음",
+    backToHistory: "나의 심의 내역으로 돌아가기",
+    unavailableTitle: "접수 상세를 불러올 수 없습니다.",
+    unavailableBody: "요청한 접수 ID가 존재하지 않거나 조회 권한이 없습니다.",
+    loginRetry: "로그인 후 다시 시도",
+    forbiddenTitle: "접수 권한이 없습니다.",
+    forbiddenBody: "이 접수를 열람할 수 있는 계정으로 로그인했는지 확인해주세요.",
+    stationFallback: "방송국",
+  },
+  en: {
+    invalidTitle: "Invalid submission ID.",
+    invalidBody: "Please check that the URL includes a submission ID.",
+    requestId: "Request ID",
+    noInput: "No input",
+    backToHistory: "Back to My Review History",
+    unavailableTitle: "Could not load this submission.",
+    unavailableBody: "The requested submission ID does not exist or you do not have permission to view it.",
+    loginRetry: "Log in and try again",
+    forbiddenTitle: "You do not have access to this submission.",
+    forbiddenBody: "Please check that you are logged in with the account that can view this submission.",
+    stationFallback: "Broadcaster",
+  },
+} as const;
+
 export type SubmissionDetailPageProps = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ payment?: string | string[] | undefined; view?: string | string[] | undefined }>;
@@ -123,6 +154,7 @@ export async function SubmissionDetailPageView({
   /** "/en" when rendered through the English mirror route. */
   localePrefix?: "" | "/en";
 }) {
+  const copy = detailCopy[localePrefix === "/en" ? "en" : "ko"];
   const { id } = await params;
   const resolvedSearchParams = (await searchParams) ?? {};
   const rawId = id?.trim();
@@ -137,19 +169,19 @@ export async function SubmissionDetailPageView({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           Submission
         </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">유효하지 않은 접수 ID입니다.</h1>
+        <h1 className="font-display mt-2 text-2xl text-foreground">{copy.invalidTitle}</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          URL에 접수 ID가 포함되어 있는지 확인해주세요.
+          {copy.invalidBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {submissionId || "입력 없음"}
+          {copy.requestId}: {submissionId || copy.noInput}
         </div>
         <div className="mt-3 flex gap-3">
           <Link
             href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
-            나의 심의 내역으로 돌아가기
+            {copy.backToHistory}
           </Link>
         </div>
       </div>
@@ -252,26 +284,26 @@ export async function SubmissionDetailPageView({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           Submission
         </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">접수 상세를 불러올 수 없습니다.</h1>
+        <h1 className="font-display mt-2 text-2xl text-foreground">{copy.unavailableTitle}</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          요청한 접수 ID가 존재하지 않거나 조회 권한이 없습니다.
+          {copy.unavailableBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {submissionId}
+          {copy.requestId}: {submissionId}
         </div>
         <div className="mt-3 flex gap-3">
           <Link
             href={`${localePrefix}/dashboard/history`}
             className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
           >
-            나의 심의 내역으로 돌아가기
+            {copy.backToHistory}
           </Link>
           {!user ? (
             <Link
               href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/submissions/${submissionId}`)}`}
               className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
             >
-              로그인 후 다시 시도
+              {copy.loginRetry}
             </Link>
           ) : null}
         </div>
@@ -287,12 +319,12 @@ export async function SubmissionDetailPageView({
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
           Submission
         </p>
-        <h1 className="font-display mt-2 text-2xl text-foreground">접수 권한이 없습니다.</h1>
+        <h1 className="font-display mt-2 text-2xl text-foreground">{copy.forbiddenTitle}</h1>
         <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-          이 접수를 열람할 수 있는 계정으로 로그인했는지 확인해주세요.
+          {copy.forbiddenBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
-          요청 ID: {submissionId}
+          {copy.requestId}: {submissionId}
         </div>
         {!user ? (
           <div className="mt-3">
@@ -300,7 +332,7 @@ export async function SubmissionDetailPageView({
               href={`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/submissions/${submissionId}`)}`}
               className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
             >
-              로그인 후 다시 시도
+              {copy.loginRetry}
             </Link>
           </div>
         ) : (
@@ -309,7 +341,7 @@ export async function SubmissionDetailPageView({
               href={`${localePrefix}/dashboard/history`}
               className="rounded-full border border-border/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-foreground"
             >
-              나의 심의 내역으로 돌아가기
+              {copy.backToHistory}
             </Link>
           </div>
         )}
@@ -410,7 +442,7 @@ export async function SubmissionDetailPageView({
     if (!reviewMap.has(stationId)) reviewMap.set(stationId, normalizedReview);
     if (station?.code && !reviewByCode.has(station.code)) reviewByCode.set(station.code, normalizedReview);
     if (!packageStations.some((item) => item.id === stationId || (station?.code && item.code === station.code))) {
-      packageStations.push({ id: stationId, name: station?.name ?? "방송국", code: station?.code ?? null });
+      packageStations.push({ id: stationId, name: station?.name ?? copy.stationFallback, code: station?.code ?? null });
     }
   });
 

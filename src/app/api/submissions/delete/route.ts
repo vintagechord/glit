@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { isPaymentInProgressDatabaseError } from "@/lib/payment-group";
 import { readBoundedJsonBody } from "@/lib/request-body";
-import { parseSubmissionDeletePayload } from "@/lib/submission-delete-request";
+import {
+  classifySubmissionDelete,
+  parseSubmissionDeletePayload,
+  type SubmissionDeleteCandidate,
+} from "@/lib/submission-delete-request";
 import {
   cleanupDeletedSubmissionB2Objects,
   loadSubmissionB2ObjectRefs,
@@ -13,11 +17,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const MAX_DELETE_BODY_BYTES = 16 * 1024;
-
-type DeletableSubmissionRow = {
-  id: string;
-  payment_status: string | null;
-};
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: ownedRows, error: loadError } = await admin
     .from("submissions")
-    .select("id, payment_status")
+    .select("id, status, payment_status, current_order_id")
     .in("id", ids)
     .eq("user_id", user.id);
 
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const ownedSubmissions = (ownedRows ?? []) as DeletableSubmissionRow[];
+  const ownedSubmissions = (ownedRows ?? []) as SubmissionDeleteCandidate[];
   if (ownedSubmissions.length === 0) {
     return NextResponse.json(
       { error: "삭제할 수 있는 내역이 없습니다." },
@@ -73,11 +72,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // Legacy REFUNDED or PAYMENT_PENDING rows may have no order, so the order
+  // trigger cannot protect them; a hard delete would cascade to their payment
+  // records. Refuse the whole request rather than delete part of it.
+  if (
+    ownedSubmissions.some((item) => classifySubmissionDelete(item) === "refuse")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "입금 확인 중이거나 장바구니·주문에 담긴 신청서는 여기서 삭제할 수 없습니다. 장바구니 또는 주문 내역에서 확인해주세요.",
+      },
+      { status: 409 },
+    );
+  }
+
   const paidIds = ownedSubmissions
-    .filter((item) => item.payment_status === "PAID")
+    .filter((item) => classifySubmissionDelete(item) === "hide")
     .map((item) => item.id);
   const unpaidIds = ownedSubmissions
-    .filter((item) => item.payment_status !== "PAID")
+    .filter((item) => classifySubmissionDelete(item) === "delete")
     .map((item) => item.id);
   const deletedIds: string[] = [];
 
@@ -113,7 +127,9 @@ export async function POST(request: Request) {
       .delete()
       .in("id", unpaidIds)
       .eq("user_id", user.id)
-      .neq("payment_status", "PAID")
+      .in("status", ["DRAFT", "PRE_REVIEW"])
+      .eq("payment_status", "UNPAID")
+      .is("current_order_id", null)
       .select("id");
 
     if (removeError) {
@@ -154,6 +170,7 @@ export async function POST(request: Request) {
       .update({ user_deleted_at: new Date().toISOString() })
       .in("id", paidIds)
       .eq("user_id", user.id)
+      .in("payment_status", ["PAID", "REFUNDED"])
       .select("id");
 
     if (hideError) {

@@ -41,12 +41,19 @@ export type SubmissionCheckpointSaveResult =
        * must stay payable until the user explicitly confirms the edit.
        */
       serverSaved?: boolean;
+      /**
+       * The server row changed since this tab last loaded or saved it. Saving
+       * again would replace someone else's edits, so automatic saves stop
+       * until the page reloads; local edits stay in the browser checkpoint.
+       */
+      conflict?: boolean;
     };
 
 export type SubmissionCheckpointViewState = {
   status: SubmissionCheckpointStatus;
   error: string | null;
   lastSavedAt: number | null;
+  conflict?: boolean;
 };
 
 export type UseSubmissionCheckpointOptions<T> = {
@@ -95,6 +102,7 @@ const normalizeSaveResult = (result: SubmissionCheckpointSaveResult) => {
       ok: false as const,
       error: result.error || "신청서를 저장하지 못했습니다.",
       savedAt: null,
+      conflict: result.conflict === true,
     };
   }
   return {
@@ -136,6 +144,7 @@ export function useSubmissionCheckpoint<T>({
   const recordRef = React.useRef<SubmissionCheckpointRecord<T> | null>(null);
   const initializedIdentityRef = React.useRef<string | null>(null);
   const blockedForRecoveryRef = React.useRef(false);
+  const blockedForConflictRef = React.useRef(false);
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightRef = React.useRef<Promise<boolean> | null>(null);
   const exclusiveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
@@ -228,6 +237,7 @@ export function useSubmissionCheckpoint<T>({
       if (
         !record?.pendingServerSave ||
         blockedForRecoveryRef.current ||
+        blockedForConflictRef.current ||
         exclusiveDepthRef.current > 0
       ) {
         return;
@@ -244,6 +254,7 @@ export function useSubmissionCheckpoint<T>({
     async (reason: SubmissionCheckpointSaveReason): Promise<boolean> => {
       clearTimer();
       if (blockedForRecoveryRef.current) return false;
+      if (blockedForConflictRef.current) return false;
       if (exclusiveDepthRef.current > 0) return false;
 
       if (inFlightRef.current) {
@@ -291,6 +302,7 @@ export function useSubmissionCheckpoint<T>({
                 ? error.message
                 : "신청서를 저장하지 못했습니다.",
             savedAt: null,
+            conflict: false,
           };
         }
       })();
@@ -304,6 +316,20 @@ export function useSubmissionCheckpoint<T>({
 
       const latest = recordRef.current;
       if (!latest) return result.ok;
+      if (!result.ok && result.conflict) {
+        blockedForConflictRef.current = true;
+        if (mountedRef.current) {
+          setView((current) => ({
+            ...current,
+            status: "error",
+            error: result.error,
+            conflict: true,
+          }));
+        }
+        return false;
+      }
+      // A foreground save may have reported the conflict while this one ran.
+      if (!result.ok && blockedForConflictRef.current) return false;
       if (!result.ok) {
         if (mountedRef.current) {
           setView((current) => ({
@@ -384,6 +410,7 @@ export function useSubmissionCheckpoint<T>({
     clearTimer();
     initializedIdentityRef.current = null;
     blockedForRecoveryRef.current = false;
+    blockedForConflictRef.current = false;
     recordRef.current = null;
     setRecovery(null);
     setPrevious(null);
@@ -464,6 +491,11 @@ export function useSubmissionCheckpoint<T>({
       snapshotRef.current,
     );
     const result = persist(next);
+    if (blockedForConflictRef.current) {
+      // Keep typing safe in the browser copy, but keep the conflict visible
+      // instead of queueing another save that the server must refuse.
+      return;
+    }
     if (next.pendingServerSave) {
       setView((current) => ({
         status: result.ok ? "local" : "error",
@@ -593,6 +625,17 @@ export function useSubmissionCheckpoint<T>({
     [persist, scheduleSave],
   );
 
+  const markConflict = React.useCallback((error: string) => {
+    clearTimer();
+    blockedForConflictRef.current = true;
+    setView((current) => ({
+      ...current,
+      status: "error",
+      error,
+      conflict: true,
+    }));
+  }, [clearTimer]);
+
   const runExclusive = React.useCallback(
     async <R,>(task: () => Promise<R>) => {
       clearTimer();
@@ -612,7 +655,12 @@ export function useSubmissionCheckpoint<T>({
       } finally {
         releaseTask();
         exclusiveDepthRef.current = Math.max(0, exclusiveDepthRef.current - 1);
-        if (recordRef.current?.pendingServerSave) scheduleSave();
+        if (
+          recordRef.current?.pendingServerSave &&
+          !blockedForConflictRef.current
+        ) {
+          scheduleSave();
+        }
       }
     },
     [clearTimer, scheduleSave],
@@ -638,6 +686,7 @@ export function useSubmissionCheckpoint<T>({
 
   return {
     ...view,
+    conflict: view.conflict === true,
     isDirty: Boolean(recordRef.current?.pendingServerSave),
     recovery,
     previous,
@@ -647,6 +696,7 @@ export function useSubmissionCheckpoint<T>({
     discardRecovery,
     revertToSaved,
     markSaved,
+    markConflict,
     runExclusive,
     clear,
   };

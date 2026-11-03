@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { archiveReviewProgress, linkedTrackResult, matchArchiveReviews } from "../src/lib/music-archive/reviews";
+import { readFileSync } from "node:fs";
+import { archiveReviewProgress, isArchiveDraftSubmission, linkedTrackResult, matchArchiveReviews, unreviewedArchiveTracks } from "../src/lib/music-archive/reviews";
 import { resolveArchiveReviewEntry } from "../src/lib/music-archive/review-entry";
 import { groupedAlbumFixture, groupedLibraryId } from "./fixtures/music-archive-grouped-albums";
 
@@ -66,4 +67,25 @@ test("saved review snapshots cannot bridge different editions, excluded albums o
     const context = { libraryId: groupedLibraryId, releaseId: scenario === "edition" ? "melon-release:100" : "genie-release:101", trackIds: [track.id] };
     assert.deepEqual(matchArchiveReviews(data, [{ id: "saved", status: "COMPLETED", melon_url: data.releases[0].links[0].url, archive_review_context: context }], groupedLibraryId), []);
   }
+});
+
+test("a paid PRE_REVIEW application counts as applied while an unpaid one stays a draft", () => {
+  const { library: { data } } = groupedAlbumFixture();
+  const context = { libraryId: groupedLibraryId, releaseId: "melon-release:100", trackIds: ["melon-track:100:1000"] };
+  assert.equal(isArchiveDraftSubmission({ status: "PRE_REVIEW", payment_status: "PAID" }), false);
+  assert.equal(isArchiveDraftSubmission({ status: "PRE_REVIEW", payment_status: "UNPAID" }), true);
+  assert.equal(isArchiveDraftSubmission({ status: "PRE_REVIEW" }), true, "unknown payment stays conservative");
+  assert.equal(isArchiveDraftSubmission({ status: "DRAFT", payment_status: "PAID" }), true);
+  const paid = matchArchiveReviews(data, [{ id: "paid", status: "PRE_REVIEW", payment_status: "PAID", archive_review_context: context }], groupedLibraryId);
+  assert.deepEqual(paid.map(scope => [scope.submissionId, scope.status]), [["paid", "PRE_REVIEW"]]);
+  assert.deepEqual(matchArchiveReviews(data, [{ id: "draft", status: "PRE_REVIEW", payment_status: "UNPAID", archive_review_context: context }], groupedLibraryId), []);
+  const releaseId = paid[0].releaseId;
+  data.tasks = [];
+  assert.ok(unreviewedArchiveTracks(data, releaseId, []).some(track => paid[0].trackIds.includes(track.id)), "fixture track needs an application");
+  const pending = unreviewedArchiveTracks(data, releaseId, paid);
+  assert.ok(!pending.some(track => paid[0].trackIds.includes(track.id)), "the paid track is not offered again");
+  assert.match(
+    readFileSync(new URL("../src/lib/music-archive/credits.ts", import.meta.url), "utf8"),
+    /select\("id,status,payment_status,/,
+  );
 });
