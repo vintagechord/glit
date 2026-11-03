@@ -10,7 +10,7 @@ const registeredId = '66666666-6666-4666-8666-666666666666';
 
 async function setup(t, options = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-manual-online-'));
-  const calls = { register: [], results: [], save: [], opened: [] };
+  const calls = { register: [], results: [], save: [], opened: [], albumInfo: [] };
   let serviceSubmissions = [];
   const source = { sourceStatus: () => ({ configured: true }), fetchSubmissions: async () => serviceSubmissions, fetchSubmission: async () => { throw Error('수동 작업은 온라인 조회 금지'); }, downloadAsset: async () => { throw Error('다운로드 금지'); } };
   const remote = {
@@ -23,6 +23,11 @@ async function setup(t, options = {}) {
     },
     getResults: async id => { calls.results.push(id); return { submission: { id, updated_at: '2026-11-02T00:00:00Z' }, stations: [], assets: { items: [{ kind: 'certificate', downloadUrl: `/api/cases/${id}/result-assets/certificate` }] } }; },
     saveResults: async (id, body) => { calls.save.push({ id, body }); return { ok: true, changed: true }; },
+    saveAlbumInfo: async (id, payload) => {
+      calls.albumInfo.push({ id, payload });
+      if (options.albumInfoFails) throw Object.assign(new Error('온사이드 서비스에 연결하지 못했습니다.'), { status: 503, code: 'DESK_CONNECTION_FAILED' });
+      return { changed: true, albumInfo: { updatedFields: ['release_date'], updatedTracks: 2, insertedTracks: 0 } };
+    },
   };
   const importer = async () => ({
     submission: { title: '메일 접수 앨범', artist_name: '메일 가수', artist_type: '그룹', release_date: '2026년 11월 5일', applicant_name: '홍길동', applicant_phone: '010-0000-0000', applicant_email: 'guest@example.invalid', members: '가, 나' },
@@ -87,4 +92,52 @@ test('only manual album cases can be registered online', async t => {
   const response = await register(s, id);
   assert.equal(response.status, 400); assert.match((await response.json()).error, /음반 수동 작업만/);
   assert.equal(s.calls.register.length, 0);
+});
+
+test('edited album details of a registered manual case follow to the online submission', async t => {
+  const s = await setup(t);
+  const { id } = await s.create();
+  // Before registration there is nothing online to update.
+  assert.equal((await s.api(`/api/cases/${id}/sync-online`, { method: 'POST', body: '{}' })).status, 409);
+  assert.equal((await register(s, id)).status, 200);
+  assert.equal(s.calls.albumInfo.length, 0);
+  // Saving document edits pushes the current details; the local save stands on its own.
+  const detail = await (await s.api(`/api/cases/${id}`)).json();
+  const patched = await s.api(`/api/cases/${id}/local`, { method: 'PATCH', body: JSON.stringify({ overrides: { submission: { release_date: '2026.11.05.', distributor: '유통사', artist_type: '솔로' }, tracks: [{ id: detail.tracks[0].id, lyrics: '고친 가사' }] } }) });
+  assert.equal(patched.status, 200);
+  const saved = await patched.json();
+  assert.deepEqual(saved.onlineSync, { ok: true, changed: true });
+  assert.equal(s.calls.albumInfo.length, 1);
+  const { id: target, payload } = s.calls.albumInfo[0];
+  assert.equal(target, registeredId);
+  assert.equal(payload.submission.releaseDate, '2026-11-05'); assert.equal(payload.submission.distributor, '유통사'); assert.equal(payload.submission.artistType, 'SOLO');
+  assert.deepEqual(payload.tracks.map(track => [track.trackNo, track.trackTitle, track.lyrics, track.isTitle]), [[1, '첫 곡', '고친 가사', true], [2, '둘째 곡', '가사 둘', false]]);
+  assert.ok(saved.detail.online.infoSyncedAt); assert.equal(saved.detail.online.infoSyncError, null);
+  // Generating documents also syncs, and the explicit action works too.
+  await s.api(`/api/cases/${id}/generate`, { method: 'POST', body: '{}' }); await s.desk.idle();
+  assert.equal(s.calls.albumInfo.length, 2);
+  const synced = await s.api(`/api/cases/${id}/sync-online`, { method: 'POST', body: '{}' });
+  assert.equal(synced.status, 200); assert.equal((await synced.json()).changed, true); assert.equal(s.calls.albumInfo.length, 3);
+  // An ambiguous act type is not guessed.
+  for (const hint of ['솔로/그룹', '그룹일 경우 팀원이름을 적어주세요.', '']) {
+    await s.api(`/api/cases/${id}/local`, { method: 'PATCH', body: JSON.stringify({ overrides: { submission: { artist_type: hint } } }) });
+    assert.equal(s.calls.albumInfo.at(-1).payload.submission.artistType, null, hint);
+  }
+  await s.api(`/api/cases/${id}/local`, { method: 'PATCH', body: JSON.stringify({ overrides: { submission: { artist_type: '그룹' } } }) });
+  assert.equal(s.calls.albumInfo.at(-1).payload.submission.artistType, 'GROUP');
+});
+
+test('a failed online sync keeps the local edit and reports the error on the case', async t => {
+  const s = await setup(t, { albumInfoFails: true });
+  const { id } = await s.create();
+  assert.equal((await register(s, id)).status, 200);
+  const patched = await s.api(`/api/cases/${id}/local`, { method: 'PATCH', body: JSON.stringify({ overrides: { submission: { genre: '발라드' } } }) });
+  assert.equal(patched.status, 200);
+  const saved = await patched.json();
+  assert.equal(saved.onlineSync.ok, false); assert.match(saved.onlineSync.error, /연결하지 못했습니다/);
+  assert.equal(saved.detail.submission.genre, '발라드'); assert.match(saved.detail.online.infoSyncError, /연결하지 못했습니다/);
+  assert.equal((await s.api(`/api/cases/${id}/sync-online`, { method: 'POST', body: '{}' })).status, 503);
+  await s.api(`/api/cases/${id}/generate`, { method: 'POST', body: '{}' }); await s.desk.idle();
+  const detail = await s.desk.detail(id);
+  assert.ok(detail.generations.at(-1).warnings.some(w => w.includes('온라인 접수에 신청서 정보를 반영하지 못했습니다')));
 });

@@ -36,7 +36,7 @@ import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
 import { StationReviewBulkForm } from "@/components/admin/station-review-bulk-form";
-import { updateStationReviewFormAction } from "@/features/admin/actions";
+import { hydrateReleasedAlbumInfoFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction } from "@/features/admin/actions";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
@@ -282,6 +282,14 @@ export default async function AdminSubmissionDetailPage({
         return "안내 이메일 재발송을 요청했습니다.";
       case "notification_error":
         return "안내 이메일 재발송을 요청하지 못했습니다.";
+      case "album_info":
+        return "신청서 항목이 저장되었습니다.";
+      case "album_info_unchanged":
+        return "변경된 신청서 항목이 없습니다.";
+      case "album_info_hydrated":
+        return "멜론·지니 앨범 정보를 신청서에 반영했습니다.";
+      case "album_info_not_released":
+        return "발매 음반(URL) 접수가 아니어서 앨범 정보를 불러오지 않았습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -496,6 +504,15 @@ export default async function AdminSubmissionDetailPage({
         const code = typeof data?.guest_token === "string" ? data.guest_token.trim() : "";
         return code.length >= 8 ? { code, url: buildUrl(`/track/${encodeURIComponent(code)}`, getBaseUrl()) } : null;
       }, () => null);
+
+  // What the customer opens: the guest lookup page or the member dashboard
+  // page. The admin preview renders the same screen without the customer's
+  // session, so staff can check what was delivered before passing the link on.
+  const customerPage = {
+    url: guestLookup?.url ?? buildUrl(`/dashboard/submissions/${encodeURIComponent(submission.id)}`, getBaseUrl()),
+    previewPath: `/admin/submissions/customer-view?id=${encodeURIComponent(submission.id)}`,
+    kind: guestLookup ? "비회원 조회 링크" : "회원 로그인 후 열람",
+  };
 
   const hasGuestColumns =
     submission.guest_name !== undefined ||
@@ -940,6 +957,37 @@ export default async function AdminSubmissionDetailPage({
         </div>
       </div>
 
+      <div className="mt-6 rounded-2xl border-2 border-[#111111] bg-[#fffaf0] p-5 text-sm shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[4px_4px_0_#f2cf27]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground">고객 결과 페이지</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              고객이 보는 결과 화면과 작성 신청서를 관리자가 그대로 확인합니다. ({customerPage.kind})
+            </p>
+          </div>
+          <Link
+            href={customerPage.previewPath}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white dark:border-[#f2cf27]"
+          >
+            고객 화면으로 보기 ↗
+          </Link>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs md:grid-cols-[120px_1fr]">
+          <span className="font-semibold text-muted-foreground">고객 주소</span>
+          <a href={customerPage.url} target="_blank" rel="noreferrer" className="select-all break-all font-mono font-semibold text-[#1556a4] underline underline-offset-4 dark:text-sky-300">
+            {customerPage.url}
+          </a>
+          {guestLookup ? (
+            <>
+              <span className="font-semibold text-muted-foreground">조회 코드</span>
+              <span className="select-all break-all font-mono font-semibold text-foreground">{guestLookup.code}</span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
       {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submission.id} admin /> : null}
       {!isMvSubmission && isOneclick ? (
         <div className="mt-6 rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-card p-5 text-sm">
@@ -960,6 +1008,19 @@ export default async function AdminSubmissionDetailPage({
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             원본 정보와 가사를 확인한 뒤 사용해주세요. 링크에서 자료를 불러오지 못하면 앨범 링크를 확인하거나 심의자료 도구에서 보완할 수 있습니다.
           </p>
+          <form action={hydrateReleasedAlbumInfoFormAction} method="post" className="mt-3 flex flex-wrap items-center gap-3">
+            <input type="hidden" name="submissionId" value={submission.id} />
+            <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
+            <button
+              type="submit"
+              className="inline-flex min-h-10 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white px-4 py-2 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white dark:border-[#f2cf27] dark:bg-[#111111] dark:text-[#f2cf27]"
+            >
+              멜론·지니 앨범 정보 신청서에 반영
+            </button>
+            <span className="text-xs text-muted-foreground">
+              비어 있는 발매일·장르·유통사·제작사와 트랙·가사를 링크의 앨범 정보로 채웁니다. 이미 입력된 값은 바꾸지 않습니다. 접수·결제 시점과 심의자료 생성 시에도 같은 반영이 자동으로 실행됩니다.
+            </span>
+          </form>
         </div>
       ) : null}
 
@@ -1672,6 +1733,68 @@ export default async function AdminSubmissionDetailPage({
               </>
             )}
           </div>
+          {!isMvSubmission ? (
+            <form
+              action={updateSubmissionAlbumInfoFormAction}
+              method="post"
+              className="mt-6 space-y-3 rounded-2xl border border-border/60 bg-background/70 p-4"
+            >
+              <input type="hidden" name="submissionId" value={submission.id} />
+              <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                신청서 항목 보정
+              </p>
+              <p className="text-xs text-muted-foreground">
+                고객 결과 페이지의 작성 신청서와 심의자료에 쓰이는 항목입니다. 대리 접수나 심의 데스크 작업 내용에 맞춰 보완하세요. 고객에게 이메일을 보내지 않습니다.
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">발매일</label>
+                  <input name="releaseDate" type="date" defaultValue={submission.release_date?.slice(0, 10) ?? ""} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">장르</label>
+                  <input name="genre" defaultValue={submission.genre ?? ""} placeholder="예: 발라드" maxLength={100} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">유통사</label>
+                  <input name="distributor" defaultValue={submission.distributor ?? ""} maxLength={200} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">제작사</label>
+                  <input name="productionCompany" defaultValue={submission.production_company ?? ""} maxLength={200} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">아티스트 유형</label>
+                  <select name="artistType" defaultValue={submission.artist_type ?? ""} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm">
+                    <option value="">선택 안 함</option>
+                    <option value="SOLO">솔로</option>
+                    <option value="GROUP">그룹</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">성별</label>
+                  <input name="artistGender" defaultValue={submission.artist_gender ?? ""} maxLength={40} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs text-muted-foreground">구성/멤버</label>
+                  <input name="artistMembers" defaultValue={submission.artist_members ?? ""} maxLength={1000} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs text-muted-foreground">이전 발매</label>
+                  <textarea name="previousRelease" defaultValue={submission.previous_release ?? ""} rows={3} maxLength={2000} className="w-full rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="rounded-full border-2 border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white transition hover:bg-[#1556a4] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+                >
+                  신청서 항목 저장
+                </button>
+              </div>
+            </form>
+          ) : null}
           {!isMvSubmission && submission.album_tracks && submission.album_tracks.length > 0 ? (
             <div className="mt-6 space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">

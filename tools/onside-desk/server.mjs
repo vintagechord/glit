@@ -86,7 +86,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.7.0' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.8.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -282,6 +282,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       const result = await generator({ ...current, ...(item.source === 'manual' ? { files: current.localAttachments || [] } : {}), outputDir: dir, settings: store.data.settings });
       const warnings = [...new Set([...current.warnings, ...translation.warnings, ...(result.warnings || [])])];
       if (!store.data.settings.managerName || !store.data.settings.managerPhone) warnings.push('앱 설정에서 심의 담당자 이름·연락처를 입력하고 다시 생성하세요.');
+      // The documents and the online application must say the same thing.
+      if (item.source === 'manual' && item.online?.submissionId) {
+        try { await syncOnline(id); }
+        catch (error) { warnings.push(`온라인 접수에 신청서 정보를 반영하지 못했습니다: ${safeError(error)} 결과 페이지의 ‘온라인에 반영’으로 다시 시도하세요.`); }
+      }
       const album = current.submission.type === 'ALBUM';
       const artifactList = (result.artifacts || []).map(a => ({ name: a.name, type: a.type, bytes: a.bytes }));
       if (album) {
@@ -374,31 +379,69 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const registering = new Set();
   const cut = (value, max) => { const text = typeof value === 'string' ? value.trim() : value === null || value === undefined ? '' : String(value).trim(); return text ? text.slice(0, max) : null; };
   function isoDate(value) {
-    const match = String(value || '').trim().match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?$/);
+    // Reference files write 2026.11.05., 2026-11-05 or 2026년 11월 5일; trailing punctuation is not part of the date.
+    const match = String(value || '').trim().replace(/[.\s]+$/, '').match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?$/);
     if (!match) return null;
     const [year, month, day] = match.slice(1).map(Number), date = new Date(Date.UTC(year, month - 1, day));
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
   }
-  function intakePayload(effective, input) {
+  /** A reference file may print both labels ("솔로/그룹"); only an unambiguous one is sent. */
+  function artistTypeOf(value) {
+    const text = String(value || '').trim();
+    // A reference file may leave the field's own hint ("그룹일 경우 팀원이름을 적어주세요.") in place of a value.
+    if (!text || text.length > 20 || /적어|주세요|기입|경우|선택|없을/.test(text)) return null;
+    const group = /그룹|밴드|듀오|팀|group|band|duo/i.test(text), solo = /솔로|개인|solo/i.test(text);
+    return group && !solo ? 'GROUP' : solo && !group ? 'SOLO' : null;
+  }
+  /** The application details of an album case in the service's album-info shape. */
+  function albumInfoPayload(effective) {
     const s = effective.submission || {}, wbs = new Set((s.wbs_track_numbers || []).map(Number));
-    const artistType = /그룹|밴드|듀오|팀|group|band|duo/i.test(s.artist_type || '') ? 'GROUP' : /솔로|개인|solo/i.test(s.artist_type || '') ? 'SOLO' : null;
-    const tracks = (effective.tracks || []).filter(track => cut(track.track_title, 300)).map(track => ({
+    const tracks = (effective.tracks || []).filter(track => cut(track.track_title, 300)).map((track, index) => ({
+      trackNo: Number(track.track_no) || index + 1,
       trackTitle: cut(track.track_title, 300), performer: cut(track.performer, 300), featuring: cut(track.featuring, 300), composer: cut(track.composer, 300),
       lyricist: cut(track.lyricist, 300), arranger: cut(track.arranger, 300), lyrics: cut(track.lyrics, 30000), translatedLyrics: cut(track.translated_lyrics, 30000),
       isTitle: !!track.is_title, broadcastSelected: wbs.has(Number(track.track_no)),
     }));
     return {
-      packageId: input.packageId, paid: input.paid,
-      guest: { name: input.guestName, phone: input.guestPhone || null, email: input.guestEmail || null },
       submission: {
         title: cut(s.title, 200), artistName: cut(s.artist_name, 200), artistNameEn: cut(s.artist_name_en, 200), releaseDate: isoDate(s.release_date),
         genre: cut(s.genre, 100), distributor: cut(s.distributor || s.distributor_name, 200), productionCompany: cut(s.production_company, 200),
-        previousRelease: cut(s.previous_release, 500), artistType, artistMembers: cut(s.members || s.artist_members, 1000),
-        applicantName: cut(s.applicant_name, 80), applicantEmail: cut(s.applicant_email, 200), applicantPhone: cut(s.applicant_phone, 40),
-        adminMemo: '관리자 수동 작업(심의 데스크)에서 등록한 비회원 접수',
+        previousRelease: cut(s.previous_release, 500), artistType: artistTypeOf(s.artist_type), artistMembers: cut(s.members || s.artist_members, 1000),
       },
       tracks,
     };
+  }
+  function intakePayload(effective, input) {
+    const s = effective.submission || {}, info = albumInfoPayload(effective);
+    return {
+      packageId: input.packageId, paid: input.paid,
+      guest: { name: input.guestName, phone: input.guestPhone || null, email: input.guestEmail || null },
+      submission: {
+        ...info.submission,
+        applicantName: cut(s.applicant_name, 80), applicantEmail: cut(s.applicant_email, 200), applicantPhone: cut(s.applicant_phone, 40),
+        adminMemo: '관리자 수동 작업(심의 데스크)에서 등록한 비회원 접수',
+      },
+      tracks: info.tracks.map(({ trackNo: _trackNo, ...track }) => { void _trackNo; return track; }),
+    };
+  }
+  /** 신청서 정보 온라인 반영: pushes the manual case's current album details and tracks to its
+   * registered submission so the admin page and the customer's application view match the documents. */
+  async function syncOnline(id) {
+    const item = getCase(id);
+    if (item.source !== 'manual' || !item.online?.submissionId) throw Object.assign(new Error('온라인 결과 페이지를 만든 수동 음반 작업만 신청서 정보를 반영할 수 있습니다.'), { status: 409, code: 'MANUAL_CASE_LOCAL_ONLY' });
+    const payload = albumInfoPayload(applyOverrides(item.detail, item.local));
+    if (!payload.submission.title || !payload.submission.artistName) throw Object.assign(new Error('앨범 제목과 아티스트명을 먼저 입력하세요.'), { status: 400 });
+    try {
+      const result = await remote.saveAlbumInfo(item.online.submissionId, payload);
+      const info = result.albumInfo || {};
+      item.online.infoSyncedAt = now(); item.online.infoSyncError = null;
+      if (result.changed) store.audit(id, 'online', `온라인 접수에 신청서 정보를 반영했습니다 (항목 ${(info.updatedFields || []).length}개, 트랙 수정 ${info.updatedTracks || 0}곡, 추가 ${info.insertedTracks || 0}곡).`);
+      await store.save();
+      return { online: item.online, changed: result.changed === true, albumInfo: info };
+    } catch (error) {
+      item.online.infoSyncError = safeError(error); await store.save();
+      throw error;
+    }
   }
   /** 관리자 대리 접수: registers a manual album case as a guest submission with a result page and lookup code. */
   async function registerOnline(id, input) {
@@ -455,7 +498,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.7.0' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.8.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -520,7 +563,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (asset.contentLength && /^\d+$/.test(String(asset.contentLength))) res.setHeader('Content-Length', asset.contentLength);
         return await pipeline(Readable.fromWeb(asset.body), res);
       }
-      const route = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)(?:\/(local|generate|download|open|attachments|results|certificate|email-preview|reference|translate|restore|register-online|open-online))?$/);
+      const route = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)(?:\/(local|generate|download|open|attachments|results|certificate|email-preview|reference|translate|restore|register-online|open-online|sync-online))?$/);
       if (!route) return sendJSON(res, 404, { error: '요청을 찾을 수 없습니다.' });
       const [, id, action] = route; const item = getCase(id, action === 'restore' || req.method === 'DELETE');
       if (!action && req.method === 'DELETE') {
@@ -552,6 +595,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       }
       const rid = ['results', 'email-preview', 'certificate'].includes(action) ? remoteCaseId(id) : id;
       if (action === 'register-online' && req.method === 'POST') return sendJSON(res, 200, await registerOnline(id, await readJSON(req)));
+      if (action === 'sync-online' && req.method === 'POST') { const synced = await syncOnline(id); return sendJSON(res, 200, { ...synced, detail: await detail(id) }); }
       if (action === 'open-online' && req.method === 'POST') {
         if (!item.online?.trackUrl || !/^https:\/\//.test(item.online.trackUrl)) return sendJSON(res, 404, { error: '온라인 결과 페이지가 없습니다.' });
         openUrl(item.online.trackUrl); return sendJSON(res, 200, { opened: true });
@@ -584,7 +628,12 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (item.source === 'manual' && patch.reviewAcknowledgedRevision && patch.reviewAcknowledgedRevision !== current.screening?.sourceHash) return sendJSON(res, 409, { error: '가사 내용이 변경되었습니다. 현재 검토사항을 다시 확인하세요.' });
         item.local = validateLocalPatch(patch, item.local, current.tracks.map(t => t.id));
         if (item.source === 'manual' && patch.overrides) { item.sourceChanged = !!item.generations?.length; item.submission.updated_at = now(); item.detail.submission.updated_at = item.submission.updated_at; }
-        store.audit(id, 'edit', '로컬 진행 상태·메모·문서 내용을 저장했습니다.'); await store.save(); return sendJSON(res, 200, { local: item.local, ...(item.source === 'manual' ? { detail: await detail(id) } : {}) });
+        store.audit(id, 'edit', '로컬 진행 상태·메모·문서 내용을 저장했습니다.'); await store.save();
+        // Edited album details follow to the registered submission; the local save stands even when the service is unreachable.
+        const onlineSync = item.source === 'manual' && patch.overrides && item.online?.submissionId
+          ? await syncOnline(id).then(result => ({ ok: true, changed: result.changed }), error => ({ ok: false, error: safeError(error) }))
+          : null;
+        return sendJSON(res, 200, { local: item.local, ...(item.source === 'manual' ? { detail: await detail(id), onlineSync } : {}) });
       }
       if (['generate', 'download'].includes(action) && req.method === 'POST') return sendJSON(res, 202, { job: enqueue(id, action) });
       if (action === 'open' && req.method === 'POST') {

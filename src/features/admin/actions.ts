@@ -32,6 +32,8 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
+import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
+import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { autoIssueRequestedCashReceipt } from "@/lib/cash-receipts-server";
@@ -2388,4 +2390,57 @@ export async function resolveUncertainPaymentFormAction(formData: FormData): Pro
   revalidatePath("/admin/submissions");
   for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
   back(`saved=${outcome === "APPROVED" ? "approved" : "failed"}${warnings.length ? `&savedWarning=${encodeURIComponent(warnings.join(" / "))}` : ""}`);
+}
+
+const albumInfoIdSchema = z.string().uuid();
+const albumInfoFormText = (formData: FormData, key: string) => {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : null;
+};
+
+/** 신청서 항목 보정: the album application fields (발매일·장르·유통사·제작사 등)
+ * on the admin detail page. Staff edits only; no customer mail. */
+export async function updateSubmissionAlbumInfoFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (!albumInfoIdSchema.safeParse(submissionId).success) redirect("/admin/submissions?saved=error&savedError=" + encodeURIComponent("접수 ID를 확인해주세요."));
+  const parsed = albumInfoSchema.safeParse({
+    submission: {
+      releaseDate: albumInfoFormText(formData, "releaseDate"),
+      genre: albumInfoFormText(formData, "genre"),
+      distributor: albumInfoFormText(formData, "distributor"),
+      productionCompany: albumInfoFormText(formData, "productionCompany"),
+      previousRelease: albumInfoFormText(formData, "previousRelease"),
+      artistType: albumInfoFormText(formData, "artistType") || null,
+      artistGender: albumInfoFormText(formData, "artistGender"),
+      artistMembers: albumInfoFormText(formData, "artistMembers"),
+    },
+    tracks: [],
+  });
+  if (!parsed.success) {
+    redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: "발매일은 2026-11-05 형식으로, 다른 항목은 허용 길이 안에서 입력해주세요." }));
+  }
+  const saved = await saveManagedAlbumInfo(createAdminClient(), {
+    submissionId, actorUserId: actor.id, input: parsed.data, mode: "overwrite", source: "관리자 페이지",
+  });
+  if (!saved.ok) redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: saved.error }));
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  revalidateUserDashboards(submissionId);
+  redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: saved.changed ? "album_info" : "album_info_unchanged" }));
+}
+
+/** Completes a released-album (URL) request from its Melon/Genie link on demand. */
+export async function hydrateReleasedAlbumInfoFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (!albumInfoIdSchema.safeParse(submissionId).success) redirect("/admin/submissions?saved=error&savedError=" + encodeURIComponent("접수 ID를 확인해주세요."));
+  const result = await hydrateReleasedAlbumSubmission(createAdminClient(), submissionId, { actorUserId: actor.id });
+  if (!result.ok) redirect(buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: result.error }));
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  revalidateUserDashboards(submissionId);
+  redirect(buildSubmissionFormRedirect(formData, submissionId, {
+    saved: result.skipped === "not-released-album" ? "album_info_not_released" : result.changed ? "album_info_hydrated" : "album_info_unchanged",
+  }));
 }

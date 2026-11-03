@@ -74,6 +74,13 @@ export async function sendPaidSubmissionNotificationsById(input: {
     if (error || !submission) return { ...outcome, warning: "결제는 저장되었지만 접수 알림에 필요한 정보를 확인하지 못했습니다." };
     if (submission.payment_status !== "PAID") return { ...outcome, recorded: true };
     outcome.eligible = true;
+    if (submission.type === "ALBUM") {
+      // Released-album (URL) requests: complete the application details from
+      // Melon/Genie after the response. Never affects the payment or mail.
+      void import("@/lib/admin/released-album-hydration")
+        .then((module) => module.scheduleReleasedAlbumHydration(submission.id))
+        .catch(() => undefined);
+    }
     const { data: event, error: eventError } = await db.from("paid_submission_notification_events")
       .select("payment_key,enqueued_at").eq("submission_id", submission.id).maybeSingle();
     // The transition event is authoritative across callback, bank confirmation

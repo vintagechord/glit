@@ -218,5 +218,17 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     if (!trackUrl || trackUrl.protocol !== 'https:' && !options.allowInsecureLocalhost) throw new RemoteReviewError('결과 페이지 주소를 확인하지 못했습니다.', 502, 'INVALID_INTAKE_RESULT');
     return { submissionId: String(data.submissionId), guestToken: nonce, trackUrl: trackUrl.href, created: data.created === true, paid: data.paid === true };
   }
-  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, listIntakePackages, registerGuestAlbum };
+  /** 신청서 정보 반영: the album details and tracks of a case, applied to its online submission. */
+  async function saveAlbumInfo(id, payload, { signal } = {}) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !payload.submission || !Array.isArray(payload.tracks)) throw new RemoteReviewError('신청서 정보를 확인해 주세요.', 400, 'INVALID_ALBUM_INFO');
+    const nonce = requestId();
+    let body;
+    try { body = Buffer.from(JSON.stringify({ operation: 'album-info', requestId: nonce, submission: payload.submission, tracks: payload.tracks })); }
+    catch { throw new RemoteReviewError('신청서 정보 형식을 확인해 주세요.', 400, 'INVALID_ALBUM_INFO'); }
+    if (body.length > JSON_LIMIT) throw new RemoteReviewError('신청서 내용이 너무 큽니다.', 413, 'ALBUM_INFO_TOO_LARGE');
+    const data = await jsonBody(await request(id, { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 60_000 }));
+    if (!data || data.ok !== true) throw new RemoteReviewError('신청서 정보 반영 결과를 확인하지 못했습니다. 접수 상세에서 반영 여부를 확인해 주세요.', 502, 'INVALID_ALBUM_INFO_RESULT');
+    return { changed: data.changed === true, albumInfo: data.albumInfo && typeof data.albumInfo === 'object' ? data.albumInfo : {} };
+  }
+  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, listIntakePackages, registerGuestAlbum, saveAlbumInfo };
 }

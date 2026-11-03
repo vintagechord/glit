@@ -16,6 +16,7 @@ const read = (relativePath: string) =>
 test("draft and detail reads round-trip one performer per album track", () => {
   const draftsRoute = read("src/app/api/submissions/drafts/route.ts");
   const guestDetail = read("src/app/track/[token]/page.tsx");
+  const customerLoader = read("src/lib/submissions/customer-detail.ts");
   const memberDetail = read("src/features/submissions/submission-detail-client.tsx");
   const adminDetail = read("src/app/admin/submissions/detail/page.tsx");
 
@@ -31,7 +32,10 @@ test("draft and detail reads round-trip one performer per album track", () => {
     assert.match(select, /album_tracks \([^)]*performer/);
   }
 
-  assert.match(guestDetail, /album_tracks \([^)]*performer/);
+  // The guest page selects through the shared customer loader, which builds on
+  // the member select and so carries the same performer column.
+  assert.match(guestDetail, /loadCustomerSubmissionDetail\(/);
+  assert.match(customerLoader, /CUSTOMER_SUBMISSION_DETAIL_SELECT = `\$\{SUBMISSION_USER_DETAIL_SELECT\}/);
   assert.match(memberDetail, /performer\?: string \| null/);
   assert.match(memberDetail, /track\.performer \|\| submission\.artist_name/);
   assert.match(adminDetail, /performer\?: string \| null/);

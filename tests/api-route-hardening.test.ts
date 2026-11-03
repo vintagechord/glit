@@ -21,9 +21,13 @@ test("malformed percent-encoded tracking tokens resolve to not-found input", () 
   const page = read("src/app/track/[token]/page.tsx");
   assert.match(page, /decodeTrackToken\(resolvedParams\.token\)/);
   assert.doesNotMatch(page, /decodeURIComponent\(resolvedParams\.token/);
+  // The guest page reads through the shared customer loader, which scopes the
+  // service-role read to a guest submission with exactly this token.
+  assert.match(page, /loadCustomerSubmissionDetail\(createAdminClient\(\), \{ guestToken: token \}/);
+  const loader = read("src/lib/submissions/customer-detail.ts");
   assert.match(
-    page,
-    /\.is\("user_id", null\)\s*\.eq\("guest_token", value\)/,
+    loader,
+    /\.is\("user_id", null\)\s*\.eq\("guest_token", target\.guestToken\)/,
   );
 
   const validateRoute = read("src/app/api/track/validate/route.ts");
