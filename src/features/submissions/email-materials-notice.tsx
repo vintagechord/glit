@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { APP_CONFIG } from "@/lib/config";
 
 export function EmailMaterialsNotice({
@@ -22,8 +23,8 @@ export function EmailMaterialsNotice({
     : `${subject} / 접수번호 ${submissionId || "발급 대기"}`;
 
   return (
-    <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-5 text-sm">
-      <p className="font-bold">이메일로 파일 제출</p>
+    <div className="mt-4 rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-card px-4 py-5 text-sm">
+      <p className={`inline-flex rounded-md border-2 px-2 py-1 font-bold ${brandStatusTones.progress}`}>이메일로 파일 제출</p>
       <p className="mt-2 text-muted-foreground">접수 완료 후 아래 주소로 파일을 보내주세요. 자료를 확인한 후 접수를 진행합니다.</p>
       <p className="mt-1 text-muted-foreground">보낼 자료: {materials}</p>
       <a className="mt-3 block break-all font-semibold underline underline-offset-4" href={`mailto:${APP_CONFIG.supportEmail}?subject=${encodeURIComponent(emailSubject)}`}>

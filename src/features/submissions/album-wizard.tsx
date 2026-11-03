@@ -243,19 +243,19 @@ const packageGuidance: Record<
 const packageToneClasses = [
   {
     card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-white/45 text-[#111111]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-[#1556a4] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#06111f]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-[#d9362c] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#111111]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-white text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-[#f2cf27] text-[#111111]",
+    chip: "border-[#111111] bg-[#f2cf27] text-[#111111]",
   },
 ];
 
@@ -4551,7 +4551,7 @@ export function AlbumWizard({
                         <div className="flex w-full flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             {guidance?.badge ? (
-                              <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
+                              <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : brandStatusTones.progress}`}>
                                 {guidance.badge}
                               </span>
                             ) : null}
@@ -4571,7 +4571,7 @@ export function AlbumWizard({
                           </p>
                         ) : null}
                         {conditionalGuidance.length > 0 ? (
-                          <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                          <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : brandStatusTones.warning}`}>
                             장르 조건 있음
                           </span>
                         ) : null}
@@ -4785,7 +4785,7 @@ export function AlbumWizard({
                 />
               </div>
               {notice.error && (
-                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className={`mt-4 rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4826,7 +4826,7 @@ export function AlbumWizard({
                   </p>
                 )}
                 {showBasicErrors && basicInfoIssues.length > 0 && (
-                  <div role="alert" className="mb-5 rounded-xl border border-red-500/40 bg-red-500/5 p-4">
+                  <div role="alert" className={`mb-5 rounded-xl border-2 p-4 ${brandStatusTones.danger}`}>
                     <p className="font-semibold">입력 내용을 확인해주세요.</p>
                     <ul className="mt-2 space-y-1">
                       {basicInfoIssues.map((item) => (
@@ -5822,7 +5822,7 @@ export function AlbumWizard({
                         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                           <span role="status" aria-atomic="true">
                             {upload.status === "done" ? (
-                              <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                              <span className={`inline-flex items-center rounded-full border-2 px-3 py-1.5 text-xs font-bold ${brandStatusTones.success}`}>
                                 첨부 완료
                               </span>
                             ) : (
@@ -5899,7 +5899,7 @@ export function AlbumWizard({
                       </span>
                     </div>
                     {hasArchiveForTrackMatch ? (
-                      <p className="mt-3 rounded-xl bg-[#f2cf27]/15 px-3 py-2 font-semibold leading-5 text-foreground">
+                      <p className={`mt-3 rounded-xl border-2 px-3 py-2 font-semibold leading-5 ${brandStatusTones.warning}`}>
                         ZIP 파일은 자동 연결하지 않습니다. 압축 안의 곡명과 트랙 순서를 확인해주세요.
                       </p>
                     ) : albumTrackFileMatch.missingTrackIndexes.length === 0 &&
@@ -5910,9 +5910,9 @@ export function AlbumWizard({
                     ) : (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {albumTrackFileMatch.missingTrackIndexes.length > 0 ? (
-                          <div className="rounded-xl bg-[#d9362c]/8 px-3 py-2">
-                            <p className="font-black text-[#b92d25]">파일 확인 필요</p>
-                            <p className="mt-1 leading-5 text-muted-foreground">
+                          <div className={`rounded-xl border-2 px-3 py-2 ${brandStatusTones.danger}`}>
+                            <p className="font-black">파일 확인 필요</p>
+                            <p className="mt-1 leading-5">
                               {albumTrackFileMatch.missingTrackIndexes
                                 .map(
                                   (index) =>
@@ -5923,9 +5923,9 @@ export function AlbumWizard({
                           </div>
                         ) : null}
                         {albumTrackFileMatch.unmatchedFileIndexes.length > 0 ? (
-                          <div className="rounded-xl bg-[#f2cf27]/15 px-3 py-2">
+                          <div className={`rounded-xl border-2 px-3 py-2 ${brandStatusTones.warning}`}>
                             <p className="font-black">연결되지 않은 파일</p>
-                            <p className="mt-1 break-all leading-5 text-muted-foreground">
+                            <p className="mt-1 break-all leading-5">
                               {albumTrackFileMatch.unmatchedFileIndexes
                                 .map((index) => {
                                   const file = albumTrackFilesForMatch[index];
@@ -5972,7 +5972,7 @@ export function AlbumWizard({
           </div>
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}
@@ -6013,7 +6013,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleStep3Next}
               disabled={isSaving || isAddingAlbum}
-              className="min-h-11 rounded-full border border-emerald-800 bg-emerald-700 px-6 py-3 text-xs font-bold tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500"
+              className="min-h-11 rounded-full border-2 border-[var(--bauhaus-ink)] bg-[#1f7a5a] px-6 py-3 text-xs font-bold tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-[#176047] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f7a5a] focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
             >
               다음 단계
             </button>

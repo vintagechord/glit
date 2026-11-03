@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import type { GuestSubmissionCartEntry } from "@/lib/guest-submission-cart";
 
 /** Keep guest credentials visible if browser storage prevents the cart handoff,
@@ -14,7 +15,7 @@ export function GuestCartRecoveryNotice({ entries, localePrefix, variant = "reco
   if (!entries.length) return null;
   // The cart already has a checkout <aside>; render the cart variant as a region.
   const Wrapper: "aside" | "section" = variant === "cart" ? "section" : "aside";
-  return <Wrapper aria-label={variant === "cart" ? "비회원 조회 코드 안내" : "비회원 신청서 저장 안내"} className="rounded-2xl border border-amber-600/40 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+  return <Wrapper aria-label={variant === "cart" ? "비회원 조회 코드 안내" : "비회원 신청서 저장 안내"} className={`rounded-2xl border-2 p-4 text-sm ${brandStatusTones.warning}`}>
     <p className="font-semibold">{variant === "cart" ? "비회원 신청서는 조회 코드로 확인합니다." : "조회 코드를 먼저 보관해주세요."}</p>
     <p className="mt-2 leading-6">{variant === "cart"
       ? "이 브라우저 저장소가 지워지거나 다른 기기에서 열면 장바구니가 비어 보입니다. 아래 조회 코드를 보관해두면 결제 전에도 신청서를 다시 열 수 있습니다. 접수자 이메일로도 조회 링크를 보내드렸습니다."
