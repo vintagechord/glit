@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { matchRemotePattern } from "next/dist/shared/lib/match-remote-pattern";
-import { buildImageRemotePatterns } from "../next.config";
+import { buildImageRemotePatterns } from "../src/lib/image-remote-patterns";
 
 const env = {
   NEXT_PUBLIC_SUPABASE_URL: "https://ownproject.supabase.co",
@@ -43,7 +43,10 @@ test("missing or unusable storage settings add no storage host instead of a wild
   const local = buildImageRemotePatterns({ SUPABASE_URL: "http://127.0.0.1:54321" });
   assert.equal(allowed(local, "http://127.0.0.1:54321/storage/v1/object/public/banner/a.png"), true);
   assert.equal(allowed(local, "http://127.0.0.1:9999/storage/v1/object/public/banner/a.png"), false);
+  const builder = readFileSync("src/lib/image-remote-patterns.ts", "utf8");
+  assert.doesNotMatch(builder, /hostname: "[^"]*\*/, "no wildcard hostnames");
   const config = readFileSync("next.config.ts", "utf8");
   assert.doesNotMatch(config, /hostname: "[^"]*\*/, "no wildcard hostnames");
+  assert.match(config, /from "\.\/src\/lib\/image-remote-patterns"/);
   assert.match(config, /remotePatterns: imageRemotePatterns/);
 });
