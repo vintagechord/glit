@@ -6,7 +6,7 @@ import { AppShell } from "@/components/site/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CenteredDialogHost } from "@/components/ui/centered-dialog-host";
 import { OG_IMAGE, SEO_KEYWORDS, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
-import { SESSION_COOKIE_FLAG_SCRIPT } from "@/lib/session-cookie";
+import { DOCUMENT_FLAGS_SCRIPT, SESSION_COOKIE_FLAG_SCRIPT } from "@/lib/session-cookie";
 import { getBaseUrl } from "@/lib/url";
 
 const enableNavigationLatencyLogger =
@@ -60,10 +60,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // lang is Korean in the cached HTML; the inline script switches /en pages to
+  // English before first paint. Reading the request here would make every page dynamic.
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="min-h-dvh font-sans antialiased">
-        <script dangerouslySetInnerHTML={{ __html: SESSION_COOKIE_FLAG_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: `${SESSION_COOKIE_FLAG_SCRIPT}${DOCUMENT_FLAGS_SCRIPT}` }} />
         <ThemeProvider>
           {enableNavigationLatencyLogger ? (
             <Suspense fallback={null}>

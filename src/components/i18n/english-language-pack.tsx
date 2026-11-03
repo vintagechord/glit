@@ -3173,6 +3173,26 @@ function translateDocumentMetadata() {
   }
 }
 
+// Translation rewrites text nodes outside React, so the first pass over the
+// server HTML waits for streamed client islands to hydrate, or React reports
+// text mismatches. Pages reached by client navigation are rendered in the
+// browser and translate at once.
+const HYDRATION_SETTLE_MS = 2500;
+let serverHtmlHydrated = false;
+
+function isLoadedDocument() {
+  try {
+    const [entry] = performance.getEntriesByType("navigation");
+    return !entry || new URL(entry.name).pathname === window.location.pathname;
+  } catch {
+    return true;
+  }
+}
+
+function firstTranslationDelay() {
+  return serverHtmlHydrated || !isLoadedDocument() ? 0 : HYDRATION_SETTLE_MS;
+}
+
 export function EnglishLanguagePack() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -3245,6 +3265,7 @@ export function EnglishLanguagePack() {
 
     const startTranslation = () => {
       timeoutId = null;
+      serverHtmlHydrated = true;
       translateDocumentMetadata();
       apply();
       observer?.observe(document.body, observeOptions);
@@ -3272,9 +3293,12 @@ export function EnglishLanguagePack() {
       }
     });
 
-    // This mutates text nodes outside React. Wait long enough for streamed
-    // client islands to hydrate first, otherwise React reports text mismatches.
-    timeoutId = window.setTimeout(startTranslation, 2500);
+    const delay = firstTranslationDelay();
+    if (delay) {
+      timeoutId = window.setTimeout(startTranslation, delay);
+    } else {
+      startTranslation();
+    }
 
     const handleClick = (event: MouseEvent) => {
       if (
