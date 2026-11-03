@@ -148,13 +148,33 @@ export function ProfileForm({ defaultValues, canChangePassword = true, canEditNo
           비밀번호 변경
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          새 비밀번호는 8자 이상 입력해주세요.
+          현재 비밀번호를 확인한 뒤 변경합니다. 새 비밀번호는 8자 이상 입력해주세요.
         </p>
         <form
           ref={passwordFormRef}
           action={passwordFormAction}
           className="mt-4 space-y-4"
         >
+          <div className="space-y-2 md:max-w-[calc(50%-0.5rem)]">
+            <label htmlFor="profile-currentPassword" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              현재 비밀번호
+            </label>
+            <input
+              id="profile-currentPassword"
+              name="currentPassword"
+              disabled={passwordPending}
+              type="password"
+              autoComplete="current-password"
+              required
+              aria-invalid={Boolean(passwordState.fieldErrors?.currentPassword)}
+              className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]"
+            />
+            {passwordState.fieldErrors?.currentPassword && (
+              <p className="text-xs text-red-500">
+                {passwordState.fieldErrors.currentPassword}
+              </p>
+            )}
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="profile-newPassword" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">

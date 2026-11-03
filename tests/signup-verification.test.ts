@@ -13,6 +13,7 @@ type Fixture = {
     configured: boolean; limited: boolean; signupError: unknown; updateError: unknown; signOutError: unknown; verifyError: unknown;
     account: { id: string; email: string; email_confirmed_at?: string; signupVerificationFlow?: string } | null;
     linkType: string; linkUser: Record<string, unknown> | null; mailOk: boolean; used: boolean; lookupThrows: boolean; mailThrows: boolean;
+    authUser: Record<string, unknown> | null; deleteError: unknown;
   };
   calls: Array<{ method: string; input?: Record<string, unknown> }>;
 };
@@ -26,13 +27,15 @@ async function fixture(): Promise<Fixture> {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'verification-fixture';";
         const modules: Record<string, string> = {
-          "verification-fixture": `export const calls=[]; export const state={configured:true,limited:false,signupError:null,updateError:null,signOutError:null,verifyError:null,account:null,linkType:'signup',linkUser:null,mailOk:true,used:false,lookupThrows:false,mailThrows:false};`,
+          "verification-fixture": `export const calls=[]; export const state={configured:true,limited:false,signupError:null,updateError:null,signOutError:null,verifyError:null,account:null,linkType:'signup',linkUser:null,mailOk:true,used:false,lookupThrows:false,mailThrows:false,authUser:null,deleteError:null};`,
           "@/lib/supabase/server": `export async function createServerSupabase(){throw Error('unexpected public/session client');}`,
           "@/lib/supabase/env": `export const getServiceRoleKey=()=> 'fixture-signing-key';`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){return {auth:{
             verifyOtp:async input=>{calls.push({method:'verify',input});if(state.used||state.verifyError)return {data:{session:null},error:state.verifyError||{code:'otp_expired'}};state.used=true;return {data:{user:{id:'fixture',email:'owner@example.invalid'},session:{access_token:'private-session'}},error:null};},
             updateUser:async input=>{calls.push({method:'password',input});return {error:state.updateError};},
             admin:{createUser:async input=>{calls.push({method:'create',input});return {data:{user:{id:'fixture'}},error:state.signupError};},
+            getUserById:async id=>{calls.push({method:'getUser',input:{id}});const a=state.account;return {data:{user:state.authUser||(a?{id:a.id,email:a.email,email_confirmed_at:a.email_confirmed_at??null,phone_confirmed_at:null,confirmed_at:a.email_confirmed_at??null,last_sign_in_at:null,identities:[{provider:'email'}],app_metadata:{provider:'email',providers:['email'],...(a.signupVerificationFlow?{signupVerificationFlow:a.signupVerificationFlow}:{})}}:null)},error:null};},
+            deleteUser:async id=>{calls.push({method:'delete',input:{id}});if(state.deleteError)return {error:state.deleteError};state.account=null;state.signupError=null;return {error:null};},
             generateLink:async input=>{calls.push({method:'link',input});return {data:{user:state.linkUser||{id:state.account?.id||'fixture',email:'owner@example.invalid',email_confirmed_at:state.account?.email_confirmed_at,app_metadata:{signupVerificationFlow:'email_password_v1'}},properties:{hashed_token:'private-signup-token-0123456789',verification_type:state.linkType}},error:null};},
             signOut:async(token,scope)=>{calls.push({method:'revoke',input:{scope}});return {error:state.signOutError};}}}};}`,
           "@/lib/email-config": `${shared} export const getEmailDeliveryConfiguration=()=>({ok:state.configured,provider:'gmail'});`,
@@ -84,7 +87,6 @@ test("duplicate signup reports an existing email without changing credentials or
   for (const code of ["email_exists", "user_already_exists"]) {
     for (const account of [
       { id: "confirmed", email: signup.email, email_confirmed_at: "2026-01-01T00:00:00Z" },
-      { id: "legacy-pending", email: signup.email },
     ]) {
       const auth = await fixture();
       auth.state.signupError = { code };
@@ -97,6 +99,49 @@ test("duplicate signup reports an existing email without changing credentials or
       assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup"], "the read-only lookup must not generate links or mail");
     }
   }
+});
+
+test("an unconfirmed account made outside the app signup flow is removed so the real owner can sign up", async () => {
+  const auth = await fixture();
+  auth.state.signupError = { code: "email_exists" };
+  auth.state.account = { id: "foreign-pending", email: signup.email };
+  const result = await auth.signupAction({}, form(signup));
+  assert.equal(result.verificationPending, true);
+  assert.match(result.message ?? "", /인증 메일을 발송/);
+  assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup", "getUser", "delete", "create", "link", "confirmationMail"]);
+  assert.equal(auth.calls[2].input?.id, "foreign-pending");
+  assert.equal(auth.calls[3].input?.id, "foreign-pending");
+  const recreated = auth.calls[4].input!;
+  assert.notEqual(recreated.password, signup.password, "the new account still starts with an unknowable password");
+  assert.equal((recreated.app_metadata as { signupVerificationFlow?: string }).signupVerificationFlow, "email_password_v1");
+  assert.equal(recreated.email_confirm, false);
+});
+
+test("accounts that could hold data are never removed by signup, resend or recovery", async () => {
+  const signedIn = { id: "kept", email: signup.email, email_confirmed_at: null, last_sign_in_at: "2026-01-01T00:00:00Z", identities: [{ provider: "email" }], app_metadata: { provider: "email", providers: ["email"] } };
+  const social = { id: "kept", email: signup.email, email_confirmed_at: null, last_sign_in_at: null, identities: [{ provider: "kakao" }], app_metadata: { provider: "kakao", providers: ["kakao"] } };
+  const phoneConfirmed = { id: "kept", email: signup.email, email_confirmed_at: null, phone_confirmed_at: "2026-01-01T00:00:00Z", last_sign_in_at: null, identities: [{ provider: "email" }], app_metadata: { provider: "email" } };
+  const otherAddress = { id: "kept", email: "someone-else@example.invalid", email_confirmed_at: null, last_sign_in_at: null, identities: [{ provider: "email" }], app_metadata: { provider: "email" } };
+  for (const authUser of [signedIn, social, phoneConfirmed, otherAddress]) {
+    const auth = await fixture();
+    auth.state.signupError = { code: "email_exists" };
+    auth.state.account = { id: "kept", email: signup.email };
+    auth.state.authUser = authUser;
+    const duplicate = await auth.signupAction({}, form(signup));
+    assert.equal(duplicate.error, "이미 가입된 이메일입니다.");
+    assert.deepEqual(auth.calls.map(call => call.method), ["create", "lookup", "getUser"]);
+    auth.calls.length = 0;
+    assert.match((await auth.resendSignupAction({}, form({ email: signup.email }))).error ?? "", /고객센터/);
+    assert.match((await auth.resetPasswordAction({}, form({ resetEmail: signup.email }))).error ?? "", /고객센터/);
+    assert.equal(auth.calls.some(call => call.method === "delete" || call.method === "link"), false);
+  }
+  // A failed deletion keeps the old answer instead of claiming the address is free.
+  const failed = await fixture();
+  failed.state.signupError = { code: "email_exists" };
+  failed.state.account = { id: "foreign-pending", email: signup.email };
+  failed.state.deleteError = { code: "unexpected_failure" };
+  assert.equal((await failed.signupAction({}, form(signup))).error, "이미 가입된 이메일입니다.");
+  assert.deepEqual(failed.calls.map(call => call.method), ["create", "lookup", "getUser", "delete"]);
 });
 
 test("duplicate signup for this app's unverified account offers the explicit resend link without sending mail", async () => {
@@ -139,6 +184,7 @@ test("English auth forms receive English replies for the same outcomes", async (
   const mismatch = await auth.completePasswordRecoveryAction({}, form({ ...confirmation, type: "recovery", confirmPassword: "different-password", locale: "en" }));
   assert.equal(mismatch.fieldErrors?.confirmPassword, "The passwords do not match.");
   auth.state.account = { id: "legacy", email: signup.email };
+  auth.state.authUser = { id: "legacy", email: signup.email, last_sign_in_at: "2026-01-01T00:00:00Z", identities: [{ provider: "email" }] };
   const legacy = await auth.resetPasswordAction({}, form({ resetEmail: signup.email, locale: "en" }));
   assert.match(legacy.error ?? "", /contact support/);
   assert.doesNotMatch(legacy.error ?? "", /[가-힣]/);
@@ -171,10 +217,20 @@ test("only explicit verification resend sends mail to safe pending accounts", as
 
   auth.calls.length = 0;
   auth.state.account = { id: "legacy-pending", email: signup.email };
+  auth.state.authUser = { id: "legacy-pending", email: signup.email, last_sign_in_at: "2026-01-01T00:00:00Z", identities: [{ provider: "email" }] };
   const legacy = await auth.resendSignupAction({}, form({ email: signup.email }));
   assert.match(legacy.error ?? "", /고객센터/);
   assert.equal(legacy.message, undefined);
-  assert.deepEqual(auth.calls.map(call => call.method), ["lookup"], "legacy pending credentials must never be activated by this flow");
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "getUser"], "legacy pending credentials must never be activated by this flow");
+
+  // An account made through GoTrue's open signup endpoint is removed instead.
+  auth.calls.length = 0;
+  auth.state.authUser = null;
+  auth.state.account = { id: "foreign-pending", email: signup.email };
+  const foreign = await auth.resendSignupAction({}, form({ email: signup.email }));
+  assert.equal(foreign.error, "가입 이력이 없는 이메일입니다.");
+  assert.equal(foreign.notice, "email_not_registered");
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "getUser", "delete"]);
 });
 
 test("confirmation replaces the password only after ownership proof, revokes sessions, and rejects replay and wrong token types", async () => {
@@ -251,13 +307,22 @@ test("recovery distinguishes unknown emails and guides pending accounts through 
   assert.equal(absent.message, undefined);
   assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
 
+  auth.state.account = { id: "foreign", email: signup.email };
+  auth.calls.length = 0;
+  const foreign = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
+  assert.equal(foreign.error, "가입 이력이 없는 이메일입니다.");
+  assert.equal(foreign.notice, "email_not_registered");
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "getUser", "delete"]);
+
   auth.state.account = { id: "legacy", email: signup.email };
+  auth.state.authUser = { id: "legacy", email: signup.email, last_sign_in_at: "2026-01-01T00:00:00Z", identities: [{ provider: "email" }] };
   auth.calls.length = 0;
   const legacy = await auth.resetPasswordAction({}, form({ resetEmail: signup.email }));
   assert.match(legacy.error ?? "", /고객센터/);
   assert.equal(legacy.message, undefined);
   assert.equal(legacy.notice, undefined);
-  assert.deepEqual(auth.calls.map(call => call.method), ["lookup"]);
+  assert.deepEqual(auth.calls.map(call => call.method), ["lookup", "getUser"]);
+  auth.state.authUser = null;
 
   auth.state.account.signupVerificationFlow = "email_password_v1";
   auth.calls.length = 0;

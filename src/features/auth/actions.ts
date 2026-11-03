@@ -22,8 +22,10 @@ import { SIGNUP_POLICY_VERSIONS } from "./policy";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { isAuthConnectionError, logAuthError, mapAuthError } from "./errors";
-import { getLoginSchema, getSignupSchema, profileSchema, getPasswordUpdateSchema, passwordUpdateSchema, getResetEmailSchema, toFieldErrors } from "./validation";
-import { findAccountByEmail, SIGNUP_VERIFICATION_FLOW } from "./account-lookup";
+import { getLoginSchema, getSignupSchema, profileSchema, getPasswordUpdateSchema, passwordChangeSchema, getResetEmailSchema, toFieldErrors } from "./validation";
+import { findAccountByEmail, SIGNUP_VERIFICATION_FLOW, type AccountLookup } from "./account-lookup";
+import { isUnclaimedForeignSignup } from "./foreign-signup";
+import { getProfileAuthDetails } from "@/features/profile/profile-auth";
 import { signSignupToken, verifySignupToken, signRecoveryToken, verifyRecoveryToken } from "./signup-token";
 
 export type ActionState = {
@@ -61,18 +63,45 @@ const isDuplicateAccount = (error: unknown) => {
   return ["email_exists", "user_already_exists"].includes(value.code ?? "") || /already.*registered|already.*exists/i.test(value.message ?? "");
 };
 
+/** undefined when the lookup failed; callers then keep today's safe answer. */
+async function lookupExistingAccount(email: string): Promise<AccountLookup | null | undefined> {
+  try {
+    return await findAccountByEmail(email);
+  } catch (error) {
+    logAuthError("duplicate signup lookup", error);
+    return undefined;
+  }
+}
+
 /** A duplicate signup never re-sends mail by itself (docs/auth-email-configuration.md).
  * Only a pending account from this app's own verification flow is pointed at the
  * explicit resend screen; a lookup failure keeps the plain duplicate notice. */
-async function describeDuplicateSignup(email: string, english: boolean, needsVerification: boolean): Promise<ActionState> {
-  if (!needsVerification) return duplicateAccountNotice(english);
-  try {
-    const account = await findAccountByEmail(email);
-    if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return pendingAccountNotice(english);
-  } catch (error) {
-    logAuthError("duplicate signup lookup", error);
-  }
+function describeDuplicateSignup(account: AccountLookup | null | undefined, english: boolean, needsVerification: boolean): ActionState {
+  if (needsVerification && account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return pendingAccountNotice(english);
   return duplicateAccountNotice(english);
+}
+
+/** Deletes an unconfirmed account that GoTrue's open /signup endpoint made for
+ * this address outside this app's flow (see foreign-signup.ts), so the real
+ * owner can sign up. The full record is re-read right before deletion; any
+ * account that could hold data is kept. */
+async function removeForeignPendingAccount(account: AccountLookup | null | undefined): Promise<boolean> {
+  if (!account || account.email_confirmed_at || account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return false;
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.getUserById(account.id);
+    if (error || !isUnclaimedForeignSignup(data?.user, account.email, SIGNUP_VERIFICATION_FLOW)) return false;
+    const { error: deleteError } = await admin.auth.admin.deleteUser(account.id);
+    if (deleteError) {
+      logAuthError("remove foreign pending account", deleteError);
+      return false;
+    }
+    console.warn("[Auth] removed an unconfirmed account created outside the app signup flow");
+    return true;
+  } catch (error) {
+    logAuthError("remove foreign pending account", error);
+    return false;
+  }
 }
 
 async function sendSignupConfirmation(email: string, formData: FormData, expectedUserId: string): Promise<ActionState> {
@@ -262,7 +291,7 @@ export async function signupAction(
 
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.auth.admin.createUser({
+    const createAccount = () => admin.auth.admin.createUser({
       email: parsed.data.email,
       password: parsed.data.password,
       email_confirm: !needsVerification,
@@ -286,9 +315,16 @@ export async function signupAction(
         marketingConsent: parsed.data.agreeMarketing === "on",
       },
     });
+    let { data, error } = await createAccount();
+    if (isDuplicateAccount(error)) {
+      const existing = await lookupExistingAccount(parsed.data.email);
+      if (!(await removeForeignPendingAccount(existing))) return describeDuplicateSignup(existing, english, needsVerification);
+      // The address is free again; continue with the normal signup flow.
+      ({ data, error } = await createAccount());
+      if (isDuplicateAccount(error)) return duplicateAccountNotice(english);
+    }
 
     if (error || !data.user) {
-      if (isDuplicateAccount(error)) return await describeDuplicateSignup(parsed.data.email, english, needsVerification);
       logAuthError("signup", error);
       return { error: mapAuthError(error, "signup", english) };
     }
@@ -328,6 +364,8 @@ export async function resendSignupAction(_prevState: ActionState, formData: Form
     if (account && !account.email_confirmed_at && account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) return await sendSignupConfirmation(account.email, formData, account.id);
     if (!account) return missingAccountNotice(english);
     if (account.email_confirmed_at) return duplicateAccountNotice(english);
+    // A foreign pending account is removed; the owner then signs up afresh.
+    if (await removeForeignPendingAccount(account)) return missingAccountNotice(english);
     return { error: legacyPendingMessage(english) };
   } catch (error) {
     logAuthError("resend signup", error);
@@ -444,6 +482,7 @@ export async function resetPasswordAction(
       if (account.signupVerificationFlow === SIGNUP_VERIFICATION_FLOW) {
         return await sendSignupConfirmation(account.email, formData, account.id);
       }
+      if (await removeForeignPendingAccount(account)) return missingAccountNotice(english);
       return { error: legacyPendingMessage(english) };
     }
     const admin = createAdminClient();
@@ -581,7 +620,8 @@ export async function updatePasswordAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = passwordUpdateSchema.safeParse({
+  const parsed = passwordChangeSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
     newPassword: formData.get("newPassword"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -597,9 +637,43 @@ export async function updatePasswordAction(
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError && isAuthConnectionError(userError)) return { error: mapAuthError(userError, "update") };
     if (userError || !user) return { error: "로그인이 필요합니다." };
+    // The profile only offers this form to accounts that have a password. A
+    // social-only account must not gain one from a session alone.
+    const auth = getProfileAuthDetails(user);
+    if (!auth.canChangePassword || !auth.email) {
+      return { error: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다. 연결된 소셜 계정으로 로그인해주세요." };
+    }
+    const limit = await consumePersistentRateLimit({ namespace: "password-change-user", identifier: user.id, limit: 5, windowMs: 15 * 60 * 1000 });
+    if (!limit.allowed) return { error: tooManyRequests(false), retryAfterSeconds: limit.retryAfterSeconds };
+
+    // Reauthenticate on an isolated, nonpersistent client (as recovery does)
+    // so the check never touches this browser's session cookies, then revoke
+    // the check's own session.
+    const verifier = createAdminClient();
+    const { data: verified, error: verifyError } = await verifier.auth.signInWithPassword({
+      email: auth.email,
+      password: parsed.data.currentPassword,
+    });
+    if (verified?.session?.access_token) {
+      const { error: revokeError } = await createAdminClient().auth.admin.signOut(verified.session.access_token, "local")
+        .catch((error: unknown) => ({ error }));
+      if (revokeError) logAuthError("revoke password check session", revokeError);
+    }
+    if (verifyError || verified?.user?.id !== user.id) {
+      if (verifyError && (isAuthConnectionError(verifyError) || (verifyError as { status?: number }).status === 429)) {
+        return { error: mapAuthError(verifyError, "update") };
+      }
+      return { fieldErrors: { currentPassword: "현재 비밀번호가 올바르지 않습니다." } };
+    }
+
     const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
     if (error) return { error: mapAuthError(error, "update") };
-    return { message: "비밀번호가 변경되었습니다." };
+    // Other devices, including any session taken without the password, must
+    // sign in again with the new password. This browser stays signed in.
+    const { error: othersError } = await supabase.auth.signOut({ scope: "others" })
+      .catch((signOutError: unknown) => ({ error: signOutError }));
+    if (othersError) logAuthError("sign out other sessions", othersError);
+    return { message: "비밀번호가 변경되었습니다. 다른 기기에서는 새 비밀번호로 다시 로그인해주세요." };
   } catch (error) {
     logAuthError("update password", error);
     return { error: mapAuthError(error, "update") };
