@@ -70,6 +70,7 @@ import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
+import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
 import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields } from "@/lib/mv-submission-specs";
 import { SubmissionProgress } from "./submission-progress";
@@ -258,16 +259,9 @@ const getLocalUploadKey = (file: File) =>
 const selectedBadgeClass =
   "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border-2 border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-black tracking-normal text-[#f2cf27] shadow-[2px_2px_0_rgba(0,0,0,0.24)] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]";
 
-const uploadMaxMb = Number(
-  process.env.NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB ??
-  process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
-  "4096",
-);
-const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
-const uploadMaxLabel =
-  uploadMaxMb >= 1024
-    ? `${Math.round(uploadMaxMb / 1024)}GB`
-    : `${uploadMaxMb}MB`;
+// One limit for site uploads; larger files go by email (see media-upload-limit).
+const uploadMaxBytes = MEDIA_UPLOAD_MAX_BYTES;
+const uploadMaxLabel = MEDIA_UPLOAD_MAX_LABEL;
 const adminReviewEmail =
   process.env.NEXT_PUBLIC_ADMIN_REVIEW_EMAIL ?? APP_CONFIG.supportEmail;
 const draftDeleteTimeoutMs = 8000;
@@ -1223,7 +1217,7 @@ export function MvWizard({
         return false;
       }
       if (file.size > uploadMaxBytes) {
-        invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
+        invalidNotice = MEDIA_UPLOAD_TOO_LARGE_MESSAGE;
         return false;
       }
       const isVideoFile = isVideoUploadFile(file.name, file.type);
@@ -4823,7 +4817,7 @@ export function MvWizard({
                   </label>
                 </div>
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-
+                  <p className="font-semibold text-foreground">{MEDIA_UPLOAD_EMAIL_HINT}</p>
                   {isDownloadedApplicationFlow ? (
                     <p>
                       다운로드한 신청서를 작성한 경우 신청서도 영상과 함께 첨부해주세요.
