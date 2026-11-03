@@ -1,4 +1,4 @@
-import { MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
+import { MEDIA_UPLOAD_MAX_BYTES, mediaUploadTooLargeMessage } from "@/lib/media-upload-limit";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
   if (sizeBytes > maxSize) {
     return NextResponse.json(
       {
-        error: MEDIA_UPLOAD_TOO_LARGE_MESSAGE,
+        error: mediaUploadTooLargeMessage(kind === "audio" ? "audio" : "video"),
       },
       { status: 413 },
     );
