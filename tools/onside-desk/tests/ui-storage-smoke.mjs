@@ -18,6 +18,8 @@ const day = 86_400_000;
 let items = [
   { submissionId: '11111111-1111-4111-8111-111111111111', title: '검증 뮤직비디오', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, finishedAt: new Date(Date.now() - 2 * day).toISOString(), fileCount: 1, totalBytes: 438_763_634 },
   { submissionId: '22222222-2222-4222-8222-222222222222', title: '<img src=x onerror=alert(1)>', artistName: '환불 가수', type: 'ALBUM', refunded: true, finishedAt: new Date(Date.now() - 120 * day).toISOString(), fileCount: 12, totalBytes: 612 * 1024 ** 2 },
+  // Still in review and not downloaded to this Mac: shown, but cannot be selected.
+  { submissionId: '33333333-3333-4333-8333-333333333333', title: '진행 중 뮤직비디오', artistName: '진행 가수', type: 'MV_BROADCAST', refunded: false, stage: 'in_review', finishedAt: null, fileCount: 1, totalBytes: 539 * 1024 ** 2, files: [{ id: 'file-x', source: 'upload', sizeBytes: 539 * 1024 ** 2 }] },
 ];
 const purged = [];
 const remote = {
@@ -45,12 +47,23 @@ try {
   await page.getByRole('button', { name: /저장공간 정리/ }).click();
   await page.getByRole('heading', { name: '저장공간 정리', exact: true }).waitFor();
   const rows = page.locator('.storage-table tbody tr');
-  await rows.nth(1).waitFor();
-  assert.equal(await rows.count(), 2);
+  await rows.nth(2).waitFor();
+  assert.equal(await rows.count(), 3);
   assert.equal(await page.locator('#screen img').count(), 0);
-  await page.getByRole('button', { name: '90일 경과', exact: true }).click();
+  await page.getByRole('button', { name: '결과 후 90일', exact: true }).click();
   assert.equal(await rows.count(), 1);
+  await page.getByRole('button', { name: '심의 진행 중', exact: true }).click();
+  assert.equal(await rows.count(), 1);
+  assert.equal(await page.getByRole('checkbox', { name: '진행 중 뮤직비디오 선택' }).isDisabled(), true);
+  await page.getByText('이 Mac에 신청이 없습니다', { exact: false }).waitFor();
+  // Not synced to this Mac yet, so there is nothing to download into; the button stays hidden.
+  assert.equal(await page.getByRole('button', { name: '원본 받기', exact: true }).count(), 0);
+  await page.screenshot({ path: path.join(screenshots, 'storage-in-review.png'), fullPage: true });
   await page.getByRole('button', { name: '전체', exact: true }).click();
+  // Select-all takes only the rows that may be deleted.
+  await page.getByRole('checkbox', { name: '목록 전체 선택' }).check();
+  assert.match(await page.locator('#storage-selection').innerText(), /선택 2건/);
+  await page.getByRole('checkbox', { name: '목록 전체 선택' }).uncheck();
   const purgeButton = page.getByRole('button', { name: '선택한 고객 파일 영구 삭제' });
   assert.equal(await purgeButton.isDisabled(), true);
   await page.getByRole('checkbox', { name: '검증 뮤직비디오 선택' }).check();
@@ -64,7 +77,7 @@ try {
   await page.getByRole('button', { name: '1건 영구 삭제', exact: true }).click();
   await page.getByText(/1건 처리 · 파일 1개 삭제 · 418\.4 MB 확보/).waitFor();
   assert.deepEqual(purged, ['11111111-1111-4111-8111-111111111111']);
-  assert.equal(await rows.count(), 1);
+  assert.equal(await rows.count(), 2);
   await page.screenshot({ path: path.join(screenshots, 'storage-after.png'), fullPage: true });
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, screenshots }));

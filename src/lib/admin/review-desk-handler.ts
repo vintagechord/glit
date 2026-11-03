@@ -177,7 +177,13 @@ export function createReviewDeskHandlers(deps: Dependencies) {
   return { GET, POST };
 }
 
-const purgeBody = z.object({ operation: z.literal("purge"), submissionIds: z.array(uuid).min(1).max(PURGE_BATCH_LIMIT), requestId: uuid });
+const purgeScope = z.enum(["finished", "received"]);
+// "received" deletes uploads of submissions still in review; the desk must
+// declare that it verified its local copies of exactly those files first.
+const purgeBody = z.object({
+  operation: z.literal("purge"), submissionIds: z.array(uuid).min(1).max(PURGE_BATCH_LIMIT), requestId: uuid,
+  scope: purgeScope.default("finished"), localCopiesVerified: z.literal(true).optional(),
+}).refine((body) => body.scope !== "received" || body.localCopiesVerified === true, { message: "local copies must be verified" });
 type StorageDependencies = Pick<Dependencies, "secret" | "createDb"> & {
   loadCandidates: typeof loadPurgeCandidates;
   purge: typeof purgeCustomerFiles;
@@ -195,11 +201,15 @@ export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
     try {
       const auth = await authenticateDeskAdmin(deps, request, await readBoundedDeskBody(request, 0));
       if (auth.error) return auth.error;
-      const items = (await deps.loadCandidates(auth.db)).map((candidate) => ({
+      const scope = purgeScope.safeParse(new URL(request.url).searchParams.get("scope") ?? "finished");
+      if (!scope.success) return failure(400, "정리 범위를 확인해주세요.");
+      // File ids and sizes let the desk match its local copies; object keys stay in the service.
+      const items = (await deps.loadCandidates(auth.db, undefined, scope.data)).map((candidate) => ({
         submissionId: candidate.submissionId, title: candidate.title, artistName: candidate.artistName, type: candidate.type,
-        refunded: candidate.refunded, finishedAt: candidate.finishedAt, fileCount: candidate.files.length, totalBytes: candidate.totalBytes,
+        refunded: candidate.refunded, stage: candidate.stage, finishedAt: candidate.finishedAt, fileCount: candidate.files.length, totalBytes: candidate.totalBytes,
+        files: candidate.files.map((file) => ({ id: file.id, source: file.source, sizeBytes: file.sizeBytes })),
       }));
-      return jsonResponse({ ok: true, items, batchLimit: PURGE_BATCH_LIMIT });
+      return jsonResponse({ ok: true, items, batchLimit: PURGE_BATCH_LIMIT, scope: scope.data });
     } catch (error) { return storageFailure(error); }
   }
   async function POST(request: Request) {
@@ -209,9 +219,9 @@ export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
       if (auth.error) return auth.error;
       if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
       const parsed = purgeBody.safeParse(await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null));
-      if (!parsed.success) return failure(400, `삭제할 신청을 1~${PURGE_BATCH_LIMIT}건씩 보내주세요.`);
+      if (!parsed.success) return failure(400, `삭제할 신청을 1~${PURGE_BATCH_LIMIT}건씩 보내주세요. 심의 진행 중인 신청은 이 Mac의 원본 확인이 필요합니다.`);
       if (parsed.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
-      return jsonResponse({ ok: true, results: await deps.purge(auth.db, parsed.data.submissionIds, auth.actorId) });
+      return jsonResponse({ ok: true, results: await deps.purge(auth.db, parsed.data.submissionIds, auth.actorId, undefined, parsed.data.scope) });
     } catch (error) { return storageFailure(error); }
   }
   return { GET, POST };

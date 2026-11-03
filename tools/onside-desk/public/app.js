@@ -338,16 +338,26 @@ async function loadMonitor(force = false) {
     clearTimeout(ui.monitorTimer); if (ui.nav === 'monitor') ui.monitorTimer = setTimeout(() => { if (ui.nav === 'monitor') void loadMonitor(false); }, ui.monitorError ? 10_000 : 60_000);
   }
 }
-const STORAGE_AGES = [['0', '전체'], ['30', '30일 경과'], ['90', '90일 경과'], ['180', '180일 경과']];
+const STORAGE_AGES = [['0', '전체'], ['review', '심의 진행 중'], ['30', '결과 후 30일'], ['90', '결과 후 90일'], ['180', '결과 후 180일']];
+/** In review, only uploads this Mac holds verified copies of may be deleted. */
+const storageSelectable = item => item.stage !== 'in_review' || item.local?.complete === true;
 const STORAGE_BATCH = 10;
 const storageItems = () => ui.storage?.items || [];
 const total = (items, key) => items.reduce((sum, item) => sum + (Number(item[key]) || 0), 0);
 function storageVisible() {
+  if (ui.storageAge === 'review') return storageItems().filter(item => item.stage === 'in_review');
   const days = Number(ui.storageAge || 0); if (!days) return storageItems();
   const cutoff = Date.now() - days * 86_400_000;
   return storageItems().filter(item => item.finishedAt && new Date(item.finishedAt).getTime() <= cutoff);
 }
-const storageChosen = () => storageVisible().filter(item => ui.storageSelected?.has(item.submissionId));
+const storageChosen = () => storageVisible().filter(item => storageSelectable(item) && ui.storageSelected?.has(item.submissionId));
+function storageStageCell(item) {
+  if (item.stage === 'in_review') {
+    const local = item.local || {};
+    return `<span class="badge amber">심의 진행 중</span><small>${local.complete ? '이 Mac에 원본 있음' : e(local.reason || '이 Mac에 원본이 없습니다.')}</small>${local.complete || local.noCase ? '' : `<button class="button secondary small" data-action="storage-download" data-case-id="${e(item.submissionId)}">원본 받기</button>`}`;
+  }
+  return `${item.refunded ? '<span class="badge red">환불</span>' : '<span class="badge">심의 완료</span>'}<small>${e(formatDate(item.finishedAt))}</small>`;
+}
 function storageResultsMarkup() {
   const results = ui.storageResults; if (!results) return '';
   const failures = results.filter(item => !item.ok);
@@ -355,20 +365,21 @@ function storageResultsMarkup() {
 }
 function storageSelectionText() { const chosen = storageChosen(); return `선택 ${chosen.length}건 · 파일 ${total(chosen, 'fileCount')}개 · ${fileSize(total(chosen, 'totalBytes')) || '0 B'}`; }
 function storageBody() {
-  if (!ui.storage) return ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>정리 대상을 확인하고 있습니다</h1><p>심의가 끝났거나 환불된 신청을 온사이드에서 불러옵니다.</p></div>`;
+  if (!ui.storage) return ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>정리 대상을 확인하고 있습니다</h1><p>결제가 끝난 신청과 이 Mac의 원본 보관 상태를 확인합니다.</p></div>`;
   const visible = storageVisible(), chosen = storageChosen(), running = !!ui.storageProgress, age = ui.storageAge || '0';
-  const rows = visible.map(item => `<tr><td><input type="checkbox" data-storage-select="${e(item.submissionId)}" aria-label="${e(value(item.title, '제목 미입력'))} 선택"${ui.storageSelected?.has(item.submissionId) ? ' checked' : ''}${running ? ' disabled' : ''}></td><td><strong>${e(value(item.title, '제목 미입력'))}</strong><small>${e(value(item.artistName, '아티스트 미입력'))} · ${e(shortId(item.submissionId))}</small></td><td>${e(TYPE[item.type] || item.type || '—')}</td><td>${item.refunded ? '<span class="badge red">환불</span>' : '<span class="badge">심의 완료</span>'}<small>${e(formatDate(item.finishedAt))}</small></td><td>${e(item.fileCount)}개</td><td>${e(fileSize(item.totalBytes) || '0 B')}</td></tr>`).join('');
-  return `${storageResultsMarkup()}${ui.storagePurgeError ? `<div class="notice error" role="alert">${e(ui.storagePurgeError)}</div>` : ''}${ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : ''}<section class="panel"><div class="panel-head"><div class="filters storage-filters" role="group" aria-label="결과·환불 후 경과 기간">${STORAGE_AGES.map(([days, text]) => `<button class="filter${age === days ? ' active' : ''}" data-storage-age="${days}" aria-pressed="${age === days}"${running ? ' disabled' : ''}>${text}</button>`).join('')}</div><span class="muted tiny">대상 ${visible.length}건 · ${e(fileSize(total(visible, 'totalBytes')) || '0 B')}</span></div>${visible.length ? `<div class="table-wrap"><table class="jobs-table storage-table"><thead><tr><th><input type="checkbox" data-storage-all aria-label="목록 전체 선택"${visible.length && chosen.length === visible.length ? ' checked' : ''}${running ? ' disabled' : ''}></th><th>신청</th><th>유형</th><th>결과·환불</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">지금 삭제할 수 있는 고객 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="storage-selection">${e(storageSelectionText())}</span><button class="button danger" data-action="storage-purge"${!chosen.length || running ? ' disabled' : ''}>${running ? `삭제 중… ${ui.storageProgress.done}/${ui.storageProgress.total}건` : '선택한 고객 파일 영구 삭제'}</button></div></section>`;
+  const selectable = visible.filter(storageSelectable);
+  const rows = visible.map(item => `<tr><td><input type="checkbox" data-storage-select="${e(item.submissionId)}" aria-label="${e(value(item.title, '제목 미입력'))} 선택"${storageSelectable(item) && ui.storageSelected?.has(item.submissionId) ? ' checked' : ''}${running || !storageSelectable(item) ? ' disabled' : ''}></td><td><strong>${e(value(item.title, '제목 미입력'))}</strong><small>${e(value(item.artistName, '아티스트 미입력'))} · ${e(shortId(item.submissionId))}</small></td><td>${e(TYPE[item.type] || item.type || '—')}</td><td>${storageStageCell(item)}</td><td>${e(item.fileCount)}개</td><td>${e(fileSize(item.totalBytes) || '0 B')}</td></tr>`).join('');
+  return `${storageResultsMarkup()}${ui.storagePurgeError ? `<div class="notice error" role="alert">${e(ui.storagePurgeError)}</div>` : ''}${ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : ''}<section class="panel"><div class="panel-head"><div class="filters storage-filters" role="group" aria-label="정리 대상 구분">${STORAGE_AGES.map(([days, text]) => `<button class="filter${age === days ? ' active' : ''}" data-storage-age="${days}" aria-pressed="${age === days}"${running ? ' disabled' : ''}>${text}</button>`).join('')}</div><span class="muted tiny">대상 ${visible.length}건 · ${e(fileSize(total(visible, 'totalBytes')) || '0 B')}</span></div>${visible.length ? `<div class="table-wrap"><table class="jobs-table storage-table"><thead><tr><th><input type="checkbox" data-storage-all aria-label="목록 전체 선택"${selectable.length && chosen.length === selectable.length ? ' checked' : ''}${running || !selectable.length ? ' disabled' : ''}></th><th>신청</th><th>유형</th><th>상태</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">지금 삭제할 수 있는 고객 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="storage-selection">${e(storageSelectionText())}</span><button class="button danger" data-action="storage-purge"${!chosen.length || running ? ' disabled' : ''}>${running ? `삭제 중… ${ui.storageProgress.done}/${ui.storageProgress.total}건` : '선택한 고객 파일 영구 삭제'}</button></div></section>`;
 }
 function storageScreen() {
-  screen.innerHTML = `${heading('저장공간 정리', '심의가 끝났거나 환불된 신청에서 고객이 올린 파일만 온사이드 저장소(B2)에서 영구 삭제해 용량을 확보합니다. 웹 관리자의 저장공간 정리와 같은 기준으로 처리합니다.', `<button class="button secondary" data-action="storage-refresh"${ui.storageLoading || ui.storageProgress ? ' disabled' : ''}>${ui.storageLoading ? '불러오는 중…' : '목록 새로고침'}</button>`)}<div class="storage-notes"><div class="notice error"><strong>삭제되는 파일</strong><br>고객이 올린 음원·영상·가사·신청서·기타 파일과 보완 제출 파일. 파일의 모든 버전까지 지워 실제 용량이 줄어듭니다. 되돌릴 수 없습니다.</div><div class="notice good"><strong>유지되는 것</strong><br>영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 “보관 종료로 삭제됨”으로 표시됩니다.</div></div><div class="notice">결과가 모두 나온 결제 완료 신청과 환불된 신청만 나옵니다. 방송국 결과가 남았거나 보완 요청이 진행 중인 신청, 결과 등급이 공개되지 않은 온라인 MV는 나오지 않습니다. 이 Mac에 내려받은 원본 파일은 지우지 않습니다. Backblaze 콘솔에서 직접 지우지 말고 여기서 정리하세요.</div><div id="storage-body">${storageBody()}</div>`;
+  screen.innerHTML = `${heading('저장공간 정리', '결제가 끝난 신청에서 고객이 올린 파일을 온사이드 저장소(B2)에서 영구 삭제해 용량을 확보합니다. 심의 진행 중인 신청은 이 Mac에 원본이 온전히 있을 때만 지울 수 있습니다.', `<button class="button secondary" data-action="storage-refresh"${ui.storageLoading || ui.storageProgress ? ' disabled' : ''}>${ui.storageLoading ? '불러오는 중…' : '목록 새로고침'}</button>`)}<div class="storage-notes"><div class="notice error"><strong>삭제되는 파일</strong><br>고객이 올린 음원·영상·가사·신청서·기타 파일과 보완 제출 파일. 파일의 모든 버전까지 지워 실제 용량이 줄어듭니다. 되돌릴 수 없습니다.</div><div class="notice good"><strong>유지되는 것</strong><br>영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 “서버 보관본 정리됨”으로 표시됩니다.</div></div><div class="notice"><strong>심의 진행 중인 신청</strong>은 고객이 올린 원본만 지우고 보완 제출 파일은 결과가 나올 때까지 남깁니다. 지우기 직전에 이 Mac의 “원본 파일” 폴더에 같은 크기의 원본이 모두 있는지 다시 확인하며, 없으면 “원본 받기” 후 지울 수 있습니다. 서버 사본을 지운 뒤에는 <strong>이 Mac의 원본이 유일한 사본</strong>이므로 심의가 끝날 때까지 지우거나 옮기지 마세요. 이 Mac의 자동 백업은 원본 파일을 포함하지 않습니다. Backblaze 콘솔에서 직접 지우지 말고 여기서 정리하세요.</div><div id="storage-body">${storageBody()}</div>`;
   if (!ui.storage && !ui.storageLoading && !ui.storageError) void loadStorage();
 }
 function updateStorageSelection() {
-  const chosen = storageChosen(), visible = storageVisible(), running = !!ui.storageProgress;
+  const chosen = storageChosen(), selectable = storageVisible().filter(storageSelectable), running = !!ui.storageProgress;
   const summary = document.getElementById('storage-selection'); if (summary) summary.textContent = storageSelectionText();
   const button = document.querySelector('[data-action="storage-purge"]'); if (button && !running) button.disabled = !chosen.length;
-  const all = document.querySelector('[data-storage-all]'); if (all) all.checked = visible.length > 0 && chosen.length === visible.length;
+  const all = document.querySelector('[data-storage-all]'); if (all) all.checked = selectable.length > 0 && chosen.length === selectable.length;
 }
 async function loadStorage() {
   if (ui.storageLoading) return;
@@ -384,7 +395,8 @@ async function purgeStorage() {
   const chosen = storageChosen(); if (!chosen.length || ui.storageProgress) return;
   const dialog = document.getElementById('confirm-dialog'); if (dialog.open) return;
   document.getElementById('confirm-title').textContent = '고객 파일을 영구 삭제할까요?';
-  document.getElementById('confirm-message').textContent = `선택한 ${chosen.length}건의 고객 업로드 파일 ${total(chosen, 'fileCount')}개(${fileSize(total(chosen, 'totalBytes')) || '0 B'})를 온사이드 저장소에서 영구 삭제합니다. 필증·연령등급 이미지·표기 가이드와 신청·결과 기록은 유지됩니다. 삭제한 파일은 되돌릴 수 없습니다.`;
+  const inReview = chosen.filter(item => item.stage === 'in_review').length;
+  document.getElementById('confirm-message').textContent = `선택한 ${chosen.length}건의 고객 업로드 파일 ${total(chosen, 'fileCount')}개(${fileSize(total(chosen, 'totalBytes')) || '0 B'})를 온사이드 저장소에서 영구 삭제합니다. 필증·연령등급 이미지·표기 가이드와 신청·결과 기록은 유지됩니다. 삭제한 파일은 되돌릴 수 없습니다.${inReview ? ` 이 중 ${inReview}건은 심의 진행 중입니다. 이후 심의는 이 Mac의 원본으로 진행하므로, 결과가 나올 때까지 이 Mac의 원본 파일을 지우거나 옮기지 마세요.` : ''}`;
   dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = `${chosen.length}건 영구 삭제`; dialog.returnValue = ''; dialog.showModal();
   dialog.querySelector('[value=cancel]').focus();
   const confirmed = await new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
@@ -717,6 +729,7 @@ async function action(name, button) {
     else if (name === 'reload-intake-packages') await loadIntakePackages(true);
     else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; await loadStorage(); }
     else if (name === 'storage-purge') await purgeStorage();
+    else if (name === 'storage-download') { const id = button?.dataset.caseId; if (!id) return; await api(`/api/cases/${encodeURIComponent(id)}/download`, { method: 'POST', body: {} }); toast('원본 다운로드를 시작했습니다. 작업 현황에서 끝난 것을 확인한 뒤 목록을 새로고침하세요.'); }
     else if (name === 'backup') { const backup = await api('/api/backup', { method: 'POST', body: {} }); toast(backup.message || '관리 내역과 생성 문서를 백업했습니다.'); await refresh(); }
     else if (name === 'copy-info') { await navigator.clipboard.writeText(copyText(effective())); toast('입력용 정보를 복사했습니다.'); }
   } catch (error) { toast(error.message, true); } finally { if (button?.isConnected) button.disabled = false; updateResultControls(); }
@@ -747,7 +760,7 @@ document.addEventListener('input', event => {
 document.addEventListener('change', async event => {
   const el = event.target;
   if (el.dataset.storageSelect) { ui.storageSelected ||= new Set(); if (el.checked) ui.storageSelected.add(el.dataset.storageSelect); else ui.storageSelected.delete(el.dataset.storageSelect); updateStorageSelection(); return; }
-  if (el.hasAttribute('data-storage-all')) { ui.storageSelected = el.checked ? new Set(storageVisible().map(item => item.submissionId)) : new Set(); document.querySelectorAll('[data-storage-select]').forEach(box => { box.checked = el.checked; }); updateStorageSelection(); return; }
+  if (el.hasAttribute('data-storage-all')) { const selectable = storageVisible().filter(storageSelectable); ui.storageSelected = el.checked ? new Set(selectable.map(item => item.submissionId)) : new Set(); const ids = new Set(selectable.map(item => item.submissionId)); document.querySelectorAll('[data-storage-select]').forEach(box => { if (ids.has(box.dataset.storageSelect)) box.checked = el.checked; }); updateStorageSelection(); return; }
   if (el.closest('#bulk-station-form')) { ui.dirty = true; ui.resultDirtyForm = 'bulk-station-form'; clearEmailPreview(true); updateBulkControls(el); if (!ui.bulkSelected.length) ui.dirty = false; updateResultControls(); return; }
   if (el.closest('#station-result-form, #online-result-form, #certificate-form')) { ui.dirty = true; ui.resultDirtyForm = el.closest('form').id; clearEmailPreview(true); updateResultControls(); }
   if (el.closest('#station-result-form') && el.name === 'status') { el.closest('form').dataset.applyOverallStatus = 'true'; updateRatingRequired(); const next = ['APPROVED','REJECTED'].includes(el.value) ? el.value : 'PENDING'; el.closest('form').querySelectorAll('[name^=trackResult_]').forEach(field => { field.value = next; }); }

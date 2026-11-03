@@ -192,14 +192,14 @@ function storageFixture() {
     return query;
   } } as unknown as SupabaseClient;
   const handlers = createReviewDeskStorageHandlers({ secret: () => secret, createDb() { calls.push({ name: "db" }); return db; },
-    async loadCandidates() {
-      calls.push({ name: "candidates" });
+    async loadCandidates(_db, _ids, scope) {
+      calls.push({ name: "candidates", input: scope });
       if (state.b2Missing) throw Object.assign(new Error("B2 env missing"), { name: "B2ConfigError" });
-      return [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, finishedAt: revision,
+      return [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, stage: "finished" as const, finishedAt: revision,
         files: [{ source: "upload" as const, id: "file", objectKey: "submissions/private-user/video.mp4", sizeBytes: 438_000_000 }], totalBytes: 438_000_000 }];
     },
-    async purge(_db, ids, actorId) {
-      calls.push({ name: "purge", input: { ids, actorId } });
+    async purge(_db, ids, actorId, _remove, scope) {
+      calls.push({ name: "purge", input: scope === "received" ? { ids, actorId, scope } : { ids, actorId } });
       return ids.map((submissionId) => ({ submissionId, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }));
     },
   });
@@ -218,7 +218,13 @@ test("desk storage list is signed, admin-only and never returns object keys", as
   assert.equal(response.status, 200);
   const text = await response.text();
   assert.doesNotMatch(text, /objectKey|submissions\/private-user/);
-  assert.deepEqual(JSON.parse(text), { ok: true, batchLimit: 10, items: [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, finishedAt: revision, fileCount: 1, totalBytes: 438_000_000 }] });
+  assert.deepEqual(JSON.parse(text), { ok: true, batchLimit: 10, scope: "finished", items: [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, stage: "finished", finishedAt: revision, fileCount: 1, totalBytes: 438_000_000,
+    files: [{ id: "file", source: "upload", sizeBytes: 438_000_000 }] }] });
+  // The desk asks for submissions still in review too; the scope is part of the signed path.
+  const received = await f.handlers.GET(signedRequest("GET", undefined, { path: `${storagePath}?scope=received` }));
+  assert.equal(received.status, 200); assert.equal((await received.json()).scope, "received");
+  assert.equal(f.calls.filter(call => call.name === "candidates").at(-1)?.input, "received");
+  assert.equal((await f.handlers.GET(signedRequest("GET", undefined, { path: `${storagePath}?scope=everything` }))).status, 400);
   f.state.b2Missing = true;
   const missing = await f.handlers.GET(signedRequest("GET", undefined, { path: storagePath }));
   assert.equal(missing.status, 500); assert.equal((await missing.json()).error, "파일 저장소 설정을 확인할 수 없습니다.");
@@ -331,4 +337,15 @@ test("album-info applies the desk's application details through the shared save 
   f.state.saveError = "INVALID_TYPE";
   const refused = await f.handlers.POST(signedRequest("POST", body), context);
   assert.equal(refused.status, 400); assert.equal((await refused.json()).errorCode, "INVALID_TYPE");
+});
+
+test("purging files of submissions still in review requires the desk's local-copy declaration", async () => {
+  const f = storageFixture();
+  const body = { operation: "purge", submissionIds: [sid], requestId, scope: "received" };
+  assert.equal((await f.handlers.POST(signedRequest("POST", body, { path: storagePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, localCopiesVerified: false }, { path: storagePath }))).status, 400);
+  assert.ok(!f.calls.some(call => call.name === "purge"));
+  const response = await f.handlers.POST(signedRequest("POST", { ...body, localCopiesVerified: true }, { path: storagePath }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(f.calls.find(call => call.name === "purge")?.input, { ids: [sid], actorId: actor, scope: "received" });
 });

@@ -118,8 +118,11 @@ export function SubmissionFilesPanel({
               </p>
             </div>
             {file.purged_at ? (
-              <span className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black text-[#111111]">
-                보관 종료로 삭제됨
+              <span
+                title="온사이드가 심의용 원본을 받은 뒤 서버에 보관하던 사본을 정리했습니다."
+                className="rounded-[6px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-1 text-[11px] font-black text-[#111111]"
+              >
+                서버 보관본 정리됨
               </span>
             ) : canDownload ? (
               <button

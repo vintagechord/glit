@@ -146,7 +146,7 @@ test('storage list is a signed read that keeps only listed fields', async () => 
   });
   const result = await client.listStorage();
   assert.equal(calls.length, 1);
-  assert.deepEqual(result.items, [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634 }]);
+  assert.deepEqual(result.items, [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, stage: 'finished', finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634, files: [] }]);
   await assert.rejects(mockClient(() => json({ ok: true })).client.listStorage(), error => error.code === 'INVALID_STORAGE_LIST');
 });
 
@@ -196,4 +196,21 @@ test('album info sync posts the album-info operation with a fresh request ID and
   await assert.rejects(client.saveAlbumInfo(id, { submission: {} }), error => error.code === 'INVALID_ALBUM_INFO');
   await assert.rejects(mockClient(() => json({ ok: false })).client.saveAlbumInfo(id, { submission: {}, tracks: [] }), error => error.code === 'INVALID_ALBUM_INFO_RESULT');
   await assert.rejects(mockClient(() => json({ ok: false, error: '음반 접수에만 신청서 정보를 반영할 수 있습니다.', errorCode: 'INVALID_TYPE' }, 400)).client.saveAlbumInfo(id, { submission: {}, tracks: [] }), error => error.code === 'INVALID_TYPE');
+});
+
+test('the received scope is signed into the path and in-review purges carry the local-copy declaration', async () => {
+  const seen = [];
+  const { client } = mockClient((url, init) => {
+    verifyCall(url, init); seen.push({ path: new URL(url).pathname + new URL(url).search, method: init.method, body: init.method === 'POST' ? JSON.parse(init.body.toString()) : null });
+    if (init.method === 'GET') return json({ ok: true, items: [{ submissionId: id, stage: 'in_review', files: [{ id: 'f1', source: 'upload', sizeBytes: 9, objectKey: 'x' }, { id: '' }] }] });
+    return json({ ok: true, results: [] });
+  });
+  const listed = await client.listStorage({ scope: 'received' });
+  assert.equal(seen[0].path, '/api/internal/review-desk/storage?scope=received');
+  assert.deepEqual(listed.items[0].files, [{ id: 'f1', source: 'upload', sizeBytes: 9 }]); assert.equal(listed.items[0].stage, 'in_review');
+  await assert.rejects(client.purgeStorage([id], { scope: 'received' }), error => error.code === 'LOCAL_COPIES_REQUIRED');
+  await client.purgeStorage([id], { scope: 'received', localCopiesVerified: true });
+  assert.equal(seen.at(-1).body.scope, 'received'); assert.equal(seen.at(-1).body.localCopiesVerified, true);
+  await client.purgeStorage([id]);
+  assert.equal(seen.at(-1).body.scope, undefined);
 });

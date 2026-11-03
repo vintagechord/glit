@@ -7,7 +7,8 @@ type Row = Record<string, unknown>;
 type PurgeApi = {
   reviewFinishedAt: (submission: Row, reviews: Row[], requests: Row[]) => string | null;
   selectPurgeFiles: (submissionId: string, uploads: Row[], supplements: Row[], prefix: string) => Array<{ source: string; id: string; objectKey: string }>;
-  purgeCustomerFiles: (db: unknown, ids: string[], actor: string, remove: (key: string) => Promise<number>) => Promise<Array<{ submissionId: string; ok: boolean; deletedFiles: number; failedFiles: number; freedBytes: number; error?: string }>>;
+  purgeCustomerFiles: (db: unknown, ids: string[], actor: string, remove: (key: string) => Promise<number>, scope?: "finished" | "received") => Promise<Array<{ submissionId: string; ok: boolean; deletedFiles: number; failedFiles: number; freedBytes: number; error?: string }>>;
+  loadPurgeCandidates: (db: unknown, ids?: string[], scope?: "finished" | "received") => Promise<Array<{ submissionId: string; stage: string; files: Array<{ id: string; source: string }> }>>;
   resumeInterruptedPurges: (db: unknown, options: { now?: number; limit?: number; deleteAllVersions?: (key: string) => Promise<number> }) => Promise<number>;
   presignGetUrl: (key: string, expiresIn?: number, options?: { filename?: string }) => Promise<string>;
   attachmentContentDisposition: (filename: string) => string;
@@ -300,4 +301,38 @@ test("all versions and hide markers of exactly one key are deleted across pages"
   assert.ok(deletes.every(input => input.Key === key && input.Bucket === "bucket"));
   const lists = api.s3.sent.filter(entry => entry.command === "ListObjectVersionsCommand").map(entry => entry.input);
   assert.deepEqual(lists.map(input => [input.Prefix, input.KeyMarker, input.VersionIdMarker]), [[key, undefined, undefined], [key, key, "m1"]]);
+});
+
+test("the desk's received scope adds paid submissions still in review, uploads only, and never unpaid ones", async () => {
+  const api = await load();
+  const fixture = purgeFixture();
+  fixture.submissions.push(finishedAlbum(C.replace(/c/g, "e"), { status: "SUBMITTED", payment_status: "UNPAID" }));
+  fixture.submission_files.push({ id: "e1", submission_id: C.replace(/c/g, "e"), kind: "AUDIO", storage_provider: "b2", object_key: upload(C.replace(/c/g, "e"), "draft.wav"), size: 10, purged_at: null });
+  fixture.submission_supplement_requests.push({ id: "req-b", submission_id: B, status: "SUBMITTED" });
+  fixture.submission_supplement_files.push({ id: "sb", request_id: "req-b", object_key: `submissions/supplements/${B}/req-b/rev/u/fix.wav`, size_bytes: 30, purged_at: null });
+  const { db } = fakeDb(fixture);
+  const finished = await api.loadPurgeCandidates(db);
+  assert.deepEqual(finished.map(c => [c.submissionId, c.stage]), [[D, "refunded"], [A, "finished"]]);
+  const received = await api.loadPurgeCandidates(db, undefined, "received");
+  // Finished and refunded first, oldest first; submissions still in review after them.
+  // C's only file sits under another submission's folder, so it is never offered.
+  assert.deepEqual(received.map(c => [c.submissionId, c.stage]), [[D, "refunded"], [A, "finished"], [B, "in_review"]]);
+  // In review: the customer's uploads only — the open supplement's file stays until the review ends.
+  assert.deepEqual(received.find(c => c.submissionId === B)?.files.map(file => [file.id, file.source]), [["b1", "upload"]]);
+  assert.ok(!received.some(c => c.submissionId === C.replace(/c/g, "e")));
+});
+
+test("an in-review purge deletes through the received scope only and records why", async () => {
+  const api = await load();
+  const fixture = purgeFixture();
+  const removed: string[] = [];
+  const remove = async (key: string) => { removed.push(key); return 1; };
+  const { db } = fakeDb(fixture);
+  const refused = await api.purgeCustomerFiles(db, [B], owner, remove);
+  assert.equal(refused[0].ok, false); assert.equal(removed.length, 0);
+  const [result] = await api.purgeCustomerFiles(db, [B], owner, remove, "received");
+  assert.deepEqual({ ok: result.ok, deletedFiles: result.deletedFiles, freedBytes: result.freedBytes }, { ok: true, deletedFiles: 1, freedBytes: 100 });
+  assert.deepEqual(removed, [upload(B, "song.wav")]);
+  assert.ok(fixture.submission_files.find(row => row.id === "b1")?.purged_at);
+  assert.match(String(fixture.submission_events.at(-1)?.message), /심의 진행 중 심의 데스크의 원본 보관을 확인하고/);
 });
