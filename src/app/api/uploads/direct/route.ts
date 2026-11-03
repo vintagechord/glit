@@ -18,19 +18,18 @@ import {
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
-import {
-  isApplicationFormFile,
-  isApplicationFormMime,
-  isAudioUploadFile,
-  isResultAttachmentFile,
-  isVideoUploadFile,
-} from "@/lib/submission-files";
 import { SERVER_UPLOAD_MAX_BYTES, SERVER_UPLOAD_MAX_LABEL } from "@/lib/server-upload-limit";
 import {
   getSubmissionUploadBlockMessage,
   getSubmissionUploadBlockReason,
 } from "@/lib/submission-upload-access";
 import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  inferSubmissionUploadKind,
+  isAllowedSubmissionUpload,
+  safeUploadContentType,
+} from "@/lib/upload-file-types";
+import { createUploadPutGrant } from "@/lib/upload-put-grants";
 import { Upload } from "@aws-sdk/lib-storage";
 
 export const runtime = "nodejs";
@@ -44,6 +43,10 @@ const schema = z.object({
   filename: z.string().min(1).max(255),
   mimeType: z.string().max(255).optional(),
   sizeBytes: z.coerce.number().int().positive(),
+  kind: z.preprocess(
+    (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
+    z.enum(["audio", "video", "etc"]).optional(),
+  ),
 });
 
 // This route streams through the application worker and is only a small-file
@@ -59,15 +62,9 @@ const SINGLE_PUT_SUBMISSION_DAILY_MIB = 4 * 1024;
 const SINGLE_PUT_OWNER_DAILY_MIB = 8 * 1024;
 const SINGLE_PUT_IP_DAILY_MIB = 8 * 1024;
 
-const isAllowedDirectUploadFile = (
-  filename?: string | null,
-  mimeType?: string | null,
-) =>
-  isAudioUploadFile(filename, mimeType) ||
-  isVideoUploadFile(filename, mimeType) ||
-  isApplicationFormFile(filename) ||
-  isApplicationFormMime(mimeType) ||
-  isResultAttachmentFile(filename, mimeType);
+// The album fallback names its kind; the payment-document fallback does not.
+const resolveDirectUploadKind = (data: z.infer<typeof schema>) =>
+  data.kind ?? inferSubmissionUploadKind(data.filename);
 
 class UploadRequestError extends Error {
   status: number;
@@ -216,6 +213,19 @@ const startValidatedUpload = async (
     if (control.aborted) {
       throw new UploadRequestError("파일 용량이 허용 한도를 초과했습니다.", 413);
     }
+    const kind = resolveDirectUploadKind(data);
+    if (!kind) {
+      throw new UploadRequestError("업로드 가능한 파일 형식이 아닙니다.", 400);
+    }
+    // Completion reads the approved metadata from this row, as with /init.
+    await createUploadPutGrant({
+      submissionId: data.submissionId,
+      objectKey: key,
+      originalName: data.filename,
+      mimeType: data.mimeType || "application/octet-stream",
+      uploadKind: kind,
+      declaredSizeBytes: data.sizeBytes,
+    });
 
     const { client, bucket } = getB2Config();
     const uploader = new Upload({
@@ -224,7 +234,8 @@ const startValidatedUpload = async (
         Bucket: bucket,
         Key: key,
         Body: filePart.stream,
-        ContentType: data.mimeType || undefined,
+        // The stored type follows the extension, never the declared type.
+        ContentType: safeUploadContentType(data.filename),
         ContentLength: data.sizeBytes,
       },
       leavePartsOnError: false,
@@ -427,13 +438,16 @@ export async function POST(request: Request) {
     if (uploadPromise || parseErrorStatus !== null || !filePart) return;
     if (!fields.submissionId || !fields.sizeBytes) return;
 
+    // Form fields are decoded as UTF-8 but the file part's name is not, so
+    // the name completion later compares against comes from the field.
     const parsed = schema.safeParse({
       submissionId: fields.submissionId,
       title: fields.title,
       guestToken: fields.guestToken,
-      filename: filePart.filename || fields.filename,
-      mimeType: filePart.mimeType || fields.mimeType,
+      filename: fields.filename || filePart.filename,
+      mimeType: fields.mimeType || filePart.mimeType,
       sizeBytes: fields.sizeBytes,
+      kind: fields.kind,
     });
 
     if (!parsed.success) {
@@ -461,10 +475,13 @@ export async function POST(request: Request) {
       filePart.stream.resume();
       return;
     }
+    const directKind = resolveDirectUploadKind(parsed.data);
     if (
-      !isAllowedDirectUploadFile(
-        filePart.filename || parsed.data.filename,
-        filePart.mimeType || parsed.data.mimeType,
+      !directKind ||
+      !isAllowedSubmissionUpload(
+        directKind,
+        parsed.data.filename,
+        parsed.data.mimeType || "application/octet-stream",
       )
     ) {
       parseErrorStatus = 400;

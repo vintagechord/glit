@@ -486,11 +486,14 @@ export async function POST(request: Request) {
   // staging rows too so another device can recover B2-verified files that
   // have not reached an explicit save. Live rows stay first and therefore win
   // the path/name/size dedupe below if an idempotent retry left both sources.
+  // Expired receipts (7 days) are removed with their objects by the
+  // scheduled storage cleanup, so they are not offered again meanwhile.
   const stagedFileResult = await admin
     .from("submission_upload_staging")
     .select(selectFileColumns)
     .in("submission_id", submissionIds)
     .eq("purpose", "SUBMISSION_FILE")
+    .gt("expires_at", new Date().toISOString())
     .order("uploaded_at", { ascending: true });
   if (!stagedFileResult.error) {
     fileRows = [

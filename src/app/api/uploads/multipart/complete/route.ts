@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   abortExpiredMultipartGrant,
+  abortFailedMultipartGrant,
   getMultipartGrant,
   getMultipartOwnerKey,
   markMultipartGrantCompleted,
@@ -20,7 +21,6 @@ import {
   B2ConfigError,
   completeMultipartUpload,
   getB2Config,
-  presignGetUrl,
 } from "@/lib/b2";
 import { ensureSubmissionOwner } from "@/lib/payments/submission";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -87,6 +87,22 @@ const inferKind = (filename: string, mimeType: string): "AUDIO" | "VIDEO" | "LYR
 };
 
 type VerifiedUploadRow = { id: string; original_name: string; mime: string; size: number; storage_provider: string; status: string };
+
+class UnsupportedUploadContentError extends Error {
+  constructor() {
+    super("파일 형식을 확인할 수 없습니다. 허용된 형식의 파일을 다시 선택해주세요.");
+    this.name = "UnsupportedUploadContentError";
+  }
+}
+
+// FAILED grants are retired at once: their upload id is aborted and any
+// object B2 assembled is deleted unless a receipt points at it. A failure
+// here leaves the grant for the scheduled lease to retry.
+const retireFailedGrant = async (grant: MultipartUploadGrant) => {
+  if (await markMultipartGrantFailed(grant.id).catch(() => false)) {
+    await abortFailedMultipartGrant(grant).catch(() => false);
+  }
+};
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -158,7 +174,8 @@ export async function POST(request: Request) {
       try { head = await readHead(); }
       catch (cause) {
         if (isMissingUploadObject(cause) && completionFailure instanceof Error && ["InvalidPart", "InvalidPartOrder", "EntityTooSmall"].includes(completionFailure.name)) {
-          await markMultipartGrantFailed(grant.id);
+          // B2 keeps uploaded parts until the upload id is aborted.
+          await retireFailedGrant(grant);
           completionGrant = null;
           return NextResponse.json({ error: "업로드 조각이 일치하지 않습니다. 파일을 다시 선택해주세요." }, { status: 400 });
         }
@@ -167,11 +184,14 @@ export async function POST(request: Request) {
     }
     const contentLength = head.ContentLength ?? 0;
     if (contentLength !== grant.declared_size_bytes) {
-      if (completionState !== "COMPLETED") await markMultipartGrantFailed(grant.id);
+      if (completionState !== "COMPLETED") await retireFailedGrant(grant);
       completionGrant = null;
       return NextResponse.json({ error: "업로드된 파일 크기가 일치하지 않습니다.", expected: grant.declared_size_bytes, actual: contentLength }, { status: 400 });
     }
     const signature = await verifyUploadedObjectSignature(key, grant.original_name);
+    // Every extension init allows has a container check; a grant whose name
+    // has none predates that rule and is refused rather than trusted.
+    if (signature === "unsupported") throw new UnsupportedUploadContentError();
     let stagingId: string | null = null;
     let existing: VerifiedUploadRow | null = null;
     const readReceipt = async () => {
@@ -193,13 +213,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "현재 신청에 연결된 업로드 기록을 확인할 수 없습니다." }, { status: 409 });
       }
     }
-    const accessUrl = await presignGetUrl(key, Number(process.env.B2_ACCESS_URL_EXPIRES_SECONDS ?? "86400")).catch(() => null);
     if (!existing) {
       // Only a size/signature-checked object reaches provisional metadata. The
       // atomic application save alone publishes submission_files.
       const payload = { submission_id: submissionId, kind: normalizedKind, file_path: key, object_key: key, original_name: filename, mime: mimeType,
         size: grant.declared_size_bytes, checksum: checksum ?? null, duration_seconds: durationSeconds ?? null,
-        access_url: accessUrl, storage_provider: "b2", status: "UPLOADED", uploaded_at: new Date().toISOString() };
+        // Downloads are signed on demand; no long-lived link is stored.
+        access_url: null, storage_provider: "b2", status: "UPLOADED", uploaded_at: new Date().toISOString() };
       // Concurrent identical completions must not overwrite the first receipt
       // (especially uploaded_at) or reset its submission/retention timestamp.
       const stagedResult = await admin.from("submission_upload_staging").upsert(payload, { onConflict: "submission_id,file_path", ignoreDuplicates: true }).select("id").maybeSingle();
@@ -231,16 +251,17 @@ export async function POST(request: Request) {
       etagId: head.ETag ? getStorageLogId(head.ETag) : null, userIdHash: user?.id ? getStorageLogId(user.id) : null,
       guest: Boolean(submission?.guest_token ?? guestToken), tookMs: Date.now() - startedAt });
     return NextResponse.json({ ok: true, verified: signature === "matched", verification: { size: true, signature, codec: "not_checked", contents: "not_checked" },
-      etag: head.ETag, contentLength, attachmentId: null, stagingId, staged, key, submissionId, accessUrl });
+      etag: head.ETag, contentLength, attachmentId: null, stagingId, staged, key, submissionId });
   } catch (error) {
-    if (error instanceof UploadSignatureMismatchError && completionGrant) await markMultipartGrantFailed(completionGrant.id).catch(() => undefined);
+    const rejectedContent = error instanceof UploadSignatureMismatchError || error instanceof UnsupportedUploadContentError;
+    if (rejectedContent && completionGrant) await retireFailedGrant(completionGrant);
     // COMPLETING plus the immutable manifest is a retryable receipt. Failed or
     // uncertain persistence must never erase a verified row or its object.
     const conflict = getSubmissionUploadConflictMessage(error) ?? (error instanceof MultipartCompletionConflictError ? error.message : null);
     const configuration = error instanceof B2ConfigError;
     const pending = error instanceof MultipartCompletionPendingError;
     console.error("[Upload][multipart][complete] error", { submissionIdHash: getStorageLogId(submissionId), objectKeyId: getStorageLogId(key), errorName: error instanceof Error ? error.name : "UnknownError" });
-    return NextResponse.json({ error: conflict ?? (error instanceof UploadSignatureMismatchError ? error.message : pending ? error.message : configuration ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요." : "업로드 완료 처리 중 오류가 발생했습니다. 다시 시도해주세요.") },
-      { status: conflict ? 409 : error instanceof UploadSignatureMismatchError ? 400 : pending || configuration ? 503 : 500 });
+    return NextResponse.json({ error: conflict ?? (rejectedContent || pending ? (error as Error).message : configuration ? "스토리지 설정 오류입니다. 관리자에게 문의해주세요." : "업로드 완료 처리 중 오류가 발생했습니다. 다시 시도해주세요.") },
+      { status: conflict ? 409 : rejectedContent ? 400 : pending || configuration ? 503 : 500 });
   }
 }
