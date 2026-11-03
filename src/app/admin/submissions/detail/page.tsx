@@ -30,6 +30,8 @@ import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details"
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
 import { loadSubmissionCustomerEmails } from "@/lib/admin/submission-emails";
+import { memberSignInFromAuthUser } from "@/lib/admin/member-sign-in";
+import { SignInMethodBadges } from "@/components/admin/sign-in-method-badges";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import { AdminRefundPanel } from "@/components/admin/refund-panel";
@@ -553,18 +555,14 @@ export default async function AdminSubmissionDetailPage({
   // These sections depend only on the authorized submission, not on one another.
   const [member, paymentDocumentResult, stationResult, expectedStationResult, eventResult, fileResult] = await Promise.all([
     (async () => {
-      if (!submission.user_id || submission.guest_name) return { profile: null, email: null };
+      if (!submission.user_id || submission.guest_name) return { profile: null, email: null, signIn: null };
       const { data: profile } = await supabase
         .from("profiles")
         .select("name, company, phone")
         .eq("user_id", submission.user_id)
         .maybeSingle();
-      let email: string | null = null;
-      if (!email) {
-        const { data } = await supabase.auth.admin.getUserById(submission.user_id);
-        email = data.user?.email ?? null;
-      }
-      return { profile, email };
+      const { data } = await supabase.auth.admin.getUserById(submission.user_id);
+      return { profile, email: data.user?.email ?? null, signIn: data.user ? memberSignInFromAuthUser(data.user) : null };
     })(),
     supabase
       .from("submissions")
@@ -1609,6 +1607,10 @@ export default async function AdminSubmissionDetailPage({
                 <p className="flex justify-between gap-4">
                   <span>구분</span>
                   <span className="text-right text-foreground">회원</span>
+                </p>
+                <p className="flex items-center justify-between gap-4">
+                  <span>가입 방법</span>
+                  <SignInMethodBadges signupProvider={member.signIn?.signupProvider ?? null} providers={member.signIn?.providers ?? []} />
                 </p>
                 <p className="flex justify-between gap-4">
                   <span>이름</span>

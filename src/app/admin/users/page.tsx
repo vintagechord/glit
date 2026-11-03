@@ -5,6 +5,8 @@ import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDateTime } from "@/lib/format";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { loadMemberAccounts } from "@/lib/admin/member-sign-in";
+import { SignInMethodBadges } from "@/components/admin/sign-in-method-badges";
 
 export const metadata = {
   title: "회원 관리",
@@ -20,6 +22,8 @@ type UserRow = {
   created_at: string | null;
   updated_at: string | null;
   email?: string | null;
+  signupProvider?: string | null;
+  providers?: string[];
 };
 
 type SearchParamsInput = {
@@ -80,25 +84,15 @@ export default async function AdminUsersPage({
   const profiles = (data ?? []) as Omit<UserRow, "email">[];
   const totalCount = count ?? profiles.length;
 
-  // Ask only for the emails of the members on this page.
+  // Ask only for the emails and sign-in methods of the members on this page.
   const ids = profiles.map((item) => item.user_id);
-  let emailMap = new Map<string, string | null>();
-  let emailError: string | null = null;
-  if (ids.length > 0) {
-    const { data: emails, error: emailsError } = await admin.rpc("admin_auth_user_emails", { p_user_ids: ids });
-    if (emailsError) {
-      emailError = emailsError.message;
-    } else {
-      emailMap = new Map(
-        ((emails ?? []) as Array<{ user_id: string; email: string | null }>).map((row) => [row.user_id, row.email ?? null]),
-      );
-    }
-  }
+  const accountResult = await loadMemberAccounts(admin, ids);
+  const emailError = accountResult.error;
 
-  const users: UserRow[] = profiles.map((item) => ({
-    ...item,
-    email: emailMap.get(item.user_id) ?? null,
-  }));
+  const users: UserRow[] = profiles.map((item) => {
+    const account = accountResult.accounts.get(item.user_id);
+    return { ...item, email: account?.email ?? null, signupProvider: account?.signupProvider ?? null, providers: account?.providers ?? [] };
+  });
 
   const hrefForPage = (target: number) => {
     const params = new URLSearchParams();
@@ -170,6 +164,11 @@ export default async function AdminUsersPage({
           </details>
         </div>
       )}
+      {accountResult.methodsUnavailable && !emailError ? (
+        <p role="status" className="mt-4 rounded-2xl border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-semibold text-[#111111]">
+          가입 방법 조회 기능이 아직 준비되지 않아 이메일만 표시합니다.
+        </p>
+      ) : null}
       {emailError && (
         <div className="mt-4 rounded-2xl border border-[#f6d64a] bg-[#f6d64a] px-4 py-2 text-xs text-black">
           <p className="font-semibold">일부 이메일을 불러오지 못했습니다.</p>
@@ -186,10 +185,11 @@ export default async function AdminUsersPage({
         aria-label="회원 목록"
         tabIndex={0}
       >
-        <table className="min-w-[900px] w-full rounded-[24px] border border-border/60 bg-card/80 text-left text-sm shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+        <table className="min-w-[1000px] w-full rounded-[24px] border border-border/60 bg-card/80 text-left text-sm shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
           <caption className="sr-only">회원 기본 정보 및 연락처 목록</caption>
           <thead className="border-b border-border/60 bg-muted/40 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             <tr>
+              <th className="px-4 py-3 font-semibold">가입 방법</th>
               <th className="px-4 py-3 font-semibold">이메일</th>
               <th className="px-4 py-3 font-semibold">User ID</th>
               <th className="px-4 py-3 font-semibold">이름</th>
@@ -202,8 +202,11 @@ export default async function AdminUsersPage({
           <tbody className="divide-y divide-border/60">
             {users.map((user) => (
               <tr key={user.user_id} className="hover:bg-background/60">
+                <td className="px-4 py-3">
+                  <SignInMethodBadges signupProvider={user.signupProvider ?? null} providers={user.providers ?? []} />
+                </td>
                 <td className="px-4 py-3 text-foreground">
-                  {user.email ?? "-"}
+                  {user.email ?? (user.signupProvider && user.signupProvider !== "email" ? <span className="text-muted-foreground">제공처 이메일 없음</span> : "-")}
                 </td>
                 <td className="px-4 py-3 font-mono text-[12px] text-muted-foreground">
                   {user.user_id}
@@ -228,7 +231,7 @@ export default async function AdminUsersPage({
             {users.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-6 text-center text-sm text-muted-foreground"
                 >
                   {searchQuery ? "검색 결과가 없습니다." : "회원 정보가 없습니다."}
