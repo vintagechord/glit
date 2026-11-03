@@ -25,6 +25,8 @@ import {
   supportChatConversationTokensStorageKey,
   supportChatStatusLabels,
   supportChatStorageKey,
+  readSupportChatAdminSignal,
+  toSupportChatAdminSignal,
   type SupportChatBroadcastPayload,
   type SupportChatConversation,
   type SupportChatMessage,
@@ -539,18 +541,59 @@ export function ChatbotWidget() {
     [applyBroadcastPayload, loadConversation, loadConversationList, open, view],
   );
 
+  // Admin-channel signals carry only a conversation id. Refetch through the
+  // API, and only for conversations this visitor already holds.
+  const handleAdminSignal = React.useCallback(
+    (payload: unknown) => {
+      const signal = readSupportChatAdminSignal(payload);
+      if (!signal) return;
+      const isActive = signal.conversationId === activeConversationIdRef.current;
+      if (
+        !isActive &&
+        !conversationsRef.current.some((item) => item.id === signal.conversationId)
+      ) {
+        return;
+      }
+      if (
+        isActive &&
+        activeTokenRef.current &&
+        open &&
+        view === "thread" &&
+        isDocumentVisible()
+      ) {
+        void loadConversation(activeTokenRef.current, {
+          quiet: true,
+          markRead: true,
+        });
+      }
+      void loadConversationList({ quiet: true });
+    },
+    [loadConversation, loadConversationList, open, view],
+  );
+
   const broadcastChatUpdate = React.useCallback(
     async (payload: SupportChatBroadcastPayload) => {
-      const broadcast = {
-        type: "broadcast" as const,
-        event: "message",
-        payload,
-      };
-      await Promise.allSettled(
-        [payload.conversation?.accessToken === activeTokenRef.current ? channelRef.current : null, adminChannelRef.current]
-          .filter(Boolean)
-          .map((channel) => channel!.send(broadcast)),
-      );
+      // The full payload goes only to the conversation's own channel, whose
+      // name contains the access token. The shared admin channel gets an id.
+      const conversationChannel =
+        payload.conversation?.accessToken === activeTokenRef.current
+          ? channelRef.current
+          : null;
+      const signal = toSupportChatAdminSignal(payload);
+      await Promise.allSettled([
+        conversationChannel?.send({
+          type: "broadcast",
+          event: "message",
+          payload,
+        }),
+        signal
+          ? adminChannelRef.current?.send({
+              type: "broadcast",
+              event: "message",
+              payload: signal,
+            })
+          : undefined,
+      ]);
     },
     [],
   );
@@ -574,9 +617,7 @@ export function ChatbotWidget() {
         config: { broadcast: { self: false } },
       })
       .on("broadcast", { event: "message" }, (event) => {
-        handleConversationBroadcast(
-          event.payload as SupportChatBroadcastPayload | undefined,
-        );
+        handleAdminSignal(event.payload);
       })
       .subscribe();
     adminChannelRef.current = channel;
@@ -585,7 +626,7 @@ export function ChatbotWidget() {
       supabase.removeChannel(channel);
     };
   }, [
-    handleConversationBroadcast,
+    handleAdminSignal,
     hiddenRoute,
     open,
     storedTokens.length,

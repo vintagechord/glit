@@ -83,6 +83,12 @@ test("static pages stay cached for an hour and the policy texts load on demand",
     const [, seconds] = readSource(page).match(/export const revalidate = (\d+);/) ?? [];
     assert.ok(Number(seconds) >= 3600, `${page} revalidates every ${seconds}s; a stale copy costs a round trip to the function region`);
   }
+  // A data cache read by a static page caps the page's revalidate at its own.
+  for (const source of ["src/lib/public-catalog.ts", "src/lib/public-ad-banners.ts"]) {
+    for (const [, seconds] of readSource(source).matchAll(/revalidate: (\d+)/g)) {
+      assert.ok(Number(seconds) >= 3600, `${source} caches for ${seconds}s, which shortens the static pages that read it`);
+    }
+  }
   assert.match(readSource("next.config.ts"), /minimumCacheTTL: 2678400/);
   const footer = readSource("src/components/site/footer.tsx");
   assert.doesNotMatch(footer, /^import .*"@\/lib\/legal-content"/m, "the footer must not bundle the policy texts");

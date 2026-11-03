@@ -1,10 +1,10 @@
 "use client";
 
 export default function MvSubmissionError({
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-12">
@@ -16,7 +16,7 @@ export default function MvSubmissionError({
         <p className="mt-3 text-sm font-semibold leading-6 text-muted-foreground">
           네트워크 또는 서버 응답 지연이 발생했습니다. 다시 시도해도 열리지 않으면 고객센터로 문의해주세요.
         </p>
-        <button type="button" onClick={reset} className="bauhaus-button mt-6 px-5 py-3 text-sm">
+        <button type="button" onClick={retry} className="bauhaus-button mt-6 px-5 py-3 text-sm">
           다시 불러오기
         </button>
       </div>

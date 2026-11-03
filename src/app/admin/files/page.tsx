@@ -134,6 +134,9 @@ export default function AdminFilesPage() {
     message: string;
   } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  // One request id per chosen file, kept across retries so a lost response
+  // does not record the same certificate twice.
+  const uploadRequestId = React.useRef<string | null>(null);
 
   const selectedSubmission = React.useMemo(
     () => submissions.find((item) => item.id === selectedSubmissionId) ?? null,
@@ -176,6 +179,7 @@ export default function AdminFilesPage() {
     setNotice(null);
     setError(null);
     setFile(null);
+    uploadRequestId.current = null;
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -183,6 +187,7 @@ export default function AdminFilesPage() {
 
   const handleSelectFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     setFile(event.target.files?.[0] ?? null);
+    uploadRequestId.current = null;
     setNotice(null);
     setError(null);
   };
@@ -248,6 +253,10 @@ export default function AdminFilesPage() {
       setError("업로드할 필증 파일을 선택하세요.");
       return;
     }
+    if (!selectedSubmission.updatedAt) {
+      setError("접수의 최신 변경 시각을 확인하지 못했습니다. 목록을 새로고침한 뒤 다시 시도하세요.");
+      return;
+    }
     if (!isAllowedCertificateFile(file)) {
       setError("필증은 PDF, PNG, JPG 파일만 업로드할 수 있습니다.");
       return;
@@ -266,6 +275,9 @@ export default function AdminFilesPage() {
       form.append("mimeType", inferCertificateMimeType(file));
       form.append("sizeBytes", String(file.size));
       form.append("file", file);
+      form.append("expectedUpdatedAt", selectedSubmission.updatedAt);
+      uploadRequestId.current ??= crypto.randomUUID();
+      form.append("requestId", uploadRequestId.current);
 
       const response = await fetchWithTimeout(
         `/api/admin/submissions/${selectedSubmission.id}/certificate`,
@@ -302,12 +314,16 @@ export default function AdminFilesPage() {
         ),
       );
       setFile(null);
+      uploadRequestId.current = null;
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
       const successMessage = "필증을 업로드했습니다.";
       setNotice(successMessage);
       setSavePopup({ id: Date.now(), message: successMessage });
+      // The upload changed the submission's updated_at; reload it so a
+      // second upload does not fail the concurrency check.
+      void loadSubmissions();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "필증 업로드에 실패했습니다.");
     } finally {

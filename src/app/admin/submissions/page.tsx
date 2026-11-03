@@ -240,21 +240,25 @@ export default async function AdminSubmissionsPage({
       query = query.or("created_from.is.null,created_from.eq.domestic");
     }
     if (filters.q) {
+      // Quote the value so titles such as "Love (feat. X)" or "Hello, World"
+      // don't break PostgREST's or() list syntax.
+      const pattern = `"%${filters.q.replace(/["\\]/g, "\\$&")}%"`;
       const terms = [
-        `title.ilike.%${filters.q}%`,
-        `artist_name.ilike.%${filters.q}%`,
+        `title.ilike.${pattern}`,
+        `artist_name.ilike.${pattern}`,
       ];
       if (includeGuestColumns) {
-        terms.push(`guest_name.ilike.%${filters.q}%`);
+        terms.push(`guest_name.ilike.${pattern}`);
       }
       query = query.or(terms.join(","));
     }
+    // The date inputs and the list show Korean time, so filter on KST days.
     if (filters.from) {
-      const from = `${filters.from}T00:00:00.000Z`;
+      const from = `${filters.from}T00:00:00.000+09:00`;
       query = query.gte("created_at", from);
     }
     if (filters.to) {
-      const to = `${filters.to}T23:59:59.999Z`;
+      const to = `${filters.to}T23:59:59.999+09:00`;
       query = query.lte("created_at", to);
     }
 

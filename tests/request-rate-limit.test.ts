@@ -69,11 +69,22 @@ test("request identifier prefers trusted edge headers and normalizes forwarding"
   assert.equal(
     getRequestIdentifier(
       new Headers({
-        "cf-connecting-ip": "203.0.113.7",
+        "x-vercel-forwarded-for": "203.0.113.7",
         "x-forwarded-for": "198.51.100.2, 10.0.0.1",
       }),
     ),
     "203.0.113.7",
+  );
+  // No Cloudflare proxy fronts the site, so a client-sent cf-connecting-ip
+  // must not pick the rate-limit bucket.
+  assert.equal(
+    getRequestIdentifier(
+      new Headers({
+        "cf-connecting-ip": "203.0.113.99",
+        "x-real-ip": "198.51.100.2",
+      }),
+    ),
+    "198.51.100.2",
   );
   assert.equal(
     getRequestIdentifier(

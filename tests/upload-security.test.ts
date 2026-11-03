@@ -123,6 +123,9 @@ test("karaoke presign fails closed for guests and signs the declared content len
   const b2Source = read("src/lib/b2.ts");
 
   assert.match(source, /MAX_GENERIC_BYTES = 512 \* 1024 \* 1024/);
+  // Applicant files use /api/uploads/init or multipart grants; the legacy
+  // 4GB single-PUT submission scope is closed.
+  assert.match(source, /if \(scope === "submission"\) \{[\s\S]{0,200}status: 410/);
   assert.match(source, /namespace: "upload-karaoke-request-user"/);
   assert.match(source, /비회원 첨부 파일은 지원하지 않습니다/);
   assert.match(source, /contentLength: sizeBytes/);

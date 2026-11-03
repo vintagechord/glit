@@ -9,6 +9,7 @@ import { decodeTrackToken } from "@/lib/track-token";
 
 export const metadata = {
   title: "비회원 진행 상황",
+  robots: { index: false, follow: false },
 };
 
 export const dynamic = "force-dynamic";

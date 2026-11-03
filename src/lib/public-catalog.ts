@@ -183,7 +183,9 @@ const loadProfanityTerms = unstable_cache(
     return (data ?? []).map((row) => ({ term: row.term, language: row.language }));
   },
   ["public-profanity-terms-v1"],
-  { revalidate: 300, tags: [PUBLIC_PROFANITY_TERMS_CACHE_TAG] },
+  // Matches the hourly static album pages that read it; admin edits refresh
+  // it at once through the tag. A shorter value would cap those pages at it.
+  { revalidate: 3600, tags: [PUBLIC_PROFANITY_TERMS_CACHE_TAG] },
 );
 
 // Final submission must distinguish a dictionary outage from an empty list.

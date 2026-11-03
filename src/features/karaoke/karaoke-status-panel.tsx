@@ -49,7 +49,7 @@ export function KaraokeStatusPanel({
     if (!supabase || !userId) return;
     const { data } = await supabase
       .from("karaoke_requests")
-      .select("id, title, artist, file_path, status, created_at, updated_at")
+      .select("id, title, artist, file_path, status, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
     if (data) {

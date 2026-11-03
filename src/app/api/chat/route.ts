@@ -93,6 +93,25 @@ const mapMessage = (row: MessageRow): SupportChatMessage => ({
 
 const makeAccessToken = () => randomBytes(24).toString("base64url");
 
+// A token alone opens only guest conversations. Once a member owns a
+// conversation, only that member's session does: a token left in a shared
+// browser's storage after logout must not reveal it to the next person.
+const isVisibleToViewer = (
+  row: { user_id: string | null },
+  userId: string | null | undefined,
+) => !row.user_id || row.user_id === userId;
+
+const viewerOwnershipFilter = (userId: string | null | undefined) =>
+  userId ? `user_id.is.null,user_id.eq.${userId}` : "user_id.is.null";
+
+async function getViewerUserId() {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? null;
+}
+
 const enforceVisitorWriteLimit = (request: NextRequest) => {
   const result = consumeRateLimit({
     namespace: "support-chat-write",
@@ -199,6 +218,7 @@ async function listVisitorConversations(params: {
     }
 
     for (const row of (data ?? []) as ConversationRow[]) {
+      if (!isVisibleToViewer(row, params.userId)) continue;
       conversations.set(row.id, mapConversation(row));
     }
   }
@@ -273,7 +293,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!conversationResult.data) {
+  if (
+    !conversationResult.data ||
+    !isVisibleToViewer(conversationResult.data as ConversationRow, user?.id)
+  ) {
     return NextResponse.json({ conversation: null, messages: [] });
   }
 
@@ -305,11 +328,13 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  const viewerUserId = await getViewerUserId();
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("support_chat_conversations")
     .update({ unread_visitor_count: 0 })
     .eq("access_token", parsed.data.accessToken)
+    .or(viewerOwnershipFilter(viewerUserId))
     .is("visitor_left_at", null)
     .select(conversationSelect)
     .maybeSingle();
@@ -362,7 +387,8 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
-    conversation = data as ConversationRow | null;
+    const row = data as ConversationRow | null;
+    conversation = row && isVisibleToViewer(row, user?.id) ? row : null;
   }
 
   if (!conversation) {
@@ -461,11 +487,13 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
+  const viewerUserId = await getViewerUserId();
   const admin = createAdminClient();
   const { data: conversation, error: conversationError } = await admin
     .from("support_chat_conversations")
     .select(conversationSelect)
     .eq("access_token", parsed.data.accessToken)
+    .or(viewerOwnershipFilter(viewerUserId))
     .is("visitor_left_at", null)
     .maybeSingle();
 

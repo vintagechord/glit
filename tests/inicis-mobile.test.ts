@@ -49,7 +49,7 @@ test("mobile request carries the required card fields and strips forbidden chara
   assert.equal(params.P_UNAME, "홍길동");
   assert.equal(params.P_NEXT_URL, "https://iamonside.com/api/inicis/mobile/return");
   assert.equal(params.P_NOTI, `${ORDER}_${STATE}`);
-  assert.equal(params.P_RESERVED, "centerCd=Y&amt_hash=Y");
+  assert.equal(params.P_RESERVED, "centerCd=Y&amt_hash=Y&twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N");
   assert.equal(params.P_CHARSET, "utf8");
   assert.equal(params.P_LANG, "en");
   assert.equal(params.P_TIMESTAMP, "1761900000000");

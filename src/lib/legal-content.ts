@@ -1,8 +1,8 @@
 import { APP_CONFIG } from "./config";
 
 /** Update together with every material change to the privacy policy text. */
-export const PRIVACY_POLICY_EFFECTIVE_DATE = "2026년 11월 1일";
-const PRIVACY_POLICY_EFFECTIVE_DATE_EN = "November 1, 2026";
+export const PRIVACY_POLICY_EFFECTIVE_DATE = "2026년 11월 3일";
+const PRIVACY_POLICY_EFFECTIVE_DATE_EN = "November 3, 2026";
 
 /** Update together with every material change to the terms of use text. */
 export const TERMS_EFFECTIVE_DATE = "2026년 11월 1일";
@@ -157,13 +157,13 @@ ${APP_CONFIG.businessName}(이하 "회사")는 온사이드(iamonside.com) 서�
 7. 개인정보의 국외 이전
 회사는 서비스 이용 계약의 체결과 이행을 위해 아래와 같이 개인정보를 국외에 처리 위탁·보관합니다(「개인정보 보호법」 제28조의8 제1항 제3호).
 (1) Vercel Inc. (연락처: privacy@vercel.com)
-- 이전 국가: 인도(뭄바이 서버), 미국 등 Vercel 네트워크가 있는 국가
+- 이전 국가: 대한민국(서울 서버)에서 처리하며, 접속 경로에 따라 미국 등 Vercel 네트워크가 있는 국가를 거칠 수 있음
 - 이전 항목: 서비스 이용 중 주고받는 회원·신청·결제 요청 정보, 접속 기록
 - 이전 시기와 방법: 서비스를 이용할 때마다 암호화된 네트워크(HTTPS)로 전송
 - 이용 목적: 웹 서비스 호스팅과 서버 운영
 - 보유·이용 기간: 요청을 처리한 뒤 삭제하며, 접속 기록은 수탁자의 보관 기준에 따라 단기간 보관 후 삭제
 (2) Supabase Pte. Ltd. (연락처: privacy@supabase.com)
-- 이전 국가: 인도(아마존웹서비스 뭄바이 데이터센터)
+- 이전 국가: 대한민국(아마존웹서비스 서울 데이터센터)에 보관하며, 수탁자의 운영·지원을 위해 해외에서 접근할 수 있음
 - 이전 항목: 위 2항의 회원 정보, 심의 신청 정보, 결제·증빙 정보, 문의 내역, 서비스 이용 기록
 - 이전 시기와 방법: 서비스를 이용할 때마다 암호화된 네트워크(HTTPS)로 전송하여 저장
 - 이용 목적: 데이터베이스·회원 인증·파일 저장 시스템 운영, 알림 메일 발송 처리
@@ -427,13 +427,13 @@ We entrust the following processing. Contracts with processors set out security 
 7. International Transfers
 To conclude and perform the service contract, we entrust and store personal information overseas as follows (PIPA Article 28-8(1)(3)):
 (1) Vercel Inc. (privacy@vercel.com)
-- Countries: India (Mumbai servers), the United States and other countries in Vercel's network
+- Countries: processed on servers in Seoul, Republic of Korea; depending on the connection, traffic may pass through the United States and other countries in Vercel's network
 - Items: member, application and payment request information exchanged while using the service, access logs
 - When and how: transmitted over encrypted connections (HTTPS) each time you use the service
 - Purpose: web hosting and server operation
 - Retention: deleted after the request is processed; access logs are kept briefly under the processor's rules
 (2) Supabase Pte. Ltd. (privacy@supabase.com)
-- Country: India (Amazon Web Services Mumbai data center)
+- Country: stored in Seoul, Republic of Korea (Amazon Web Services Seoul data center); the processor may access it from abroad for operation and support
 - Items: member, application, payment and receipt information, inquiries and usage records listed in Section 2
 - When and how: transmitted over HTTPS and stored each time you use the service
 - Purpose: database, authentication and file storage systems, notification email processing

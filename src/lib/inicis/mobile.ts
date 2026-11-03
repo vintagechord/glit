@@ -103,12 +103,19 @@ export function buildInicisMobileRequest(
     P_CHKFAKE: makeInicisMobileChkFake({
       amountKrw: params.amountKrw, orderId: params.orderId, timestamp, hashKey: params.hashKey,
     }),
-    P_RESERVED: "centerCd=Y&amt_hash=Y",
+    // ISP cards (BC, KB and other 안전결제 cards) otherwise approve in one
+    // step and report only to P_NOTI_URL, which this flow does not use: the
+    // card would be charged and the order never recorded. twotrs_isp sends
+    // them through P_NEXT_URL like other cards (Inicis manual Q&A).
+    P_RESERVED: INICIS_MOBILE_RESERVED,
   };
   if (email && /^[A-Za-z0-9@.]+$/.test(email) && email.length <= 30 && email.includes("@")) request.P_EMAIL = email;
   if (tel) request.P_MOBILE = tel;
   return { actionUrl: params.actionUrl, params: request };
 }
+
+export const INICIS_MOBILE_RESERVED =
+  "centerCd=Y&amt_hash=Y&twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N";
 
 /** P_NOTI carries "<orderId>_<closeState>" so the auth result identifies the order. */
 export const encodeInicisMobileMerchantData = (orderId: string, closeState: string) => `${orderId}_${closeState}`;

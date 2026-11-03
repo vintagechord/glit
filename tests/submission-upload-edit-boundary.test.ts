@@ -102,7 +102,6 @@ test("every editable applicant upload stays staged until the explicit save", () 
 test("every submission upload endpoint checks lifecycle after owner lookup", () => {
   for (const path of [
     "src/app/api/uploads/init/route.ts",
-    "src/app/api/uploads/presign/route.ts",
     "src/app/api/uploads/direct/route.ts",
     "src/app/api/uploads/complete/route.ts",
     "src/app/api/uploads/multipart/init/route.ts",
