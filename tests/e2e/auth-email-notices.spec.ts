@@ -8,7 +8,7 @@ let documentHtml = "";
 test.beforeAll(async () => {
   const bundle = await build({
     stdin: {
-      contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {SignupForm} from './src/features/auth/signup-form';import {LoginForm} from './src/features/auth/login-form';import ForgotPasswordPage from './src/app/forgot-password/page';import {CenteredDialogHost} from './src/components/ui/centered-dialog-host';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(<><CenteredDialogHost/>{location.pathname.endsWith('/signup')?<SignupForm nextPath={nextPath}/>:location.pathname.endsWith('/login')?<LoginForm nextPath={nextPath}/>:<ForgotPasswordPage/>}</>);`,
+      contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {SignupForm} from './src/features/auth/signup-form';import {LoginForm} from './src/features/auth/login-form';import {ForgotPasswordView as ForgotPasswordPage} from './src/app/forgot-password/forgot-password-view';import {CenteredDialogHost} from './src/components/ui/centered-dialog-host';const nextPath=new URLSearchParams(location.search).get('next');createRoot(document.getElementById('root')).render(<><CenteredDialogHost/>{location.pathname.endsWith('/signup')?<SignupForm nextPath={nextPath}/>:location.pathname.endsWith('/login')?<LoginForm nextPath={nextPath}/>:<ForgotPasswordPage/>}</>);`,
       resolveDir: process.cwd(), loader: "tsx",
     },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",

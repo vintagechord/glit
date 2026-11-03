@@ -8,7 +8,7 @@ let documentHtml = "";
 // creates accounts, exchanges credentials, sends email, or reaches a database.
 test.beforeAll(async () => {
   const bundle = await build({
-    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import Forgot from './src/app/forgot-password/page';import {TrackLookupForm} from './src/features/track/track-lookup-form';import {AppShell} from './src/components/site/app-shell';const path=location.pathname.replace(/^\\/en/,'');const Screen=path==='/forgot-password'?Forgot:TrackLookupForm;createRoot(document.getElementById('root')).render(<AppShell><Screen/></AppShell>);`, resolveDir: process.cwd(), loader: "tsx" },
+    stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {ForgotPasswordView as Forgot} from './src/app/forgot-password/forgot-password-view';import {TrackLookupForm} from './src/features/track/track-lookup-form';import {AppShell} from './src/components/site/app-shell';const path=location.pathname.replace(/^\\/en/,'');const Screen=path==='/forgot-password'?Forgot:TrackLookupForm;createRoot(document.getElementById('root')).render(<AppShell><Screen/></AppShell>);`, resolveDir: process.cwd(), loader: "tsx" },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_EMAIL_DELIVERY_MODE": '"manual"' },
     plugins: [{ name: "manual-email-fixture", setup(plugin) {
