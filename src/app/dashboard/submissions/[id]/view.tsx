@@ -16,6 +16,7 @@ import {
   readPaymentResultGrant,
 } from "@/lib/payment-result-grant";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const uuidPattern =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -170,7 +171,7 @@ export async function SubmissionDetailPageView({
           Submission
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">{copy.invalidTitle}</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           {copy.invalidBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
@@ -285,7 +286,7 @@ export async function SubmissionDetailPageView({
           Submission
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">{copy.unavailableTitle}</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           {copy.unavailableBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">
@@ -320,7 +321,7 @@ export async function SubmissionDetailPageView({
           Submission
         </p>
         <h1 className="font-display mt-2 text-2xl text-foreground">{copy.forbiddenTitle}</h1>
-        <p className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <p className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           {copy.forbiddenBody}
         </p>
         <div className="mt-3 rounded-2xl border border-border/60 bg-background px-4 py-3 text-xs text-muted-foreground">

@@ -10,6 +10,7 @@ import {
   openInicisCardPopup,
   type InicisPopupContext,
 } from "@/lib/inicis/popup";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type PaymentRetryClientProps = {
   submissionId: string;
@@ -139,8 +140,8 @@ export function PaymentRetryClient({
         <div
           className={`rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${
             notice.type === "error"
-              ? "border-[#d9362c] bg-[#d9362c]/10 text-[#d9362c]"
-              : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+              ? brandStatusTones.danger
+              : brandStatusTones.progress
           }`}
         >
           {notice.message}

@@ -187,7 +187,7 @@ export async function DashboardArtistDetailPageView({
               />
             </div>
           ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-lg font-bold text-emerald-900">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-[#1f7a5a] text-lg font-bold text-white">
               {(artist.name || "A").charAt(0).toUpperCase()}
             </div>
           )}

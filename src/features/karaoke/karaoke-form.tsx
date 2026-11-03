@@ -439,7 +439,7 @@ export function KaraokeForm({
               className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 tjRequested
                   ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+                  : "border-border/70 bg-background text-foreground hover:border-foreground"
               }`}
             >
               <input
@@ -465,7 +465,7 @@ export function KaraokeForm({
               className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 kyRequested
                   ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+                  : "border-border/70 bg-background text-foreground hover:border-foreground"
               }`}
             >
               <input

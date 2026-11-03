@@ -8,6 +8,7 @@ import {
   updateProfileAction,
   type ActionState,
 } from "@/features/auth/actions";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type ProfileFormProps = {
   canChangePassword?: boolean;
@@ -126,12 +127,12 @@ export function ProfileForm({ defaultValues, canChangePassword = true, canEditNo
           </div>}
         </div>
         {state.error && (
-          <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+          <p role="alert" className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
             {state.error}
           </p>
         )}
         {state.message && (
-          <p role="status" className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
+          <p role="status" className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.success}`}>
             {state.message}
           </p>
         )}
@@ -218,12 +219,12 @@ export function ProfileForm({ defaultValues, canChangePassword = true, canEditNo
             </div>
           </div>
           {passwordState.error && (
-            <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+            <p role="alert" className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
               {passwordState.error}
             </p>
           )}
           {passwordState.message && (
-            <p role="status" className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]">
+            <p role="status" className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.success}`}>
               {passwordState.message}
             </p>
           )}

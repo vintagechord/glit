@@ -3808,7 +3808,7 @@ export function MvWizard({
                   }}
                   className={`text-left rounded-[28px] border p-4 transition sm:p-6 ${active
                     ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
+                    : "border-border/60 bg-card/80 text-foreground hover:border-foreground"
                     }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3854,7 +3854,7 @@ export function MvWizard({
                       onClick={() => toggleTvStation(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
-                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        : "border-border/60 bg-background text-foreground hover:border-foreground"
                         }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3894,7 +3894,7 @@ export function MvWizard({
                   onClick={() => setOnlineBaseSelected((prev) => !prev)}
                   className={`text-left rounded-2xl border p-4 transition ${onlineBaseSelected
                     ? mvOptionToneClasses[0]
-                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
                     }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3936,7 +3936,7 @@ export function MvWizard({
                       onClick={() => toggleOnlineOption(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
-                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        : "border-border/60 bg-background text-foreground hover:border-foreground"
                         }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">

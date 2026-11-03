@@ -15,6 +15,7 @@ import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 
 import { signupAction, type ActionState } from "./actions";
 import { useAuthNotice } from "./use-auth-notice";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const initialState: ActionState = {};
 
@@ -358,14 +359,14 @@ export function SignupForm({ nextPath }: { nextPath?: string | null }) {
         )}
       </fieldset>
       {state.error && (
-        <p role="alert" className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-2 text-xs font-semibold text-[#d9362c]">
+        <p role="alert" className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
           {state.error}
         </p>
       )}
       {state.message && (
         <p
           aria-live="polite"
-          className="rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-2 text-xs font-semibold text-[#1f7a5a]"
+          className={`rounded-[8px] border-2 px-4 py-2 text-xs font-semibold ${brandStatusTones.success}`}
         >
           {state.message}{!state.verificationPending ? (english ? " You will be taken to the login page." : " 로그인 페이지로 이동합니다.") : ""}
         </p>

@@ -16,6 +16,7 @@ import {
   getActiveSubscription,
 } from "@/lib/subscriptions/service";
 import { SubscriptionPayButtons } from "@/features/subscriptions/subscription-pay";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const maskMid = (mid: string) => {
   if (!mid) return "";
@@ -203,7 +204,7 @@ export default async function SubscriptionPage() {
       </p>
 
       {subscription ? (
-        <div className="mt-6 rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 p-4 text-sm font-semibold text-[#1f7a5a]">
+        <div className={`mt-6 rounded-[8px] border-2 p-4 text-sm font-semibold ${brandStatusTones.success}`}>
           <p className="font-semibold">활성화된 구독이 있습니다.</p>
           <p className="mt-1">
             상태: {subscription.status} · 금액:{" "}

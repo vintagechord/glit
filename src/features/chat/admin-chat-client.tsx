@@ -27,6 +27,7 @@ import {
 } from "@/lib/support-chat";
 import { createClient } from "@/lib/supabase/client";
 import { ADMIN_CHAT_LIST_MAX, ADMIN_CHAT_PAGE_SIZE } from "./admin-chat-list";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type AdminChatClientProps = {
   initialConversations: SupportChatConversation[];
@@ -61,7 +62,7 @@ type DeletePayload = {
 const statusTone: Record<SupportChatStatus, string> = {
   OPEN: "border-border bg-background text-foreground",
   WAITING_ADMIN: "border-[#111111] bg-[#f2cf27] text-[#111111]",
-  WAITING_VISITOR: "border-[#1556a4]/30 bg-[#1556a4]/10 text-[#1556a4]",
+  WAITING_VISITOR: brandStatusTones.progress,
   CLOSED: "border-border bg-muted text-muted-foreground",
 };
 
@@ -568,7 +569,7 @@ export function AdminChatClient({
 
   return (
     <div className="mt-8 grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-      {error && !selectedConversation && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 lg:col-span-2">{error}</p>}
+      {error && !selectedConversation && <p role="alert" className={`rounded-xl border-2 p-3 text-sm font-semibold lg:col-span-2 ${brandStatusTones.danger}`}>{error}</p>}
       <aside className="overflow-hidden rounded-[18px] border-2 border-[#111111] bg-card shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:shadow-[5px_5px_0_#f2cf27]">
         <div className="flex items-center justify-between gap-3 border-b-2 border-[#111111] bg-background px-4 py-3">
           <div>
@@ -606,7 +607,7 @@ export function AdminChatClient({
                 <div
                   key={conversation.id}
                   className={`flex items-stretch border-b border-border/60 transition hover:bg-background ${
-                    active ? "bg-[#f2cf27]/18" : "bg-card"
+                    active ? "bg-card shadow-[inset_6px_0_0_#f2cf27]" : "bg-card"
                   }`}
                 >
                   <button
@@ -647,7 +648,7 @@ export function AdminChatClient({
                       type="button"
                       onClick={() => void deleteConversation(conversation)}
                       disabled={deletingId === conversation.id}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border bg-background text-muted-foreground transition hover:border-[#d9362c] hover:bg-[#d9362c]/10 hover:text-[#d9362c] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] border border-border bg-background text-muted-foreground transition hover:border-[#111111] hover:bg-[#d9362c] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`${getConversationTitle(conversation)} 상담 삭제`}
                       title="상담 삭제"
                     >
@@ -736,7 +737,7 @@ export function AdminChatClient({
             </div>
 
             {error ? (
-              <div className="border-b border-red-500/30 bg-red-500/10 px-5 py-3 text-xs font-semibold text-red-600">
+              <div className={`border-b-2 px-5 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                 {error}
               </div>
             ) : null}

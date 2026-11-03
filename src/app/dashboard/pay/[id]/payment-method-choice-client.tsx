@@ -6,6 +6,7 @@ import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice,
 
 import type { InicisPopupContext } from "@/lib/inicis/popup";
 import { PaymentRetryClient } from "./payment-retry-client";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type PaymentMethod = "BANK" | "CARD";
 
@@ -144,7 +145,7 @@ export function PaymentMethodChoiceClient({
       {isMobileDevice ? <p className="text-sm leading-6 text-muted-foreground">{INICIS_MOBILE_UNAVAILABLE_MESSAGE}</p> : null}
 
       {errorMessage ? (
-        <div className="rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]">
+        <div className={`rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           {errorMessage}
         </div>
       ) : null}

@@ -11,6 +11,7 @@ import {
 import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { cancelUnopenedInicisOrder, submissionOrderReturnHref } from "@/lib/inicis/popup-recovery";
 import { cleanupInicisPaymentLayer, submitInicisMobileForm } from "@/lib/inicis/popup";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type StdPayInit = {
   ok?: boolean;
@@ -439,7 +440,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
 
       {error && (
         <div className="p-4">
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className={`rounded-xl border-2 px-4 py-3 text-sm ${brandStatusTones.danger}`}>
             <p className="font-semibold">결제 준비에 실패했습니다.</p>
             <p className="mt-1">{error}</p>
             {submissionId && context !== "karaoke" && context !== "test1000" ? (

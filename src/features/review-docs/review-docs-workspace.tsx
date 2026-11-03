@@ -6,6 +6,7 @@ import { getReviewRetrySourceIds } from "@/lib/review-docs/retry";
 import type { publicReviewJob } from "@/lib/review-docs/jobs-types";
 import { hasUnlimitedReviewRetention } from "@/lib/review-docs/retention";
 import { alignTranslationSegments, emptyAlbum, emptyTrack, mergeReviewAlbums, moveReviewTrack, reorderReviewTrack } from "./editor";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type Job = ReturnType<typeof publicReviewJob>;
 type Tab = "files" | "urls" | "mv";
@@ -15,6 +16,8 @@ const tabs: { id: Tab; label: string }[] = [{ id: "files", label: "기준파일 
 const inputClass = "mt-1 w-full rounded-[8px] border-2 border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60";
 const buttonClass = "rounded-[8px] border-2 border-border px-3 py-2 text-sm font-bold transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
 const panelClass = "rounded-[12px] border-2 border-border bg-card p-4 sm:p-5";
+// Buttons inside a solid status box keep their own white surface.
+const toneButtonClass = "rounded-[8px] border-2 border-[#111111] bg-white px-3 py-2 text-sm font-bold text-[#111111] transition hover:bg-[#ebe7de] disabled:cursor-not-allowed disabled:opacity-50";
 const uid = () => crypto.randomUUID();
 const toggle = (items: string[], value: string, checked: boolean) => checked ? [...new Set([...items, value])] : items.filter((item) => item !== value);
 const formatDate = (value: string) => new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
@@ -226,8 +229,8 @@ export function ReviewDocsWorkspace() {
 
   return <div className="mt-7 space-y-6">
     {historyLoading && <p role="status" className="text-sm text-muted-foreground">심의자료 처리 환경과 지원 파일 형식을 확인하고 있습니다…</p>}
-    {workerReady === false && <div role="status" className="flex flex-col gap-3 rounded-[8px] border-2 border-amber-500/60 bg-amber-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"><p>{workerError || "심의자료 처리 연결을 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 연결이 복구되면 새 분석·문서 생성을 시작할 수 있습니다."}</p><button type="button" className={`${buttonClass} shrink-0`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button></div>}
-    {workerMode === "web" && <p role="status" className="rounded-[8px] border border-emerald-600/40 bg-emerald-600/5 p-4 text-sm">{supportedFormats.length > 1 ? "DOC · DOCX · HWP · PDF 파일과 멜론·지니 URL을 바로 분석할 수 있습니다." : "DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다. DOC·HWP·PDF는 DOCX로 저장해서 업로드해주세요."}</p>}
+    {workerReady === false && <div role="status" className={`flex flex-col gap-3 rounded-[8px] border-2 p-4 text-sm sm:flex-row sm:items-center sm:justify-between ${brandStatusTones.warning}`}><p>{workerError || "심의자료 처리 연결을 확인하고 있습니다. 기존 자료를 확인·수정할 수 있으며, 연결이 복구되면 새 분석·문서 생성을 시작할 수 있습니다."}</p><button type="button" className={`${toneButtonClass} shrink-0`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button></div>}
+    {workerMode === "web" && <p role="status" className={`rounded-[8px] border-2 p-4 text-sm ${brandStatusTones.success}`}>{supportedFormats.length > 1 ? "DOC · DOCX · HWP · PDF 파일과 멜론·지니 URL을 바로 분석할 수 있습니다." : "DOCX 파일과 멜론·지니 URL은 바로 분석할 수 있습니다. DOC·HWP·PDF는 DOCX로 저장해서 업로드해주세요."}</p>}
     <section className={panelClass} aria-label="자료 입력">
       <div role="tablist" aria-label="생성 방식" className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-selected={tab === item.id} aria-controls="review-input-panel" onClick={() => setTab(item.id)} className={`${buttonClass} ${tab === item.id ? "border-[#111111] bg-[#f2cf27] text-[#111111]" : ""}`}>{item.label}</button>)}</div>
       <div id="review-input-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="mt-5 space-y-4">
@@ -243,8 +246,8 @@ export function ReviewDocsWorkspace() {
       </div>
     </section>
 
-    {(error || historyError) && <div role="alert" className="rounded-[8px] border-2 border-red-500/60 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><p>{error || historyError}</p>{historyError && <button type="button" className={`${buttonClass} mt-3`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button>}</div>}
-    {notice && <p role="status" className="rounded-[8px] border-2 border-emerald-600/50 bg-emerald-500/10 p-4 text-sm">{notice}</p>}
+    {(error || historyError) && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm ${brandStatusTones.danger}`}><p>{error || historyError}</p>{historyError && <button type="button" className={`${toneButtonClass} mt-3`} disabled={checkingConnection} onClick={() => void loadHistory(true)}>{checkingConnection ? "연결 확인 중…" : "연결 다시 확인"}</button>}</div>}
+    {notice && <p role="status" className={`rounded-[8px] border-2 p-4 text-sm ${brandStatusTones.success}`}>{notice}</p>}
 
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0 space-y-5">
@@ -253,7 +256,7 @@ export function ReviewDocsWorkspace() {
             <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">{job.mode === "mv" ? "영등위 가사파일" : "음반 심의자료"} · {statusLabels[job.status]}</h2><p className="mt-1 break-all text-xs text-muted-foreground">작업 {job.id} / 자료 버전 {job.version}</p></div><button type="button" className={buttonClass} disabled={pending} onClick={() => void perform(() => loadJob(job.id))}>상태 새로고침</button></div>
             <ol className="mt-4 flex flex-wrap gap-2 text-xs" aria-label="처리 단계">{["자료 입력", "분석·번역", "확인·수정", "생성·검사", "다운로드"].map((label, index) => <li key={label} className="rounded border border-border px-2 py-1">{index + 1}. {label}</li>)}</ol>
             <p className="mt-3 text-sm" role="status" aria-live="polite">{running ? `${statusLabels[job.status]}입니다. 다른 페이지로 이동해도 최근 작업 이력에서 다시 확인할 수 있습니다.` : dirty ? "저장하지 않은 수정 내용이 있습니다. 저장 후 번역·생성을 진행해주세요." : "원문과 추출 내용을 확인한 뒤 저장·생성을 진행해주세요."}</p>
-            {job.error_message && <p className="mt-3 rounded bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{job.error_message}</p>}
+            {job.error_message && <p className={`mt-3 rounded border-2 p-3 text-sm ${brandStatusTones.danger}`}>{job.error_message}</p>}
             <div className="mt-4 flex flex-wrap gap-2">{running && <button type="button" className={buttonClass} disabled={pending || dirty} onClick={() => void action("cancel")}>작업 취소</button>}{job.status === "failed" && job.retryable && <button type="button" className={buttonClass} disabled={pending || dirty || workerReady !== true} onClick={() => void action("retry")}>실패한 단계 재시도</button>}{job.status === "needs_review" && failedSourceCount > 0 && <button type="button" className={buttonClass} disabled={pending || dirty || workerReady !== true || (job.extraction_attempts ?? 0) >= 3} onClick={() => void action("retry")}>실패한 원본 다시 분석 ({failedSourceCount}개)</button>}</div>{job.status === "needs_review" && failedSourceCount > 0 && (job.extraction_attempts ?? 0) >= 3 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">원본 재분석 횟수를 모두 사용했습니다. 오류 원인을 확인하고 수정된 파일·URL로 새 작업을 시작해주세요.</p>}
           </section>
 
@@ -273,9 +276,9 @@ export function ReviewDocsWorkspace() {
 
           {draft && <>
             <section className={panelClass} aria-label="검토 필요 항목"><h2 className="font-black">확인 필요 {issues.length}건 {blocking.length > 0 && <span className="text-sm text-red-600">· 생성 전 보완 {blocking.length}건</span>}</h2>
-              {issues.length ? <ul className="mt-3 max-h-96 space-y-3 overflow-auto">{issues.map((issue) => <li key={issue.id} className={`rounded border p-3 text-sm ${issue.severity === "error" ? "border-red-500/30 bg-red-500/5" : "border-amber-500/30 bg-amber-500/5"}`}>
+              {issues.length ? <ul className="mt-3 max-h-96 space-y-3 overflow-auto">{issues.map((issue) => <li key={issue.id} className={`rounded border-2 p-3 text-sm ${issue.severity === "error" ? brandStatusTones.danger : brandStatusTones.warning}`}>
                 <p>{issue.albumId && <span className="font-bold">{draft.albums.find((album) => album.id === issue.albumId)?.title || "앨범"} · </span>}{issue.trackId && <span className="font-bold">{draft.albums.flatMap((album) => album.tracks).find((track) => track.id === issue.trackId)?.title || "곡"} · </span>}{issue.message}</p>
-                {!canConfirmReviewIssue(issue) && <p className="mt-2 text-xs text-muted-foreground">원본 처리 실패는 확인만으로 해제할 수 없습니다. 오류 원인을 해결한 후 원본을 다시 분석하거나 수정된 자료를 업로드해주세요.</p>}
+                {!canConfirmReviewIssue(issue) && <p className="mt-2 text-xs">원본 처리 실패는 확인만으로 해제할 수 없습니다. 오류 원인을 해결한 후 원본을 다시 분석하거나 수정된 자료를 업로드해주세요.</p>}
                 {canConfirmReviewIssue(issue) && draft.issues.some((item) => item.id === issue.id) && editable && <div className="mt-2"><Check label="원문과 비교해 수정·확인했습니다" checked={draft.confirmedIssueIds.includes(issue.id)} onChange={(checked) => edit((data) => ({ ...data, confirmedIssueIds: toggle(data.confirmedIssueIds, issue.id, checked) }))} /></div>}
               </li>)}</ul> : <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">필수 정보 검사가 통과했습니다. 원문·번역·타이틀 표시를 최종 확인해주세요.</p>}
               {confirmedIssues.length > 0 && <details className="mt-3 text-xs"><summary>확인한 원문 경고 {confirmedIssues.length}건</summary><div className="mt-2 space-y-2">{confirmedIssues.map((issue) => <Check key={issue.id} label={issue.message} checked onChange={() => edit((data) => ({ ...data, confirmedIssueIds: data.confirmedIssueIds.filter((id) => id !== issue.id) }))} />)}</div></details>}
@@ -312,7 +315,7 @@ export function ReviewDocsWorkspace() {
         </> : <div className={`${panelClass} py-16 text-center text-sm text-muted-foreground`}>새 자료를 분석하거나 최근 작업을 선택해주세요.</div>}
       </div>
 
-      <aside className={panelClass} aria-label="최근 생성 작업 이력"><div className="flex items-center justify-between gap-2"><h2 className="font-black">최근 작업</h2><button type="button" className="text-xs underline" onClick={() => void loadHistory()}>새로고침</button></div>{dirty && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">현재 수정 내용을 저장한 뒤 다른 작업을 선택해주세요.</p>}{historyLoading ? <p className="mt-4 text-sm">이력 불러오는 중…</p> : <ul className="mt-4 space-y-3">{jobs.map((item) => <li key={item.id}><button type="button" disabled={dirty || pending} className={`w-full rounded-[8px] border-2 p-3 text-left disabled:opacity-50 ${job?.id === item.id ? "border-[#1556a4] bg-blue-500/5" : "border-border"}`} onClick={() => void perform(async () => { await loadJob(item.id, true); if (!mounted.current) return; setTab(item.mode === "mv" ? "mv" : item.input_kind === "urls" ? "urls" : "files"); })}><span className="block text-sm font-bold">{item.mode === "mv" ? "영등위 가사" : "음반 자료"} · {statusLabels[item.status]}</span><span className="mt-1 block truncate text-xs">{item.sources[0]?.name || "새 작업"}{item.sources.length > 1 ? ` 외 ${item.sources.length - 1}개` : ""}</span><span className="mt-1 block text-[11px] text-muted-foreground">{formatDate(item.created_at)} · v{item.version}</span></button></li>)}</ul>}{!historyLoading && !jobs.length && <p className="mt-4 text-xs text-muted-foreground">최근 생성 작업이 없습니다.</p>}</aside>
+      <aside className={panelClass} aria-label="최근 생성 작업 이력"><div className="flex items-center justify-between gap-2"><h2 className="font-black">최근 작업</h2><button type="button" className="text-xs underline" onClick={() => void loadHistory()}>새로고침</button></div>{dirty && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">현재 수정 내용을 저장한 뒤 다른 작업을 선택해주세요.</p>}{historyLoading ? <p className="mt-4 text-sm">이력 불러오는 중…</p> : <ul className="mt-4 space-y-3">{jobs.map((item) => <li key={item.id}><button type="button" disabled={dirty || pending} className={`w-full rounded-[8px] border-2 p-3 text-left disabled:opacity-50 ${job?.id === item.id ? "border-[var(--bauhaus-ink)] shadow-[3px_3px_0_#1556a4]" : "border-border"}`} onClick={() => void perform(async () => { await loadJob(item.id, true); if (!mounted.current) return; setTab(item.mode === "mv" ? "mv" : item.input_kind === "urls" ? "urls" : "files"); })}><span className="block text-sm font-bold">{item.mode === "mv" ? "영등위 가사" : "음반 자료"} · {statusLabels[item.status]}</span><span className="mt-1 block truncate text-xs">{item.sources[0]?.name || "새 작업"}{item.sources.length > 1 ? ` 외 ${item.sources.length - 1}개` : ""}</span><span className="mt-1 block text-[11px] text-muted-foreground">{formatDate(item.created_at)} · v{item.version}</span></button></li>)}</ul>}{!historyLoading && !jobs.length && <p className="mt-4 text-xs text-muted-foreground">최근 생성 작업이 없습니다.</p>}</aside>
     </div>
   </div>;
 }

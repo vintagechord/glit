@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { resendSignupAction, type ActionState } from "./actions";
 import { getAuthPageHref } from "./navigation";
 import { useAuthNotice } from "./use-auth-notice";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export function AccountEmailForm({ nextPath }: { nextPath?: string | null }) {
   const english = usePathname().startsWith("/en/");
@@ -32,7 +33,7 @@ export function AccountEmailForm({ nextPath }: { nextPath?: string | null }) {
     <input id="signup-email" name="email" type="email" autoComplete="email" maxLength={254} required aria-invalid={Boolean(state.fieldErrors?.email)} aria-describedby={state.fieldErrors?.email ? "signup-email-error" : undefined} className="w-full rounded-[8px] border-2 border-border bg-background px-4 py-3 text-sm" />
     {state.fieldErrors?.email && <p id="signup-email-error" className="text-sm text-red-500">{state.fieldErrors.email}</p>}
     {state.error && <p role="alert" className="text-sm text-red-500">{state.error}</p>}
-    {state.message && <p role="status" className="rounded-[8px] border border-emerald-600 p-3 text-sm">{state.message}</p>}
+    {state.message && <p role="status" className={`rounded-[8px] border-2 p-3 text-sm font-semibold ${brandStatusTones.success}`}>{state.message}</p>}
     <button type="submit" disabled={pending || remaining > 0} className="bauhaus-button w-full px-5 py-3 text-sm disabled:opacity-60">{pending ? english ? "Requesting..." : "요청 중..." : remaining > 0 ? `${remaining}${english ? " seconds until retry" : "초 후 다시 보내기"}` : english ? "Send email" : "이메일로 받기"}</button>
     <div className="flex flex-wrap justify-center gap-4 text-sm font-semibold underline underline-offset-4">
       <Link href={getAuthPageHref("login", nextPath, english)}>{english ? "Log in" : "로그인"}</Link>
