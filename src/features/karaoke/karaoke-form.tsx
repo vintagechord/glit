@@ -5,6 +5,7 @@ import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
@@ -601,7 +602,7 @@ export function KaraokeForm({
                   </span>
                   <div className="flex items-center gap-3">
                     {upload.status === "done" ? (
-                      <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                      <span className={`inline-flex items-center rounded-full border-2 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${brandStatusTones.success}`}>
                         첨부 완료
                       </span>
                     ) : (
@@ -620,7 +621,7 @@ export function KaraokeForm({
                         setUpload({ name: "", progress: 0, status: "idle" });
                         setIsDraggingOver(false);
                       }}
-                      className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                      className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-[#d9362c] hover:text-[#d9362c]"
                     >
                       삭제
                     </button>
@@ -720,12 +721,12 @@ export function KaraokeForm({
         </div>
 
         {notice.error && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             {notice.error}
           </div>
         )}
         {notice.message && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+          <div role="status" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
             {notice.message}
           </div>
         )}

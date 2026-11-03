@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 
+import { brandStatusTones } from "@/lib/brand-status-tones";
+
 export type CreditActionNoticeState = {
   type: "success" | "error";
   text: string;
@@ -35,7 +37,7 @@ export function CreditActionNotice({
 
   if (notice.type === "error") {
     return (
-      <div className="mb-5 rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-black text-[#d9362c]">
+      <div role="alert" className={`mb-5 rounded-[10px] border-2 px-4 py-3 text-sm font-black ${brandStatusTones.danger}`}>
         {notice.text}
       </div>
     );
