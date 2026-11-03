@@ -225,10 +225,10 @@ function MvCreditConsistencyNotice() {
     <aside
       role="note"
       data-testid="mv-credit-consistency-notice"
-      className="rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:p-5"
+      className="rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-card p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+        <span className={`rounded-md border-2 px-2 py-1 text-[11px] font-bold ${brandStatusTones.progress}`}>
           필수 안내
         </span>
         <h3 className="text-sm font-semibold text-foreground">
@@ -647,7 +647,7 @@ export function MvWizard({
   const requiredFieldClass = React.useCallback(
     (field: MvValidationField) =>
       `w-full rounded-2xl border bg-background px-4 py-3 text-sm text-foreground outline-none transition ${invalidField === field
-        ? "border-red-500 ring-2 ring-red-500/20 focus:border-red-500"
+        ? "border-[#d9362c] ring-1 ring-[#d9362c] focus:border-[#d9362c]"
         : "border-border/70 focus:border-foreground"
       }`,
     [invalidField],
@@ -2423,7 +2423,7 @@ export function MvWizard({
         return (
           <mark
             key={`${part}-${index}`}
-            className="rounded bg-red-200/80 px-1 text-red-900 dark:bg-red-500/30 dark:text-red-100"
+            className="rounded bg-[#d9362c] px-1 text-white"
           >
             {part}
           </mark>
@@ -3658,7 +3658,7 @@ export function MvWizard({
             {resumeDeleteError ? (
               <p
                 role="alert"
-                className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600"
+                className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}
               >
                 {resumeDeleteError}
               </p>
@@ -3902,7 +3902,7 @@ export function MvWizard({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
                         <span
-                          className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111]/30 bg-white/45 text-[#111111]" : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}
+                          className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111] bg-white text-[#111111]" : brandStatusTones.progress}`}
                         >
                           유통사 제출용
                         </span>
@@ -4080,7 +4080,7 @@ export function MvWizard({
               </div>
               <div className="mt-5">{renderGuestContactSection()}</div>
               {notice.error && (
-                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className={`mt-4 rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4551,7 +4551,7 @@ export function MvWizard({
                       </button>
                     </div>
                     {showLyricsToolNotice && (
-                      <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
+                      <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-white opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[var(--bauhaus-ink)] group-hover/lyrics-tools:bg-[#1556a4] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[var(--bauhaus-ink)] group-focus-within/lyrics-tools:bg-[#1556a4] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
                         위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                         체크해주세요.
                       </div>
@@ -4560,11 +4560,11 @@ export function MvWizard({
                 </div>
                 {lyricsToolNotice && (
                   <div
-                    className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
-                      ? "border-red-200/70 bg-red-50 text-red-700"
+                    className={`mt-3 rounded-2xl border-2 px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
+                      ? brandStatusTones.danger
                       : lyricsToolNotice.type === "success"
-                        ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-                        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+                        ? brandStatusTones.success
+                        : brandStatusTones.progress
                       }`}
                   >
                     {lyricsToolNotice.message}
@@ -4572,7 +4572,7 @@ export function MvWizard({
                 )}
                 <div
                   className={`relative isolate mt-4 overflow-hidden rounded-2xl border bg-background transition ${invalidField === "lyrics"
-                      ? "border-red-500 ring-2 ring-red-500/20 focus-within:border-red-500"
+                      ? "border-[#d9362c] ring-1 ring-[#d9362c] focus-within:border-[#d9362c]"
                       : "border-border/70 focus-within:border-foreground"
                     }`}
                 >
@@ -4644,7 +4644,7 @@ export function MvWizard({
               {renderGuestContactSection()}
 
               {notice.error && (
-                <div id="mv-basic-error" role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div id="mv-basic-error" role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4858,7 +4858,7 @@ export function MvWizard({
                           <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                             <span role="status" aria-atomic="true">
                               {upload.status === "done" ? (
-                                  <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                                  <span className={`inline-flex items-center rounded-full border-2 px-3 py-1.5 text-xs font-bold ${brandStatusTones.success}`}>
                                     첨부 완료
                                   </span>
                                 ) : (
@@ -4920,7 +4920,7 @@ export function MvWizard({
           </div>
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}
@@ -5320,7 +5320,7 @@ export function MvWizard({
           ) : null}
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}
