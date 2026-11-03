@@ -9,6 +9,7 @@ import type { RadioRequestDraft, RadioRequestProgress, RadioRequestSelection } f
 import { useRadioRequestWorkspace } from "./use-radio-request-workspace";
 import { RadioDraftEditor, downloadRadioText, radioExternalUrl, radioButtonClass, radioCardClass, radioControlClass, radioNoteClass, radioPrimaryClass } from "./radio-request-ui";
 import { RadioProgramSchedule, RadioProgramStrategy } from "./radio-program-plan";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { RadioRequestOutcome } from "./radio-request-outcome";
 
 export { radioButtonClass } from "./radio-request-ui";
@@ -126,7 +127,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
         </div>
         <div className="flex w-full max-w-full flex-wrap gap-1.5 text-[11px] font-semibold sm:w-auto">
           <span className="rounded-lg bg-white/10 px-2.5 py-1.5">{stationName}</span>
-          <span className={`rounded-lg px-2.5 py-1.5 ${selected.manual ? "bg-amber-300/15 text-amber-200" : "bg-emerald-300/15 text-emerald-200"}`}>{selected.manual ? (isEnglish ? "Track approval unverified" : "곡별 적격 여부 미확인") : (isEnglish ? "Approved track" : "적격 곡")}</span>
+          <span className={`rounded-lg border-2 px-2.5 py-1.5 ${selected.manual ? brandStatusTones.warning : brandStatusTones.success}`}>{selected.manual ? (isEnglish ? "Track approval unverified" : "곡별 적격 여부 미확인") : (isEnglish ? "Approved track" : "적격 곡")}</span>
         </div>
       </div>
       <nav aria-label={isEnglish ? "Request steps" : "방송 신청 단계"}>
@@ -137,7 +138,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
               <button type="button" aria-current={step === number ? "step" : undefined} disabled={number > lastAvailableStep}
                 aria-label={isEnglish ? `Step ${number}: ${label}` : `${number}단계: ${label}`}
                 onClick={() => workspace.setStep(number)}
-                className={`flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-center text-[11px] font-semibold leading-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-xs ${step === number ? "border-blue-700 bg-blue-700 text-white shadow-sm dark:border-blue-500 dark:bg-blue-600" : "border-slate-200 bg-slate-50 text-slate-600 enabled:hover:border-blue-400 disabled:opacity-45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                className={`flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-center text-[11px] font-semibold leading-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-xs ${step === number ? "border-[var(--bauhaus-ink)] bg-[#1556a4] text-white shadow-sm" : "border-slate-200 bg-slate-50 text-slate-600 enabled:hover:border-blue-400 disabled:opacity-45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
                 <span className={`flex size-6 items-center justify-center rounded-full text-xs ${step === number ? "bg-white/20" : "bg-slate-200/70 dark:bg-slate-700"}`}>{number < step ? <Check size={14} aria-hidden /> : number}</span>
                 <span className="[word-break:keep-all]">{label}</span>
               </button>
@@ -153,7 +154,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
             : (isEnglish ? "Auto-saved in this tab · continue after refresh" : "이 탭에 자동 저장 · 새로고침해도 이어서 작성")}</p>
         <button type="button" className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-slate-500 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-400" onClick={() => setResetOpen(!resetOpen)}><RotateCcw size={12} aria-hidden />{isEnglish ? "Reset saved work" : "저장 내용 초기화"}</button>
       </div>
-      {resetOpen && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      {resetOpen && <div className={`rounded-xl border-2 p-4 text-sm ${brandStatusTones.warning}`}>
         <p>{isEnglish ? "Clear this album’s drafts and checklist from this tab? Download any text you want to keep first." : "이 탭에 저장된 이 음반의 초안과 체크를 지울까요? 필요한 신청글은 먼저 TXT로 저장해주세요."}</p>
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={radioButtonClass} onClick={() => { workspace.resetWorkspace(); setResetOpen(false); }}>{isEnglish ? "Clear this album’s saved work" : "이 음반의 저장 내용 지우기"}</button><button type="button" className={radioButtonClass} onClick={() => setResetOpen(false)}>{isEnglish ? "Keep writing" : "계속 작성"}</button></div>
       </div>}
@@ -164,14 +165,14 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
           <p className={`mt-2 ${radioNoteClass}`}>{descriptions[step - 1]}</p>
         </div>
         {step === 1 && <div className={`${radioCardClass} space-y-5`}>
-          {needsTrackConfirmation && <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "Your previously selected song is no longer in this broadcaster’s approved list. Confirm an available song to continue." : "이전에 선택한 곡이 현재 적격 목록에서 빠졌어요. 신청할 곡을 다시 확인한 뒤 진행해주세요."}</p>}
+          {needsTrackConfirmation && <p className={`rounded-xl border-2 p-3 text-sm leading-6 ${brandStatusTones.warning}`}>{isEnglish ? "Your previously selected song is no longer in this broadcaster’s approved list. Confirm an available song to continue." : "이전에 선택한 곡이 현재 적격 목록에서 빠졌어요. 신청할 곡을 다시 확인한 뒤 진행해주세요."}</p>}
           {candidates.length > 1 && <div><label htmlFor={`${id}-station`} className="mb-2 block text-sm font-bold">{isEnglish ? "Approved broadcaster" : "적격 방송국"}</label>
             <select id={`${id}-station`} value={selected.review.id} className={radioControlClass} onChange={event => { workspace.setStationId(event.target.value); setQuery(""); setTimeFilter("all"); setRouteFilter("all"); }}>
               {candidates.map(item => <option key={item.review.id} value={item.review.id}>{item.review.station?.name || item.review.station?.code || (isEnglish ? "Broadcaster" : "방송국")}</option>)}
             </select>
           </div>}
           {selected.manual ? <>
-            <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "The broadcaster’s approval is recorded, but individual song details are missing. Enter a song from this album and check its actual approval before posting. Your review record will not change." : "방송국의 적격 기록은 있지만 개별 곡 정보가 없습니다. 이 음반의 곡을 입력하고 신청 전 실제 적격 여부를 확인해주세요. 심의 기록은 변경되지 않습니다."}</p>
+            <p className={`rounded-xl border-2 p-3 text-xs leading-5 ${brandStatusTones.warning}`}>{isEnglish ? "The broadcaster’s approval is recorded, but individual song details are missing. Enter a song from this album and check its actual approval before posting. Your review record will not change." : "방송국의 적격 기록은 있지만 개별 곡 정보가 없습니다. 이 음반의 곡을 입력하고 신청 전 실제 적격 여부를 확인해주세요. 심의 기록은 변경되지 않습니다."}</p>
             <div><label htmlFor={`${id}-manual-title`} className="mb-2 block text-sm font-bold">{isEnglish ? "Song title (required)" : "신청할 곡명 (필수)"}</label><input id={`${id}-manual-title`} className={radioControlClass} value={manual.title} maxLength={200} onChange={event => { const title = event.target.value; workspace.setManualNames(previous => ({ ...previous, [selected.review.id]: { ...manual, title } })); }} /></div>
           </> : <div>
             <label htmlFor={`${id}-track`} className="mb-2 block text-sm font-bold">{isEnglish ? "Approved track" : "신청할 적격 곡"}</label>
@@ -194,8 +195,8 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
             </div>
             {(timeFilter !== "all" || routeFilter !== "all") && <p className={radioNoteClass}>{isEnglish ? "Filters include only programs with verified time or participation details. Select All to see other programs." : "필터에는 시간·참여 방식이 확인된 프로그램만 표시합니다. 나머지는 ‘전체’에서 확인하세요."}</p>}
             <div className="grid gap-3 sm:grid-cols-2">
-              {filteredPrograms.map(item => <article key={item.name} className={`flex min-w-0 flex-col rounded-2xl border-2 p-4 ${program === item.name ? "border-blue-600 bg-blue-50/50 dark:border-blue-400 dark:bg-blue-950/30" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"}`}>
-                <div className="mb-2 flex flex-wrap gap-1.5 text-[10px] font-semibold"><span className="rounded bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{stationName}</span><span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{isEnglish ? "Official request board" : "공식 신청 게시판"}</span></div>
+              {filteredPrograms.map(item => <article key={item.name} className={`flex min-w-0 flex-col rounded-2xl border-2 p-4 ${program === item.name ? "border-[var(--bauhaus-ink)] bg-white shadow-[4px_4px_0_#1556a4] dark:bg-slate-950" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"}`}>
+                <div className="mb-2 flex flex-wrap gap-1.5 text-[10px] font-semibold"><span className="rounded bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{stationName}</span><span className={`rounded border px-2 py-1 ${brandStatusTones.success}`}>{isEnglish ? "Official request board" : "공식 신청 게시판"}</span></div>
                 <h4 className="text-base font-bold">{item.name}</h4>
                 <p className="mt-2 text-xs font-semibold text-blue-700 dark:text-blue-300">{formatRadioSchedule(getRadioProgramPlan(item), isEnglish)}</p>
                 <p className={`mt-2 flex-1 ${radioNoteClass}`}>{item.description[locale]}</p>
@@ -210,10 +211,10 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
             {guide ? <a href={guide.directoryUrl} target="_blank" rel="noopener noreferrer" className={radioButtonClass}>{isEnglish ? `All programs at ${guide.name}` : `${guide.name} · 전체 프로그램`}<ArrowUpRight size={15} aria-hidden /></a> : <p className={radioNoteClass}>{isEnglish ? "A public request board has not been verified for this broadcaster. Confirm the participation route with the broadcaster first." : "이 방송국의 공개 신청곡 게시판은 확인되지 않았습니다. 방송국에 참여 경로를 먼저 확인해주세요."}</p>}
             <div><label htmlFor={`${id}-program`} className="mb-2 block text-sm font-semibold">{guide?.programs.length ? (isEnglish ? "Selected program or another program name" : "선택한 프로그램 또는 다른 프로그램명") : (isEnglish ? "Program name you checked (required)" : "직접 확인한 프로그램명 (필수)")}</label><input id={`${id}-program`} className={radioControlClass} value={selection.program ?? ""} maxLength={120} onChange={event => updateSelection({ program: event.target.value })} placeholder={isEnglish ? "Enter the exact program name" : "프로그램 이름을 정확히 입력해주세요"} /></div>
           </div>
-          {program && <p className="flex items-start gap-2 rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200"><CheckCircle2 size={18} className="mt-0.5 shrink-0" aria-hidden /><span>{isEnglish ? "Selected: " : "선택한 프로그램: "}{program}<span className={`mt-1 block font-normal ${radioNoteClass}`}>{selectedProgram ? (isEnglish ? "We will link you directly to its official board." : "신청 단계에서 공식 게시판으로 바로 연결합니다.") : (isEnglish ? "Use the official directory to find this program’s board." : "직접 입력한 프로그램은 공식 목록에서 게시판을 찾아주세요.")}</span></span></p>}
+          {program && <p className={`flex items-start gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.progress}`}><CheckCircle2 size={18} className="mt-0.5 shrink-0" aria-hidden /><span>{isEnglish ? "Selected: " : "선택한 프로그램: "}{program}<span className="mt-1 block text-xs font-normal leading-5">{selectedProgram ? (isEnglish ? "We will link you directly to its official board." : "신청 단계에서 공식 게시판으로 바로 연결합니다.") : (isEnglish ? "Use the official directory to find this program’s board." : "직접 입력한 프로그램은 공식 목록에서 게시판을 찾아주세요.")}</span></span></p>}
         </>}
         {step === 3 && <>
-          <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 dark:bg-blue-950 dark:text-blue-200">{stationName} <span className="mx-1 text-blue-400">/</span> {program}</p>
+          <p className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.progress}`}>{stationName} <span className="mx-1">/</span> {program}</p>
           {selectedProgram && <RadioProgramStrategy program={selectedProgram} isEnglish={isEnglish} />}
           <fieldset className={`${radioCardClass} space-y-2`}><legend className="px-1 text-sm font-bold">{isEnglish ? "Prepare a relevant request" : "신청 전 준비 확인"}</legend>{([
             ["playlistFit", isEnglish ? "I found a connection in recent playlists" : "최근 선곡표에서 내 곡과 어울리는 분위기를 확인했어요"],
@@ -230,7 +231,7 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
               <div className="min-w-0">
                 <label htmlFor={`${id}-story`} className="block text-sm font-semibold">{isEnglish ? "Add your song’s story (optional)" : "내 곡만의 이야기를 더해보세요 (선택)"}</label>
                 <p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? `Why should ${program} listeners hear “${trackName}”? Two or three sentences are enough.` : `${program} 청취자들과 ‘${trackName}’을 함께 듣고 싶은 이유를 2~3문장으로 적어주세요.`}</p>
-                <div className="my-3 flex flex-wrap gap-1.5">{storyPrompts.map((prompt, index) => <button key={prompt} type="button" aria-pressed={draft.prompt === index} onClick={() => updateDraft(current => ({ ...current, prompt: index }))} className={`${radioButtonClass} px-2 text-xs ${draft.prompt === index ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-200" : ""}`}>{isEnglish ? ["Inspiration", "Listening moment", "Song mood"][index] : ["만든 이야기", "듣기 좋은 순간", "곡의 분위기"][index]}</button>)}</div>
+                <div className="my-3 flex flex-wrap gap-1.5">{storyPrompts.map((prompt, index) => <button key={prompt} type="button" aria-pressed={draft.prompt === index} onClick={() => updateDraft(current => ({ ...current, prompt: index }))} className={`${draft.prompt === index ? radioPrimaryClass : radioButtonClass} px-2 text-xs`}>{isEnglish ? ["Inspiration", "Listening moment", "Song mood"][index] : ["만든 이야기", "듣기 좋은 순간", "곡의 분위기"][index]}</button>)}</div>
                 <textarea id={`${id}-story`} value={draft.story} rows={4} maxLength={1000} placeholder={storyPrompts[draft.prompt]} className={`${radioControlClass} resize-y`} onChange={event => { const story = event.target.value; updateDraft(current => ({ ...current, story })); }} />
                 {draft.story.trim() && <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">{isEnglish ? "Not yet added to your final request." : "아직 최종 신청글에 반영되지 않았어요."}</p>}
                 <button type="button" disabled={!draft.story.trim() || draft.body.length + draft.story.trim().length + 2 > 5000} className={`${radioButtonClass} mt-2 w-full`} onClick={() => updateDraft(current => ({ ...current, body: `${current.body.trimEnd()}\n\n${current.story.trim()}`, story: "", bodyCopied: false }))}>{isEnglish ? "Add my story to the request" : "신청 문구에 이야기 추가"}<ArrowRight size={15} aria-hidden /></button>
@@ -257,17 +258,17 @@ export function RadioRequestWizard({ submission, candidates, isEnglish = false }
                 {guide ? <>
                   <a href={selectedProgram?.messageUrl ?? guide.directoryUrl} target="_blank" rel="noopener noreferrer" className={`${radioPrimaryClass} w-full`}>{selectedProgram ? (isEnglish ? `Open ${program} request board` : `${program} 신청 게시판 열기`) : (isEnglish ? `Find ${program} on the official site` : `공식 사이트에서 ${program} 찾기`)}<ExternalLink size={16} aria-hidden /><span className="sr-only">{isEnglish ? " (new tab)" : " (새 창)"}</span></a>
                   {!selectedProgram && <p className={radioNoteClass}>{isEnglish ? "Find your program’s board in the official directory." : "공식 프로그램 목록에서 입력한 프로그램의 게시판을 찾아주세요."}</p>}
-                </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{isEnglish ? "No official board link has been verified. Use the route you confirmed with this broadcaster." : "확인된 공식 게시판 링크가 없습니다. 방송국에 직접 확인한 경로를 이용해주세요."}</p>}
+                </> : <p className={`rounded-xl border-2 p-3 text-sm leading-6 ${brandStatusTones.warning}`}>{isEnglish ? "No official board link has been verified. Use the route you confirmed with this broadcaster." : "확인된 공식 게시판 링크가 없습니다. 방송국에 직접 확인한 경로를 이용해주세요."}</p>}
               </div>
               <ol className="space-y-3 border-t border-slate-200 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-slate-700">
-                {(isEnglish ? ["Open the official site and sign in.", selectedProgram ? "Read the board notice and start a new post." : "Find this program’s listener / song-request board.", "Paste your title and body, check the details, then submit."] : ["공식 사이트를 열고 방송국 계정으로 로그인", selectedProgram ? "게시판 공지를 확인하고 글쓰기 선택" : "프로그램의 ‘사연과 신청곡’ 또는 참여 게시판 찾기", "제목·본문 붙여넣기 → 내용 확인 → 직접 등록"]).map((text, index) => <li key={text} className="flex gap-2.5 text-sm leading-6"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-200">{index + 1}</span><span>{text}</span></li>)}
+                {(isEnglish ? ["Open the official site and sign in.", selectedProgram ? "Read the board notice and start a new post." : "Find this program’s listener / song-request board.", "Paste your title and body, check the details, then submit."] : ["공식 사이트를 열고 방송국 계정으로 로그인", selectedProgram ? "게시판 공지를 확인하고 글쓰기 선택" : "프로그램의 ‘사연과 신청곡’ 또는 참여 게시판 찾기", "제목·본문 붙여넣기 → 내용 확인 → 직접 등록"]).map((text, index) => <li key={text} className="flex gap-2.5 text-sm leading-6"><span className="flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-[var(--bauhaus-ink)] bg-[#1556a4] text-xs font-bold text-white">{index + 1}</span><span>{text}</span></li>)}
               </ol>
             </div>
             <details className={`${radioCardClass} group`} data-testid="radio-prepared-request">
               <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 text-sm font-semibold"><span className="flex items-center gap-2"><FileText size={16} className="shrink-0 text-blue-700 dark:text-blue-300" aria-hidden />{isEnglish ? "Copy my prepared title and request" : "준비한 제목·본문 다시 복사하기"}</span><ChevronDown size={16} className="shrink-0 transition group-open:rotate-180" aria-hidden /></summary>
               <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700"><RadioDraftEditor key={draftKey} draft={draft} updateDraft={updateDraft} isEnglish={isEnglish} onDownload={downloadRequest} readOnly /></div>
             </details>
-            <div className={`${radioCardClass} space-y-4 ${currentProgress.posted ? "border-emerald-300 dark:border-emerald-800" : ""}`} data-testid="radio-posting-record">
+            <div className={`${radioCardClass} space-y-4 ${currentProgress.posted ? "ring-2 ring-[#1f7a5a]" : ""}`} data-testid="radio-posting-record">
               <div className="flex items-start gap-2.5"><CheckCircle2 size={22} className={currentProgress.posted ? "shrink-0 text-emerald-600" : "shrink-0 text-slate-400"} aria-hidden /><div><h4 className="text-base font-bold">{currentProgress.posted ? (isEnglish ? "Marked as posted" : "신청 완료로 표시했어요") : (isEnglish ? "My posting checklist" : "나의 신청 체크리스트")}</h4><p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? "Your own record, separate from broadcaster confirmation." : "방송국 접수 확인과 별도로, 내가 직접 남기는 기록이에요."}</p>{currentProgress.posted && postedAt && <p className={`mt-1 ${radioNoteClass}`}>{isEnglish ? "Marked on " : "직접 표시한 시각: "}{postedAt}</p>}</div></div>
               <div className="grid min-w-0 gap-5 lg:grid-cols-2">
               <fieldset className="min-w-0 space-y-1"><legend className="sr-only">{isEnglish ? "Posting checks" : "신청 확인 항목"}</legend>{([
