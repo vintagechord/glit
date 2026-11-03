@@ -5,6 +5,8 @@ import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import * as React from "react";
 import { usePathname } from "next/navigation";
 
+import { BannerRotationToggle, useBannerRotation } from "@/components/site/banner-rotation";
+
 type AdBanner = {
   id: string;
   title: string;
@@ -20,27 +22,10 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
     () => (Array.isArray(banners) ? banners.filter(Boolean) : []),
     [banners],
   );
-  const [index, setIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    setIndex(0);
-  }, [safeBanners.length]);
-
-  React.useEffect(() => {
-    if (safeBanners.length <= 1) return;
-    const interval = window.setInterval(() => {
-      setIndex((prev) => (prev + 1) % safeBanners.length);
-    }, ROTATE_MS);
-    return () => window.clearInterval(interval);
-  }, [safeBanners.length]);
-
-  const goTo = React.useCallback(
-    (nextIndex: number) => {
-      if (!safeBanners.length) return;
-      setIndex((nextIndex + safeBanners.length) % safeBanners.length);
-    },
-    [safeBanners.length],
-  );
+  const { index, goTo, playing, rotating, togglePlaying, regionProps } =
+    useBannerRotation(safeBanners.length, ROTATE_MS);
+  const pathname = usePathname();
+  const english = pathname === "/en" || pathname.startsWith("/en/");
 
   if (safeBanners.length === 0) return null;
 
@@ -48,10 +33,21 @@ export function StripAdBannerClient({ banners }: { banners: AdBanner[] }) {
 
   return (
     <div data-brand-banner className="overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27]">
-      <div className="relative">
-        <BannerLinkWrap banner={banner}>
-          <BannerContent banner={banner} eager={index === 0} />
-        </BannerLinkWrap>
+      <div className="relative" {...regionProps}>
+        {safeBanners.length > 1 ? (
+          <BannerRotationToggle
+            playing={playing}
+            onToggle={togglePlaying}
+            english={english}
+            className="absolute right-11 top-1 z-30 size-7 rounded-[6px] sm:right-12"
+          />
+        ) : null}
+
+        <div aria-live={rotating ? "off" : "polite"}>
+          <BannerLinkWrap banner={banner}>
+            <BannerContent banner={banner} eager={index === 0} />
+          </BannerLinkWrap>
+        </div>
 
         <div className="pointer-events-none absolute left-1/2 top-1 z-30 -translate-x-1/2 rounded-b-[8px] border-2 border-t-0 border-[#111111] bg-[#111111] px-4 py-1 text-[10px] font-black uppercase leading-none tracking-[0.18em] text-white shadow-[3px_3px_0_#f2cf27] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[3px_3px_0_#111111] sm:text-[11px]">
           Our Other Brand
