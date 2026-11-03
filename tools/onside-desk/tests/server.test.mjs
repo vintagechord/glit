@@ -15,10 +15,11 @@ async function setup(t, options = {}) {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-server-test-'));
   let offline = false, downloadCount = 0;
   const submission = { id, type: 'ALBUM', title: '검증 앨범', artist_name: '검증 가수', payment_status: 'PAID', status: 'SUBMITTED', updated_at: '2026-10-25T00:00:00Z' };
+  let assets = [{ ...(options.assetId ? { id: options.assetId } : {}), objectKey: 'submissions/test.wav', original_name: '검증.wav', size: 4, kind: 'AUDIO' }];
   const source = {
     sourceStatus: () => ({ configured: true, downloadsConfigured: true }),
     fetchSubmissions: async () => { if (offline) throw Error('연결 실패'); return [{ ...submission }]; },
-    fetchSubmission: async () => { if (offline) throw Error('연결 실패'); return { submission: { ...submission }, tracks: [{ id: trackId, track_no: 1, track_title: '첫 곡', lyrics: '원문' }], files: [], assets: [{ objectKey: 'submissions/test.wav', original_name: '검증.wav', size: 4, kind: 'AUDIO' }], stations: [], stationReviews: [] }; },
+    fetchSubmission: async () => { if (offline) throw Error('연결 실패'); return { submission: { ...submission }, tracks: [{ id: trackId, track_no: 1, track_title: '첫 곡', lyrics: '원문' }], files: [], assets: assets.map(asset => ({ ...asset })), stations: [], stationReviews: [] }; },
     downloadAsset: async (asset, destination) => { downloadCount++; if (options.downloadFail) throw Error('다운로드 실패'); await fs.writeFile(destination, 'wave'); return { bytes: 4, sha256: createHash('sha256').update('wave').digest('hex') }; },
   };
   let generated = 0;
@@ -31,7 +32,7 @@ async function setup(t, options = {}) {
   const url = `http://127.0.0.1:${desk.server.address().port}`;
   const api = (route, init = {}) => fetch(url + route, { ...init, headers: { 'X-Desk-Token': desk.token, 'Content-Type': 'application/json', ...init.headers } });
   t.after(async () => { await desk.close(); await fs.rm(dataRoot, { recursive: true, force: true }); });
-  return { desk, api, url, submission, offline: value => { offline = value; }, generated: () => generated, downloads: () => downloadCount };
+  return { desk, api, url, submission, offline: value => { offline = value; }, generated: () => generated, downloads: () => downloadCount, setAssets: value => { assets = value; } };
 }
 test('loopback API blocks unauthenticated, hostile origins/hosts, inherited IDs and traversal', async t => {
   const { desk, api, url } = await setup(t); await desk.sync();
@@ -137,4 +138,42 @@ test('storage purge stays behind the local token, runs one batch at a time and r
   release();
   assert.equal((await first).status, 200); assert.equal(purges, 1);
   assert.match(s.desk.store.data.cases[id].history[0].message, /고객 업로드 파일 2개\(2MB\)/);
+});
+
+test('a submission still in review is deleted from the service only after its originals are verified on this Mac', async t => {
+  const purgeCalls = [];
+  const remote = { configured: () => true,
+    listStorage: async ({ scope } = {}) => { assert.equal(scope, 'received'); return { items: [{ submissionId: id, title: '검증 앨범', stage: 'in_review', fileCount: 1, totalBytes: 4, files: [{ id: 'file-1', source: 'upload', sizeBytes: 4 }] }] }; },
+    purgeStorage: async (ids, options) => { purgeCalls.push({ ids, options }); return { ok: true, results: ids.map(submissionId => ({ submissionId, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 4 })) }; } };
+  const s = await setup(t, { remote, assetId: 'file-1' }); await s.desk.sync();
+  await s.desk.detail(id, true);
+  // Not downloaded yet: listed as missing, and the purge is refused before reaching the service.
+  let listed = (await (await s.api('/api/storage')).json()).items[0];
+  assert.equal(listed.local.complete, false); assert.match(listed.local.reason, /원본 1개가 없습니다/);
+  let response = await (await s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) })).json();
+  assert.equal(response.results[0].ok, false); assert.match(response.results[0].error, /원본/); assert.equal(purgeCalls.length, 0);
+  // Downloaded: listed as complete.
+  s.desk.enqueue(id, 'download'); await s.desk.idle();
+  listed = (await (await s.api('/api/storage')).json()).items[0];
+  assert.equal(listed.local.complete, true);
+  // A local file that no longer matches its recorded size is caught at deletion time.
+  const record = s.desk.store.data.cases[id].downloads[0];
+  const original = path.join(s.desk.outputRoot, id, '원본 파일', record.name);
+  await fs.writeFile(original, 'changed!');
+  response = await (await s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) })).json();
+  assert.equal(response.results[0].ok, false); assert.equal(purgeCalls.length, 0);
+  await fs.writeFile(original, 'wave');
+  response = await (await s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) })).json();
+  assert.equal(response.results[0].ok, true);
+  assert.deepEqual(purgeCalls[0].ids, [id]); assert.equal(purgeCalls[0].options.scope, 'received'); assert.equal(purgeCalls[0].options.localCopiesVerified, true);
+  assert.ok(s.desk.store.data.cases[id].history.some(entry => /고객 업로드 파일 1개/.test(entry.message)));
+});
+
+test('a later download run keeps the record of an original the service no longer lists', async t => {
+  const s = await setup(t, { assetId: 'file-1' }); await s.desk.sync();
+  s.desk.enqueue(id, 'download'); await s.desk.idle();
+  assert.equal(s.desk.store.data.cases[id].downloads.length, 1);
+  s.setAssets([]);
+  s.desk.enqueue(id, 'download'); await s.desk.idle();
+  assert.deepEqual(s.desk.store.data.cases[id].downloads.map(record => record.sourceKey), ['submissions/test.wav']);
 });

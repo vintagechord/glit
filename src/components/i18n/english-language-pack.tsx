@@ -2465,6 +2465,8 @@ Object.assign(exactTranslations, {
   "뮤직비디오 결과 다운로드": "Music video result downloads",
   "심의 불가": "Not eligible for review",
   "보관 종료로 삭제됨": "Deleted after storage ended",
+  "서버 보관본 정리됨": "Server copy removed",
+  "온사이드가 심의용 원본을 받은 뒤 서버에 보관하던 사본을 정리했습니다.": "Onside received the original for review and removed the copy stored on the server.",
   "보관이 끝나 삭제된 파일입니다.": "This file was deleted when its storage ended.",
   "심의 불가 결과에는 등급 이미지, 필증, 표기 가이드가 제공되지 않습니다.": "A rejected review comes with no rating mark, certificate or labeling guide.",
   "심의 불가 결과에는 제공되는 파일이 없습니다.": "A rejected review has no files to download.",

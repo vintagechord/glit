@@ -51,12 +51,22 @@ type UploadRow = {
 };
 
 export type PurgeFile = { source: "upload" | "supplement"; id: string; objectKey: string; sizeBytes: number };
+/**
+ * "finished": results decided or refunded (web admin and the desk).
+ * "received": also paid submissions still in review — only for the review
+ * desk, which deletes them after checking it holds verified local copies of
+ * exactly these uploads. Supplement files are not downloaded by the desk, so
+ * they stay until the review is finished.
+ */
+export type PurgeScope = "finished" | "received";
+export type PurgeStage = "finished" | "refunded" | "in_review";
 export type PurgeCandidate = {
   submissionId: string;
   title: string | null;
   artistName: string | null;
   type: string | null;
   refunded: boolean;
+  stage: PurgeStage;
   finishedAt: string | null;
   files: PurgeFile[];
   totalBytes: number;
@@ -153,12 +163,14 @@ const submissionColumns =
  * submissions (the purge path re-checks with this instead of trusting the
  * browser).
  */
-export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[]): Promise<PurgeCandidate[]> {
+export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[], scope: PurgeScope = "finished"): Promise<PurgeCandidate[]> {
   const { prefix } = getB2Config();
   const submissions = await selectPages<PurgeSubmissionRow>((from, to) => {
-    let query = db.from("submissions").select(submissionColumns).or(
-      "payment_status.eq.REFUNDED,and(payment_status.eq.PAID,or(status.in.(RESULT_READY,COMPLETED),result_status.not.is.null,result_notified_at.not.is.null))",
-    );
+    let query = scope === "received"
+      ? db.from("submissions").select(submissionColumns).in("payment_status", ["PAID", "REFUNDED"])
+      : db.from("submissions").select(submissionColumns).or(
+        "payment_status.eq.REFUNDED,and(payment_status.eq.PAID,or(status.in.(RESULT_READY,COMPLETED),result_status.not.is.null,result_notified_at.not.is.null))",
+      );
     if (onlyIds) query = query.in("id", onlyIds);
     return query.order("id").range(from, to);
   });
@@ -183,11 +195,13 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[]): 
         reviews.filter((review) => review.submission_id === submission.id),
         ownRequests,
       );
-      if (!finishedAt) continue;
+      const refunded = submission.payment_status === "REFUNDED";
+      const inReview = !finishedAt && scope === "received" && submission.payment_status === "PAID" && submission.status !== "DRAFT";
+      if (!finishedAt && !inReview) continue;
       const files = selectPurgeFiles(
         submission.id,
         uploads,
-        ownRequests.flatMap((request) => (request.revisions ?? []).flatMap((revision) => revision.files ?? [])),
+        inReview ? [] : ownRequests.flatMap((request) => (request.revisions ?? []).flatMap((revision) => revision.files ?? [])),
         prefix,
       );
       if (!files.length) continue;
@@ -196,14 +210,18 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[]): 
         title: submission.title,
         artistName: submission.artist_name,
         type: submission.type,
-        refunded: submission.payment_status === "REFUNDED",
+        refunded,
+        stage: inReview ? "in_review" : refunded ? "refunded" : "finished",
         finishedAt,
         files,
         totalBytes: files.reduce((sum, file) => sum + file.sizeBytes, 0),
       });
     }
   }
-  return candidates.sort((a, b) => String(a.finishedAt).localeCompare(String(b.finishedAt)));
+  // Finished and refunded first (oldest first), then submissions still in review.
+  return candidates.sort((a, b) =>
+    Number(a.stage === "in_review") - Number(b.stage === "in_review") ||
+    String(a.finishedAt).localeCompare(String(b.finishedAt)));
 }
 
 /** Upload keys another live row or an in-flight upload still points at. */
@@ -259,16 +277,19 @@ export async function purgeCustomerFiles(
   submissionIds: string[],
   actorUserId: string,
   deleteAllVersions: (objectKey: string) => Promise<number> = deleteObjectAllVersions,
+  scope: PurgeScope = "finished",
 ): Promise<PurgeResult[]> {
   const requested = Array.from(new Set(submissionIds));
-  const candidates = new Map((await loadPurgeCandidates(db, requested)).map((candidate) => [candidate.submissionId, candidate]));
+  const candidates = new Map((await loadPurgeCandidates(db, requested, scope)).map((candidate) => [candidate.submissionId, candidate]));
   const results: PurgeResult[] = [];
 
   for (const submissionId of requested) {
     const empty = { submissionId, deletedFiles: 0, failedFiles: 0, freedBytes: 0 };
     const candidate = candidates.get(submissionId);
     if (!candidate) {
-      results.push({ ...empty, ok: false, error: "심의가 끝나지 않았거나(환불 건 제외) 삭제할 고객 파일이 없습니다." });
+      results.push({ ...empty, ok: false, error: scope === "received"
+        ? "결제가 완료된 접수가 아니거나 삭제할 고객 파일이 없습니다."
+        : "심의가 끝나지 않았거나(환불 건 제외) 삭제할 고객 파일이 없습니다." });
       continue;
     }
     try {
@@ -310,7 +331,9 @@ export async function purgeCustomerFiles(
           submission_id: submissionId,
           actor_user_id: actorUserId,
           event_type: "CUSTOMER_FILES_PURGED",
-          message: `${candidate.refunded ? "환불 후" : "심의 완료 후"} 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`,
+          message: candidate.stage === "in_review"
+            ? `심의 진행 중 심의 데스크의 원본 보관을 확인하고 서버의 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`
+            : `${candidate.refunded ? "환불 후" : "심의 완료 후"} 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`,
         });
       }
       results.push({

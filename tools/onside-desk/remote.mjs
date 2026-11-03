@@ -177,23 +177,28 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     return { body, filename: filenameFromHeaders(response.headers, fallback), contentType, contentLength };
   }
   /** 저장공간 정리: finished or refunded submissions whose customer uploads can be purged. */
-  async function listStorage({ signal } = {}) {
-    const data = await jsonBody(await request('storage', { signal, timeout: 60_000 }));
+  /** "received" also lists paid submissions still in review (uploads only); the desk deletes those only after checking its local copies. */
+  async function listStorage({ scope = 'finished', signal } = {}) {
+    const data = await jsonBody(await request('storage', { query: scope === 'received' ? { scope } : undefined, signal, timeout: 60_000 }));
     if (!data || !Array.isArray(data.items)) throw new RemoteReviewError('저장공간 정리 대상을 불러오지 못했습니다. 서비스 배포 상태를 확인해 주세요.', 502, 'INVALID_STORAGE_LIST');
     const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
     const items = data.items.filter(item => item && UUID.test(String(item.submissionId))).map(item => ({
       submissionId: String(item.submissionId), title: typeof item.title === 'string' ? item.title : null, artistName: typeof item.artistName === 'string' ? item.artistName : null,
-      type: typeof item.type === 'string' ? item.type : null, refunded: item.refunded === true, finishedAt: typeof item.finishedAt === 'string' ? item.finishedAt : null,
+      type: typeof item.type === 'string' ? item.type : null, refunded: item.refunded === true,
+      stage: ['finished', 'refunded', 'in_review'].includes(item.stage) ? item.stage : item.refunded === true ? 'refunded' : 'finished',
+      finishedAt: typeof item.finishedAt === 'string' ? item.finishedAt : null,
       fileCount: count(item.fileCount), totalBytes: count(item.totalBytes),
+      files: Array.isArray(item.files) ? item.files.filter(file => file && typeof file.id === 'string' && file.id).map(file => ({ id: file.id, source: file.source === 'supplement' ? 'supplement' : 'upload', sizeBytes: count(file.sizeBytes) })) : [],
     }));
     return { items };
   }
   /** Permanently deletes customer uploads (all B2 versions) for one batch; the service re-checks eligibility. */
-  async function purgeStorage(submissionIds, { requestId: requestedId, signal } = {}) {
+  async function purgeStorage(submissionIds, { requestId: requestedId, scope = 'finished', localCopiesVerified = false, signal } = {}) {
     if (!Array.isArray(submissionIds) || !submissionIds.length || submissionIds.length > STORAGE_PURGE_BATCH || new Set(submissionIds).size !== submissionIds.length) throw new RemoteReviewError(`삭제할 신청을 1~${STORAGE_PURGE_BATCH}건씩 선택해 주세요.`, 400, 'INVALID_PURGE_BATCH');
+    if (scope === 'received' && localCopiesVerified !== true) throw new RemoteReviewError('심의 진행 중인 신청은 이 Mac의 원본을 확인한 뒤 삭제할 수 있습니다.', 400, 'LOCAL_COPIES_REQUIRED');
     const ids = submissionIds.map(submissionId);
     const nonce = requestId(requestedId);
-    const body = Buffer.from(JSON.stringify({ operation: 'purge', submissionIds: ids, requestId: nonce }));
+    const body = Buffer.from(JSON.stringify({ operation: 'purge', submissionIds: ids, requestId: nonce, ...(scope === 'received' ? { scope, localCopiesVerified: true } : {}) }));
     // Deleting every version of large videos can take minutes; the service allows 300 s.
     const data = await jsonBody(await request('storage', { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 300_000 }));
     if (!data || !Array.isArray(data.results)) throw new RemoteReviewError('삭제 결과를 확인하지 못했습니다. 목록을 새로고침해 처리 여부를 확인해 주세요.', 502, 'INVALID_PURGE_RESULT');

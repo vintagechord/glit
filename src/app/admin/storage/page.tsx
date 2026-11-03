@@ -58,7 +58,7 @@ export default async function AdminStoragePage() {
         </div>
         <div className="rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-blue)] p-4 text-sm leading-6 text-white">
           <p className="font-black">유지되는 것</p>
-          <p className="mt-1">영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 &ldquo;보관 종료로 삭제됨&rdquo;으로 표시됩니다.</p>
+          <p className="mt-1">영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 &ldquo;서버 보관본 정리됨&rdquo;으로 표시됩니다. 심의 진행 중인 신청의 파일은 원본을 보관하는 심의 데스크의 저장공간 정리에서만 지울 수 있습니다.</p>
         </div>
       </div>
 

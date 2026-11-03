@@ -86,7 +86,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.8.1' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.9.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -204,12 +204,58 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       return { ok: failedCases.length === 0, deletedCount, failedCases };
     } finally { emptyingTrash = false; }
   }
+  /**
+   * Whether this Mac holds every listed upload of a submission: the original
+   * downloaded by 심의 자료 생성/원본 다운로드, at the recorded path, with the
+   * recorded and the service's byte size. Matching goes file id → the case's
+   * asset → its object key → the download record.
+   */
+  async function localCopyStatus(submissionId, files) {
+    const item = store.data.cases[submissionId];
+    if (!item || item.deletedAt || item.source === 'manual') return { complete: false, missing: files.length, noCase: true, reason: '이 Mac에 신청이 없습니다. 신청 관리에서 새로고침한 뒤 원본을 받으세요.' };
+    const assets = item.detail?.assets || [];
+    const directory = path.join(caseDir(submissionId), '원본 파일');
+    let missing = 0;
+    for (const file of files) {
+      const asset = assets.find(candidate => candidate.id === file.id);
+      const key = asset && (asset.objectKey || asset.file_path || asset.path || asset.id);
+      const record = key && (item.downloads || []).find(download => download.sourceKey === key);
+      let stat = null;
+      if (record) { try { stat = await fs.stat(childPath(directory, record.name)); } catch { stat = null; } }
+      if (!record || !stat?.isFile() || stat.size !== record.bytes || (file.sizeBytes && stat.size !== file.sizeBytes)) missing += 1;
+    }
+    return missing ? { complete: false, missing, reason: `이 Mac에 원본 ${missing}개가 없습니다. 원본 받기 후 삭제할 수 있습니다.` } : { complete: true, missing: 0 };
+  }
+  /** 저장공간 정리 목록: finished, refunded and paid submissions still in review, with this Mac's copy state for the last. */
+  async function listStorage() {
+    const listed = await remote.listStorage({ scope: 'received' });
+    const items = [];
+    for (const item of listed.items) items.push({ ...item, local: item.stage === 'in_review' ? await localCopyStatus(item.submissionId, item.files) : { complete: true, missing: 0, notRequired: true } });
+    return { items };
+  }
   /** 저장공간 정리: one service batch at a time; the service re-checks every submission. */
   async function purgeStorage(input) {
     if (purgingStorage) throw Object.assign(new Error('저장공간을 정리하고 있습니다. 끝난 뒤 다시 시도하세요.'), { status: 409, code: 'STORAGE_BUSY' });
     purgingStorage = true;
     try {
-      const result = await remote.purgeStorage(input?.submissionIds, { requestId: input?.requestId });
+      const requested = Array.isArray(input?.submissionIds) ? input.submissionIds.map(String) : [];
+      // Re-read the current list and this Mac's originals right before deleting anything still in review.
+      const current = new Map((await remote.listStorage({ scope: 'received' })).items.map(item => [item.submissionId, item]));
+      const refused = [], allowed = [];
+      for (const id of requested) {
+        const item = current.get(id);
+        if (!item) { refused.push({ submissionId: id, ok: false, deletedFiles: 0, failedFiles: 0, freedBytes: 0, error: '삭제할 고객 파일이 없거나 정리 대상이 아닙니다. 목록을 새로고침하세요.' }); continue; }
+        if (item.stage === 'in_review') {
+          if (store.data.cases[id] && !store.data.cases[id].deletedAt) await detail(id, true).catch(() => {});
+          const local = await localCopyStatus(id, item.files);
+          if (!local.complete) { refused.push({ submissionId: id, ok: false, deletedFiles: 0, failedFiles: 0, freedBytes: 0, error: local.reason }); continue; }
+        }
+        allowed.push(id);
+      }
+      const result = allowed.length
+        ? await remote.purgeStorage(allowed, { requestId: input?.requestId, scope: 'received', localCopiesVerified: true })
+        : { ok: true, results: [] };
+      result.results = [...result.results, ...refused];
       let recorded = false;
       for (const item of result.results) {
         if (!item?.deletedFiles || !Object.hasOwn(store.data.cases, item.submissionId)) continue;
@@ -244,7 +290,10 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         results.push({ name, bytes: saved.bytes, sha256: saved.sha256, sourceKey: identity, createdAt: now() });
       } catch (error) { errors.push(`${name}: ${safeError(error)}`); }
     }
-    item.downloads = results;
+    // Originals already purged from the service are no longer listed; keep their local records.
+    const listedKeys = new Set(assets.map(asset => asset.objectKey || asset.file_path || asset.path || asset.id));
+    const retained = (item.downloads || []).filter(record => !listedKeys.has(record.sourceKey) && !results.some(result => result.sourceKey === record.sourceKey));
+    item.downloads = [...results, ...retained];
     const message = [current.submission.files_submitted_by_email ? '신청 시 이메일로 전달한 파일이 있습니다. 수신함에서 실제 파일을 확인하고 앱의 이메일 파일 추가 기능으로 보관하세요.' : '', !assets.length ? '서비스에서 다운로드할 업로드 파일을 찾지 못했습니다.' : '', ...errors].filter(Boolean).join('\n');
     await fs.writeFile(path.join(destination, '파일 수신 현황.txt'), `신청 ID: ${id}\n확인 일시: ${now()}\n\n${message}\n\n다운로드한 파일\n${results.map(r => `${r.name} (${r.bytes} bytes) SHA256 ${r.sha256}`).join('\n')}\n\n로컬 추가 파일\n${(item.attachments || []).map(a => a.name).join('\n')}`, { mode: 0o600 });
     store.audit(id, 'download', `${results.length}개 원본 파일 저장${errors.length ? `, ${errors.length}개 실패` : ''}`);
@@ -498,7 +547,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.8.1' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.9.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -517,7 +566,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         return sendJSON(res, 201, await importManual(await readReference(req), filename, url.searchParams.get('type') || 'ALBUM'));
       }
       if (url.pathname === '/api/connection' && req.method === 'GET') return sendJSON(res, 200, await remote.health());
-      if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await remote.listStorage());
+      if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await listStorage());
       if (url.pathname === '/api/intake/packages' && req.method === 'GET') return sendJSON(res, 200, await remote.listIntakePackages());
       if (url.pathname === '/api/storage/purge' && req.method === 'POST') return sendJSON(res, 200, await purgeStorage(await readJSON(req)));
       if (url.pathname === '/api/sync' && req.method === 'POST') return sendJSON(res, 200, await sync());
