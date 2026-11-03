@@ -97,6 +97,42 @@ test("canceled guest history survives a deleted cart item using its token hash, 
   assert.equal((await listSubmissionOrders(f.db, { userId: null, guestTokensBySubmissionId: {} })).orders.length, 0);
 });
 
+test("a guest who signs in on the same browser still reaches their guest orders, read-only", async () => {
+  const guestOrder = order({ user_id: null, created_at: "2026-09-09T00:00:00Z" });
+  const memberOrder = order({ id: "member-order", items: [item(second)] });
+  const f = fixture([guestOrder, memberOrder, order({ id: "someone-else", user_id: null, items: [item(second, token2)] })],
+    [parent({ user_id: null, guest_token: token }), parent({ id: second, current_order_id: "member-order" })]);
+  const signedIn = { userId: owner, guestTokensBySubmissionId: { [first]: token } };
+  const page = await listSubmissionOrders(f.db, signedIn);
+  assert.deepEqual(page.orders.map(entry => [entry.id, entry.guestOrder]), [[orderId, true], ["member-order", false]]);
+  // The same order is returnable for the guest who is signed out.
+  assert.equal((await listSubmissionOrders(f.db, guest)).orders[0].canReturnToCart, true);
+  // Viewing is the access the token already gives while signed out; the
+  // account cannot return the guest order into a cart it cannot pay from.
+  assert.equal(page.orders[0].canReturnToCart, false);
+  assert.equal(page.orders[1].canReturnToCart, true);
+  assert.equal((await returnSubmissionOrderToCart(f.db, orderId, signedIn)).ok, false);
+  assert.equal(f.calls.some(call => call.method === "return_submission_order_to_cart"), false);
+  // Without the browser's proofs the guest order stays invisible to the account.
+  assert.deepEqual((await listSubmissionOrders(f.db, actor)).orders.map(entry => entry.id), ["member-order"]);
+  // Proofs never open another member's order, and later pages add no guest orders twice.
+  assert.equal((await listSubmissionOrders(f.db, { userId: "another-member", guestTokensBySubmissionId: { [first]: token } })).orders.some(entry => entry.id === "member-order"), false);
+  assert.equal((await listSubmissionOrders(f.db, signedIn, 30)).orders.length, 0);
+});
+
+test("unconfirmed card approvals are flagged so the customer is told not to pay again", async () => {
+  for (const [changes, expected] of [
+    [{ status: "REVIEW_REQUIRED" }, true],
+    [{ payment_method: "CARD", status: "CARD_PENDING", payments: { status: "REQUESTED", result_code: "APPROVAL_IN_PROGRESS" } }, true],
+    [{ payment_method: "CARD", status: "CARD_PENDING", payments: [{ status: "REQUESTED", result_code: "APPROVAL_UNCERTAIN" }] }, true],
+    [{ payment_method: "CARD", status: "CARD_PENDING", payments: { status: "REQUESTED", result_code: null } }, false],
+    [{ payment_method: "CARD", status: "PAID", payments: { status: "APPROVED", result_code: "0000" } }, false],
+  ] as const) {
+    const f = fixture([order(changes)]);
+    assert.equal((await listSubmissionOrders(f.db, actor)).orders[0].paymentChecking, expected, JSON.stringify(changes));
+  }
+});
+
 test("claiming a live guest submission revokes the old token's order access", async () => {
   const f = fixture([order({ user_id: null })], [parent({ user_id: owner, guest_token: null })]);
   assert.deepEqual(await listSubmissionOrders(f.db, guest), { orders: [], nextOffset: null });

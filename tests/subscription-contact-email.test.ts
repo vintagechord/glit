@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -19,7 +19,7 @@ async function fixture(): Promise<Fixture> {
       plugin.onResolve({ filter: /^(subscription-fixture|next\/(navigation|link)|@\/lib\/supabase\/server|@\/lib\/inicis\/(stdpay|config)|@\/lib\/url|@\/lib\/subscriptions\/service|@\/features\/subscriptions\/subscription-pay)$/ }, ({ path }) => ({ path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
         "subscription-fixture": `export const state={email:undefined,subscription:null};export const calls=[];`,
-        "next/navigation": `export const redirect=()=>{throw Error('Unexpected redirect')};`,
+        "next/navigation": `export const redirect=()=>{throw Error('Unexpected redirect')};export const notFound=()=>{throw Error('NEXT_NOT_FOUND')};`,
         "next/link": `import React from 'react';export default function Link({children,...props}){return <a {...props}>{children}</a>}`,
         "@/lib/supabase/server": `import {state} from 'subscription-fixture';export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:{id:'verified-member',email:state.email}},error:null})}};}`,
         "@/lib/inicis/stdpay": `import {calls} from 'subscription-fixture';export const resolveSubscriptionPrice=()=>1000;export const buildStdPayRequest=input=>{calls.push({method:'pc-request',input});return input};export const buildMobileBillingRequest=input=>{calls.push({method:'mobile-request',input});return input};`,
@@ -35,7 +35,25 @@ async function fixture(): Promise<Fixture> {
   return bundled.exports;
 }
 
-test("a member without an email sees recovery guidance before any subscription order or gateway request", async () => {
+// The page renders only when legacy subscription billing is explicitly on.
+function enableBilling(t: TestContext) {
+  const previous = process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED;
+  process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = "1";
+  t.after(() => { if (previous === undefined) delete process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED; else process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = previous; });
+}
+
+test("with billing off the page is a 404 before any session read or subscription order", async (t) => {
+  const previous = process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED;
+  delete process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED;
+  t.after(() => { if (previous !== undefined) process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = previous; });
+  const f = await fixture();
+  f.state.email = "member@example.com";
+  await assert.rejects(f.SubscriptionPage(), /NEXT_NOT_FOUND/);
+  assert.deepEqual(f.calls, []);
+});
+
+test("a member without an email sees recovery guidance before any subscription order or gateway request", async (t) => {
+  enableBilling(t);
   const f = await fixture();
   for (const email of [undefined, "", "   "]) {
     f.state.email = email;
@@ -47,7 +65,8 @@ test("a member without an email sees recovery guidance before any subscription o
   assert.deepEqual(f.calls, []);
 });
 
-test("an email member creates the same owned order and passes a nonempty Auth address to both gateways", async () => {
+test("an email member creates the same owned order and passes a nonempty Auth address to both gateways", async (t) => {
+  enableBilling(t);
   const f = await fixture();
   f.state.email = " member@example.com ";
   await f.SubscriptionPage();
@@ -56,7 +75,8 @@ test("an email member creates the same owned order and passes a nonempty Auth ad
   for (const call of f.calls.slice(1)) assert.equal(call.input?.buyerEmail, "member@example.com");
 });
 
-test("an active subscription remains viewable without creating another order when email is absent", async () => {
+test("an active subscription remains viewable without creating another order when email is absent", async (t) => {
+  enableBilling(t);
   const f = await fixture();
   f.state.subscription = { status: "ACTIVE", amount_krw: 1000 };
   const html = renderToStaticMarkup(await f.SubscriptionPage());

@@ -40,6 +40,11 @@ export type SubmissionOrder = {
   depositDueAt?: string | null;
   items: SubmissionOrderItem[];
   canReturnToCart: boolean;
+  /** A card approval is unconfirmed (claim open, reconciliation pending or
+   * REVIEW_REQUIRED): the customer may have been charged. */
+  paymentChecking?: boolean;
+  /** Placed as a guest; reached through this browser's guest proofs. */
+  guestOrder?: boolean;
   cashReceipt?: CashReceiptSummary | null;
 };
 

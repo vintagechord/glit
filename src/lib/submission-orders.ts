@@ -27,6 +27,7 @@ type Parent = {
 
 const orderSelect = "id,user_id,payment_method,status,amount_krw,amount,currency,source,note,created_at,updated_at,paid_at,returned_at,depositor_name,deposit_due_at,items:submission_order_items(id,submission_id,submission_ref,type,title,artist_name,package_name,amount_krw,amount,is_oneclick,guest_token_hash),payments:submission_payments!checkout_order_id(status,result_code)";
 const pageSize = 30;
+const guestOrderLimit = 100;
 const returnableStatuses = new Set(["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED"]);
 const finiteAmount = (value: number | null) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
 
@@ -48,9 +49,16 @@ async function loadParents(db: OrdersDb, orders: RawOrder[]) {
   return parents;
 }
 
+/**
+ * A member order belongs to its account. A guest order (no owner) belongs to
+ * whoever holds every item's guest token, signed in or not: a guest who signs
+ * in on the same browser keeps reaching orders placed before signing in.
+ * Ownership is never transferred here; the proof grants exactly the access
+ * the same browser had while signed out.
+ */
 function ownsOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Parent>) {
-  if (actor.userId) return order.user_id === actor.userId;
-  if (order.user_id || !order.items.length) return false;
+  if (order.user_id) return Boolean(actor.userId) && order.user_id === actor.userId;
+  if (!order.items.length) return false;
   return order.items.every(item => {
     const token = actor.guestTokensBySubmissionId[item.submission_ref];
     const parent = item.submission_id ? parents.get(item.submission_id) : undefined;
@@ -60,10 +68,16 @@ function ownsOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Pare
   });
 }
 
+const paymentCheckCodes = ["CAPTURE_IN_PROGRESS", "APPROVAL_IN_PROGRESS", "APPROVAL_UNCERTAIN"];
+
 function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Parent>): SubmissionOrder {
   const payments = Array.isArray(order.payments) ? order.payments : order.payments ? [order.payments] : [];
+  // The gateway may already have charged the customer: the order list tells
+  // them not to pay again until an administrator reconciles the attempt.
+  const paymentChecking = order.status === "REVIEW_REQUIRED" ||
+    payments.some(payment => payment.status === "REQUESTED" && paymentCheckCodes.includes(payment.result_code ?? ""));
   const canReturnToCart = returnableStatuses.has(order.status) && !order.returned_at &&
-    order.items.length > 0 && !payments.some(payment => payment.status === "APPROVED" || ["CAPTURE_IN_PROGRESS", "APPROVAL_IN_PROGRESS", "APPROVAL_UNCERTAIN"].includes(payment.result_code ?? "")) &&
+    order.items.length > 0 && !payments.some(payment => payment.status === "APPROVED" || paymentCheckCodes.includes(payment.result_code ?? "")) &&
     order.items.every(item => {
       const parent = item.submission_id ? parents.get(item.submission_id) : undefined;
       return parent && parent.current_order_id === order.id && !parent.user_deleted_at &&
@@ -71,7 +85,11 @@ function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Paren
         ["UNPAID", "PAYMENT_PENDING"].includes(parent.payment_status) &&
         !parent.result_status?.trim() && !parent.result_notified_at &&
         parent.reviews.every(review => review.status === "NOT_SENT") &&
-        (actor.userId ? parent.user_id === actor.userId : !parent.user_id && actor.guestTokensBySubmissionId[parent.id] === parent.guest_token);
+        // A guest order seen after signing in stays read-only: returning it
+        // would put the items back in a guest cart this account cannot pay.
+        (order.user_id
+          ? Boolean(actor.userId) && parent.user_id === actor.userId
+          : !actor.userId && !parent.user_id && actor.guestTokensBySubmissionId[parent.id] === parent.guest_token);
     });
   return {
     id: order.id, paymentMethod: order.payment_method, status: order.status,
@@ -79,6 +97,7 @@ function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Paren
     currency: order.currency, source: order.source, note: order.note,
     createdAt: order.created_at, updatedAt: order.updated_at, paidAt: order.paid_at,
     returnedAt: order.returned_at, canReturnToCart: Boolean(canReturnToCart),
+    paymentChecking, guestOrder: !order.user_id,
     depositorName: order.depositor_name ?? null, depositDueAt: order.deposit_due_at ?? null,
     items: order.items.map(item => ({
       id: item.id, submissionId: item.submission_id, submissionRef: item.submission_ref,
@@ -91,15 +110,23 @@ function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Paren
 export async function listSubmissionOrders(db: OrdersDb, actor: OrderActor, offset = 0): Promise<SubmissionOrdersPage> {
   const guestIds = Object.keys(actor.guestTokensBySubmissionId);
   if (!actor.userId && guestIds.length === 0) return { orders: [], nextOffset: null };
-  let query = db.from("submission_orders").select(actor.userId ? orderSelect : `${orderSelect},matching_items:submission_order_items!inner(submission_ref)`);
-  query = actor.userId
-    ? query.eq("user_id", actor.userId)
-    : query.is("user_id", null).in("matching_items.submission_ref", guestIds);
-  const { data, error } = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(offset, offset + pageSize);
-  if (error) throw new Error("주문내역을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
-  const rows = (data ?? []) as unknown as RawOrder[];
-  const parents = await loadParents(db, rows);
-  const visible = rows.slice(0, pageSize).filter(order => ownsOrder(order, actor, parents));
+  const read = async (memberId: string | null, from: number, to: number) => {
+    let query = db.from("submission_orders").select(memberId ? orderSelect : `${orderSelect},matching_items:submission_order_items!inner(submission_ref)`);
+    query = memberId
+      ? query.eq("user_id", memberId)
+      : query.is("user_id", null).in("matching_items.submission_ref", guestIds);
+    const { data, error } = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, to);
+    if (error) throw new Error("주문내역을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    return (data ?? []) as unknown as RawOrder[];
+  };
+  const rows = await read(actor.userId, offset, offset + pageSize);
+  // Signed in with this browser's guest proofs: the guest orders (at most one
+  // per proof plus returned history) join the first page of member orders.
+  const extra = actor.userId && guestIds.length && offset === 0 ? await read(null, 0, guestOrderLimit - 1) : [];
+  const page = [...rows.slice(0, pageSize), ...extra.filter(order => !rows.some(row => row.id === order.id))]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+  const parents = await loadParents(db, page);
+  const visible = page.filter(order => ownsOrder(order, actor, parents));
   const bankOrderIds = visible.filter(order => order.payment_method === "BANK").map(order => order.id);
   // Receipts are optional extras: a lookup failure must not hide the orders.
   const receipts = bankOrderIds.length ? await loadCashReceiptRows(db, bankOrderIds).catch(() => new Map()) : new Map();

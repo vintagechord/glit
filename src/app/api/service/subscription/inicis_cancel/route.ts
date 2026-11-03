@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requestRefund } from "@/lib/inicis/api";
+import { isSubscriptionBillingEnabled, subscriptionBillingGoneResponse } from "@/lib/payments/subscription-billing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getBaseUrl, getClientIp } from "../../../../../lib/url";
@@ -191,7 +192,10 @@ const refundClaimErrorResponse = (error: RpcError) => {
   );
 };
 
-const handleCancel = async (req: NextRequest, requireAdmin = false) => {
+/** A member refunds their own subscription charge. There is no administrator
+ * variant: operators refund in the Inicis console. */
+const handleCancel = async (req: NextRequest) => {
+  if (!isSubscriptionBillingEnabled()) return subscriptionBillingGoneResponse();
   // Authenticate before parsing identifiers or querying history so this route
   // cannot be used as an order/TID existence oracle.
   const supabase = await createServerSupabase();
@@ -201,15 +205,7 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  let adminAllowed = false;
-  if (requireAdmin) {
-    const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
-    if (adminError || isAdmin !== true) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    adminAllowed = true;
-  }
+  const adminAllowed = false;
 
   const payload = await parsePayload(req);
   if (!payload) {
@@ -349,7 +345,7 @@ const handleCancel = async (req: NextRequest, requireAdmin = false) => {
 };
 
 export async function POST(req: NextRequest) {
-  return handleCancel(req, false);
+  return handleCancel(req);
 }
 
 export function GET() {
@@ -360,5 +356,3 @@ export function GET() {
 }
 
 export const runtime = "nodejs";
-
-export const handleCancelRequest = handleCancel;

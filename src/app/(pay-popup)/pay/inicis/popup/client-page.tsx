@@ -350,7 +350,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     const receiveResult = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !event.data || typeof event.data !== "object") return;
       const { type, payload } = event.data as { type?: string; payload?: { submissionId?: string } };
-      if (!type || !["INICIS:SUCCESS", "INICIS:FAIL", "INICIS:CANCEL", "INICIS:ERROR"].includes(type)) return;
+      if (!type || !["INICIS:SUCCESS", "INICIS:FAIL", "INICIS:CANCEL", "INICIS:ERROR", "INICIS:CHECKING"].includes(type)) return;
       if (payload?.submissionId && payload.submissionId !== submissionId) return;
       cleanupInicisPaymentLayer();
       window.location.replace(`${submissionOrderReturnHref(submissionId)}&payment=${type.slice(7).toLowerCase()}`);

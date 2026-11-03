@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
+import { isSubscriptionBillingEnabled } from "@/lib/payments/subscription-billing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -23,7 +24,14 @@ const maskMid = (mid: string) => {
     : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 };
 
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "정기결제", robots: { index: false, follow: false } };
+
 export default async function SubscriptionPage() {
+  // Off unless explicitly enabled: each visit would otherwise open a billing
+  // attempt (subscription_history row) for a service Onside does not offer.
+  if (!isSubscriptionBillingEnabled()) notFound();
   const supabase = await createServerSupabase();
   const {
     data: { user },

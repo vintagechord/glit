@@ -33,7 +33,10 @@ type PaymentRow = {
 const filters = [
   ["all", "전체"], ["attention", "승인 확인 필요"], ["APPROVED", "승인 완료"],
   ["REQUESTED", "요청·처리 중"], ["FAILED", "실패"], ["CANCELED", "취소"],
+  ["archived", "삭제된 접수 보관"],
 ] as const;
+/** Attempts of deleted submissions, kept by archive_deleted_submission_payment. */
+const archiveColumns = "order_id,submission_id,amount_krw,status,paid_at,pg_tid,result_code,result_message,created_at:payment_created_at,archived_at";
 const attentionCodes = ["APPROVAL_IN_PROGRESS", "CAPTURE_IN_PROGRESS", "APPROVAL_UNCERTAIN", "REVIEW_REQUIRED"];
 const pageSize = 100;
 
@@ -76,10 +79,15 @@ export default async function AdminPaymentsPage({ searchParams }: {
     );
   if (filter === "attention") query = query.in("result_code", attentionCodes);
   else if (filter !== "all") query = query.eq("status", filter);
-  const { data, error, count } = await query.order("created_at", { ascending: false })
-    .order("order_id", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
+  const archived = filter === "archived";
+  const { data, error, count } = archived
+    ? await admin.from("submission_payment_archive").select(archiveColumns, { count: "exact" })
+      .order("archived_at", { ascending: false }).order("order_id", { ascending: false })
+      .range((page - 1) * pageSize, page * pageSize - 1)
+    : await query.order("created_at", { ascending: false })
+      .order("order_id", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
 
-  const rows = (data ?? []) as unknown as PaymentRow[];
+  const rows = (data ?? []) as unknown as Array<PaymentRow & { archived_at?: string }>;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -113,7 +121,7 @@ export default async function AdminPaymentsPage({ searchParams }: {
       {error ? (
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           <p className="font-semibold">결제 내역을 불러오지 못했습니다.</p>
-          <p className="mt-1">잠시 후 다시 불러오고, 문제가 계속되면 관리자 로그를 확인해주세요.</p>
+          <p className="mt-1">{archived ? "보관 목록은 마이그레이션 20261103132000 적용 후 표시됩니다." : "잠시 후 다시 불러오고, 문제가 계속되면 관리자 로그를 확인해주세요."}</p>
         </div>
       ) : null}
 
@@ -168,7 +176,9 @@ export default async function AdminPaymentsPage({ searchParams }: {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-foreground">
-                    {row.submission_id ? (
+                    {archived ? (
+                      <span className="font-mono text-xs">{row.submission_id ?? "—"}</span>
+                    ) : row.submission_id ? (
                       <Link
                         href={`/admin/submissions/${row.submission_id}`}
                         className="text-foreground underline underline-offset-2"
@@ -184,9 +194,11 @@ export default async function AdminPaymentsPage({ searchParams }: {
                       <p className={`font-semibold ${row.status === "APPROVED" && !attentionCodes.includes(row.result_code ?? "") ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}>{row.status ?? "확인 필요"}</p>
                       <p className="break-all font-mono">{row.result_code || "—"}</p>
                       <p className="text-muted-foreground">
-                        {row.submission?.payment_method ?? "CARD"} / {row.submission?.payment_status ?? "신청 상태 확인 필요"}
+                        {archived
+                          ? `삭제된 접수 · 보관 ${row.archived_at ? formatDateTime(row.archived_at) : ""}`
+                          : `${row.submission?.payment_method ?? "CARD"} / ${row.submission?.payment_status ?? "신청 상태 확인 필요"}`}
                       </p>
-                      {row.status === "REQUESTED" && row.result_code === "APPROVAL_UNCERTAIN" ? (
+                      {!archived && row.status === "REQUESTED" && row.result_code === "APPROVAL_UNCERTAIN" ? (
                         <UncertainPaymentResolver orderId={row.order_id} />
                       ) : null}
                     </div>
