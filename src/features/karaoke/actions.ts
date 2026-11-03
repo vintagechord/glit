@@ -8,6 +8,8 @@ import { getB2Config } from "@/lib/b2";
 import { getGuestStorageOwnerId } from "@/lib/guest-storage-owner";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { consumePersistentRateLimit, getRequestIdentifier } from "@/lib/request-rate-limit";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export type KaraokeActionState = {
@@ -150,6 +152,17 @@ const formatKaraokeCreditRpcError = (
   return fallback;
 };
 
+// Guests can file requests without an account, so shared limits per address
+// and per member (or guest email) keep a script from flooding the admin list.
+const KARAOKE_REQUEST_WINDOW_MS = 60 * 60_000;
+const karaokeRequestLimits = (address: string, userId: string | null, guestEmail?: string) => [
+  { namespace: "karaoke-request-ip", identifier: address, limit: 10, windowMs: KARAOKE_REQUEST_WINDOW_MS },
+  { namespace: "karaoke-request-ip-day", identifier: address, limit: 30, windowMs: 24 * KARAOKE_REQUEST_WINDOW_MS },
+  userId
+    ? { namespace: "karaoke-request-user", identifier: userId, limit: 10, windowMs: KARAOKE_REQUEST_WINDOW_MS }
+    : { namespace: "karaoke-request-guest-email", identifier: guestEmail ?? "", limit: 5, windowMs: KARAOKE_REQUEST_WINDOW_MS },
+];
+
 export async function createKaraokeRequestAction(
   payload: z.infer<typeof karaokeRequestSchema>,
 ): Promise<KaraokeActionState> {
@@ -204,6 +217,14 @@ export async function createKaraokeRequestAction(
   }
   if (recommendationPublic && promotionCredits < 1) {
     return { error: "추천 공개에는 최소 1크레딧이 필요합니다." };
+  }
+
+  const address = getRequestIdentifier(await headers());
+  for (const limit of karaokeRequestLimits(address, user?.id ?? null, parsed.data.guestEmail)) {
+    const result = await consumePersistentRateLimit(limit);
+    if (!result.allowed) {
+      return { error: "노래방 등록 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+    }
   }
 
   const admin = createAdminClient();

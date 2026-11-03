@@ -4,6 +4,7 @@ import {
   // updateKaraokePromotionRecommendationStatusFormAction,
 } from "@/features/karaoke/actions";
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { AdminListPager, adminListRange, parseAdminListPage } from "@/components/admin/list-pager";
 import { KaraokeFileButton } from "@/features/karaoke/karaoke-file-button";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -41,7 +42,10 @@ type KaraokeRequestRow = {
 type KaraokeSearchParamsInput = {
   status?: string | string[];
   saved?: string | string[];
+  page?: string | string[];
 };
+
+const PAGE_SIZE = 50;
 
 const toSingle = (value?: string | string[]) => {
   if (Array.isArray(value)) return value[0] ?? "";
@@ -54,15 +58,20 @@ export default async function AdminKaraokePage({
   searchParams?: Promise<KaraokeSearchParamsInput>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const statusFilter = toSingle(resolvedSearchParams?.status).trim();
+  const rawStatus = toSingle(resolvedSearchParams?.status).trim();
+  const statusFilter = statusOptions.includes(rawStatus) ? rawStatus : "";
   const savedFlag = toSingle(resolvedSearchParams?.saved).trim();
-  const currentParams = new URLSearchParams();
-  if (statusFilter) {
-    currentParams.set("status", statusFilter);
-  }
-  const currentPageHref = currentParams.toString()
-    ? `/admin/karaoke?${currentParams.toString()}`
-    : "/admin/karaoke";
+  const page = parseAdminListPage(resolvedSearchParams?.page);
+  const range = adminListRange(page, PAGE_SIZE);
+  const hrefForPage = (target: number) => {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set("status", statusFilter);
+    if (target > 1) params.set("page", String(target));
+    const search = params.toString();
+    return search ? `/admin/karaoke?${search}` : "/admin/karaoke";
+  };
+  // Saving a row returns to the same filter and page.
+  const currentPageHref = hrefForPage(page);
 
   const supabase = await createServerSupabase();
   const baseSelect =
@@ -72,14 +81,15 @@ export default async function AdminKaraokePage({
   const buildQuery = (selectFields: string) => {
     let query = supabase
       .from("karaoke_requests")
-      .select(selectFields)
-      .order("created_at", { ascending: false });
+      .select(selectFields, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
     if (statusFilter) {
       query = query.eq("status", statusFilter);
     }
 
-    return query;
+    return query.range(range.from, range.to);
   };
 
   let hasGuestColumns = true;
@@ -88,6 +98,7 @@ export default async function AdminKaraokePage({
   const guestResult = await buildQuery(guestSelect);
   requestsError = guestResult.error ?? null;
   requests = (guestResult.data ?? []) as unknown as KaraokeRequestRow[];
+  let totalCount = guestResult.count ?? requests.length;
 
   if (
     requestsError?.message?.toLowerCase().includes("guest_name") ||
@@ -97,6 +108,7 @@ export default async function AdminKaraokePage({
     const fallback = await buildQuery(baseSelect);
     requests = (fallback.data ?? []) as unknown as KaraokeRequestRow[];
     requestsError = fallback.error ?? null;
+    totalCount = fallback.count ?? requests.length;
   }
 
   // 크레딧 운영 보류: 추천 인증 관리 조회 숨김
@@ -134,7 +146,14 @@ export default async function AdminKaraokePage({
         >
           필터 적용
         </button>
+        <span className="ml-auto rounded-[8px] border border-border bg-background px-3 py-2 text-xs font-black text-muted-foreground">
+          총 {totalCount.toLocaleString()}건
+        </span>
       </form>
+
+      <div className="mt-4 flex justify-end">
+        <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+      </div>
 
       <div className="mt-6 space-y-4">
         {requestsError ? (
@@ -258,6 +277,12 @@ export default async function AdminKaraokePage({
           </div>
         )}
       </div>
+
+      {totalCount > PAGE_SIZE ? (
+        <div className="mt-6 flex justify-end">
+          <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+        </div>
+      ) : null}
 
       {/* 크레딧 운영 보류: 추천 인증 관리 섹션 숨김
       <div className="mt-10">

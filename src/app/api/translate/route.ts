@@ -4,6 +4,7 @@ import { translateLyricsBatch } from "@/lib/server-lyrics-translation";
 import { isUsableLyricsTranslation, LYRICS_TRANSLATION_LIMITS } from "@/lib/lyrics-translation-validation";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
+  consumePersistentRateLimit,
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
@@ -21,6 +22,28 @@ export const maxDuration = 60;
 const maxTranslateLines = LYRICS_TRANSLATION_LIMITS.apiSegments;
 const maxTranslateLineLength = LYRICS_TRANSLATION_LIMITS.apiLine;
 const maxTranslateTotalLength = LYRICS_TRANSLATION_LIMITS.total;
+
+// The album and MV wizards translate one track per click (guests included),
+// usually in one or two requests. Each request may fan out to up to 15
+// OpenAI batches, so the shared limits below bound the provider bill even
+// across instances: per network address, and one daily budget for the site
+// counted in provider batches.
+const IP_WINDOW_LIMIT = { limit: 30, windowMs: 10 * 60 * 1_000 };
+const IP_DAILY_LIMIT = { limit: 150, windowMs: 24 * 60 * 60 * 1_000 };
+const TRANSLATE_DAILY_BATCH_BUDGET = 3_000;
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+/** Upper bound of OpenAI calls for one request (see translateLyricsBatch). */
+const estimateProviderBatches = (lines: string[]) => {
+  const characters = lines.reduce((total, line) => total + line.length, 0);
+  return Math.min(15, Math.max(1,
+    Math.ceil(lines.length / LYRICS_TRANSLATION_LIMITS.batch),
+    Math.ceil(characters / LYRICS_TRANSLATION_LIMITS.batchCharacters),
+  ));
+};
+
+const limitedResponse = (error: string, retryAfterSeconds: number, status = 429) =>
+  NextResponse.json({ error }, { status, headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) } });
 
 const normalizeLanguageCode = (value: string, fallback: string) => {
   const normalized = value.trim().toLowerCase();
@@ -40,13 +63,7 @@ export async function POST(request: Request) {
       windowMs: 10 * 60 * 1_000,
     });
     if (!requestLimit.allowed) {
-      return NextResponse.json(
-        { error: "Translation requests are temporarily limited. Please try again later." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(requestLimit.retryAfterSeconds) },
-        },
-      );
+      return limitedResponse("자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", requestLimit.retryAfterSeconds);
     }
     const bodyResult = await readBoundedJsonBody(request, 256 * 1024);
     if (!bodyResult.ok) {
@@ -99,6 +116,24 @@ export async function POST(request: Request) {
       typeof body.target === "string" && body.target.trim()
         ? normalizeLanguageCode(body.target, "ko")
         : "ko";
+
+    // Counted only for requests that reach the provider. A limiter outage
+    // denies: an unlimited route would spend the provider budget.
+    const identifier = getRequestIdentifier(request.headers);
+    for (const window of [IP_WINDOW_LIMIT, IP_DAILY_LIMIT]) {
+      const byAddress = await consumePersistentRateLimit({ namespace: `translate-ip-${window.windowMs}`, identifier, ...window });
+      if (!byAddress.allowed) {
+        return limitedResponse("자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", byAddress.retryAfterSeconds);
+      }
+    }
+    const budget = await consumePersistentRateLimit({
+      namespace: "translate-daily-budget", identifier: "site",
+      limit: TRANSLATE_DAILY_BATCH_BUDGET, windowMs: DAY_MS, cost: estimateProviderBatches(lines),
+    });
+    if (!budget.allowed) {
+      // 503 lets the wizard fall back to its free in-browser translation.
+      return limitedResponse("오늘 자동번역 사용량이 한도에 도달했습니다. 잠시 후 다시 시도하거나 번역을 직접 입력해주세요.", budget.retryAfterSeconds, 503);
+    }
 
     const deadline = AbortSignal.timeout(50_000);
     const signal = AbortSignal.any([request.signal, deadline]);

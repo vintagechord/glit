@@ -7,6 +7,7 @@ import {
 } from "@/lib/support-chat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { ADMIN_CHAT_PAGE_SIZE, loadAdminChatConversationRows } from "@/features/chat/admin-chat-list";
 
 export const dynamic = "force-dynamic";
 
@@ -71,16 +72,12 @@ async function requireAdminPage() {
 export default async function AdminChatPage() {
   await requireAdminPage();
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("support_chat_conversations")
-    .select("*")
-    .order("last_message_at", { ascending: false })
-    .limit(120);
-
-  const conversations = ((data ?? []) as ConversationRow[]).map(
-    mapConversation,
+  const { rows, hasMore, error } = await loadAdminChatConversationRows<ConversationRow>(
+    createAdminClient(),
+    "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, visitor_left_at, created_at, updated_at",
+    ADMIN_CHAT_PAGE_SIZE,
   );
+  const conversations = rows.map(mapConversation);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-12">
@@ -98,7 +95,7 @@ export default async function AdminChatPage() {
         </div>
       ) : null}
 
-      <AdminChatClient initialConversations={conversations} />
+      <AdminChatClient initialConversations={conversations} initialHasMore={hasMore} />
     </div>
   );
 }

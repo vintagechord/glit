@@ -24,6 +24,7 @@ import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { loadSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
@@ -478,6 +479,12 @@ export default async function AdminSubmissionDetailPage({
       </div>
     );
   }
+
+  // Staff notes come from the administrator-only table. The old column is
+  // only read as a fallback until 20261103160000 has moved the notes.
+  const adminMemoResult = await loadSubmissionAdminMemo(supabase, submission.id);
+  const adminMemo = adminMemoResult.memo ?? submission.admin_memo ?? null;
+  const adminMemoUnavailable = adminMemoResult.error && !submission.admin_memo;
 
   // Guest submissions (including admin-registered ones) are followed with a
   // lookup code; the admin may need to pass the code and link on again.
@@ -1233,11 +1240,14 @@ export default async function AdminSubmissionDetailPage({
                 <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   관리자 메모
                 </label>
+                {/* A disabled field is not submitted, so a note that failed to
+                    load is left unchanged instead of being cleared. */}
                 <textarea
                   name="adminMemo"
-                  defaultValue={submission.admin_memo ?? ""}
-                  className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
-                  placeholder="관리자 메모"
+                  defaultValue={adminMemo ?? ""}
+                  disabled={adminMemoUnavailable}
+                  className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm disabled:opacity-60"
+                  placeholder={adminMemoUnavailable ? "관리자 메모를 불러오지 못했습니다. 새로고침 후 수정해주세요." : "관리자 메모"}
                 />
               </div>
               <div className="mt-5 flex justify-end">
@@ -1557,13 +1567,13 @@ export default async function AdminSubmissionDetailPage({
             )}
           </div>
 
-          {submission.admin_memo ? (
+          {adminMemo ? (
             <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 관리자 메모
               </p>
               <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">
-                {submission.admin_memo}
+                {adminMemo}
               </p>
             </div>
           ) : null}

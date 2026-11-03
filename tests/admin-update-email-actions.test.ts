@@ -14,8 +14,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'actions-fixture';";
         const files: Record<string, string> = {
-          "actions-fixture": `export const calls=[];export const state={isAdmin:true,failUpdate:false,failEvent:false,warning:undefined,submission:{id:'${submissionId}',type:'ALBUM',status:'PRE_REVIEW',payment_status:'PAID',current_order_id:null,title:'Original',artist_name:'Artist',admin_memo:null,result_status:null,result_memo:null}};
-            export const db={auth:{getUser:async()=>({data:{user:{id:'admin'}}})},from(table){let payload=null;const chain={select(){return chain},eq(){return chain},update(value){payload=value;return chain},async maybeSingle(){if(payload){calls.push({name:'write',input:payload});if(state.failUpdate)return {data:null,error:{message:'write failed'}};Object.assign(state.submission,payload)}return {data:{...state.submission},error:null}},async insert(value){calls.push({name:'event',input:value});return {error:state.failEvent?{message:'event rejected'}:null}},then(resolve){chain.maybeSingle().then(resolve)}};return chain}};`,
+          "actions-fixture": `export const calls=[];export const state={isAdmin:true,failUpdate:false,failEvent:false,warning:undefined,memo:null,submission:{id:'${submissionId}',type:'ALBUM',status:'PRE_REVIEW',payment_status:'PAID',current_order_id:null,title:'Original',artist_name:'Artist',admin_memo:null,result_status:null,result_memo:null}};
+            export const db={auth:{getUser:async()=>({data:{user:{id:'admin'}}})},from(table){if(table==='submission_admin_memos'){const memo={select(){return memo},eq(){return memo},async maybeSingle(){return {data:state.memo===null?null:{memo:state.memo},error:null}},async upsert(value,options){calls.push({name:'memo',input:{...value,options}});state.memo=value.memo;return {error:null}},delete(){return {eq:async(key,value)=>{calls.push({name:'memo',input:{[key]:value,memo:null}});state.memo=null;return {error:null}}}}};return memo}let payload=null;const chain={select(){return chain},eq(){return chain},update(value){payload=value;return chain},async maybeSingle(){if(payload){calls.push({name:'write',input:payload});if(state.failUpdate)return {data:null,error:{message:'write failed'}};Object.assign(state.submission,payload)}return {data:{...state.submission},error:null}},async insert(value){calls.push({name:'event',input:value});return {error:state.failEvent?{message:'event rejected'}:null}},then(resolve){chain.maybeSingle().then(resolve)}};return chain}};`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>db;`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>db;`,
           "@/lib/payments/notifications": `${shared} export const sendPaidSubmissionNotificationsById=async input=>{if(state.submission.payment_status!=='PAID')throw Error('payment not committed');calls.push({name:'paid-notice',input});return {recorded:true,warning:state.warning}};`,
@@ -32,7 +32,7 @@ async function fixture() {
   });
   type Actions = typeof import("../src/features/admin/actions");
   const output = { exports: {} as Pick<Actions, "updatePaymentStatusAction" | "updateSubmissionMvRatingAction" | "updateSubmissionStatusAction" | "updateSubmissionBasicInfoAction" | "updateSubmissionResultFormAction" | "saveSubmissionAdminFormAction" | "notifySubmissionResultAction" | "notifySubmissionProgressAction"> & {
-    state: { isAdmin: boolean; failUpdate: boolean; failEvent: boolean; warning?: string; submission: Record<string, unknown> };
+    state: { isAdmin: boolean; failUpdate: boolean; failEvent: boolean; warning?: string; memo: string | null; submission: Record<string, unknown> };
     calls: Array<{ name: string; input: Record<string, unknown> }>;
   } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
@@ -196,4 +196,39 @@ test("main form paid transition uses one receipt flow and failed saves send none
     assert.equal(api.calls.filter(call => call.name === "paid-notice").length, failUpdate ? 0 : 1);
     assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
   }
+});
+
+test("staff notes are saved only to the administrator-only memo table, never on the submission row", async () => {
+  const api = await fixture();
+  await api.updateSubmissionStatusAction({ submissionId, status: "PRE_REVIEW", adminMemo: " private staff note " });
+  assert.equal(api.state.memo, "private staff note");
+  const memoWrites = api.calls.filter(call => call.name === "memo");
+  assert.equal(memoWrites.length, 1);
+  assert.equal(memoWrites[0].input.submission_id, submissionId);
+  assert.deepEqual(memoWrites[0].input.options, { onConflict: "submission_id" });
+  // Same note again: nothing to change.
+  assert.equal((await api.updateSubmissionStatusAction({ submissionId, status: "PRE_REVIEW", adminMemo: "private staff note" })).message, "변경된 내용이 없습니다.");
+  assert.equal(api.calls.filter(call => call.name === "memo").length, 1);
+
+  const form = new FormData();
+  for (const [key, value] of Object.entries({ submissionId, status: "PRE_REVIEW", paymentStatus: "PAID", title: "Original", artistName: "Artist", adminMemo: "edited note" })) form.set(key, value);
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.state.memo, "edited note");
+  assert.ok(api.calls.some(call => call.name === "event" && call.input.event_type === "ADMIN_MEMO"), "a memo-only edit keeps its audit event");
+
+  // A form that could not load the note leaves the field out; that must not clear it.
+  form.delete("adminMemo"); form.set("title", "Renamed");
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.state.memo, "edited note");
+
+  form.set("adminMemo", "");
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.state.memo, null, "an emptied textarea removes the note");
+
+  await api.updatePaymentStatusAction({ submissionId, paymentStatus: "PAID", adminMemo: "deposit checked" });
+  assert.equal(api.state.memo, "deposit checked");
+  for (const write of api.calls.filter(call => call.name === "write")) {
+    assert.equal("admin_memo" in write.input, false, "submission updates never carry the staff note");
+  }
+  assert.equal("admin_memo" in api.state.submission && api.state.submission.admin_memo !== null, false);
 });
