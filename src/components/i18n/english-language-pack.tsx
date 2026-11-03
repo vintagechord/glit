@@ -2875,6 +2875,8 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/총 결제금액/g, "Total Payment Amount"],
   [/진행중 (\d+)건/g, "$1 active"],
   [/(\d+)곡 대기/g, "$1 tracks pending"],
+  [/(\d+)곡 부적격/g, "$1 tracks rejected"],
+  [/(\d+)곡 적격/g, "$1 tracks approved"],
   [/([\d,]+)건/g, "$1 items"],
   [/접수한 심의/g, "Submitted reviews"],
   [/아티스트 미입력/g, "Artist not entered"],

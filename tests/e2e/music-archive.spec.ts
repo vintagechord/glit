@@ -285,7 +285,7 @@ test("Onside review tab opens the live result popup and respects selected track 
   await page.getByLabel("심의 결과",{exact:true}).selectOption("eligible");
   await page.getByRole("button",{name:"저장",exact:true}).click();
   expect(harness.libraries[0].data.tasks[0].trackId).toBe("clean");
-  await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("KBS · 적격");
+  await expect(page.getByRole("region",{name:"심의 정보"}).getByRole("button",{name:"KBS · 적격",exact:true})).toBeVisible();
   expect(harness.errors).toEqual([]);
 });
 
@@ -498,9 +498,16 @@ test("manual reviews save selected broadcasters atomically and show ineligibilit
   expect(harness.writes[0].action).toBe("commands");
   expect(harness.libraries[0].data.tasks).toHaveLength(stationCount * 2);
   expect(harness.libraries[0].data.tasks.every(task => task.result === "ineligible" && task.status === "completed" && task.memo === "특정 상품명 포함")).toBe(true);
-  await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("부적격 사유: 특정 상품명 포함");
+  // Album records read per station: both songs failed everywhere, and the reason sits in the station popup.
+  const review = page.getByRole("region",{name:"심의 정보"});
+  await expect(review.getByRole("list",{name:"방송사별 심의 결과",exact:true}).getByRole("listitem")).toHaveCount(stationCount);
+  await review.getByRole("button",{name:"KBS · 2곡 부적격",exact:true}).click();
+  const kbs = page.getByRole("dialog",{name:"KBS 심의 결과",exact:true});
+  await expect(kbs.getByRole("listitem")).toHaveCount(2);
+  await expect(kbs.getByText("부적격 사유: 특정 상품명 포함").first()).toBeVisible();
+  await kbs.getByRole("button",{name:"닫기"}).first().click();
   await page.reload();
-  await expect(page.getByRole("region",{name:"심의 정보"})).toContainText("KBS · 부적격");
+  await expect(page.getByRole("region",{name:"심의 정보"}).getByRole("button",{name:"KBS · 2곡 부적격",exact:true})).toBeVisible();
   expect(harness.errors).toEqual([]);
 });
 

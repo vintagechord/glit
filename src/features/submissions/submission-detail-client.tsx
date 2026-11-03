@@ -1070,8 +1070,10 @@ export function SubmissionDetailClient({
                 rejected: trackInfo.counts.rejected,
                 pending: pendingCount,
               };
+              // Finished stations read "적격" or "N곡 부적격" on their own; the
+              // per-song count only helps while results are still arriving.
               const trackSummaryLine =
-                hasTrackDetails && totalTracksForDisplay > 1
+                hasTrackDetails && totalTracksForDisplay > 1 && pendingCount > 0
                   ? buildTrackSummaryText(summaryCounts, " · ")
                   : null;
               const resolvedResultNote = note;

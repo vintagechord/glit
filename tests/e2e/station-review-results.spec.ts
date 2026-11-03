@@ -84,7 +84,7 @@ test("administrator results reach the requester live and unlock radio requests o
   await page.getByLabel("두 번째 노래 심의 결과").selectOption("REJECTED");
   await save(page);
   await expect(requester.getByText("결과 1/1", { exact: true })).toBeVisible();
-  await expect(requester.getByRole("button", { name: /KBS · 부분 적격/ })).toBeVisible();
+  await expect(requester.getByRole("button", { name: /KBS · 1곡 부적격/ })).toBeVisible();
   await expect(requester.getByTestId("broadcast-support")).toBeVisible();
   await expect(requester.getByLabel("신청할 적격 곡").locator("option")).toHaveText(["첫 번째 노래"]);
 });

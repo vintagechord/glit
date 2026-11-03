@@ -87,9 +87,10 @@ for (const width of [320, 640, 1440]) {
         }));
         if (mode === "detail") reference = styles;
         else expect(styles).toEqual(reference);
-        await expect(controls.nth(2)).toContainText("부분 적격");
-        await expect(controls.nth(2)).toContainText("1곡 적격");
+        // A finished multi-song station reads "N곡 부적격" alone (owner decision 2026-11-03).
         await expect(controls.nth(2)).toContainText("1곡 부적격");
+        await expect(controls.nth(2)).not.toContainText("부분 적격");
+        await expect(controls.nth(2)).not.toContainText("1곡 적격");
         for (const control of await controls.all()) {
           const rect = (await control.boundingBox())!;
           expect(rect.height).toBeGreaterThanOrEqual(44);
@@ -102,7 +103,7 @@ for (const width of [320, 640, 1440]) {
           expect(await controls.nth(3).evaluate(element => element.tagName)).toBe("SPAN");
         }
         await page.screenshot({ path: testInfo.outputPath(`${mode}-${width}-${theme}.png`), fullPage: true });
-        const result = page.getByRole("button", { name: mode === "detail" ? /MBC · 부적격/ : "MBC 부적격 결과 보기" });
+        const result = page.getByRole("button", { name: mode === "detail" ? /MBC · 2곡 부적격/ : "MBC 2곡 부적격 결과 보기" });
         await result.focus();
         await page.keyboard.press("Enter");
         const dialog = page.getByRole("dialog", { name: mode === "detail" ? "트랙별 결과" : mode === "list" ? "MBC 트랙별 결과" : "MBC 심의 결과" });
@@ -141,7 +142,7 @@ for (const width of [320, 390, 640, 1440]) {
         if (locale === "en") await expect(page.getByText("Sample", { exact: true })).toBeVisible();
         await expect(statuses.nth(0)).toHaveText(locale === "en" ? "Queued" : "접수예정");
         await expect(statuses.nth(4)).toHaveText(locale === "en" ? "Fix needed" : "보완 요청");
-        await expect(statuses.nth(5)).toHaveText(locale === "en" ? "Partial" : "부분 적격");
+        await expect(statuses.nth(5)).toHaveText(locale === "en" ? "1 rejected" : "1곡 부적격");
         for (const header of ["방송국", "Station", "Status"]) {
           await expect(page.getByText(header, { exact: true })).toHaveCount(0);
         }
@@ -261,7 +262,7 @@ for (const mode of ["home", "compact"]) {
 
 // An approved online MV shows its rating, painted like the rating mark.
 const ratingChips = {
-  ALL: ["전체관람가", "rgb(34, 156, 86)", "rgb(17, 17, 17)"],
+  ALL: ["전체관람가", "rgb(34, 156, 86)", "rgb(255, 255, 255)"],
   "12": ["12세이상관람가", "rgb(233, 182, 48)", "rgb(17, 17, 17)"],
   "15": ["15세이상관람가", "rgb(221, 116, 48)", "rgb(17, 17, 17)"],
   "19": ["청소년관람불가", "rgb(217, 42, 53)", "rgb(255, 255, 255)"],

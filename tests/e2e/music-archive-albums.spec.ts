@@ -84,16 +84,20 @@ test("old source album and track deep links resolve the same song through tabs a
 test("same-agency histories stay visible and editing retains the original task ID", async ({ page }) => {
   const harness = await mount(page, albumPath);
   const review = page.getByRole("region", { name: "심의 정보", exact: true });
-  await expect(review.getByRole("article")).toHaveCount(2);
+  // Records are folded per station; both same-agency histories stay listed in its popup.
+  const stations = review.getByRole("list", { name: "방송사별 심의 결과", exact: true });
+  await expect(stations.getByRole("listitem")).toHaveCount(1);
   await expect(review.getByRole("link", { name: "온사이드에 심의 신청", exact: true })).toHaveCount(0);
-  const pending = review.getByRole("article").filter({ hasText: "심의 미진행" });
-  await pending.getByRole("button", { name: "수정", exact: true }).click();
+  await stations.getByRole("button").click();
+  const histories = page.getByRole("dialog", { name: /심의 결과$/ }).getByRole("listitem");
+  await expect(histories).toHaveCount(2);
+  await histories.filter({ hasText: "심의 미진행" }).getByRole("button", { name: "수정", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "심의 내역 수정", exact: true });
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(harness.writes[0]).toMatchObject({ action: "commands", commands: [{ type: "update_task", taskId: "history-1:genie-track:101:1010" }] });
   expect(harness.detail.library.data.tasks.map(task => task.trackId)).toEqual(["melon-track:100:1000", "genie-track:101:1010"]);
-  await expect(review.getByRole("article")).toHaveCount(2);
+  await expect(stations.getByRole("listitem")).toHaveCount(1);
   expect(harness.errors).toEqual([]);
 });
 

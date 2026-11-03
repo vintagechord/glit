@@ -485,7 +485,11 @@ function CompactStationRow({
     "심의 중": "In review", "적격": "Approved", "부적격": "Rejected",
     "보완 요청": "Fix needed", "부분 적격": "Partial",
   };
-  const label = english ? shortEnglishLabels[status.label] ?? status.label : status.label;
+  // "N곡 부적격" (see buildRejectedSongsLabel); string checks, not a Korean regex literal.
+  const rejectedSongs = status.label.endsWith("곡 부적격") ? Number.parseInt(status.label, 10) : Number.NaN;
+  const label = english
+    ? shortEnglishLabels[status.label] ?? (Number.isFinite(rejectedSongs) ? `${rejectedSongs} rejected` : status.label)
+    : status.label;
   const content = <>
     <StationLogo station={station} compact />
     <span className="flex min-w-0 flex-col items-center gap-1">
