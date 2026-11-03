@@ -221,7 +221,10 @@ export default async function AdminSubmissionsPage({
       .from("submissions")
       .select(selectFields, { count: "exact" })
       .order("updated_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      // Rows saved in one statement share timestamps; the unique id keeps
+      // offset pages from repeating or skipping them.
+      .order("id", { ascending: false });
 
     if (filters.status) {
       query = query.eq("status", filters.status);
