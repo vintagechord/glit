@@ -120,9 +120,6 @@ export default async function AdminPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-12">
       <h1 className="font-display text-3xl text-foreground">대시보드</h1>
-      <Link href="/admin/emails" className="mt-5 mr-3 inline-flex items-center gap-2 rounded-[8px] border-2 border-border bg-card px-4 py-3 text-sm font-black text-foreground">
-        <SendHorizontal className="h-5 w-5" aria-hidden="true" />이메일 발송 관리
-      </Link>
       <Link href="/admin/review-docs" className="mt-5 inline-flex items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-4 py-3 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111]">
         <FileArchive className="h-5 w-5" aria-hidden="true" />
         심의자료 생성
@@ -316,6 +313,15 @@ export default async function AdminPage() {
         >
           <h2 className="text-xl font-semibold text-foreground">
             저장공간 정리
+          </h2>
+        </Link>
+        <Link
+          href="/admin/emails"
+          className="rounded-[24px] border border-border/60 bg-card/80 p-6 text-sm transition hover:-translate-y-1 hover:border-foreground"
+        >
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
+            <SendHorizontal className="h-5 w-5" aria-hidden="true" />
+            메일 발송 내역
           </h2>
         </Link>
       </div>

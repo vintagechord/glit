@@ -39,6 +39,8 @@ export function AdminRefundPanel({
   const [note, setNote] = React.useState("");
   const [done, setDone] = React.useState(false);
   const [notify, setNotify] = React.useState(true);
+  // Refunds are rare: the form stays folded until an administrator opens it.
+  const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
 
   const receiptNotice = cashReceiptIssued ? (
@@ -79,14 +81,33 @@ export function AdminRefundPanel({
     });
   };
 
+  const panelId = `refund-panel-${submissionId}`;
   return (
     <div className="space-y-4 rounded-[28px] border-2 border-[#111111] bg-card p-6 text-sm">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">환불 처리</p>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          실제 환불은 먼저 직접 처리해주세요. 카드 결제는 KG이니시스 관리자에서 결제를 취소하고, 무통장 입금은 고객 계좌로 송금합니다. 여기서는 그 환불을 온사이드에 기록합니다.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">환불 처리</p>
+          {!open ? (
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">환불이 필요할 때 펼쳐서 기록합니다.</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={open ? "환불 처리 접기" : "환불 처리 펼치기"}
+          className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-[8px] border-2 border-[#111111] bg-white px-3 py-1 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white dark:border-[#f2cf27] dark:bg-[#111111] dark:text-[#f2cf27]"
+        >
+          <span aria-hidden>{open ? "▲" : "▼"}</span>
+          <span>{open ? "접기" : "펼치기"}</span>
+        </button>
       </div>
+      {open ? (
+      <div id={panelId} className="space-y-4">
+      <p className="text-xs leading-5 text-muted-foreground">
+        실제 환불은 먼저 직접 처리해주세요. 카드 결제는 KG이니시스 관리자에서 결제를 취소하고, 무통장 입금은 고객 계좌로 송금합니다. 여기서는 그 환불을 온사이드에 기록합니다.
+      </p>
       {groupCount > 1 ? (
         <div className="rounded-[8px] border-2 border-[#111111] bg-background p-3 text-xs leading-5">
           <p className="font-black">같은 주문으로 결제한 {groupCount}건이 함께 환불로 기록됩니다.</p>
@@ -134,6 +155,8 @@ export function AdminRefundPanel({
       >
         {pending ? "기록 중…" : "환불 완료로 기록"}
       </button>
+      </div>
+      ) : null}
     </div>
   );
 }

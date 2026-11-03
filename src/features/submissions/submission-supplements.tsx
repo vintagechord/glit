@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
@@ -279,7 +278,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
             {admin && !!revision.notifications?.length && <details className="mt-3 rounded border border-border p-3">
               <summary className="cursor-pointer font-semibold">{t("보완 안내 발송 이력", "Supplement Notification History")}</summary>
               <p className="mt-2">{t("업체 접수와 실제 수신은 다릅니다. 응답이 불확실하거나 오래된 실패는 공급자 기록을 대조한 후 재시도해주세요.", "Provider acceptance does not confirm delivery. Reconcile uncertain responses or old failures with provider records before retrying.")}</p>
-              <p className="mt-2">{t("아래는 요청 처리 당시 기록입니다. 자동 재시도 이후의 현재 상태는 이메일 발송 내역에서 확인해주세요.", "These are records from the original request. Check Email Delivery History for the current status after automatic retries.")} <Link href="/admin/emails" className="underline">{t("이메일 발송 내역", "Email Delivery History")}</Link></p>
+              <p className="mt-2">{t("아래는 요청 처리 당시 기록입니다. 자동 재시도 이후의 현재 상태는 이메일 발송 내역에서 확인해주세요.", "These are records from the original request. Check Email Delivery History for the current status after automatic retries.")} <a href="#customer-emails" className="underline">{t("이메일 발송 내역", "Email Delivery History")}</a></p>
               <ul className="mt-2 space-y-3">{revision.notifications.map(notice => <li key={notice.id} className="break-words">
                 <p>{notice.state_key} · {notice.attempts} {t("회 시도", "attempts")} · {notice.last_attempt_at ? new Date(notice.last_attempt_at).toLocaleString(english ? "en-US" : "ko-KR") : "—"}</p>
                 <p>{t("이메일", "Email")}: {delivery(notice.outcome.email, true, notice.outcome)} · {t("카카오", "Kakao")}: {delivery(notice.outcome.kakao)}</p>
