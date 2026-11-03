@@ -120,10 +120,13 @@ export default function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
             <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-6">
-              <div className="space-y-5 sm:space-y-6">
-                <span className="bauhaus-kicker" style={{ textTransform: "none" }}>
+              {/* The kicker is a block so the gap applies; as an inline span its
+                  padded box overlapped the headline. The kicker and headline read
+                  as one unit, so their gap stays smaller than the gap below. */}
+              <div className="space-y-4 sm:space-y-5">
+                <p className="bauhaus-kicker" style={{ textTransform: "none" }}>
                   Since 2017
-                </span>
+                </p>
                 <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
                   심의 신청부터
                   <span className="sm:hidden"> </span>
