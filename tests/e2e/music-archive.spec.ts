@@ -118,6 +118,17 @@ async function tab(page: Page, name: string) {
 }
 const forbiddenMemberCopy = /메타데이터 출처|업무 기록|업무 이력|변경 이력|이용 허가|아티스트 ID|공식 조회 미확인|사용자 입력|공식 출처 확인일/;
 
+test("the empty archive offers artist creation next to its prompt, not only in the header", async ({ page }) => {
+  const harness = await mount(page);
+  const empty = page.locator("div", { has: page.getByRole("heading", { name: "내 아티스트를 추가해 주세요", exact: true }) }).last();
+  await expect(empty.getByText("발매한 음악을 찾아 한곳에 모아드립니다.", { exact: true })).toBeVisible();
+  await empty.getByRole("button", { name: "아티스트 추가하기", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "아티스트 이름", exact: true })).toBeVisible();
+  expect(harness.writes).toHaveLength(0);
+  expect(harness.errors).toEqual([]);
+});
+
 test("artist deletion confirmation uses the full album count and cancelling leaves the library intact", async ({ page }) => {
   const original: Library = { ...fixture(), summary: { releaseCount: 14, trackCount: 55, needsCheck: 0, inProgress: 0, needsChanges: 0, awaitingResult: 0 } };
   const harness = await mount(page, [original]);
@@ -342,6 +353,51 @@ test("manual album and track creation preserves distinct recordings with concise
   for (const version of ["Original","Clean"]) { await page.getByRole("button",{name:"트랙 추가",exact:true}).click(); await page.getByLabel("트랙 제목",{exact:true}).fill("동명곡"); await page.getByLabel("버전",{exact:true}).fill(version); await page.getByRole("button",{name:"저장",exact:true}).click(); await expect(page.getByRole("dialog")).toHaveCount(0); }
   expect(harness.libraries[0].data.recordings).toHaveLength(2); expect(harness.libraries[0].data.tracks).toHaveLength(2);
   await expect(page.getByLabel("관리할 음악",{exact:true})).toContainText("Original"); await expect(page.getByLabel("관리할 음악",{exact:true})).toContainText("Clean");
+  expect(harness.errors).toEqual([]);
+});
+
+test("a mistakenly added track can be deleted from its editor and leaves the album's other tracks", async ({ page }) => {
+  const harness = await mount(page);
+  await page.getByRole("button", { name: "아티스트 추가", exact: true }).click(); await page.getByRole("button", { name: "직접 추가", exact: true }).click();
+  await page.getByLabel("아티스트 활동명", { exact: true }).fill("테스트 뮤지션"); await page.getByRole("button", { name: "아티스트 직접 추가", exact: true }).click();
+  await page.getByRole("button", { name: "앨범 추가", exact: true }).click(); await page.getByLabel("앨범 제목", { exact: true }).fill("첫 앨범"); await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: /첫 앨범/ }).click();
+  for (const title of ["남길 곡", "실수한 곡"]) {
+    await page.getByRole("button", { name: "트랙 추가", exact: true }).click(); await page.getByLabel("트랙 제목", { exact: true }).fill(title);
+    await page.getByRole("button", { name: "저장", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+  const select = page.getByLabel("관리할 음악", { exact: true });
+  await select.selectOption({ label: "2. 실수한 곡" });
+  await page.getByRole("button", { name: "트랙 수정", exact: true }).click();
+  page.once("dialog", dialog => { expect(dialog.message()).toContain("삭제할까요"); void dialog.accept(); });
+  await page.getByRole("button", { name: "트랙 삭제", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(select).not.toContainText("실수한 곡"); await expect(select).toContainText("남길 곡");
+  await expect(select).toHaveValue("");
+  expect(harness.libraries[0].data.tracks.find(track => track.title === "실수한 곡")?.excluded).toBe(true);
+  expect(harness.libraries[0].data.tracks.find(track => track.title === "남길 곡")?.excluded).toBeFalsy();
+  expect(harness.errors).toEqual([]);
+});
+
+test("review results can be entered directly for an album whose tracks are not linked to the artist", async ({ page }) => {
+  const initial = fixture();
+  for (const track of initial.data.tracks) track.managed = false;
+  const harness = await mount(page, [initial]);
+  await openAlbum(page);
+  const entry = page.getByRole("button", { name: "심의 내역 직접 입력", exact: true });
+  await expect(entry).toBeEnabled();
+  await entry.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("음원", { exact: true }).selectOption({ label: "1. 같은 제목 (Original)" });
+  await expect(dialog.getByRole("checkbox", { name: "KBS", exact: true })).toBeChecked();
+  await dialog.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const saved = harness.libraries[0].data;
+  expect(saved.tracks.find(track => track.id === "original")?.managed).toBe(true);
+  expect(saved.tracks.find(track => track.id === "clean")?.managed).toBe(false);
+  expect(saved.tasks.length).toBeGreaterThan(0);
+  expect(saved.tasks.every(task => task.kind === "review" && task.trackId === "original")).toBe(true);
   expect(harness.errors).toEqual([]);
 });
 

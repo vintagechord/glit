@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { type ArchiveCommand, type ArchiveData, type ArchiveRelease, type ArchiveTrack, type ArchiveAffiliation, type ServiceLink } from "@/lib/music-archive/model";
 import { parseMusicProviderUrl } from "@/lib/music-archive/providers";
 import { isDomesticMusicProvider, providerNames, releaseLabels } from "./types";
@@ -10,7 +12,7 @@ export function LinksEditor({ kind, value, onChange }: { kind: "artist" | "relea
   return <div className="space-y-2"><strong className="text-sm">음악 서비스 링크</strong>{value.map((link, index) => <div key={`${link.url}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3"><External href={link.url}>{providerNames[link.provider] || link.provider}</External><Button aria-label={`${providerNames[link.provider] || link.provider} 링크 제거`} onClick={() => onChange(value.filter((_, i) => i !== index))}>제거</Button></div>)}<div className="flex items-end gap-2"><div className="min-w-0 flex-1"><Field label="추가할 음악 서비스 링크"><input className={inputClass} value={url} onChange={(e) => setUrl(e.target.value)} maxLength={2000} placeholder="https://…" /></Field></div><Button onClick={() => { const parsed = parseMusicProviderUrl(url, kind); if (!parsed || (!isDomesticMusicProvider(parsed.provider) && parsed.provider !== "apple")) { setError("멜론·지니뮤직·벅스 또는 Apple Music 한국 페이지 주소를 입력해 주세요."); return; } onChange([...value.filter((link) => link.url !== parsed.url), { provider: parsed.provider, url: parsed.url, externalId: parsed.externalId }]); setUrl(""); setError(""); }}>링크 추가</Button></div>{error && <Notice error>{error}</Notice>}<p className="text-xs text-muted-foreground">음악을 확인할 수 있는 페이지를 저장합니다. 앨범과 트랙 정보는 따로 추가·수정할 수 있습니다.</p></div>;
 }
 
-export function EntityEditor({ data, kind, release, track, busy, onSave }: { data: ArchiveData; kind: "artist" | "release" | "track"; release?: ArchiveRelease; track?: ArchiveTrack; busy: boolean; onSave: (commands: ArchiveCommand[]) => Promise<void> }) {
+export function EntityEditor({ data, kind, release, track, busy, onSave, onDelete }: { data: ArchiveData; kind: "artist" | "release" | "track"; release?: ArchiveRelease; track?: ArchiveTrack; busy: boolean; onSave: (commands: ArchiveCommand[]) => Promise<void>; onDelete?: () => Promise<void> }) {
   const [title, setTitle] = useState(kind === "artist" ? data.artist.name : track?.title ?? (kind === "track" ? "" : release?.title) ?? "");
   const [artistName, setArtistName] = useState(track?.artistName ?? release?.artistName ?? data.artist.name);
   const [version, setVersion] = useState(track?.version ?? release?.version ?? "");
@@ -45,6 +47,14 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
       await onSave(commands);
     } catch (error) { setError(error instanceof Error ? error.message : "저장하지 못했습니다."); }
   }
+  async function removeTrack() {
+    if (!onDelete || busy) return;
+    const recorded = data.tasks.some(task => task.trackId === track?.id);
+    const confirmed = await showCenteredConfirm(recorded ? "이 트랙과 트랙에 입력한 심의·등록 기록을 내 음악 관리 목록에서 삭제할까요?" : "이 트랙을 내 음악 관리 목록에서 삭제할까요?", { title: "트랙 삭제" });
+    if (!confirmed) return;
+    setError("");
+    try { await onDelete(); } catch (error) { setError(error instanceof Error ? error.message : "삭제하지 못했습니다."); }
+  }
   return <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="space-y-4">
     {error && <Notice error>{error}</Notice>}
     <Field label={kind === "artist" ? "아티스트 활동명" : kind === "release" ? "앨범 제목" : "트랙 제목"}><input className={inputClass} value={title} required maxLength={500} onChange={(event) => setTitle(event.target.value)} /></Field>
@@ -52,7 +62,7 @@ export function EntityEditor({ data, kind, release, track, busy, onSave }: { dat
     {kind === "release" && <div className="grid gap-4 sm:grid-cols-2"><Field label="발매 형식"><select className={inputClass} value={releaseType} onChange={(event) => setReleaseType(event.target.value as ArchiveRelease["type"])}>{Object.entries(releaseLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="발매일"><input className={inputClass} value={releaseDate} placeholder="YYYY-MM-DD" pattern="[0-9]{4}(-[0-9]{2})?(-[0-9]{2})?" onChange={(event) => setReleaseDate(event.target.value)} /></Field></div>}
     {kind === "release" && <Field label="음원 사이트 앨범 URL (선택)" hint="멜론·지니 앨범 주소를 연결하면 공개된 저작자 정보를 다시 가져올 수 있습니다."><input type="url" className={inputClass} value={albumUrl} maxLength={2000} placeholder="https://…" onChange={event => setAlbumUrl(event.target.value)} /></Field>}
     {kind === "track" && <div className="grid gap-4 sm:grid-cols-2"><Field label="트랙 순서"><input type="number" min={1} max={10000} required className={inputClass} value={trackNumber} onChange={(event) => setTrackNumber(Number(event.target.value))} /></Field><Field label="버전"><input className={inputClass} value={version} maxLength={500} placeholder="원곡, 클린, 라이브 등" onChange={(event) => setVersion(event.target.value)} /></Field></div>}
-    <div className="flex justify-end border-t border-border pt-4"><Button primary type="submit" className="min-w-28" disabled={busy}>{busy ? "저장 중…" : "저장"}</Button></div>
+    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">{kind === "track" && track && onDelete && <Button className="mr-auto" disabled={busy} onClick={() => { void removeTrack(); }}><Trash2 className="h-4 w-4" aria-hidden />트랙 삭제</Button>}<Button primary type="submit" className="min-w-28" disabled={busy}>{busy ? "저장 중…" : "저장"}</Button></div>
   </form>;
 }
 

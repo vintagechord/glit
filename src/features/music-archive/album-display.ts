@@ -18,6 +18,11 @@ export function albumDisplayCommands(commands: ArchiveCommand[], groups: Archive
       const patch = Object.fromEntries(Object.entries(command.patch).filter(([key]) => ["title", "version", "artistName", "trackNumber"].includes(key)));
       return [command, ...(Object.keys(patch).length ? (group?.trackIds ?? []).filter(id => id !== command.trackId).map(trackId => ({ type: "update_track" as const, trackId, patch })) : [])];
     }
+    if (command.type === "set_excluded" && command.entityType === "track") {
+      // A track added by the member is copied into every grouped release, so removal covers each copy.
+      const group = groups.flatMap(group => group.tracks).find(group => group.trackIds.includes(command.id));
+      return [command, ...(group?.trackIds ?? []).filter(id => id !== command.id).map(id => ({ ...command, id }))];
+    }
     if (command.type === "add_track") {
       const group = groups.find(group => group.releaseIds.includes(command.track.releaseId));
       return [command, ...(group?.releaseIds ?? []).filter(id => id !== command.track.releaseId).map(releaseId => ({ type: "add_track" as const, track: { ...command.track, id: crypto.randomUUID(), releaseId, links: [] } }))];
