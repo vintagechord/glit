@@ -103,7 +103,7 @@ export function SubmissionSaveIndicator({
           aria-modal="true"
           aria-labelledby="submission-recovery-title"
           className={cn(
-            "max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border-2 border-[#111111] bg-[#fff7cf] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#2a2512] dark:text-white dark:shadow-none",
+            "max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border-2 border-[#111111] bg-[#f2cf27] p-5 text-[#111111] shadow-[4px_4px_0_#111111] dark:shadow-none",
             className,
           )}
         >
@@ -119,14 +119,14 @@ export function SubmissionSaveIndicator({
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
-              className="min-h-11 rounded-full border border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+              className="min-h-11 rounded-full border border-[#111111] bg-[#111111] px-4 py-2 text-xs font-black text-white"
               onClick={onRecover}
             >
               최근 입력 복구
             </button>
             <button
               type="button"
-              className="min-h-11 rounded-full border border-[#111111] px-4 py-2 text-xs font-bold dark:border-[#f2cf27]"
+              className="min-h-11 rounded-full border border-[#111111] bg-white px-4 py-2 text-xs font-bold text-[#111111]"
               onClick={() => void confirmDiscardRecovery()}
             >
               서버 저장본 사용
