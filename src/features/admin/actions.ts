@@ -33,6 +33,7 @@ import {
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
+import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { autoIssueRequestedCashReceipt } from "@/lib/cash-receipts-server";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import {
@@ -379,24 +380,21 @@ export async function updateSubmissionStatusAction(
   }
 
   const supabase = createAdminClient();
-  const { data: previous, error: previousError } = await supabase.from("submissions")
-    .select("status, admin_memo").eq("id", parsed.data.submissionId).maybeSingle();
-  if (previousError || !previous) return { error: "접수 정보를 확인하지 못했습니다." };
+  const [{ data: previous, error: previousError }, previousMemo] = await Promise.all([
+    supabase.from("submissions").select("status").eq("id", parsed.data.submissionId).maybeSingle(),
+    loadSubmissionAdminMemo(supabase, parsed.data.submissionId),
+  ]);
+  if (previousError || !previous || previousMemo.error) return { error: "접수 정보를 확인하지 못했습니다." };
   const statusChanged = previous.status !== parsed.data.status;
-  if (!statusChanged && (previous.admin_memo ?? "") === (parsed.data.adminMemo || "")) {
+  const nextMemo = normalizeAdminMemo(parsed.data.adminMemo);
+  const memoChanged = previousMemo.memo !== nextMemo;
+  if (!statusChanged && !memoChanged) {
     return { message: "변경된 내용이 없습니다." };
   }
-  const updatePayload: {
-    status: z.infer<typeof reviewStatusEnum>;
-    admin_memo: string | null;
-  } = {
-    status: parsed.data.status,
-    admin_memo: parsed.data.adminMemo || null,
-  };
 
   const { data: updatedSubmission, error } = await supabase
     .from("submissions")
-    .update(updatePayload)
+    .update({ status: parsed.data.status })
     .eq("id", parsed.data.submissionId)
     .select("id, status")
     .maybeSingle();
@@ -406,6 +404,10 @@ export async function updateSubmissionStatusAction(
   }
   if (!updatedSubmission || updatedSubmission.status !== parsed.data.status) {
     return { error: "상태 저장 결과가 DB에 반영되지 않았습니다." };
+  }
+  // Staff notes live in an administrator-only table, never on submissions.
+  if (memoChanged && (await saveSubmissionAdminMemo(supabase, parsed.data.submissionId, nextMemo)).error) {
+    return { error: "관리자 메모를 저장하지 못했습니다." };
   }
 
   const eventWarning = await insertEvent(
@@ -664,6 +666,13 @@ export async function updatePaymentStatusAction(
     adminMemo: parsed.data.adminMemo,
   });
   if (orderPayment.error) return { error: orderPayment.error };
+  // The order RPCs add a given note through submissions.admin_memo, which a
+  // trigger appends to the administrator-only note. The form sends the whole
+  // note, so the submitted text then replaces it.
+  if ((orderPayment.confirmedIds || orderPayment.refundedIds) && parsed.data.adminMemo !== undefined
+    && (await saveSubmissionAdminMemo(supabase, parsed.data.submissionId, parsed.data.adminMemo)).error) {
+    return { error: "결제 상태는 저장됐지만 관리자 메모를 저장하지 못했습니다." };
+  }
   if (orderPayment.confirmedIds) {
     for (const id of orderPayment.confirmedIds) revalidateUserDashboards(id);
     for (const prefix of ["", "/en"]) revalidatePath(`${prefix}/mypage/orders`);
@@ -693,7 +702,6 @@ export async function updatePaymentStatusAction(
     .update({
       ...(!submission.current_order_id ? { payment_status: parsed.data.paymentStatus } : {}),
       status: nextStatus,
-      admin_memo: parsed.data.adminMemo || null,
     })
     .eq("id", parsed.data.submissionId)
     .select("id, status, payment_status")
@@ -708,6 +716,9 @@ export async function updatePaymentStatusAction(
     updatedSubmission.status !== nextStatus
   ) {
     return { error: "결제 상태 저장 결과가 DB에 반영되지 않았습니다." };
+  }
+  if ((await saveSubmissionAdminMemo(supabase, parsed.data.submissionId, parsed.data.adminMemo)).error) {
+    return { error: "결제 상태는 저장됐지만 관리자 메모를 저장하지 못했습니다." };
   }
 
   const eventWarning = await insertEvent(
@@ -2071,6 +2082,9 @@ export async function saveSubmissionAdminFormAction(
   const status = String(formData.get("status") ?? "").trim();
   const operationalStage = String(formData.get("operationalStage") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
+  // The detail page leaves the note out (disabled field) when it could not
+  // load it; an absent field must never clear the stored note.
+  const memoSubmitted = formData.has("adminMemo");
   const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const artistName = String(formData.get("artistName") ?? "").trim();
@@ -2095,12 +2109,16 @@ export async function saveSubmissionAdminFormAction(
   }
 
   const supabase = createAdminClient();
-  const { data: currentSubmission, error: currentSubmissionError } = await supabase
-    .from("submissions")
-    .select("id, type, mv_desired_rating, status, payment_status, current_order_id, title, artist_name, admin_memo")
-    .eq("id", submissionId)
-    .maybeSingle();
+  const [{ data: currentSubmission, error: currentSubmissionError }, currentMemo] = await Promise.all([
+    supabase
+      .from("submissions")
+      .select("id, type, mv_desired_rating, status, payment_status, current_order_id, title, artist_name")
+      .eq("id", submissionId)
+      .maybeSingle(),
+    loadSubmissionAdminMemo(supabase, submissionId),
+  ]);
 
+  if (memoSubmitted && currentMemo.error) redirectWithError("관리자 메모를 불러오지 못했습니다. 다시 시도해주세요.");
   if (currentSubmissionError) {
     console.error("admin save submission load error", currentSubmissionError, {
       submissionId,
@@ -2173,7 +2191,6 @@ export async function saveSubmissionAdminFormAction(
 
   const submissionUpdate: Record<string, unknown> = {};
   submissionUpdate.status = nextStatus;
-  submissionUpdate.admin_memo = adminMemo || null;
   if (!currentSubmissionRow.current_order_id) submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;
@@ -2182,7 +2199,7 @@ export async function saveSubmissionAdminFormAction(
     .from("submissions")
     .update(submissionUpdate)
     .eq("id", submissionId)
-    .select("id, status, payment_status, title, artist_name, admin_memo")
+    .select("id, status, payment_status, title, artist_name")
     .maybeSingle();
 
   if (submissionError) {
@@ -2209,6 +2226,15 @@ export async function saveSubmissionAdminFormAction(
     redirectWithError("저장 결과가 DB에 반영되지 않았습니다.");
   }
 
+  // Staff notes live in an administrator-only table. The textarea shows the
+  // whole note, so the submitted text replaces it, including any line an
+  // order RPC appended above.
+  const memoChanged = memoSubmitted && currentMemo.memo !== normalizeAdminMemo(adminMemo);
+  if (memoSubmitted && (memoChanged || orderPayment.confirmedIds || orderPayment.refundedIds)
+    && (await saveSubmissionAdminMemo(supabase, submissionId, adminMemo)).error) {
+    redirectWithError("상태는 저장됐지만 관리자 메모를 저장하지 못했습니다.");
+  }
+
   const changes = [
     mappedStageLabel &&
     (currentStatus !== nextStatus || currentPaymentStatus !== nextPaymentStatus)
@@ -2227,7 +2253,7 @@ export async function saveSubmissionAdminFormAction(
   ].filter(Boolean);
 
   let savedWarning = "";
-  if (!changes.length && (currentSubmissionRow.admin_memo ?? "") !== adminMemo) {
+  if (!changes.length && memoChanged) {
     // Staff-only edits keep their audit trail without sending customer mail.
     try {
       await insertEvent(submissionId, "관리자 메모가 업데이트되었습니다.", "ADMIN_MEMO");

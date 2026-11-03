@@ -20,9 +20,11 @@ import { canHandlePaymentApprovalCallback, getPaymentGroupSubmissionIds } from "
 import { createPaymentResultGrant, setPaymentResultGrantCookie } from "@/lib/payment-result-grant";
 import { claimInicisSubmissionApproval, settleInicisSubmissionApproval } from "@/lib/payments/inicis-approval";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
-import { getPaymentByOrderId, markPaymentFailure, markPaymentSuccess } from "@/lib/payments/submission";
+import { getPaymentByOrderId, markPaymentCanceled, markPaymentFailure, markPaymentSuccess } from "@/lib/payments/submission";
 
-type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
+// CHECKING: the gateway may have charged the card but the result is not
+// confirmed; the customer is told not to pay again.
+type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR" | "CHECKING";
 
 // The bridge URL only carries identifiers; never guest tokens or receipts.
 type BridgePayload = {
@@ -39,6 +41,7 @@ export type InicisMobileReturnDeps = {
   settle: typeof settleInicisSubmissionApproval;
   markPaymentSuccess: typeof markPaymentSuccess;
   markPaymentFailure: typeof markPaymentFailure;
+  markPaymentCanceled: typeof markPaymentCanceled;
   approve: typeof requestInicisMobileApproval;
   netCancel: typeof requestInicisMobileNetCancel;
   notify: typeof sendPaidSubmissionNotificationsById;
@@ -58,6 +61,7 @@ const defaultDeps: InicisMobileReturnDeps = {
   settle: settleInicisSubmissionApproval,
   markPaymentSuccess,
   markPaymentFailure,
+  markPaymentCanceled,
   approve: requestInicisMobileApproval,
   netCancel: requestInicisMobileNetCancel,
   notify: sendPaidSubmissionNotificationsById,
@@ -114,7 +118,7 @@ const buildBridgeRedirect = (baseUrl: string, payload: BridgePayload) => {
 
 export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMobileReturnDeps = defaultDeps) {
   const baseUrl = getInicisCallbackBaseUrl(req);
-  let claimed: { orderId: string; closeState: string } | null = null;
+  let claimed: { orderId: string; closeState: string; submissionId: string | null } | null = null;
   try {
     const params = await readParams(req);
     const status = (params.P_STATUS ?? "").trim();
@@ -181,8 +185,17 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
 
     if (status !== "00") {
       const canceled = /취소|cancel/i.test(message) || status === "01";
+      if (canceled) {
+        // The customer left the payment page: the same CANCELED attempt as
+        // closing the PC window, so the order reads "결제 대기", not "실패".
+        await deps.markPaymentCanceled(orderId, {
+          result_code: status || "CANCELED", result_message: message || "사용자가 결제를 취소했습니다.",
+          raw_response: returnAudit(), close_state: closeState,
+        });
+        return buildBridgeRedirect(baseUrl, { status: "CANCEL", submissionId });
+      }
       await saveFailure(status || "AUTH_FAIL", message || "결제 인증이 완료되지 않았습니다.", returnAudit(), true);
-      return buildBridgeRedirect(baseUrl, { status: canceled ? "CANCEL" : "FAIL", submissionId });
+      return buildBridgeRedirect(baseUrl, { status: "FAIL", submissionId });
     }
     if (!authTid) {
       await saveFailure("AUTH_MISSING", "인증 거래번호를 받지 못했습니다.", returnAudit(), true);
@@ -207,11 +220,11 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
         for (const paidId of paidSubmissionIds) await deps.notify({ submissionId: paidId, paymentKey: orderId });
       }
       return buildBridgeRedirect(baseUrl, {
-        status: claim?.alreadyApproved ? "SUCCESS" : "ERROR", submissionId,
+        status: claim?.alreadyApproved ? "SUCCESS" : claim?.alreadyProcessing ? "CHECKING" : "ERROR", submissionId,
         submissionIds: claim?.alreadyApproved ? paidSubmissionIds : undefined,
       });
     }
-    claimed = { orderId, closeState };
+    claimed = { orderId, closeState, submissionId };
 
     const hashKey = deps.getHashKey();
     const compensate = async (reason: string) => {
@@ -238,10 +251,10 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
       await saveFailure(
         data?.P_STATUS || "APPROVAL_FAILED",
         data?.P_RMESG1 || "승인 요청 결과를 확인하지 못했습니다.",
-        scrubInicisPaymentAudit({ returnParams: params, approval: data, compensation }),
+        scrubInicisPaymentAudit({ returnParams: params, approval: data, compensation, channel: "mobile" }),
         confirmed,
       );
-      return buildBridgeRedirect(baseUrl, { status: "FAIL", submissionId });
+      return buildBridgeRedirect(baseUrl, { status: confirmed ? "FAIL" : "CHECKING", submissionId });
     }
 
     const bindingError = validateInicisMobileCardReceipt(data, { mid: config.mid, orderId, amountKrw: paymentAmount });
@@ -250,10 +263,10 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
       await saveFailure(
         bindingError.startsWith("ORDER_ID_") ? "ORDER_MISMATCH" : bindingError,
         "승인된 결제 정보가 결제 요청과 일치하지 않습니다.",
-        scrubInicisPaymentAudit({ returnParams: params, approval: data, bindingError, expectedAmount: paymentAmount, approvedAmount: data.P_AMT, compensation }),
+        scrubInicisPaymentAudit({ returnParams: params, approval: data, bindingError, expectedAmount: paymentAmount, approvedAmount: data.P_AMT, compensation, channel: "mobile" }),
         compensation.ok,
       );
-      return buildBridgeRedirect(baseUrl, { status: "FAIL", submissionId });
+      return buildBridgeRedirect(baseUrl, { status: compensation.ok ? "FAIL" : "CHECKING", submissionId });
     }
 
     const success = await deps.markPaymentSuccess(orderId, {
@@ -268,10 +281,10 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
       await deps.settle({
         orderId, callbackState: closeState, confirmedFailure: false,
         resultCode: "PERSIST_FAIL", resultMessage: "승인 후 저장 처리에 실패했습니다. 거래 내역 대조가 필요합니다.",
-        rawResponse: scrubInicisPaymentAudit({ returnParams: params, approval: data }),
+        rawResponse: scrubInicisPaymentAudit({ returnParams: params, approval: data, channel: "mobile" }),
       });
       console.error("[INICIS][mobile][persist][error]", { orderId, submissionId, error: success.error ?? null });
-      return withGrant({ status: "FAIL", submissionId }, true);
+      return withGrant({ status: "CHECKING", submissionId }, true);
     }
 
     console.info("[INICIS][mobile][final]", { orderId, status: "APPROVED" });
@@ -287,6 +300,7 @@ export async function handleInicisMobileReturn(req: NextRequest, deps: InicisMob
       }).catch(() => false);
     }
     console.error("[INICIS][mobile][final][error]", error);
-    return buildBridgeRedirect(baseUrl, { status: "ERROR" });
+    const held = claimed as { submissionId: string | null } | null;
+    return buildBridgeRedirect(baseUrl, { status: held ? "CHECKING" : "ERROR", submissionId: held?.submissionId });
   }
 }

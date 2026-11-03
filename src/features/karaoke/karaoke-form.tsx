@@ -5,10 +5,16 @@ import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
 import { openInicisCardPopup } from "@/lib/inicis/popup";
+import {
+  isAllowedKaraokeUpload,
+  karaokeUploadAccept,
+  karaokeUploadTypeError,
+} from "@/lib/upload-file-types";
 
 import {
   createKaraokeRequestAction,
@@ -90,6 +96,10 @@ export function KaraokeForm({
       setNotice({
         error: `파일 용량은 ${karaokeUploadMaxMb}MB 이하만 가능합니다.`,
       });
+      return;
+    }
+    if (!isAllowedKaraokeUpload("karaoke_request", selected.name, selected.type)) {
+      setNotice({ error: karaokeUploadTypeError("karaoke_request") });
       return;
     }
     setNotice({});
@@ -429,7 +439,7 @@ export function KaraokeForm({
               className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 tjRequested
                   ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+                  : "border-border/70 bg-background text-foreground hover:border-foreground"
               }`}
             >
               <input
@@ -455,7 +465,7 @@ export function KaraokeForm({
               className={`flex min-h-[54px] items-center gap-3 rounded-[10px] border-2 px-4 py-3 text-sm font-semibold transition ${
                 kyRequested
                   ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_14px_28px_rgba(0,113,227,0.18)] dark:bg-[#2997ff] dark:text-[#00101f]"
-                  : "border-border/70 bg-background text-foreground hover:border-primary/40"
+                  : "border-border/70 bg-background text-foreground hover:border-foreground"
               }`}
             >
               <input
@@ -572,6 +582,7 @@ export function KaraokeForm({
               <span className="sr-only">파일 첨부</span>
               <input
                 type="file"
+                accept={karaokeUploadAccept("karaoke_request")}
                 onChange={onFileChange}
                 disabled={isGuest}
                 className="hidden"
@@ -601,7 +612,7 @@ export function KaraokeForm({
                   </span>
                   <div className="flex items-center gap-3">
                     {upload.status === "done" ? (
-                      <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                      <span className={`inline-flex items-center rounded-full border-2 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${brandStatusTones.success}`}>
                         첨부 완료
                       </span>
                     ) : (
@@ -620,7 +631,7 @@ export function KaraokeForm({
                         setUpload({ name: "", progress: 0, status: "idle" });
                         setIsDraggingOver(false);
                       }}
-                      className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-rose-400 hover:text-rose-500"
+                      className="rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:border-[#d9362c] hover:text-[#d9362c]"
                     >
                       삭제
                     </button>
@@ -720,12 +731,12 @@ export function KaraokeForm({
         </div>
 
         {notice.error && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             {notice.error}
           </div>
         )}
         {notice.message && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600">
+          <div role="status" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
             {notice.message}
           </div>
         )}

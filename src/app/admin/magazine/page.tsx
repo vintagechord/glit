@@ -5,6 +5,7 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 import { updateMagazineRequestStatusFormAction } from "@/features/magazine/actions";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -123,7 +124,7 @@ export default async function AdminMagazinePage({
 
       <div className="mt-6 space-y-4">
         {error ? (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p className="font-semibold">요청 목록을 불러오지 못했습니다.</p>
             <details className="mt-1">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>
@@ -146,7 +147,7 @@ export default async function AdminMagazinePage({
                       {channelLabels[request.target_channel ?? ""] ??
                         request.target_channel}
                     </span>
-                    <span className="rounded-[6px] border border-[#1556a4]/30 bg-[#1556a4]/10 px-2 py-1 text-[10px] font-black text-[#1556a4]">
+                    <span className={`rounded-[6px] border-2 px-2 py-1 text-[10px] font-black ${brandStatusTones.progress}`}>
                       회원 크레딧
                     </span>
                   </div>

@@ -746,10 +746,10 @@ export function SubmissionDetailClient({
       failed: "결제가 완료되지 않았습니다.",
     }[paymentFeedbackState],
     tone: paymentFeedbackState === "paid"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-500/10 dark:text-emerald-100"
+      ? brandStatusTones.success
       : paymentFeedbackState === "failed"
-        ? "border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-300/20 dark:bg-rose-500/10 dark:text-rose-100"
-        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]",
+        ? brandStatusTones.danger
+        : brandStatusTones.progress,
   } : null;
   const stationSummary = renderStationReviews.reduce(
     (acc, review) => {
@@ -975,7 +975,7 @@ export function SubmissionDetailClient({
                 className={[
                   "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black",
                   step.state === "done"
-                    ? "border-white/70 bg-white/20 text-white dark:border-[#06111f]/40 dark:text-[#06111f]"
+                    ? "border-[#111111] bg-white text-[#111111]"
                     : step.state === "active"
                       ? "border-[#111111] bg-[#111111] text-[#f2cf27]"
                       : "border-border bg-muted text-muted-foreground",
@@ -1955,11 +1955,11 @@ export function SubmissionDetailClient({
               </div>
             ) : null}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-[8px] border-2 border-[#1556a4] bg-[#1556a4]/5 p-4 dark:border-[#8fb7e8] dark:bg-[#0f1d2e]">
-                <p className="text-xs font-black uppercase tracking-normal text-[#1556a4] dark:text-[#b9d8ff]">
+              <div className={`mt-4 rounded-[8px] border-2 p-4 ${brandStatusTones.progress}`}>
+                <p className="text-xs font-black uppercase tracking-normal">
                   심의 결과 메모
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
+                <p className="mt-2 whitespace-pre-wrap text-sm">
                   <span data-no-translate>{trackResultModal.resultNote}</span>
                 </p>
               </div>
@@ -2063,7 +2063,7 @@ export function SubmissionDetailClient({
             <BroadcastSupportPanel key={`${submission.id}:${activeRadioReview.id}`} submission={submission} stationReviews={[activeRadioReview]} isEnglish={localePrefix === "/en"} embedded />
           ) : (
             <div className="space-y-5">
-              <p className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold leading-relaxed text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+              <p className={`rounded-xl border-2 p-4 text-sm font-semibold leading-relaxed ${brandStatusTones.warning}`}>
                 {localePrefix === "/en"
                   ? "Music video approval is separate from audio approval. Check the audio track's review result before requesting radio airplay."
                   : "뮤직비디오 적격은 음원 적격과 별개입니다. 라디오 신청 전 해당 음원의 심의 결과를 확인하세요."}

@@ -2,6 +2,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { APP_CONFIG } from "@/lib/config";
 import {
   isCashReceiptEditable,
+  isCashReceiptResultUnknown,
   maskCashReceiptIdentifier,
   splitVatInclusiveAmount,
   type CashReceiptIssueMethod,
@@ -90,8 +91,8 @@ export async function loadCashReceiptOrder(db: Db, orderId: string) {
 
 /**
  * Create, replace or withdraw (`request = null`) a customer's request. An
- * issued or in-flight receipt is never overwritten; the conditional update
- * keeps a concurrent issuance from being reset.
+ * issued, in-flight or unconfirmed receipt is never overwritten; the
+ * conditional update keeps a concurrent issuance from being reset.
  */
 export async function saveCashReceiptRequest(
   db: Db,
@@ -104,9 +105,19 @@ export async function saveCashReceiptRequest(
   if (existing && !isCashReceiptEditable(existing.status)) return fail(409, "이미 발급 중이거나 발급된 현금영수증은 변경할 수 없습니다. 고객센터로 문의해주세요.");
   const table = db.from("submission_order_cash_receipts");
   if (!request) {
-    if (!existing) return { ok: true, value: null };
-    const { error } = await table.delete().eq("order_id", order.id).in("status", ["REQUESTED", "FAILED", "CANCELED"]);
-    return error ? fail(500, "현금영수증 신청을 취소하지 못했습니다.") : { ok: true, value: null };
+    if (!existing || existing.status === "CANCELED") return { ok: true, value: null };
+    // A request that never reached Inicis leaves no trace worth keeping; a
+    // rejected attempt is kept (as cancelled) for the administrator.
+    if (existing.status === "REQUESTED") {
+      const { error } = await table.delete().eq("order_id", order.id).eq("status", "REQUESTED");
+      return error ? fail(500, "현금영수증 신청을 취소하지 못했습니다.") : { ok: true, value: null };
+    }
+    const now = new Date().toISOString();
+    const { data, error } = await table.update({ status: "CANCELED", canceled_at: now, cancel_reason: "고객이 신청을 취소했습니다.", updated_at: now })
+      .eq("order_id", order.id).eq("status", "FAILED").select(RECEIPT_COLUMNS).maybeSingle();
+    if (error) return fail(500, "현금영수증 신청을 취소하지 못했습니다.");
+    if (!data) return fail(409, "현금영수증 상태가 바뀌었습니다. 새로고침 후 다시 확인해주세요.");
+    return { ok: true, value: toCashReceiptSummary(data as unknown as CashReceiptRow) };
   }
   const now = new Date().toISOString();
   const fields = {
@@ -161,7 +172,11 @@ async function requirePaidOrderWithReceipt(db: Db, orderId: string): Promise<Res
 
 export const isCashReceiptAutoIssueEnabled = () => Boolean(getCashReceiptInicisConfig());
 
-/** Issue through KG Inicis. The row is claimed first so one request can win. */
+/**
+ * Issue through KG Inicis. The row is claimed first so one request can win;
+ * the claim also requires the version that was read, so a customer edit in
+ * between can never send the previous number to Inicis.
+ */
 export async function issueCashReceiptViaInicis(db: Db, orderId: string, actorUserId: string | null): Promise<Result<CashReceiptRow>> {
   const loaded = await requirePaidOrderWithReceipt(db, orderId);
   if (!loaded.ok) return loaded;
@@ -170,8 +185,9 @@ export async function issueCashReceiptViaInicis(db: Db, orderId: string, actorUs
   if (!getCashReceiptInicisConfig()) return fail(503, "이니시스 INIAPI 키가 등록되지 않았습니다. 홈택스에서 발급한 뒤 승인번호를 입력해주세요.");
   const table = db.from("submission_order_cash_receipts");
   const { data: claimed, error: claimError } = await table.update({ status: "ISSUING", updated_at: new Date().toISOString(), failure_message: null })
-    .eq("order_id", orderId).in("status", ["REQUESTED", "FAILED"]).select("order_id").maybeSingle();
-  if (claimError || !claimed) return fail(409, "다른 화면에서 발급을 진행하고 있습니다. 새로고침 후 확인해주세요.");
+    .eq("order_id", orderId).eq("status", receipt.status).eq("updated_at", receipt.updated_at)
+    .eq("purpose", receipt.purpose).eq("identifier", receipt.identifier).select("order_id").maybeSingle();
+  if (claimError || !claimed) return fail(409, "현금영수증 신청 정보가 바뀌었거나 다른 화면에서 발급을 진행하고 있습니다. 새로고침 후 확인해주세요.");
   const amounts = issuedFields(order);
   const buyer = await loadBuyer(db, order).catch(() => ({ name: "고객", email: APP_CONFIG.supportEmail, phone: null }));
   const result = await issueCashReceiptWithInicis({
@@ -179,12 +195,54 @@ export async function issueCashReceiptViaInicis(db: Db, orderId: string, actorUs
     purpose: receipt.purpose, identifier: receipt.identifier, goodName: cashReceiptGoodName(order),
     buyerName: buyer.name, buyerEmail: buyer.email, buyerTel: buyer.phone,
   });
+  // An unknown result may already be registered with the National Tax
+  // Service: it is never offered for editing, withdrawal or reissue.
   const update = result.ok
     ? { status: "ISSUED", issue_method: "INICIS", approval_number: result.approvalNumber.slice(0, 40), provider_tid: result.tid?.slice(0, 80) ?? null, issued_at: result.issuedAt, ...amounts, issued_by: actorUserId, failure_message: null }
-    : { status: "FAILED", failure_message: `${result.uncertain ? "[결과 확인 필요] " : ""}${result.message}`.slice(0, 500) };
+    : { status: result.uncertain ? "UNCERTAIN" : "FAILED", failure_message: result.message.slice(0, 500) };
   const { data, error } = await table.update({ ...update, updated_at: new Date().toISOString() }).eq("order_id", orderId).eq("status", "ISSUING").select(RECEIPT_COLUMNS).maybeSingle();
-  if (error || !data) return fail(500, result.ok ? `이니시스 발급은 완료됐지만(승인번호 ${result.approvalNumber}) 저장하지 못했습니다. 승인번호를 수동으로 입력해주세요.` : "발급 결과를 저장하지 못했습니다.");
+  if (error || !data) return fail(500, result.ok ? `이니시스 발급은 완료됐지만(승인번호 ${result.approvalNumber}) 저장하지 못했습니다. 발급 결과 확인에서 승인번호를 입력해주세요.` : "발급 결과를 저장하지 못했습니다. 이니시스 관리자에서 발급 여부를 확인한 뒤 발급 결과 확인에서 기록해주세요.");
   return result.ok ? { ok: true, value: data as unknown as CashReceiptRow } : fail(result.uncertain ? 504 : 502, result.message);
+}
+
+export type CashReceiptResolution =
+  | { outcome: "ISSUED"; approvalNumber: string; issuedAt: string }
+  | { outcome: "NOT_ISSUED"; note: string };
+
+/**
+ * Settle an unknown Inicis result (UNCERTAIN, or an ISSUING claim whose
+ * process died) after the administrator checked the Inicis console. ISSUED
+ * records the approval number found there; NOT_ISSUED returns the row to a
+ * definite failure so it can be issued again or corrected by the customer.
+ */
+export async function resolveUncertainCashReceipt(db: Db, orderId: string, actorUserId: string, resolution: CashReceiptResolution, now = Date.now()): Promise<Result<CashReceiptRow>> {
+  let fields: Record<string, unknown>;
+  const order = await loadCashReceiptOrder(db, orderId);
+  if (!order) return fail(404, "주문을 찾을 수 없습니다.");
+  if (resolution.outcome === "ISSUED") {
+    const approvalNumber = resolution.approvalNumber.replace(/\s/g, "");
+    if (!/^[0-9A-Za-z-]{1,40}$/.test(approvalNumber)) return fail(400, "승인번호는 숫자·영문·하이픈으로 40자 이내여야 합니다.");
+    const issuedAt = new Date(resolution.issuedAt);
+    if (Number.isNaN(issuedAt.getTime()) || issuedAt.getTime() > now + 5 * 60_000) return fail(400, "발급 일시를 확인해주세요.");
+    if (!order.amount_krw || order.amount_krw <= 0) return fail(409, "주문 금액을 확인할 수 없습니다.");
+    fields = {
+      status: "ISSUED", issue_method: "INICIS", approval_number: approvalNumber, issued_at: issuedAt.toISOString(),
+      ...issuedFields(order), issued_by: actorUserId, failure_message: null,
+    };
+  } else {
+    const note = resolution.note.trim().slice(0, 300);
+    if (!note) return fail(400, "확인한 내용을 입력해주세요.");
+    fields = { status: "FAILED", failure_message: `관리자 확인: 이니시스에서 발급되지 않았습니다. ${note}`.slice(0, 500) };
+  }
+  const receipt = (await loadCashReceiptRows(db, [orderId])).get(orderId);
+  if (!receipt) return fail(404, "현금영수증 신청 내역이 없습니다.");
+  if (!isCashReceiptResultUnknown(receipt, now)) return fail(409, "결과 확인이 필요한 현금영수증이 아닙니다. 새로고침 후 확인해주세요.");
+  const { data, error } = await db.from("submission_order_cash_receipts")
+    .update({ ...fields, updated_at: new Date(now).toISOString() })
+    .eq("order_id", orderId).eq("status", receipt.status).eq("updated_at", receipt.updated_at)
+    .select(RECEIPT_COLUMNS).maybeSingle();
+  if (error || !data) return fail(409, "현금영수증 상태가 바뀌었습니다. 새로고침 후 다시 확인해주세요.");
+  return { ok: true, value: data as unknown as CashReceiptRow };
 }
 
 /** Record a receipt the administrator issued in Hometax or the Inicis console. */

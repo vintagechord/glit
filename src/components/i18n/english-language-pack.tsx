@@ -362,6 +362,12 @@ const exactTranslations: Record<string, string> = {
   "비밀번호 재설정 메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.": "We could not send the password reset email. Please try again shortly.",
   "비밀번호가 변경되었습니다.": "Your password has been updated.",
   "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.": "Your password has been updated. Please log in with your new password.",
+  "비밀번호가 변경되었습니다. 다른 기기에서는 새 비밀번호로 다시 로그인해주세요.": "Your password has been updated. Sign in again with the new password on your other devices.",
+  "현재 비밀번호": "Current Password",
+  "현재 비밀번호를 입력해주세요.": "Enter your current password.",
+  "현재 비밀번호가 올바르지 않습니다.": "Your current password is incorrect.",
+  "현재 비밀번호를 확인한 뒤 변경합니다. 새 비밀번호는 8자 이상 입력해주세요.": "We check your current password first. Use a new password of at least 8 characters.",
+  "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다. 연결된 소셜 계정으로 로그인해주세요.": "Social login accounts have no password to change. Sign in with your linked social account.",
   "비밀번호가 일치하지 않습니다.": "The passwords do not match.",
   "비밀번호는 128자 이하로 입력해주세요.": "Use a password of 128 characters or fewer.",
   "비밀번호는 8자 이상 입력해주세요.": "Use a password of at least 8 characters.",
@@ -2034,11 +2040,15 @@ Object.assign(exactTranslations, {
   "번역할 가사를 먼저 입력해주세요.": "Enter the lyrics you want to translate first.",
   "한국어 외 언어 가사를 찾지 못했습니다. 번역 대상을 확인해주세요.": "No non-Korean lyrics were found. Check the text to translate.",
   "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.": "Automatic translation failed. Please try again shortly.",
+  "자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.": "Too many automatic translation requests. Please try again shortly.",
+  "가사가 한 번에 번역 가능한 범위를 넘었습니다. 가사를 나누어 번역해주세요.": "The lyrics exceed what can be translated at once. Translate them in parts.",
   "원음방송 심의는 3곡까지만 선택할 수 있습니다.": "Select no more than three tracks for WBS review.",
   "현재 파일 업로드가 끝난 뒤 추가해주세요.": "Wait for the current upload to finish before adding another file.",
   "신청 정보를 준비하는 중입니다. 잠시 후 다시 시도해주세요. 업로드가 계속 어려우면 예전 온사이드 사이트에서도 동일하게 접수할 수 있습니다.": "Your application is being prepared. Please try again shortly. If uploads remain unavailable, you can also apply through the previous Onside site.",
   "빈 파일은 업로드할 수 없습니다. 파일을 확인해주세요.": "Empty files cannot be uploaded. Check the file and try again.",
   "WAV, MP3, ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.": "Upload WAV, MP3, ZIP, or application files in HWP, DOC, or DOCX format.",
+  "추천 인증샷은 이미지 파일(JPG/PNG/WEBP/GIF/HEIC)만 업로드할 수 있습니다.": "Recommendation proof must be an image file (JPG, PNG, WEBP, GIF or HEIC).",
+  "음원(WAV/MP3/M4A/AAC/FLAC), 영상(MP4/MOV), 문서(PDF/HWP/DOC/DOCX/TXT/LRC), 이미지 또는 ZIP 파일만 업로드할 수 있습니다.": "Upload audio (WAV, MP3, M4A, AAC, FLAC), video (MP4, MOV), documents (PDF, HWP, DOC, DOCX, TXT, LRC), images or ZIP files only.",
   "파일 업로드 중 오류가 발생했습니다.": "An error occurred while uploading the file.",
   "사업자등록증은 PDF, JPG, PNG, WEBP 파일로 첨부해주세요.": "Attach your business registration certificate as a PDF, JPG, PNG, or WEBP file.",
   "사업자등록증 업로드 중 오류가 발생했습니다.": "We could not upload the business registration certificate.",
@@ -3173,6 +3183,26 @@ function translateDocumentMetadata() {
   }
 }
 
+// Translation rewrites text nodes outside React, so the first pass over the
+// server HTML waits for streamed client islands to hydrate, or React reports
+// text mismatches. Pages reached by client navigation are rendered in the
+// browser and translate at once.
+const HYDRATION_SETTLE_MS = 2500;
+let serverHtmlHydrated = false;
+
+function isLoadedDocument() {
+  try {
+    const [entry] = performance.getEntriesByType("navigation");
+    return !entry || new URL(entry.name).pathname === window.location.pathname;
+  } catch {
+    return true;
+  }
+}
+
+function firstTranslationDelay() {
+  return serverHtmlHydrated || !isLoadedDocument() ? 0 : HYDRATION_SETTLE_MS;
+}
+
 export function EnglishLanguagePack() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -3245,6 +3275,7 @@ export function EnglishLanguagePack() {
 
     const startTranslation = () => {
       timeoutId = null;
+      serverHtmlHydrated = true;
       translateDocumentMetadata();
       apply();
       observer?.observe(document.body, observeOptions);
@@ -3272,9 +3303,12 @@ export function EnglishLanguagePack() {
       }
     });
 
-    // This mutates text nodes outside React. Wait long enough for streamed
-    // client islands to hydrate first, otherwise React reports text mismatches.
-    timeoutId = window.setTimeout(startTranslation, 2500);
+    const delay = firstTranslationDelay();
+    if (delay) {
+      timeoutId = window.setTimeout(startTranslation, delay);
+    } else {
+      startTranslation();
+    }
 
     const handleClick = (event: MouseEvent) => {
       if (

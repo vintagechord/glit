@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ManualEmailSupport } from "@/features/auth/manual-email-support";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export function TrackLookupForm({
   onSuccess,
@@ -137,7 +138,7 @@ export function TrackLookupForm({
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "guest-track-token-error" : undefined}
           className={`w-full rounded-[8px] border-2 ${
-            error ? "border-[#d9362c] bg-[#d9362c]/10" : "border-border bg-background"
+            error ? "border-[#d9362c] bg-background ring-1 ring-[#d9362c]" : "border-border bg-background"
           } px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#1556a4]`}
         />
         {error ? (
@@ -206,7 +207,7 @@ export function TrackLookupForm({
         ) : null}
         {lookupMessage ? (
           <p
-            className="mt-3 rounded-[8px] border-2 border-[#1556a4] bg-[#1556a4]/10 px-3 py-3 text-xs font-semibold leading-5 text-foreground"
+            className={`mt-3 rounded-[8px] border-2 px-3 py-3 text-xs font-semibold leading-5 ${brandStatusTones.progress}`}
             role="status"
           >
             {lookupMessage}

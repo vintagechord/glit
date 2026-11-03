@@ -8,8 +8,11 @@ type PurgeApi = {
   reviewFinishedAt: (submission: Row, reviews: Row[], requests: Row[]) => string | null;
   selectPurgeFiles: (submissionId: string, uploads: Row[], supplements: Row[], prefix: string) => Array<{ source: string; id: string; objectKey: string }>;
   purgeCustomerFiles: (db: unknown, ids: string[], actor: string, remove: (key: string) => Promise<number>) => Promise<Array<{ submissionId: string; ok: boolean; deletedFiles: number; failedFiles: number; freedBytes: number; error?: string }>>;
+  resumeInterruptedPurges: (db: unknown, options: { now?: number; limit?: number; deleteAllVersions?: (key: string) => Promise<number> }) => Promise<number>;
+  presignGetUrl: (key: string, expiresIn?: number, options?: { filename?: string }) => Promise<string>;
+  attachmentContentDisposition: (filename: string) => string;
   deleteObjectAllVersions: (key: string) => Promise<number>;
-  s3: { pages: Array<{ Versions?: Row[]; DeleteMarkers?: Row[]; IsTruncated?: boolean; NextKeyMarker?: string; NextVersionIdMarker?: string }>; sent: Array<{ command: string; input: Row }> };
+  s3: { pages: Array<{ Versions?: Row[]; DeleteMarkers?: Row[]; IsTruncated?: boolean; NextKeyMarker?: string; NextVersionIdMarker?: string }>; sent: Array<{ command: string; input: Row }>; signed: Array<{ input: Row; options: Row }> };
 };
 
 async function load(): Promise<PurgeApi> {
@@ -19,15 +22,15 @@ async function load(): Promise<PurgeApi> {
   });
   const bundle = await build({
     stdin: {
-      contents: "export * from './src/lib/admin/customer-file-purge'; export { deleteObjectAllVersions } from './src/lib/b2'; export { s3 } from 's3-fixture';",
+      contents: "export * from './src/lib/admin/customer-file-purge'; export { deleteObjectAllVersions, presignGetUrl, attachmentContentDisposition } from './src/lib/b2'; export { s3 } from 's3-fixture';",
       resolveDir: process.cwd(), loader: "ts",
     },
     bundle: true, write: false, platform: "node", format: "cjs", packages: "external",
     plugins: [{ name: "s3-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(s3-fixture|@aws-sdk\/client-s3|@aws-sdk\/s3-request-presigner)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
-        if (path === "s3-fixture") return { loader: "js", contents: "export const s3={pages:[],sent:[]};" };
-        if (path === "@aws-sdk/s3-request-presigner") return { loader: "js", contents: "export const getSignedUrl=async()=>'https://signed.invalid';" };
+        if (path === "s3-fixture") return { loader: "js", contents: "export const s3={pages:[],sent:[],signed:[]};" };
+        if (path === "@aws-sdk/s3-request-presigner") return { loader: "js", contents: "import {s3} from 's3-fixture';export const getSignedUrl=async(client,command,options)=>{s3.signed.push({input:command.input,options});return 'https://signed.invalid'};" };
         const names = ["CreateMultipartUploadCommand", "UploadPartCommand", "CompleteMultipartUploadCommand", "AbortMultipartUploadCommand", "GetObjectCommand", "HeadObjectCommand", "PutObjectCommand", "DeleteObjectCommand", "ListObjectVersionsCommand", "ListPartsCommand", "CopyObjectCommand"];
         return { loader: "js", contents: `import {s3} from 's3-fixture';
           ${names.map(name => `export class ${name}{constructor(input){this.input=input;this.name='${name}'}}`).join("\n")}
@@ -76,7 +79,20 @@ test("files qualify once a paid review is fully decided without open supplements
   }
 
   const onlineMv = finishedAlbum(A, { type: "MV_DISTRIBUTION", status: "IN_PROGRESS", result_status: "APPROVED", mv_desired_rating: "15" });
-  assert.ok(reviewFinishedAt(onlineMv, [{ submission_id: A, status: "SENT", updated_at: null }], []));
+  // An online MV order can include Mnet/ETN reviews of the same video: a
+  // published rating alone does not release the file while one is open.
+  for (const pending of ["NOT_SENT", "SENT", "RECEIVED", "NEEDS_FIX"]) {
+    assert.equal(reviewFinishedAt(onlineMv, [{ submission_id: A, status: pending, updated_at: null }], []), null, pending);
+  }
+  assert.equal(
+    reviewFinishedAt(onlineMv, [{ submission_id: A, status: "APPROVED", updated_at: "2026-10-03T00:00:00Z" }, { submission_id: A, status: "SENT", updated_at: null }], []),
+    null,
+  );
+  assert.equal(
+    reviewFinishedAt(onlineMv, [{ submission_id: A, status: "APPROVED", updated_at: "2026-10-03T00:00:00Z" }, { submission_id: A, status: "REJECTED", updated_at: "2026-10-04T00:00:00Z" }], []),
+    "2026-10-04T00:00:00Z",
+  );
+  assert.ok(reviewFinishedAt(onlineMv, [], []), "an online MV without station reviews needs only its rating");
   assert.ok(reviewFinishedAt({ ...onlineMv, mv_desired_rating: "REJECT", result_status: "REJECTED" }, [], []));
   assert.equal(reviewFinishedAt({ ...onlineMv, mv_desired_rating: "15세 희망" }, [], []), null);
   assert.equal(reviewFinishedAt({ ...onlineMv, result_status: null }, [], []), null);
@@ -119,6 +135,8 @@ function fakeDb(tables: Record<string, Row[]>, failUpdate = new Set<string>()) {
       neq(column: string, value: unknown) { filters.push(row => row[column] !== value); return query; },
       in(column: string, values: unknown[]) { filters.push(row => values.includes(row[column])); return query; },
       is(column: string, value: unknown) { filters.push(row => (row[column] ?? null) === value); return query; },
+      lt(column: string, value: unknown) { filters.push(row => row[column] != null && String(row[column]) < String(value)); return query; },
+      limit() { return query; },
       range(start: number, end: number) { range = [start, end]; return query; },
       update(values: Row) { mode = "update"; payload = values; return query; },
       insert(values: Row) { mode = "insert"; payload = values; return query; },
@@ -188,6 +206,10 @@ test("purging marks rows first, deletes every version, keeps shared keys, and un
   assert.match(resultB.error ?? "", /심의가 끝나지 않았거나/);
   assert.deepEqual({ ...resultD, error: undefined }, { submissionId: D, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 400, error: undefined });
   assert.ok(file("d1").purged_at, "a refunded submission is purged even though its review stopped midway");
+  const confirmedAt = (id: string) => (file(id) as Row).purge_confirmed_at ?? null;
+  assert.ok(confirmedAt("a1"), "a finished delete is confirmed");
+  assert.ok(confirmedAt("s1"));
+  assert.equal(confirmedAt("a2"), null, "a failed delete is not confirmed");
   assert.equal(tables.submission_events.length, 2);
   assert.ok(tables.submission_events.every(event => event.event_type === "CUSTOMER_FILES_PURGED" && event.actor_user_id === "admin-user"));
   assert.match(String(tables.submission_events[0].message), /^심의 완료 후 .*2개/);
@@ -204,6 +226,65 @@ test("nothing is deleted when the rows cannot be marked, and partial marks are u
   assert.equal(result.ok, false);
   assert.ok(tables.submission_files.every(row => row.purged_at === null));
   assert.equal(tables.submission_events.length, 0);
+});
+
+test("a purge cut off after marking rows is finished later, never forgotten", async () => {
+  const { resumeInterruptedPurges } = await load();
+  const now = Date.parse("2026-11-03T12:00:00Z");
+  const stale = "2026-11-03T11:00:00Z";
+  const marked = (id: string, key: string, overrides: Row = {}): Row => ({
+    id, submission_id: A, kind: "AUDIO", storage_provider: "b2", object_key: key, size: 1, purged_at: stale, purge_confirmed_at: null, ...overrides,
+  });
+  const tables: Record<string, Row[]> = {
+    submission_files: [
+      marked("cut-off", upload(A, "song.wav")),
+      marked("in-progress", upload(A, "fresh.wav"), { purged_at: "2026-11-03T11:55:00Z" }),
+      marked("done", upload(A, "done.wav"), { purge_confirmed_at: "2026-11-03T11:01:00Z" }),
+      marked("shared", upload(A, "shared.wav")),
+      { id: "other-live", submission_id: C, kind: "AUDIO", storage_provider: "b2", object_key: upload(A, "shared.wav"), size: 1, purged_at: null },
+      marked("certificate", `submissions/${A}/certificate/cert.pdf`, { kind: "ETC" }),
+      marked("storage-down", upload(A, "down.wav")),
+    ],
+    submission_upload_staging: [],
+    submission_supplement_files: [
+      { id: "supp", object_key: `submissions/supplements/${A}/r/v/u/fix.wav`, purged_at: stale, purge_confirmed_at: null },
+    ],
+  };
+  const { db } = fakeDb(tables);
+  const deleted: string[] = [];
+  const confirmed = await resumeInterruptedPurges(db, {
+    now,
+    deleteAllVersions: async key => {
+      if (key.endsWith("down.wav")) throw new Error("storage down");
+      deleted.push(key);
+      return 0;
+    },
+  });
+  const row = (id: string) => [...tables.submission_files, ...tables.submission_supplement_files].find(entry => entry.id === id)!;
+  assert.deepEqual(deleted.sort(), [upload(A, "song.wav"), `submissions/supplements/${A}/r/v/u/fix.wav`].sort());
+  assert.equal(confirmed, 4);
+  for (const id of ["cut-off", "supp", "shared", "certificate"]) assert.ok(row(id).purge_confirmed_at, id);
+  assert.equal(row("in-progress").purge_confirmed_at, null, "a purge that may still be running is left alone");
+  assert.equal(row("storage-down").purge_confirmed_at, null, "a failed retry stays queued for the next run");
+  assert.equal(row("done").purge_confirmed_at, "2026-11-03T11:01:00Z");
+});
+
+test("signed downloads are attachments with an extension-based type", async () => {
+  const api = await load();
+  api.s3.signed.length = 0;
+  await api.presignGetUrl(`submissions/${owner}/album/${A}/3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f-proof.pdf`, 300);
+  await api.presignGetUrl(`submissions/${owner}/album/${A}/3f2b8c4e-1a2b-4c3d-8e9f-0a1b2c3d4e5f-page.html`, 300);
+  await api.presignGetUrl(`submissions/supplements/${A}/r/v/u/fix.wav`, 300, { filename: "수정본 \"최종\".wav" });
+  const [pdf, html, named] = api.s3.signed.map(entry => entry.input);
+  assert.equal(pdf.ResponseContentDisposition, `attachment; filename="proof.pdf"; filename*=UTF-8''proof.pdf`);
+  assert.equal(pdf.ResponseContentType, "application/pdf");
+  // An uploaded page is downloaded, never rendered on the storage domain.
+  assert.match(String(html.ResponseContentDisposition), /^attachment; filename="page\.html"/);
+  assert.equal(html.ResponseContentType, undefined);
+  assert.equal(named.ResponseContentType, "audio/wav");
+  // Non-ASCII and quotes only fall back to "_" in the legacy parameter.
+  assert.equal(named.ResponseContentDisposition, `attachment; filename="___ ____.wav"; filename*=UTF-8''${encodeURIComponent("수정본 \"최종\".wav")}`);
+  assert.equal(api.attachmentContentDisposition("a/b\\c\r\n.txt"), `attachment; filename="a_b_c__.txt"; filename*=UTF-8''a_b_c__.txt`);
 });
 
 test("all versions and hide markers of exactly one key are deleted across pages", async () => {

@@ -35,7 +35,7 @@ export function RadioStationGuideContent({ stationCode, stationName, isEnglish =
       {guide.programs.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-4">
           {guide.programs.map((program, index) => (
-            <article key={program.url} className={`flex min-w-0 flex-col rounded-[1rem] border p-5 transition sm:p-6 ${selectedProgram === program.name ? "border-[#1556a4]/40 bg-blue-50/50 dark:border-blue-400/50 dark:bg-blue-950/20" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/40"}`}>
+            <article key={program.url} className={`flex min-w-0 flex-col rounded-[1rem] border p-5 transition sm:p-6 ${selectedProgram === program.name ? "border-[var(--bauhaus-ink)] bg-white shadow-[4px_4px_0_#1556a4] dark:bg-slate-900/40" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/40"}`}>
               <div className="flex items-center justify-between gap-3 text-[11px] font-medium tracking-wider text-slate-400 dark:text-slate-500">
                 <span>{isEnglish ? "LISTENER REQUEST" : "청취자 참여"}</span>
                 <span className="tabular-nums">{String(index + 1).padStart(2, "0")}</span>

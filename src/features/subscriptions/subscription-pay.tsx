@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ensureStdPayScript } from "@/lib/inicis/popup";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type StdPayParams = Record<string, string>;
 type MobileParams = Record<string, string>;
@@ -109,7 +110,7 @@ export function SubscriptionPayButtons({
           </p>
           <p className="text-lg font-black text-foreground">{amountLabel}</p>
         </div>
-        {error && <p role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-100">{error}</p>}
+        {error && <p role="alert" className={`mt-4 rounded-lg border-2 p-3 text-sm font-semibold ${brandStatusTones.danger}`}>{error}</p>}
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"

@@ -4,6 +4,13 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
+import {
+  clearMultipartResumeState,
+  loadMultipartResumeState,
+  runMultipartWorkers,
+  saveMultipartResumeState,
+} from "@/lib/multipart-upload-client";
+import { httpStatus, isTransientFailure, retryTransient, supplementResumeKey } from "@/lib/submission-supplements/upload-retry";
 
 type SupplementFile = { id: string; original_name: string; size_bytes: number; status: string; purged_at?: string | null };
 type Notice = { id: string; state_key: string; attempts: number; last_attempt_at?: string | null; outcome: { email?: string; kakao?: string; emailMessageId?: string; kakaoMessageId?: string; emailQueued?: boolean; emailStatus?: string } };
@@ -11,6 +18,7 @@ type Revision = { id: string; revision_no: number; status: string; note?: string
 type Request = { id: string; note: string; status: string; created_at: string; revisions: Revision[] };
 
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50";
+
 
 /** Supplements remain separate from the paid application and its original files. */
 export function SubmissionSupplements({ submissionId, guestToken, admin = false }: {
@@ -63,13 +71,16 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       // Do not display infrastructure errors, SQL, object keys, or tokens.
-      if (response.status === 401 || response.status === 403) throw new Error(t("조회 권한을 확인해주세요. 로그인 또는 조회 코드로 다시 접속해주세요.", "Check access by signing in or reopening with your tracking code."));
-      if (response.status === 503) throw new Error(t("보완 제출 기능을 준비 중입니다. 고객센터로 문의해주세요.", "Supplement submission is not available yet. Contact support."));
-      if (response.status === 409) throw new Error(t("보완 상태가 변경되었거나 필요한 파일이 아직 준비되지 않았습니다. 새로 불러오기를 눌러 최신 내역을 확인해주세요.", "The status changed or required files are not ready. Select Reload to check the latest details."));
-      throw new Error(t("처리하지 못했습니다. 파일 형식·용량과 요청 상태를 확인하고 다시 시도해주세요.", "Could not complete the request. Check the file format, size, and request status, then retry."));
+      // The status travels with the error so uploads can tell a retryable
+      // failure from a final one.
+      const fail = (message: string) => Object.assign(new Error(message), { status: response.status });
+      if (response.status === 401 || response.status === 403) throw fail(t("조회 권한을 확인해주세요. 로그인 또는 조회 코드로 다시 접속해주세요.", "Check access by signing in or reopening with your tracking code."));
+      if (response.status === 503) throw fail(t("보완 자료 처리가 잠시 지연되고 있습니다. 잠시 후 다시 시도해주세요.", "Supplement processing is delayed. Please try again shortly."));
+      if (response.status === 409) throw fail(t("보완 상태가 변경되었거나 필요한 파일이 아직 준비되지 않았습니다. 새로 불러오기를 눌러 최신 내역을 확인해주세요.", "The status changed or required files are not ready. Select Reload to check the latest details."));
+      throw fail(t("처리하지 못했습니다. 파일 형식·용량과 요청 상태를 확인하고 다시 시도해주세요.", "Could not complete the request. Check the file format, size, and request status, then retry."));
     }
     return result as T;
   }
@@ -99,51 +110,123 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
     await run(async () => {
       const abort = new AbortController(); controller.current = abort;
       setUploading(true);
-      let activeFileId: string | undefined;
+      let active: { fileId: string; resumeKey: string } | undefined;
       let awaitingVerification = false;
       try {
         for (const file of selectedFiles) {
           if (!file.size) throw new Error(t("빈 파일은 제출할 수 없습니다.", "Empty files cannot be submitted."));
-          const init = await api<{ fileId: string; partSize: number; partCount: number }>({ action: "init", requestId, filename: file.name, mimeType: file.type || "application/octet-stream", sizeBytes: file.size }, abort.signal);
-          activeFileId = init.fileId;
-          const parts: Array<{ partNumber: number; etag: string }> = [];
-          let signedParts: Array<{ partNumber: number; url: string }> = [];
-          for (let partNumber = 1; partNumber <= init.partCount; partNumber++) {
-            setMessage(`${file.name} · ${partNumber}/${init.partCount} ${t("전송 중", "uploading")}`);
-            if (!signedParts.some(item => item.partNumber === partNumber)) {
-              const partNumbers = Array.from({ length: Math.min(4, init.partCount - partNumber + 1) }, (_, index) => partNumber + index);
-              const signed = await api<{ parts: Array<{ partNumber: number; url: string }> }>({ action: "presign", fileId: init.fileId, partNumbers }, abort.signal);
-              signedParts = signed.parts;
+          const resumeKey = supplementResumeKey(submissionId, requestId, file);
+          for (let attempt = 0; ; attempt++) {
+            // Reselecting the same file continues its upload: the server keeps
+            // the grant after a transient failure, and finished parts are kept here.
+            const saved = loadMultipartResumeState(resumeKey);
+            const resumed = saved?.key === requestId ? saved : null;
+            const target = resumed
+              ? { fileId: resumed.grantId, partSize: resumed.partSize, partCount: Math.ceil(file.size / resumed.partSize), parts: { ...resumed.parts }, createdAt: resumed.createdAt }
+              : await api<{ fileId: string; partSize: number; partCount: number }>({ action: "init", requestId, filename: file.name, mimeType: file.type || "application/octet-stream", sizeBytes: file.size }, abort.signal)
+                .then((init) => ({ ...init, parts: {} as Record<number, string>, createdAt: Date.now() }));
+            active = { fileId: target.fileId, resumeKey };
+            // The upload id and key stay on the server; the supplement file id
+            // and request id stand in for them in the shared resume record.
+            const persist = () => saveMultipartResumeState(resumeKey, { grantId: target.fileId, uploadId: target.fileId, key: requestId, partSize: target.partSize, parts: target.parts, createdAt: target.createdAt });
+            persist();
+            try {
+              await uploadSupplementParts(file, target, abort.signal, persist);
+              awaitingVerification = true;
+              const parts = Object.entries(target.parts).map(([partNumber, etag]) => ({ partNumber: Number(partNumber), etag }));
+              setMessage(`${file.name} · ${t("전송 확인 중", "verifying")}`);
+              // The server completes a claimed upload again when B2 lost the
+              // first request, so a transient failure here is worth retrying.
+              await retryTransient(() => api({ action: "complete", fileId: target.fileId, parts }, abort.signal), abort.signal, 4);
+            } catch (cause) {
+              // A resumed upload whose grant expired or was cancelled starts over once.
+              if (resumed && attempt === 0 && !abort.signal.aborted && [404, 409, 410].includes(httpStatus(cause))) {
+                awaitingVerification = false;
+                clearMultipartResumeState(resumeKey);
+                await api({ action: "abort", fileId: target.fileId }).catch(() => undefined);
+                continue;
+              }
+              throw cause;
             }
-            const part = signedParts.find(item => item.partNumber === partNumber);
-            if (!part) throw new Error(t("업로드 주소를 받지 못했습니다.", "Could not obtain an upload URL."));
-            const response = await fetch(part.url, {
-              method: "PUT",
-              body: file.slice((partNumber - 1) * init.partSize, Math.min(partNumber * init.partSize, file.size)),
-              signal: AbortSignal.any([abort.signal, AbortSignal.timeout(120_000)]),
-              credentials: "omit",
-            });
-            const etag = response.headers.get("etag");
-            if (!response.ok || !etag) throw new Error(t("전송을 완료하지 못했습니다. 네트워크를 확인한 뒤 파일을 다시 선택해주세요.", "Upload failed. Check your connection and select the file again."));
-            parts.push({ partNumber, etag: etag.replaceAll('"', "") });
+            awaitingVerification = false;
+            clearMultipartResumeState(resumeKey);
+            active = undefined;
+            break;
           }
-          awaitingVerification = true;
-          await api({ action: "complete", fileId: init.fileId, parts }, abort.signal);
-          awaitingVerification = false;
-          activeFileId = undefined;
         }
         setMessage(t("파일 전송이 완료되었습니다. 아래 보완 제출 버튼을 눌러 관리자에게 제출해주세요.", "Files uploaded. Use Submit Supplements below to send them for review."));
       } catch (cause) {
-        if (activeFileId && !awaitingVerification) {
-          try { await api({ action: "abort", fileId: activeFileId }); } catch { /* The server retains an expiring grant for cleanup. */ }
+        const cancelled = abort.signal.aborted;
+        const transient = !cancelled && isTransientFailure(cause);
+        if (active && !awaitingVerification && !transient) {
+          // Cancelled or rejected: release the grant. A transient failure keeps
+          // it so the same file can resume; unused grants expire on their own.
+          clearMultipartResumeState(active.resumeKey);
+          try { await api({ action: "abort", fileId: active.fileId }); } catch { /* The server retains an expiring grant for cleanup. */ }
         }
-        if (awaitingVerification) setMessage(t("파일이 저장되었을 수 있습니다. 내역의 ‘전송 확인 다시 시도’로 먼저 확인해주세요.", "The file may have been saved. Use Recheck Upload in the history before uploading again."));
-        if (abort.signal.aborted && !awaitingVerification) throw new Error(t("전송을 취소했습니다. 다시 제출하려면 파일을 선택해주세요.", "Upload cancelled. Select the file to try again."));
+        if (active && awaitingVerification && !transient && !cancelled) clearMultipartResumeState(active.resumeKey);
+        if (awaitingVerification) {
+          setMessage(t("파일이 저장되었을 수 있습니다. 내역의 ‘전송 확인 다시 시도’로 먼저 확인해주세요.", "The file may have been saved. Use Recheck Upload in the history before uploading again."));
+          if (transient) throw new Error(t("전송 확인 응답을 받지 못했습니다. 잠시 후 ‘전송 확인 다시 시도’를 눌러주세요.", "Could not confirm the upload. Select Recheck Upload shortly."));
+        }
+        if (cancelled && !awaitingVerification) throw new Error(t("전송을 취소했습니다. 다시 제출하려면 파일을 선택해주세요.", "Upload cancelled. Select the file to try again."));
+        if (transient) throw new Error(t("네트워크가 불안정해 전송을 멈췄습니다. 같은 파일을 다시 선택하면 남은 부분부터 이어서 전송합니다.", "The connection dropped. Select the same file again to continue from where it stopped."));
         throw cause;
       } finally {
         setUploading(false); controller.current = null;
-        await load();
+        await load().catch(() => undefined);
       }
+    });
+  }
+
+  /** Sends every missing part, three at a time, each retried with backoff. */
+  async function uploadSupplementParts(
+    file: File,
+    target: { fileId: string; partSize: number; partCount: number; parts: Record<number, string> },
+    signal: AbortSignal,
+    persist: () => void,
+  ) {
+    const missing = Array.from({ length: target.partCount }, (_, index) => index + 1).filter((partNumber) => !target.parts[partNumber]);
+    const urls = new Map<number, { url: string; expiresAt: number }>();
+    let signing: Promise<void> | null = null;
+    const progress = () => setMessage(`${file.name} · ${Object.keys(target.parts).length}/${target.partCount} ${t("전송 중", "uploading")}`);
+    const signedUrl = async (partNumber: number): Promise<string> => {
+      for (;;) {
+        const cached = urls.get(partNumber);
+        if (cached && cached.expiresAt > Date.now()) return cached.url;
+        if (signing) { await signing; continue; }
+        const batch = [partNumber, ...missing.filter((candidate) => candidate > partNumber && !target.parts[candidate] && !((urls.get(candidate)?.expiresAt ?? 0) > Date.now()))].slice(0, 8);
+        signing = api<{ parts: Array<{ partNumber: number; url: string }>; expiresInSeconds?: number }>({ action: "presign", fileId: target.fileId, partNumbers: batch }, signal)
+          .then((signed) => {
+            const expiresAt = Date.now() + Math.max(10_000, (signed.expiresInSeconds ?? 300) * 1_000 - 60_000);
+            for (const part of signed.parts) urls.set(part.partNumber, { url: part.url, expiresAt });
+          })
+          .finally(() => { signing = null; });
+        await signing;
+      }
+    };
+    progress();
+    await runMultipartWorkers(missing, 3, async (partNumber) => {
+      await retryTransient(async () => {
+        const response = await fetch(await signedUrl(partNumber), {
+          method: "PUT",
+          body: file.slice((partNumber - 1) * target.partSize, Math.min(partNumber * target.partSize, file.size)),
+          signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+          credentials: "omit",
+        });
+        const etag = response.headers.get("etag");
+        if (response.ok && etag) {
+          target.parts[partNumber] = etag.replaceAll('"', "");
+          persist(); progress();
+          return;
+        }
+        // An expired or rejected signature, or a slow-request timeout, is
+        // retried with a fresh URL; a missing upload or exposed-header
+        // problem will not improve with retries.
+        if (response.status === 400 || response.status === 403) urls.delete(partNumber);
+        const retryable = !response.ok && (response.status >= 500 || [400, 403, 408, 429].includes(response.status));
+        throw Object.assign(new Error(t("전송을 완료하지 못했습니다. 네트워크를 확인한 뒤 파일을 다시 선택해주세요.", "Upload failed. Check your connection and select the file again.")), { status: retryable ? 503 : response.status || 400 });
+      }, signal, 5);
     });
   }
 
@@ -219,7 +302,7 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
           {editable && <>
             <label className="block text-sm font-bold" htmlFor={`${regionId}-${request.id}-files`}>{t("보완 파일 선택", "Select Supplement Files")}</label>
             <input id={`${regionId}-${request.id}-files`} type="file" multiple disabled={busy} className="block min-h-11 w-full text-base file:mr-3 file:min-h-11 file:rounded file:border file:border-border file:px-3" onChange={event => { void upload(request.id, event.target.files); event.target.value = ""; }} />
-            <p className="text-sm text-muted-foreground">{t("음원·영상·신청서 파일을 선택하세요. 새로고침하면 전송 중이던 파일은 다시 선택해야 합니다. 파일 전송 후 제출을 눌러주세요.", "Choose audio, video, or application files. After refreshing, reselect any unfinished files. Submit after uploading.")}</p>
+            <p className="text-sm text-muted-foreground">{t("음원·영상·신청서 파일을 선택하세요. 전송이 끊기면 같은 파일을 다시 선택해 이어서 보낼 수 있습니다. 파일 전송 후 제출을 눌러주세요.", "Choose audio, video, or application files. If an upload stops, select the same file again to continue. Submit after uploading.")}</p>
             <label className="block text-sm font-bold" htmlFor={`${regionId}-${request.id}-note`}>{t("보완 내용", "Revision Notes")}</label>
             <textarea id={`${regionId}-${request.id}-note`} maxLength={4000} value={notes[request.id] ?? ""} onChange={event => setNotes(value => ({ ...value, [request.id]: event.target.value }))} className="min-h-24 w-full rounded border border-border bg-background p-3 text-base" />
             <button type="button" disabled={busy || !verified} className={`${buttonClass} bg-primary text-primary-foreground`} onClick={() => void run(async () => { await api({ action: "submit", requestId: request.id, note: notes[request.id] ?? "" }); await load(); setMessage(t("보완 자료를 제출했습니다. 관리자 확인을 기다려주세요.", "Supplements submitted. Please wait for staff review.")); })}>{t("보완 제출", "Submit Supplements")}</button>

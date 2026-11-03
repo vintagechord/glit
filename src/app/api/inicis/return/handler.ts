@@ -4,7 +4,12 @@ import {
   requestStdPayApproval,
   requestStdPayNetCancel,
 } from "@/lib/inicis/api";
-import { claimInicisSubmissionApproval, settleInicisSubmissionApproval } from "@/lib/payments/inicis-approval";
+import {
+  claimInicisKaraokeApproval,
+  claimInicisSubmissionApproval,
+  settleInicisKaraokeApproval,
+  settleInicisSubmissionApproval,
+} from "@/lib/payments/inicis-approval";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
 import { getStdPayConfig } from "@/lib/inicis/config";
 import { isTrustedStdPayUrl, validateStdPayCardReceipt } from "@/lib/inicis/protocol";
@@ -40,7 +45,16 @@ import {
 import { getInicisCallbackBaseUrl } from "@/lib/inicis/callback-origin";
 import { isInicisSuccessCode } from "@/lib/inicis/api";
 
-type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR";
+// CHECKING: the gateway may have charged the card but the result is not
+// confirmed; the customer is told not to pay again.
+type ReturnStatus = "SUCCESS" | "FAIL" | "CANCEL" | "ERROR" | "CHECKING";
+
+type ApprovalClaim = {
+  orderId: string;
+  callbackState: string;
+  submissionId: string | null;
+  karaokeRequestId: string | null;
+};
 
 type BridgePayload = {
   status: ReturnStatus;
@@ -158,7 +172,11 @@ const toStrOrNull = (value: string | number | null | undefined) =>
 
 export async function handleInicisReturn(req: NextRequest) {
   let parsed: ParsedReturn | null = null;
-  let approvalClaim: { orderId: string; callbackState: string; submissionId: string } | null = null;
+  let approvalClaim: ApprovalClaim | null = null;
+  // Once the claim is held a gateway request may have charged the card, so a
+  // failure that was not confirmed (rejection or net cancel) is CHECKING.
+  const failureStatus = (confirmed: boolean): ReturnStatus =>
+    approvalClaim && !confirmed ? "CHECKING" : "FAIL";
   try {
     parsed = await parseParams(req);
     const { baseUrl, contentType, method, params, keys } = parsed;
@@ -368,7 +386,12 @@ export async function handleInicisReturn(req: NextRequest) {
           raw_response: scrubbed,
         });
       }
-      if (karaokeRequestId) {
+      if (karaokeRequestId && approvalClaim) {
+        await settleInicisKaraokeApproval({
+          orderId, callbackState: approvalClaim.callbackState, confirmedFailure,
+          resultCode: code, resultMessage: message, rawResponse: scrubbed,
+        });
+      } else if (karaokeRequestId) {
         await markKaraokePaymentFailure(orderId, {
           result_code: code,
           result_message: message,
@@ -524,27 +547,36 @@ export async function handleInicisReturn(req: NextRequest) {
       });
     }
 
-    if (submissionId) {
-      // Claim while holding the payment row lock before making any gateway
-      // request. Closing the window or replaying a callback cannot race it.
-      const claim = callbackStateVerified
-        ? await claimInicisSubmissionApproval(orderId, receivedCallbackState)
-        : null;
-      if (!claim || claim.alreadyProcessing || claim.alreadyApproved) {
-        if (claim?.alreadyApproved) {
-          for (const paidId of paidSubmissionIds) {
-            await sendPaidSubmissionNotificationsById({ submissionId: paidId, paymentKey: orderId });
-          }
-        }
-        return buildBridgeRedirect(baseUrl, {
-          status: claim?.alreadyApproved ? "SUCCESS" : "ERROR",
-          orderId, submissionId,
-          submissionIds: claim?.alreadyApproved ? paidSubmissionIds : undefined,
-          message: claim?.alreadyProcessing ? "결제 승인 결과를 확인 중입니다." : "유효하지 않거나 종료된 결제 요청입니다.",
-        });
-      }
-      approvalClaim = { orderId, callbackState: receivedCallbackState, submissionId };
+    if (!submissionId && !karaokeRequestId) {
+      // Nothing could record the approval; never contact the gateway.
+      return buildBridgeRedirect(baseUrl, {
+        status: "FAIL", orderId,
+        message: "결제 내역을 찾을 수 없습니다.",
+        resultCode: "ORDER_NOT_FOUND",
+      });
     }
+
+    // Claim while holding the payment row lock before making any gateway
+    // request. Closing the window or replaying a callback (submission or
+    // karaoke) cannot race it: a second approval call with the same authToken
+    // would fail and its net cancel could reverse the recorded charge.
+    const claim = submissionId
+      ? await claimInicisSubmissionApproval(orderId, receivedCallbackState)
+      : await claimInicisKaraokeApproval(orderId, receivedCallbackState);
+    if (!claim || claim.alreadyProcessing || claim.alreadyApproved) {
+      if (claim?.alreadyApproved) {
+        for (const paidId of paidSubmissionIds) {
+          await sendPaidSubmissionNotificationsById({ submissionId: paidId, paymentKey: orderId });
+        }
+      }
+      return buildBridgeRedirect(baseUrl, {
+        status: claim?.alreadyApproved ? "SUCCESS" : claim?.alreadyProcessing ? "CHECKING" : "ERROR",
+        orderId, submissionId, requestId: karaokeRequestId,
+        submissionIds: claim?.alreadyApproved ? paidSubmissionIds : undefined,
+        message: claim?.alreadyProcessing ? "결제 승인 결과를 확인 중입니다." : "유효하지 않거나 종료된 결제 요청입니다.",
+      });
+    }
+    approvalClaim = { orderId, callbackState: receivedCallbackState, submissionId, karaokeRequestId };
 
     console.info("[INICIS][auth_call_start]", {
       env: envSuffix,
@@ -652,11 +684,12 @@ export async function handleInicisReturn(req: NextRequest) {
         approval.ok && authSuccess
           ? await compensateApprovedGateway("approval_response_incomplete")
           : null;
+      const confirmedFailure = cancellation?.ok === true || approval.confirmedFailure === true;
       await saveFailure(authResultCode, failMessage, {
         returnParams: scrubParams(params),
         approval: authData,
         compensation: cancellation ?? approval.netCancellation,
-      }, cancellation?.ok === true || approval.confirmedFailure === true);
+      }, confirmedFailure);
 
       console.info("[INICIS][final]", {
         orderId,
@@ -671,7 +704,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
 
       return buildBridgeRedirect(baseUrl, {
-        status: "FAIL",
+        status: failureStatus(confirmedFailure),
         orderId,
         submissionId,
         requestId: karaokeRequestId,
@@ -714,7 +747,7 @@ export async function handleInicisReturn(req: NextRequest) {
         compensation: cancellation,
       }, cancellation.ok);
       return buildBridgeRedirect(baseUrl, {
-        status: "FAIL",
+        status: failureStatus(cancellation.ok),
         orderId,
         submissionId,
         requestId: karaokeRequestId,
@@ -757,7 +790,7 @@ export async function handleInicisReturn(req: NextRequest) {
         expected: paymentAmount,
       });
       return buildBridgeRedirect(baseUrl, {
-        status: "FAIL",
+        status: failureStatus(false),
         orderId,
         submissionId,
         requestId: karaokeRequestId,
@@ -819,7 +852,7 @@ export async function handleInicisReturn(req: NextRequest) {
       });
       return buildVerifiedGuestBridgeRedirect(
         {
-          status: "FAIL",
+          status: failureStatus(cancellation.ok),
           orderId,
           submissionId,
           requestId: karaokeRequestId,
@@ -860,9 +893,11 @@ export async function handleInicisReturn(req: NextRequest) {
         { status: error.status },
       );
     }
-    if (approvalClaim) {
-      await settleInicisSubmissionApproval({
-        orderId: approvalClaim.orderId, callbackState: approvalClaim.callbackState,
+    const claimed = approvalClaim as ApprovalClaim | null;
+    if (claimed) {
+      const settle = claimed.submissionId ? settleInicisSubmissionApproval : settleInicisKaraokeApproval;
+      await settle({
+        orderId: claimed.orderId, callbackState: claimed.callbackState,
         confirmedFailure: false, resultCode: "APPROVAL_EXCEPTION",
         resultMessage: "결제 승인 결과를 확인해야 합니다.",
       }).catch(() => false);
@@ -870,8 +905,9 @@ export async function handleInicisReturn(req: NextRequest) {
     console.error("[INICIS][final][error]", error);
     const fallbackBase = parsed?.baseUrl ?? getInicisCallbackBaseUrl(req);
     return buildBridgeRedirect(fallbackBase, {
-      status: "ERROR",
-      submissionId: approvalClaim?.submissionId,
+      status: claimed ? "CHECKING" : "ERROR",
+      submissionId: claimed?.submissionId,
+      requestId: claimed?.karaokeRequestId,
       message: "결제 처리 중 오류가 발생했습니다.",
     });
   }

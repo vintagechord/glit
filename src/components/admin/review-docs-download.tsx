@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { CheckSquare, Download, Loader2, Square, X } from "lucide-react";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type ReviewDocsSelectionContextValue = {
   availableIds: string[];
@@ -254,7 +255,7 @@ export function ReviewDocsBulkToolbar() {
       {error ? (
         <p
           role="alert"
-          className="mt-3 rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+          className={`mt-3 rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}
         >
           {error}
         </p>
@@ -355,7 +356,7 @@ export function MelonReviewDocsDownloadForm() {
       {error ? (
         <p
           role="alert"
-          className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+          className={`rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}
         >
           {error}
         </p>
@@ -409,7 +410,7 @@ export function ReviewDocsSingleDownloadButton({
       {error ? (
         <p
           role="alert"
-          className="rounded-[8px] border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700"
+          className={`rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}
         >
           {error}
         </p>

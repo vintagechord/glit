@@ -189,7 +189,11 @@ test("payment routes reject malformed IDs, tokens, states, and oversized guest m
   assert.equal(invalidKaraoke.status, 400);
 });
 
-test("Inicis public callbacks reject oversized bodies before any mutation", async () => {
+test("Inicis public callbacks reject oversized bodies before any mutation", async (t) => {
+  // Subscription billing callbacks parse bodies only when explicitly enabled.
+  const previousBilling = process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED;
+  process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = "1";
+  t.after(() => { if (previousBilling === undefined) delete process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED; else process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = previousBilling; });
   const oversizedForm = new URLSearchParams({
     oid: "ORDER-1",
     authToken: "x".repeat(70 * 1024),

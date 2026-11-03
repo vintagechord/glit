@@ -75,7 +75,17 @@ import {
   type SubmissionPreflightTarget,
 } from "@/lib/submission-preflight";
 import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import {
+  parkGuestDraftSlot,
+  readGuestDraftLeftovers,
+  restoreParkedGuestDraftSlot,
+  retainGuestDraftLeftovers,
+} from "@/lib/submission-guest-drafts";
 import { mergeSubmissionUploadMetadata } from "@/lib/submission-upload-metadata";
+import {
+  recordSubmissionVersion,
+  REUSED_DRAFT_LOAD_ERROR,
+} from "@/lib/submission-version";
 
 import {
   saveAlbumSubmissionAction,
@@ -233,19 +243,19 @@ const packageGuidance: Record<
 const packageToneClasses = [
   {
     card: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-white/45 text-[#111111]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-[#1556a4] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#06111f]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-[#d9362c] text-white shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-white/30 bg-white/16 text-white dark:text-[#111111]",
+    chip: "border-[#111111] bg-white text-[#111111]",
   },
   {
     card: "border-[#111111] bg-white text-[#111111] shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[4px_4px_0_#f2cf27]",
-    chip: "border-[#111111]/30 bg-[#f2cf27] text-[#111111]",
+    chip: "border-[#111111] bg-[#f2cf27] text-[#111111]",
   },
 ];
 
@@ -354,6 +364,7 @@ const sanitizeAlbumDraftForCheckpoint = (draft: AlbumDraft): AlbumDraft => ({
 type AlbumCheckpointController = {
   runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
   markSaved: (snapshot?: AlbumCheckpointSnapshot, savedAt?: number) => void;
+  markConflict: (error: string) => void;
   clear: () => void;
 };
 
@@ -519,6 +530,10 @@ export function AlbumWizard({
   const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
     null,
   );
+  // The row version (updated_at) this tab last loaded or saved, per album.
+  // Every save sends it so an older tab cannot replace newer edits.
+  const submissionVersionsRef = React.useRef(new Map<string, string>());
+  const reusedDraftAttemptRef = React.useRef<string | null>(null);
   const albumCheckpointControllerRef =
     React.useRef<AlbumCheckpointController | null>(null);
   const draftSaveInFlightRef = React.useRef(false);
@@ -987,8 +1002,50 @@ export function AlbumWizard({
           submissionId?: string;
           guestToken?: string;
           error?: string;
+          reused?: boolean;
+          updatedAt?: string | null;
         };
+        if (res.ok && json?.submissionId && json.reused) {
+          // The server handed back a draft that already holds saved content.
+          // It must load through the resume prompt: treated as new, autosave
+          // would write this blank form over it. A second miss for the same
+          // draft stops here instead of looping between the two requests.
+          const reusedId = json.submissionId;
+          const retryResume =
+            reusedDraftAttemptRef.current !== reusedId || options?.force;
+          reusedDraftAttemptRef.current = reusedId;
+          if (retryResume) {
+            const reusedToken = isGuest
+              ? json.guestToken ?? currentGuestTokenRef.current
+              : null;
+            if (!readDraftStorage()?.ids?.includes(reusedId)) {
+              if (isGuest) {
+                parkGuestDraftSlot(window.localStorage, "album", {
+                  cartSubmissionIds: [],
+                });
+              }
+              writeDraftStorage({
+                ids: [reusedId],
+                guestToken: reusedToken,
+                guestTokensBySubmissionId:
+                  isGuest && reusedToken ? { [reusedId]: reusedToken } : undefined,
+              });
+            }
+            draftInitAttemptedRef.current = false;
+            resumePromptHandledRef.current = false;
+            setResumeChecked(false);
+            return null;
+          }
+          draftErrorRef.current = REUSED_DRAFT_LOAD_ERROR;
+          setDraftError(REUSED_DRAFT_LOAD_ERROR);
+          return null;
+        }
         if (res.ok && json?.submissionId) {
+          recordSubmissionVersion(
+            submissionVersionsRef.current,
+            json.submissionId,
+            json.updatedAt,
+          );
           const issuedGuestToken =
             isGuest && json.guestToken
               ? json.guestToken
@@ -1050,6 +1107,7 @@ export function AlbumWizard({
     currentSubmissionId,
     isGuest,
     existingCartSubmission,
+    readDraftStorage,
     writeDraftStorage,
   ]);
 
@@ -1078,10 +1136,16 @@ export function AlbumWizard({
       submissionId?: string;
       guestToken?: string;
       error?: string;
+      updatedAt?: string | null;
     } | null;
     if (!res.ok || !json?.submissionId) {
       throw new Error(json?.error || "추가 앨범 초안을 만들지 못했습니다.");
     }
+    recordSubmissionVersion(
+      submissionVersionsRef.current,
+      json.submissionId,
+      json.updatedAt,
+    );
     const usedIds = new Set([
       currentSubmissionId,
       ...albumDrafts.map((draft) => draft.submissionId),
@@ -1379,7 +1443,9 @@ export function AlbumWizard({
         return;
       }
       setNotice({
-        error: "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        error:
+          (error instanceof LyricsTranslationError && error.userMessage) ||
+          "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       });
     } finally {
       if (translationRequestRef.current === controller) {
@@ -2442,6 +2508,13 @@ export function AlbumWizard({
   ) => {
     if (draftRows.length === 0) return;
     setCheckpointInitialDataIsServerState(true);
+    for (const row of draftRows) {
+      recordSubmissionVersion(
+        submissionVersionsRef.current,
+        String(row.id ?? ""),
+        row.updated_at,
+      );
+    }
     const sorted = orderAlbumDraftRowsForResume(
       draftRows,
       storedSubmissionIds,
@@ -2686,30 +2759,14 @@ export function AlbumWizard({
     let cancelled = false;
     // Drafts written as a guest in this browser are adopted by the account
     // after login; otherwise they would stay invisible until logout.
-    const readGuestLeftovers = () => {
-      if (isGuest || typeof window === "undefined") return null;
-      try {
-        const raw = window.localStorage.getItem("onside:draft:album:guest");
-        const parsedRaw = raw ? JSON.parse(raw) as {
-          ids?: string[]; guestToken?: string; guestTokensBySubmissionId?: Record<string, string>;
-        } : null;
-        const token = window.localStorage.getItem("onside:guest-token:album:guest") ?? parsedRaw?.guestToken ?? undefined;
-        const tokens = { ...(parsedRaw?.guestTokensBySubmissionId ?? {}) };
-        if (!token && Object.keys(tokens).length === 0) return null;
-        return { ids: parsedRaw?.ids ?? [], guestToken: token ?? undefined, guestTokensBySubmissionId: tokens };
-      } catch {
-        return null;
-      }
-    };
-    const clearGuestLeftovers = () => {
-      try {
-        window.localStorage.removeItem("onside:draft:album:guest");
-        window.localStorage.removeItem("onside:guest-token:album:guest");
-      } catch {
-        // ignore storage errors
-      }
-    };
+    const readGuestLeftovers = () =>
+      isGuest ? null : readGuestDraftLeftovers(window.localStorage, "album");
     const run = async () => {
+      // A draft parked while a cart item was edited comes back once the
+      // locator slot is free again.
+      if (isGuest && !isFromDraftsTab) {
+        restoreParkedGuestDraftSlot(window.localStorage, "album");
+      }
       const stored = readDraftStorage();
       const guestLeftovers = readGuestLeftovers();
       if (!isFromDraftsTab && (!stored?.ids || stored.ids.length === 0) && !guestLeftovers) {
@@ -2740,9 +2797,19 @@ export function AlbumWizard({
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
           claimedIds?: string[];
+          claimFailed?: boolean;
+          retainedGuestTokens?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
-        if (guestLeftovers && res.ok) clearGuestLeftovers();
+        // Forget guest credentials only after the account really adopted
+        // them; a failed claim or a draft mid-save keeps its token.
+        if (guestLeftovers && res.ok && json && !json.claimFailed) {
+          retainGuestDraftLeftovers(
+            window.localStorage,
+            "album",
+            json.retainedGuestTokens ?? [],
+          );
+        }
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);
@@ -3199,6 +3266,7 @@ export function AlbumWizard({
         const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(draft.submissionId),
           archiveReview: initialArchiveEntry?.context,
           packageId: sourceSnapshot.selectedPackageId ?? undefined,
           amountKrw: albumPrice,
@@ -3262,8 +3330,16 @@ export function AlbumWizard({
               : mapTracksForSave(draft.tracks),
           files: options.includeFiles ? draft.files : undefined,
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          draft.submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            albumCheckpointControllerRef.current?.markConflict(result.error);
+          }
           if (foreground) {
             setNotice({ error: result.error });
           }
@@ -3884,6 +3960,7 @@ export function AlbumWizard({
         }
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(draft.submissionId),
           archiveReview: initialArchiveEntry?.context,
           packageId: selectedPackage?.id,
           amountKrw: albumPrice,
@@ -3959,8 +4036,16 @@ export function AlbumWizard({
               : mapTracksForSave(draft.tracks),
           files: status === "SUBMITTED" ? draft.files : undefined,
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          draft.submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            albumCheckpointControllerRef.current?.markConflict(result.error);
+          }
           setNotice({ error: result.error });
           return;
         }
@@ -4363,6 +4448,8 @@ export function AlbumWizard({
         error={albumCheckpoint.error}
         hasRecovery={Boolean(albumCheckpoint.recovery)}
         hasPrevious={Boolean(albumCheckpoint.previous)}
+        conflict={albumCheckpoint.conflict}
+        onReload={() => window.location.reload()}
         onRetry={albumCheckpoint.retry}
         onRecover={recoverAlbumCheckpoint}
         onDiscardRecovery={albumCheckpoint.discardRecovery}
@@ -4464,7 +4551,7 @@ export function AlbumWizard({
                         <div className="flex w-full flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             {guidance?.badge ? (
-                              <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}>
+                              <span className={`mb-2 inline-flex rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${isActive ? tone.chip : brandStatusTones.progress}`}>
                                 {guidance.badge}
                               </span>
                             ) : null}
@@ -4484,7 +4571,7 @@ export function AlbumWizard({
                           </p>
                         ) : null}
                         {conditionalGuidance.length > 0 ? (
-                          <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : "border-[#f2cf27] bg-[#f2cf27]/20 text-[#111111] dark:text-[#f2cf27]"}`}>
+                          <span className={`mt-3 inline-flex self-start rounded-[6px] border px-2 py-1 text-[10px] font-black tracking-normal ${isActive ? tone.chip : brandStatusTones.warning}`}>
                             장르 조건 있음
                           </span>
                         ) : null}
@@ -4698,7 +4785,7 @@ export function AlbumWizard({
                 />
               </div>
               {notice.error && (
-                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className={`mt-4 rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4739,7 +4826,7 @@ export function AlbumWizard({
                   </p>
                 )}
                 {showBasicErrors && basicInfoIssues.length > 0 && (
-                  <div role="alert" className="mb-5 rounded-xl border border-red-500/40 bg-red-500/5 p-4">
+                  <div role="alert" className={`mb-5 rounded-xl border-2 p-4 ${brandStatusTones.danger}`}>
                     <p className="font-semibold">입력 내용을 확인해주세요.</p>
                     <ul className="mt-2 space-y-1">
                       {basicInfoIssues.map((item) => (
@@ -5735,7 +5822,7 @@ export function AlbumWizard({
                         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                           <span role="status" aria-atomic="true">
                             {upload.status === "done" ? (
-                              <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                              <span className={`inline-flex items-center rounded-full border-2 px-3 py-1.5 text-xs font-bold ${brandStatusTones.success}`}>
                                 첨부 완료
                               </span>
                             ) : (
@@ -5812,7 +5899,7 @@ export function AlbumWizard({
                       </span>
                     </div>
                     {hasArchiveForTrackMatch ? (
-                      <p className="mt-3 rounded-xl bg-[#f2cf27]/15 px-3 py-2 font-semibold leading-5 text-foreground">
+                      <p className={`mt-3 rounded-xl border-2 px-3 py-2 font-semibold leading-5 ${brandStatusTones.warning}`}>
                         ZIP 파일은 자동 연결하지 않습니다. 압축 안의 곡명과 트랙 순서를 확인해주세요.
                       </p>
                     ) : albumTrackFileMatch.missingTrackIndexes.length === 0 &&
@@ -5823,9 +5910,9 @@ export function AlbumWizard({
                     ) : (
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {albumTrackFileMatch.missingTrackIndexes.length > 0 ? (
-                          <div className="rounded-xl bg-[#d9362c]/8 px-3 py-2">
-                            <p className="font-black text-[#b92d25]">파일 확인 필요</p>
-                            <p className="mt-1 leading-5 text-muted-foreground">
+                          <div className={`rounded-xl border-2 px-3 py-2 ${brandStatusTones.danger}`}>
+                            <p className="font-black">파일 확인 필요</p>
+                            <p className="mt-1 leading-5">
                               {albumTrackFileMatch.missingTrackIndexes
                                 .map(
                                   (index) =>
@@ -5836,9 +5923,9 @@ export function AlbumWizard({
                           </div>
                         ) : null}
                         {albumTrackFileMatch.unmatchedFileIndexes.length > 0 ? (
-                          <div className="rounded-xl bg-[#f2cf27]/15 px-3 py-2">
+                          <div className={`rounded-xl border-2 px-3 py-2 ${brandStatusTones.warning}`}>
                             <p className="font-black">연결되지 않은 파일</p>
-                            <p className="mt-1 break-all leading-5 text-muted-foreground">
+                            <p className="mt-1 break-all leading-5">
                               {albumTrackFileMatch.unmatchedFileIndexes
                                 .map((index) => {
                                   const file = albumTrackFilesForMatch[index];
@@ -5885,7 +5972,7 @@ export function AlbumWizard({
           </div>
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}
@@ -5926,7 +6013,7 @@ export function AlbumWizard({
               type="button"
               onClick={handleStep3Next}
               disabled={isSaving || isAddingAlbum}
-              className="min-h-11 rounded-full border border-emerald-800 bg-emerald-700 px-6 py-3 text-xs font-bold tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-500"
+              className="min-h-11 rounded-full border-2 border-[var(--bauhaus-ink)] bg-[#1f7a5a] px-6 py-3 text-xs font-bold tracking-[0.12em] text-white transition hover:-translate-y-0.5 hover:bg-[#176047] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f7a5a] focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
             >
               다음 단계
             </button>

@@ -1,6 +1,7 @@
-import { abortMultipartUpload } from "@/lib/b2";
+import { abortMultipartUpload, getB2Config } from "@/lib/b2";
 import { getGuestStorageOwnerId } from "@/lib/guest-storage-owner";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteUnreferencedUploadObject } from "@/lib/upload-object-references";
 
 export const MULTIPART_GRANT_TTL_SECONDS = Math.min(
   24 * 60 * 60,
@@ -135,8 +136,15 @@ const finalizeAbort = async (
       uploadId: grant.upload_id,
     }).catch((error: unknown) => {
       // A retry after successful abort (or a completion/abort race) has no
-      // multipart upload left. Its separately recorded object is not deleted.
+      // multipart upload left.
       if (!(error instanceof Error && error.name === "NoSuchUpload")) throw error;
+    });
+    // A failed or abandoned completion may already have assembled the file.
+    // No receipt points at it, so its stored versions go too; an object a
+    // live, staged or verified supplement row uses is always kept.
+    await deleteUnreferencedUploadObject(admin, grant.object_key, {
+      prefix: getB2Config().prefix,
+      submissionId: grant.submission_id,
     });
     const { data, error } = await admin
       .from("multipart_upload_grants")
@@ -180,6 +188,8 @@ export async function abortExpiredMultipartGrant(grant: MultipartUploadGrant) {
   return finalizeAbort(data as MultipartUploadGrant, "ABORTING");
 }
 
+/** Leases expired, failed and abandoned grants (see the lease RPC) and
+ * aborts them. Returns how many were leased so a scheduled run can loop. */
 export async function cleanupExpiredMultipartGrants(limit = 5) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc(
@@ -187,9 +197,33 @@ export async function cleanupExpiredMultipartGrants(limit = 5) {
     { p_limit: Math.max(1, Math.min(20, limit)) },
   );
   if (error) throw new Error(error.message);
-  for (const grant of (data ?? []) as MultipartUploadGrant[]) {
+  const leased = (data ?? []) as MultipartUploadGrant[];
+  for (const grant of leased) {
     await finalizeAbort(grant, "ABORTING");
   }
+  return leased.length;
+}
+
+/** Retires a FAILED grant at once instead of waiting for the scheduled
+ * lease: aborts its upload id and removes any object B2 assembled. */
+export async function abortFailedMultipartGrant(grant: MultipartUploadGrant) {
+  const admin = createAdminClient();
+  const attemptedAt = new Date().toISOString();
+  const { data, error } = await admin
+    .from("multipart_upload_grants")
+    .update({
+      status: "ABORTING",
+      abort_attempts: (grant.abort_attempts ?? 0) + 1,
+      last_abort_attempt_at: attemptedAt,
+      updated_at: attemptedAt,
+    })
+    .eq("id", grant.id)
+    .eq("status", "FAILED")
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return false;
+  return finalizeAbort(data as MultipartUploadGrant, "ABORTING");
 }
 
 export async function abortCompletingMultipartGrant(
@@ -233,15 +267,19 @@ export async function markMultipartGrantCompleted(grantId: string) {
   }
 }
 
+/** True when this call moved the grant to FAILED. */
 export async function markMultipartGrantFailed(
   grantId: string,
   fromStatuses: Array<MultipartUploadGrant["status"]> = ["COMPLETING"],
 ) {
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("multipart_upload_grants")
     .update({ status: "FAILED", updated_at: new Date().toISOString() })
     .eq("id", grantId)
-    .in("status", fromStatuses);
+    .in("status", fromStatuses)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  return Boolean(data);
 }

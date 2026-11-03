@@ -5,7 +5,9 @@ import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
 
 import { createKaraokePromotionRecommendationAction } from "@/features/karaoke/actions";
+import { isAllowedKaraokeUpload, karaokeUploadTypeError } from "@/lib/upload-file-types";
 import { safeRandomUUID } from "@/lib/uuid";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type PromotionSummary = {
   id: string;
@@ -90,6 +92,13 @@ export function KaraokeCreditPanel({
     if (!selected) {
       setRecommendationFile(null);
       setRecommendationUpload({ name: "", progress: 0, status: "idle" });
+      return;
+    }
+    if (!isAllowedKaraokeUpload("karaoke_recommendation", selected.name, selected.type)) {
+      event.target.value = "";
+      setRecommendationFile(null);
+      setRecommendationUpload({ name: "", progress: 0, status: "idle" });
+      setNotice({ error: karaokeUploadTypeError("karaoke_recommendation") });
       return;
     }
     setNotice({});
@@ -374,12 +383,12 @@ export function KaraokeCreditPanel({
         </div>
 
         {notice.error && (
-          <div className="mt-4 rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-xs font-semibold text-[#d9362c]">
+          <div className={`mt-4 rounded-[8px] border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             {notice.error}
           </div>
         )}
         {notice.message && (
-          <div className="mt-4 rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 px-4 py-3 text-xs font-semibold text-[#1f7a5a]">
+          <div className={`mt-4 rounded-[8px] border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.success}`}>
             {notice.message}
           </div>
         )}

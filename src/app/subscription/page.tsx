@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
+import { isSubscriptionBillingEnabled } from "@/lib/payments/subscription-billing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -15,6 +16,7 @@ import {
   getActiveSubscription,
 } from "@/lib/subscriptions/service";
 import { SubscriptionPayButtons } from "@/features/subscriptions/subscription-pay";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 const maskMid = (mid: string) => {
   if (!mid) return "";
@@ -23,7 +25,14 @@ const maskMid = (mid: string) => {
     : `${mid.slice(0, 2)}***${mid.slice(-2)}`;
 };
 
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "정기결제", robots: { index: false, follow: false } };
+
 export default async function SubscriptionPage() {
+  // Off unless explicitly enabled: each visit would otherwise open a billing
+  // attempt (subscription_history row) for a service Onside does not offer.
+  if (!isSubscriptionBillingEnabled()) notFound();
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -195,7 +204,7 @@ export default async function SubscriptionPage() {
       </p>
 
       {subscription ? (
-        <div className="mt-6 rounded-[8px] border-2 border-[#1f7a5a] bg-[#1f7a5a]/10 p-4 text-sm font-semibold text-[#1f7a5a]">
+        <div className={`mt-6 rounded-[8px] border-2 p-4 text-sm font-semibold ${brandStatusTones.success}`}>
           <p className="font-semibold">활성화된 구독이 있습니다.</p>
           <p className="mt-1">
             상태: {subscription.status} · 금액:{" "}

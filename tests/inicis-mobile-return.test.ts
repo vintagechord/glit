@@ -42,6 +42,7 @@ function harness(overrides: Partial<{
       return { ok: options.persistOk, error: options.persistOk ? null : new Error("lost"), submissionId: SUBMISSION };
     }) as InicisMobileReturnDeps["markPaymentSuccess"],
     markPaymentFailure: (async (orderId: string, payload: unknown) => { calls.push({ method: "failure", args: { orderId, payload } }); return { ok: true, error: null }; }) as InicisMobileReturnDeps["markPaymentFailure"],
+    markPaymentCanceled: (async (orderId: string, payload: unknown) => { calls.push({ method: "canceled", args: { orderId, payload } }); return { ok: true, error: null, submissionId: SUBMISSION, guestToken: null }; }) as InicisMobileReturnDeps["markPaymentCanceled"],
     approve: (async (params: unknown) => {
       calls.push({ method: "approve", args: params });
       if (options.approval === "throw") throw new Error("network");
@@ -100,12 +101,18 @@ test("GET delivery of the authentication result is accepted", async (t) => {
 
 test("authentication failures and cancellations close the attempt without any gateway call", async (t) => {
   silence(t);
-  for (const [status, message, expected] of [["01", "사용자 취소", "CANCEL"], ["V033", "card declined", "FAIL"]] as const) {
+  // A customer cancel is the same CANCELED attempt as closing the PC window
+  // (the order then reads "결제 대기"); a rejection is a FAILED attempt.
+  for (const [status, message, expected, method] of [
+    ["01", "사용자 취소", "CANCEL", "canceled"], ["V001", "결제를 취소하였습니다", "CANCEL", "canceled"], ["V033", "card declined", "FAIL", "failure"],
+  ] as const) {
     const { deps, calls } = harness();
     const response = await handleInicisMobileReturn(post(params({ P_STATUS: status, P_RMESG1: message, P_TID: "" })), deps);
     assert.equal(location(response).searchParams.get("status"), expected);
-    assert.deepEqual(calls.map((call) => call.method), ["failure"]);
-    assert.equal((calls[0].args as { payload: { result_code: string } }).payload.result_code, status);
+    assert.deepEqual(calls.map((call) => call.method), [method]);
+    const payload = (calls[0].args as { payload: { result_code: string; close_state?: string } }).payload;
+    assert.equal(payload.result_code, status);
+    if (method === "canceled") assert.equal(payload.close_state, STATE, "the authenticated close state binds the cancel");
   }
 });
 
@@ -137,7 +144,9 @@ test("replayed results for an approved payment only repair notifications", async
 
 test("concurrent or invalid claims stop before the gateway", async (t) => {
   silence(t);
-  for (const [claim, status] of [["processing", "ERROR"], ["invalid", "ERROR"], ["approved", "SUCCESS"]] as const) {
+  // A concurrent result for an attempt still being approved may already be
+  // charged: the customer is told the payment is being checked, not failed.
+  for (const [claim, status] of [["processing", "CHECKING"], ["invalid", "ERROR"], ["approved", "SUCCESS"]] as const) {
     const { deps, calls } = harness({ claim });
     const response = await handleInicisMobileReturn(post(), deps);
     assert.equal(location(response).searchParams.get("status"), status);
@@ -148,25 +157,39 @@ test("concurrent or invalid claims stop before the gateway", async (t) => {
 test("a gateway rejection settles as a confirmed failure; unknown outcomes net-cancel first", async (t) => {
   silence(t);
   const rejected = harness({ approval: { ok: false, data: { P_STATUS: "V033", P_RMESG1: "declined" }, confirmedFailure: true } });
-  await handleInicisMobileReturn(post(), rejected.deps);
+  assert.equal(location(await handleInicisMobileReturn(post(), rejected.deps)).searchParams.get("status"), "FAIL");
   assert.deepEqual(rejected.calls.map((call) => call.method), ["claim", "approve", "settle"]);
   assert.equal((rejected.calls[2].args as { confirmedFailure: boolean; resultCode: string }).confirmedFailure, true);
   assert.equal((rejected.calls[2].args as { resultCode: string }).resultCode, "V033");
 
   const cancelled = harness({ approval: "throw", cancelOk: true });
-  await handleInicisMobileReturn(post(), cancelled.deps);
+  assert.equal(location(await handleInicisMobileReturn(post(), cancelled.deps)).searchParams.get("status"), "FAIL");
   assert.deepEqual(cancelled.calls.map((call) => call.method), ["claim", "approve", "netCancel", "settle"]);
   assert.equal((cancelled.calls[3].args as { confirmedFailure: boolean }).confirmedFailure, true);
 
   const uncertain = harness({ approval: "throw", cancelOk: false });
-  await handleInicisMobileReturn(post(), uncertain.deps);
+  assert.equal(location(await handleInicisMobileReturn(post(), uncertain.deps)).searchParams.get("status"), "CHECKING");
   assert.deepEqual(uncertain.calls.map((call) => call.method), ["claim", "approve", "netCancel", "settle"]);
   assert.equal((uncertain.calls[3].args as { confirmedFailure: boolean }).confirmedFailure, false);
 
   const noKey = harness({ approval: "throw", hashKey: null });
-  await handleInicisMobileReturn(post(), noKey.deps);
+  assert.equal(location(await handleInicisMobileReturn(post(), noKey.deps)).searchParams.get("status"), "CHECKING");
   assert.deepEqual(noKey.calls.map((call) => call.method), ["claim", "approve", "settle"]);
   assert.equal((noKey.calls[2].args as { confirmedFailure: boolean }).confirmedFailure, false);
+
+  const mismatchUncancelled = harness({ approval: { ok: true, data: { ...receipt(), P_AMT: "1000" }, confirmedFailure: false }, cancelOk: false });
+  assert.equal(location(await handleInicisMobileReturn(post(), mismatchUncancelled.deps)).searchParams.get("status"), "CHECKING");
+});
+
+test("an exception after the claim reports CHECKING and keeps the attempt for reconciliation", async (t) => {
+  silence(t);
+  const { deps, calls } = harness();
+  deps.markPaymentSuccess = (async () => { throw new Error("database connection reset"); }) as InicisMobileReturnDeps["markPaymentSuccess"];
+  const target = location(await handleInicisMobileReturn(post(), deps));
+  assert.equal(target.searchParams.get("status"), "CHECKING");
+  assert.equal(target.searchParams.get("submissionId"), SUBMISSION);
+  const settle = calls.find((call) => call.method === "settle")?.args as { confirmedFailure: boolean; resultCode: string };
+  assert.deepEqual([settle.confirmedFailure, settle.resultCode], [false, "APPROVAL_EXCEPTION"]);
 });
 
 test("an approved receipt that does not match the order is net-cancelled and failed", async (t) => {
@@ -183,7 +206,7 @@ test("a lost database response after approval keeps the charge for reconciliatio
   silence(t);
   const { deps, calls } = harness({ persistOk: false });
   const response = await handleInicisMobileReturn(post(), deps);
-  assert.equal(location(response).searchParams.get("status"), "FAIL");
+  assert.equal(location(response).searchParams.get("status"), "CHECKING", "a charged customer must not read this as a failure");
   assert.deepEqual(calls.map((call) => call.method), ["claim", "approve", "paid", "settle", "grant"]);
   const settle = calls[3].args as { confirmedFailure: boolean; resultCode: string };
   assert.equal(settle.confirmedFailure, false);

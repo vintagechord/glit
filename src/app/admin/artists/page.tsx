@@ -10,6 +10,7 @@ import {
   deleteArtistFormAction,
   deleteArtistsFormAction,
 } from "@/features/admin/actions";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "아티스트 관리",
@@ -158,7 +159,7 @@ export default async function AdminArtistsPage({
       </div>
 
       {queryError && (
-        <div className="mt-4 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+        <div className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}>
           <p className="font-semibold">아티스트 정보를 불러올 수 없습니다.</p>
           <details className="mt-1 text-xs">
             <summary className="cursor-pointer font-semibold">오류 상세</summary>
@@ -211,7 +212,7 @@ export default async function AdminArtistsPage({
         </p>
         <button
           type="submit"
-          className="rounded-full border border-rose-200/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
+          className="rounded-full border-2 border-[#d9362c] bg-background px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#d9362c] transition hover:bg-[#d9362c] hover:text-white"
         >
           선택 삭제
         </button>
@@ -269,7 +270,7 @@ export default async function AdminArtistsPage({
                         />
                       </div>
                     ) : (
-                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-200 via-lime-200 to-emerald-400 text-sm font-semibold text-emerald-900">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border-2 border-[var(--bauhaus-ink)] bg-[#1f7a5a] text-sm font-semibold text-white">
                         {(artist.name || "A").charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -305,7 +306,7 @@ export default async function AdminArtistsPage({
                         <input type="hidden" name="redirectTo" value={currentListHref} />
                         <button
                           type="submit"
-                          className="rounded-full border border-border/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-600 transition hover:border-rose-500 hover:text-rose-700"
+                          className="rounded-full border-2 border-[#d9362c] bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#d9362c] transition hover:bg-[#d9362c] hover:text-white"
                         >
                           삭제
                         </button>

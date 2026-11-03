@@ -29,11 +29,21 @@ const getObjectKeyFromRequest = (request: Request) => {
   }
 };
 
+// The anonymous thumbnail branch must stay inside its folder: no empty,
+// "." or ".." segment, backslash or control character may follow the folder.
+const hasSafeSegments = (rest: string) =>
+  !/[\u0000-\u001f\u007f\\]/.test(rest) &&
+  rest.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+
 const getAllowedKeyKind = (objectKey: string) => {
   try {
-    const { prefix } = getB2Config();
-    if (objectKey.startsWith(`${prefix}artist-thumbnails/`)) return "thumbnail";
-    if (objectKey.startsWith(`${prefix}admin-free/`)) return "admin";
+    const base = getB2Config().prefix;
+    for (const [folder, kind] of [["artist-thumbnails/", "thumbnail"], ["admin-free/", "admin"]] as const) {
+      const start = `${base}${folder}`;
+      if (objectKey.startsWith(start)) {
+        return hasSafeSegments(objectKey.slice(start.length)) ? kind : null;
+      }
+    }
     return null;
   } catch {
     return null;

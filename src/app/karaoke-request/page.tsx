@@ -1,9 +1,14 @@
 import { KaraokeTabs } from "@/features/karaoke/karaoke-tabs";
+import { pageMetadata } from "@/lib/seo";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-export const metadata = {
+// Shows the visitor's own requests, so it stays out of search results.
+export const metadata = pageMetadata({
   title: "노래방 등록",
-};
+  description: "태진·금영 노래방 곡 등록을 요청하고 접수 진행 상황을 확인하세요.",
+  path: "/karaoke-request",
+  noindex: true,
+});
 
 export default async function KaraokeRequestPage() {
   const supabase = await createServerSupabase();

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, Copy, Download, FileText } from "lucide-react";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import type { RadioRequestDraft } from "@/lib/radio-request-workspace";
 
 export const radioControlClass =
@@ -13,7 +14,7 @@ const radioActionClass =
 export const radioButtonClass =
   `${radioActionClass} border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800`;
 export const radioPrimaryClass =
-  `${radioActionClass} border-blue-700 bg-blue-700 text-white hover:border-blue-800 hover:bg-blue-800 dark:border-blue-500 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700`;
+  `${radioActionClass} border-[var(--bauhaus-ink)] bg-[#1556a4] text-white hover:bg-[#0f4f99]`;
 export const radioNoteClass = "text-xs leading-5 text-slate-600 dark:text-slate-300";
 export const radioCardClass =
   "min-w-0 rounded-2xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/60 sm:p-4";
@@ -123,7 +124,7 @@ export function RadioDraftEditor({
           {isEnglish ? "Final request" : "최종 신청글"}
         </h4>
         {readOnly && (
-          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-semibold ${brandStatusTones.progress}`}>
             {isEnglish ? "Prepared request" : "준비한 신청글"}
           </span>
         )}

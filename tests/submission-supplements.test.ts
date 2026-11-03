@@ -3,6 +3,8 @@ import test from "node:test";
 import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { isSupplementFilenameAllowed, matchesSupplementSignature, supplementActionSchema, SUPPLEMENT_MAX_BYTES, supplementMimeType } from "../src/lib/submission-supplements/model";
+import { isTransientFailure, retryTransient, supplementResumeKey } from "../src/lib/submission-supplements/upload-retry";
+import { multipartCompletionManifest } from "../src/lib/multipart-upload-completion";
 
 test("supplement boundaries reject empty/oversize files, paths, duplicate parts and missing rejection reasons", () => {
   const requestId = "11111111-1111-4111-8111-111111111111";
@@ -32,8 +34,8 @@ test("supplement API authorization and B2 reconciliation preserve original locks
             export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.memberEmail}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){const filters=[];const chain={select(){return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},is(k,v){filters.push(r=>r[k]===v);return chain},async maybeSingle(){return {data:(state.rows[table]||[]).find(r=>filters.every(f=>f(r)))||null,error:null}},async single(){return chain.maybeSingle()}};return chain},async rpc(name,args){calls.push({name,args});return {data:args.p_action==='notify_claim'?state.notice:args.p_action==='request'?{requestId:'request-a'}:{ok:true},error:(state.failMutation&&args.p_action!=='notify_claim')||(state.failFinish&&args.p_action==='notify_finish')?{message:'write failed'}:null}}};`,
           "@/lib/supabase/server": `${shared} export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:state.user}})},rpc:async()=>({data:state.isAdmin})}}`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){return db}`,
-          "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}}); export const headObject=async()=>({ContentLength:state.headSize}); export const presignGetUrl=async key=>{calls.push({name:'download',key});return 'https://signed.fixture.invalid'}; export const presignUploadPart=async()=>{calls.push({name:'presign'});return 'https://part.fixture.invalid'}; export const completeMultipartUpload=async()=>{calls.push({name:'complete'})}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s;`,
-          "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=({submissionUserId,guestToken})=>submissionUserId?'user:'+submissionUserId:'guest:'+guestToken; export const getMultipartGrant=async()=>state.grant; export const getMultipartPartSize=()=>16; export const abortClaimedMultipartGrant=async()=>{calls.push({name:'abort'});return true}; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>state.grant;`,
+          "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}}); export const headObject=async()=>({ContentLength:state.headSize}); export const presignGetUrl=async key=>{calls.push({name:'download',key});return 'https://signed.fixture.invalid'}; export const presignUploadPart=async()=>{calls.push({name:'presign'});return 'https://part.fixture.invalid'}; export const completeMultipartUpload=async()=>{calls.push({name:'complete'})}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s; export const listMultipartUploadParts=async()=>null;`,
+          "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=({submissionUserId,guestToken})=>submissionUserId?'user:'+submissionUserId:'guest:'+guestToken; export const getMultipartGrant=async()=>state.grant; export const getMultipartPartSize=()=>16; export const abortClaimedMultipartGrant=async()=>{calls.push({name:'abort'});return true}; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>state.grant; export const abortFailedMultipartGrant=async()=>{calls.push({name:'retire'});return true};`,
           "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',args:input});return state.emailResult};`,
           "@/lib/kakao": `${shared} export const sendKakaoOfficialNotification=async input=>{calls.push({name:'kakao',args:input});return state.kakaoResult};`,
         };
@@ -71,10 +73,10 @@ test("supplement API authorization and B2 reconciliation preserve original locks
   assert.equal(api.calls.some((call) => call.name === "complete"), false, "recheck never repeats B2 completion");
   state.headSize = 99;
   await assert.rejects(api.performSupplementAction(owner, { action: "recheck", fileId: "file-a" }), /크기/);
-  assert.equal(api.calls.at(-1)?.args?.p_action, "invalidate");
+  assert.equal(api.calls.at(-2)?.args?.p_action, "invalidate");
   state.headSize = 16; state.bytes = new TextEncoder().encode("invalid file");
   await assert.rejects(api.performSupplementAction(owner, { action: "recheck", fileId: "file-a" }), /확장자/);
-  assert.equal(api.calls.at(-1)?.args?.p_action, "invalidate");
+  assert.equal(api.calls.at(-2)?.args?.p_action, "invalidate");
   await api.performSupplementAction(owner, { action: "abort", fileId: "file-a" });
   assert.equal(api.calls.at(-2)?.args?.p_action, "abort");
   assert.equal(api.calls.at(-1)?.name, "abort");
@@ -129,4 +131,133 @@ test("supplement API authorization and B2 reconciliation preserve original locks
   api.calls.length = 0; state.notice.alreadyAccepted = true;
   await api.performSupplementAction(admin, { action: "notify", requestId: "request-a" });
   assert.equal(api.calls.length, 1, "already accepted notice only reads its claim result");
+});
+
+test("a claimed supplement upload whose B2 completion failed is completed again instead of waiting forever", async () => {
+  const fixture = `export const calls=[]; export const state={grant:null,object:false,completeFailure:null,listed:null,bytes:new TextEncoder().encode('RIFF1234WAVEdata')};
+    const rows={submission_supplement_requests:[{id:'request-a',submission_id:'submission-a',status:'OPEN'}],submission_supplement_revisions:[{id:'revision-a',request_id:'request-a',status:'DRAFT'}],
+      submission_supplement_files:[{id:'file-a',revision_id:'revision-a',grant_id:'grant-a',original_name:'fixture.wav',size_bytes:16,object_key:'configured/supplements/submission-a/request-a/revision-a/u/fixture.wav',status:'PENDING'}]};
+    export const db={from(table){const filters=[];let patch=null;const chain={select(){return chain},update(values){patch=values;return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},is(k,v){filters.push(r=>(r[k]??null)===v);return chain},
+      async maybeSingle(){if(table==='multipart_upload_grants'&&patch){const g=state.grant;if(!filters.every(f=>f(g)))return {data:null,error:null};Object.assign(g,patch);calls.push({name:'bind-manifest'});return {data:{id:g.id},error:null}}return {data:(rows[table]||[]).find(r=>filters.every(f=>f(r)))||null,error:null}},async single(){return chain.maybeSingle()}};return chain},
+      async rpc(name,args){calls.push({name,args});if(name==='claim_multipart_upload_completion'){state.grant.status='COMPLETING';state.grant.completion_manifest_hash=args.p_manifest_hash}if(args.p_action==='invalidate')state.grant.status='FAILED';if(args.p_action==='verify')state.grant.status='COMPLETED';return {data:{ok:true},error:null}}};`;
+  const result = await build({ stdin: { contents: "export * from './src/lib/submission-supplements/server'; export {state,calls,db} from 'recompletion-fixture';", resolveDir: process.cwd(), loader: "ts" }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
+    plugins: [{ name: "recompletion-fixture", setup(plugin) {
+      plugin.onResolve({ filter: /^(recompletion-fixture|@\/lib\/(?:supabase\/(?:server|admin)|b2|multipart-upload-grants|email|kakao))$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
+      plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
+        const shared = "import {state,calls,db} from 'recompletion-fixture';";
+        const files: Record<string, string> = {
+          "recompletion-fixture": fixture,
+          "@/lib/supabase/server": `export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:{id:'user-a'}}})},rpc:async()=>({data:false})}}`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){return db}`,
+          "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}});
+            export const headObject=async()=>{calls.push({name:'head'});if(!state.object)throw Object.assign(new Error('missing'),{name:'NotFound'});return {ContentLength:16}};
+            export const completeMultipartUpload=async input=>{calls.push({name:'complete',parts:input.parts});const failure=state.completeFailure;state.completeFailure=null;if(failure)throw Object.assign(new Error(failure),{name:failure});state.object=true};
+            export const listMultipartUploadParts=async()=>{calls.push({name:'list-parts'});return state.listed};
+            export const presignGetUrl=async()=> 'https://signed.fixture.invalid'; export const presignUploadPart=async()=> 'https://part.fixture.invalid'; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s;`,
+          "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=({submissionUserId})=>'user:'+submissionUserId; export const getMultipartGrant=async()=>({...state.grant}); export const getMultipartPartSize=()=>8; export const abortClaimedMultipartGrant=async()=>true; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>state.grant; export const abortFailedMultipartGrant=async()=>{calls.push({name:'retire'});state.grant.status='ABORTED';state.object=false;return true};`,
+          "@/lib/email": `export const sendSubmissionUpdateEmail=async()=>({ok:true});`,
+          "@/lib/kakao": `export const sendKakaoOfficialNotification=async()=>({ok:true});`,
+        };
+        return { loader: "js", contents: files[path] };
+      });
+    } }],
+  });
+  type Grant = { id: string; status: string; completion_manifest_hash: string | null; [key: string]: unknown };
+  type Server = typeof import("../src/lib/submission-supplements/server");
+  const bundled = { exports: {} as { state: { grant: Grant; object: boolean; completeFailure: string | null; listed: unknown }; calls: Array<{ name: string; args?: { p_action?: string; p_manifest_hash?: string }; parts?: Array<{ partNumber: number; etag: string }> }>; db: unknown; performSupplementAction: Server["performSupplementAction"] } };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
+  const api = bundled.exports;
+  const context = { db: api.db, submission: { id: "submission-a", user_id: "user-a", guest_token: null, payment_status: "PAID", type: "ALBUM" }, userId: "user-a", isAdmin: false, guestToken: null } as unknown as Parameters<Server["performSupplementAction"]>[0];
+  const run = (input: Parameters<Server["performSupplementAction"]>[1]) => api.performSupplementAction(context, input);
+  const parts = [{ partNumber: 1, etag: "fixture-etag-one" }, { partNumber: 2, etag: "fixture-etag-two" }];
+  const manifest = multipartCompletionManifest(parts);
+  const reset = (overrides: Partial<Grant> = {}) => {
+    api.calls.length = 0; api.state.object = false; api.state.completeFailure = null; api.state.listed = null;
+    api.state.grant = { id: "grant-a", submission_id: "submission-a", owner_key: "user:user-a", upload_id: "fixture-upload", object_key: "configured/supplements/submission-a/request-a/revision-a/u/fixture.wav", status: "ACTIVE", declared_size_bytes: 16, part_count: 2, part_size_bytes: 8, completion_manifest_hash: null, expires_at: new Date(Date.now() + 60_000).toISOString(), ...overrides };
+  };
+  const count = (name: string) => api.calls.filter((call) => call.name === name).length;
+  const lastAction = () => api.calls.filter((call) => call.args?.p_action).at(-1)?.args?.p_action;
+
+  // The first completion binds the ETag manifest, as the main multipart flow does.
+  reset();
+  assert.deepEqual(await run({ action: "complete", fileId: "file-a", parts }), { verified: true });
+  assert.equal(api.calls.find((call) => call.name === "claim_multipart_upload_completion")?.args?.p_manifest_hash, manifest);
+  assert.equal(lastAction(), "verify");
+
+  // B2 rejected or lost the first CompleteMultipartUpload (InvalidPart, 5xx):
+  // the grant stayed COMPLETING with no object. A retry completes it again.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  assert.deepEqual(await run({ action: "complete", fileId: "file-a", parts: [...parts].reverse() }), { verified: true });
+  assert.equal(count("complete"), 1);
+  assert.equal(count("claim_multipart_upload_completion"), 0, "the claim is not repeated");
+  assert.equal(lastAction(), "verify");
+
+  // A different part list cannot ride on someone else's claim.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  await assert.rejects(run({ action: "complete", fileId: "file-a", parts: [{ ...parts[0], etag: "tampered-etag" }, parts[1]] }), /다른 업로드 조각/);
+  assert.equal(count("complete"), 0);
+
+  // A claim from before manifests were bound takes the first complete list once.
+  reset({ status: "COMPLETING", completion_manifest_hash: null });
+  assert.deepEqual(await run({ action: "complete", fileId: "file-a", parts }), { verified: true });
+  assert.equal(count("bind-manifest"), 1);
+  assert.equal(api.state.grant.completion_manifest_hash, manifest);
+
+  // After a reload the browser has no part list: recheck reads it back from B2.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  api.state.listed = parts.map((part) => ({ ...part, size: 8 }));
+  assert.deepEqual(await run({ action: "recheck", fileId: "file-a" }), { verified: true });
+  assert.deepEqual(api.calls.find((call) => call.name === "complete")?.parts, parts);
+
+  // B2 parts that do not match the bound manifest are never assembled.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  api.state.listed = [{ partNumber: 1, etag: "other-etag", size: 8 }, { partNumber: 2, etag: "fixture-etag-two", size: 8 }];
+  await assert.rejects(run({ action: "recheck", fileId: "file-a" }), /전송 확인을 완료하지 못했습니다/);
+  assert.equal(count("complete"), 0);
+
+  // A provider error that will not pass retires the file and its upload id.
+  for (const failure of ["InvalidPart", "NoSuchUpload"]) {
+    reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+    api.state.completeFailure = failure;
+    await assert.rejects(run({ action: "complete", fileId: "file-a", parts }), /업로드 조각이 일치하지 않습니다/);
+    assert.equal(lastAction(), "invalidate", failure);
+    assert.equal(api.calls.at(-1)?.name, "retire", failure);
+  }
+
+  // A transient failure stays retryable: no invalidation, 503.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  api.state.completeFailure = "InternalError";
+  await assert.rejects(run({ action: "complete", fileId: "file-a", parts }), (error: Error & { status?: number }) => error.status === 503);
+  assert.equal(lastAction(), undefined);
+  assert.equal(api.state.grant.status, "COMPLETING");
+
+  // The upload id is gone and nothing was assembled: reselect.
+  reset({ status: "COMPLETING", completion_manifest_hash: manifest });
+  api.state.listed = null;
+  await assert.rejects(run({ action: "recheck", fileId: "file-a" }), /업로드가 종료되어/);
+  assert.equal(lastAction(), "invalidate");
+});
+
+test("supplement upload retries only transient failures, with backoff", async () => {
+  const signal = new AbortController().signal;
+  assert.equal(isTransientFailure(Object.assign(new Error("x"), { status: 503 })), true);
+  assert.equal(isTransientFailure(Object.assign(new Error("x"), { status: 429 })), true);
+  assert.equal(isTransientFailure(Object.assign(new TypeError("Failed to fetch"))), true);
+  assert.equal(isTransientFailure(Object.assign(new Error("x"), { name: "TimeoutError" })), true);
+  for (const status of [400, 403, 409, 410]) assert.equal(isTransientFailure(Object.assign(new Error("x"), { status })), false, String(status));
+
+  let attempts = 0;
+  assert.equal(await retryTransient(async () => { attempts++; if (attempts < 3) throw new TypeError("offline"); return "sent"; }, signal, 5, 1), "sent");
+  assert.equal(attempts, 3);
+  attempts = 0;
+  await assert.rejects(retryTransient(async () => { attempts++; throw Object.assign(new Error("gone"), { status: 410 }); }, signal, 5, 1), /gone/);
+  assert.equal(attempts, 1, "a final error is not retried");
+  attempts = 0;
+  await assert.rejects(retryTransient(async () => { attempts++; throw new TypeError("offline"); }, signal, 3, 1));
+  assert.equal(attempts, 3, "attempts are bounded");
+  const cancelled = new AbortController(); cancelled.abort();
+  attempts = 0;
+  await assert.rejects(retryTransient(async () => { attempts++; throw new TypeError("offline"); }, cancelled.signal, 5, 1));
+  assert.equal(attempts, 1, "a cancelled upload stops retrying");
+  assert.equal(supplementResumeKey("s", "r", { name: "a.wav", size: 3, lastModified: 7 }), "supplement-multipart:s:r:a.wav:3:7");
 });

@@ -23,14 +23,19 @@ const schema = z.object({
 
 const draftStatuses = ["DRAFT", "PRE_REVIEW"] as const;
 
-async function findExistingDraftId(
+// PRE_REVIEW also means "paid, awaiting material review" (20261023212202).
+// Only unpaid, unordered, visible rows are still drafts the wizard may resume.
+async function findExistingDraft(
   admin: ReturnType<typeof createAdminClient>,
   params: { type: "ALBUM" | "MV_DISTRIBUTION" | "MV_BROADCAST"; guestToken?: string; userId?: string },
 ) {
   let query = admin
     .from("submissions")
-    .select("id")
+    .select("id, updated_at")
     .in("status", [...draftStatuses])
+    .or("payment_status.is.null,payment_status.eq.UNPAID")
+    .is("current_order_id", null)
+    .is("user_deleted_at", null)
     .order("updated_at", { ascending: false })
     .limit(1);
 
@@ -49,7 +54,9 @@ async function findExistingDraftId(
   }
 
   const { data } = await query.maybeSingle();
-  return data?.id ?? null;
+  return data?.id
+    ? { id: data.id as string, updatedAt: (data.updated_at as string | null) ?? null }
+    : null;
 }
 
 export async function POST(request: Request) {
@@ -101,17 +108,21 @@ export async function POST(request: Request) {
   };
 
   if (isGuest) {
-    const fallbackId = parsed.data.forceNew
+    // The token already belongs to a saved draft. Say so: the wizard must load
+    // it through the resume path, never treat it as a blank new application.
+    const existing = parsed.data.forceNew
       ? null
-      : await findExistingDraftId(admin, {
+      : await findExistingDraft(admin, {
           type: parsed.data.type,
           guestToken: parsed.data.guestToken,
         });
-    if (fallbackId) {
+    if (existing) {
       return NextResponse.json({
         ok: true,
-        submissionId: fallbackId,
+        submissionId: existing.id,
         guestToken: parsed.data.guestToken,
+        reused: true,
+        updatedAt: existing.updatedAt,
       });
     }
 
@@ -124,7 +135,7 @@ export async function POST(request: Request) {
           ...payload,
           guest_token: guestToken,
         })
-        .select("id, guest_token")
+        .select("id, guest_token, updated_at")
         .maybeSingle();
 
       if (data?.id) {
@@ -132,6 +143,7 @@ export async function POST(request: Request) {
           ok: true,
           submissionId: data.id,
           guestToken: data.guest_token ?? guestToken,
+          updatedAt: data.updated_at ?? null,
         });
       }
 
@@ -154,30 +166,39 @@ export async function POST(request: Request) {
   const insertQuery = supabase
     .from("submissions")
     .insert(payload)
-    .select("id")
+    .select("id, updated_at")
     .maybeSingle();
 
   const { data, error } = await insertQuery;
   if (error || !data?.id) {
-    const fallbackId = parsed.data.forceNew
+    const existing = parsed.data.forceNew
       ? null
-      : await findExistingDraftId(admin, {
+      : await findExistingDraft(admin, {
           type: parsed.data.type,
           guestToken: parsed.data.guestToken,
           userId: user?.id,
         });
-    if (fallbackId) {
-      return NextResponse.json({ ok: true, submissionId: fallbackId });
+    if (existing) {
+      return NextResponse.json({
+        ok: true,
+        submissionId: existing.id,
+        reused: true,
+        updatedAt: existing.updatedAt,
+      });
     }
 
     if (!isGuest && user?.id) {
       const fallback = await admin
         .from("submissions")
         .insert(payload)
-        .select("id")
+        .select("id, updated_at")
         .maybeSingle();
       if (fallback.data?.id) {
-        return NextResponse.json({ ok: true, submissionId: fallback.data.id });
+        return NextResponse.json({
+          ok: true,
+          submissionId: fallback.data.id,
+          updatedAt: fallback.data.updated_at ?? null,
+        });
       }
     }
 
@@ -190,5 +211,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "초안 생성을 실패했습니다." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, submissionId: data.id });
+  return NextResponse.json({
+    ok: true,
+    submissionId: data.id,
+    updatedAt: data.updated_at ?? null,
+  });
 }

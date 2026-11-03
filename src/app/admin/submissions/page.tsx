@@ -18,6 +18,7 @@ import {
   type PaymentStatus,
   type ReviewStatus,
 } from "@/constants/review-status";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
@@ -77,31 +78,20 @@ const labelMap = {
 } as const;
 
 const statusToneMap: Record<ReviewStatus, string> = {
-  DRAFT:
-    "border-border bg-background text-muted-foreground",
-  SUBMITTED:
-    "border-[#1556a4]/30 bg-[#1556a4]/10 text-[#1556a4] dark:border-[#3f8ad8]/35 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]",
-  PRE_REVIEW:
-    "border-[#1556a4]/30 bg-[#1556a4]/10 text-[#1556a4] dark:border-[#3f8ad8]/35 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]",
-  WAITING_PAYMENT:
-    "border-[#f2cf27] bg-[#f2cf27]/35 text-[#111111] dark:text-[#f7f5ef]",
-  IN_PROGRESS:
-    "border-[#1556a4]/35 bg-[#1556a4]/12 text-[#1556a4] dark:border-[#3f8ad8]/35 dark:bg-[#3f8ad8]/15 dark:text-[#8bc3ff]",
-  RESULT_READY:
-    "border-[#1f7a5a]/35 bg-[#1f7a5a]/12 text-[#1f7a5a] dark:text-[#75d2a5]",
-  COMPLETED:
-    "border-[#1f7a5a]/35 bg-[#1f7a5a]/12 text-[#1f7a5a] dark:text-[#75d2a5]",
+  DRAFT: brandStatusTones.neutral,
+  SUBMITTED: brandStatusTones.progress,
+  PRE_REVIEW: brandStatusTones.progress,
+  WAITING_PAYMENT: brandStatusTones.warning,
+  IN_PROGRESS: brandStatusTones.progress,
+  RESULT_READY: brandStatusTones.success,
+  COMPLETED: brandStatusTones.success,
 };
 
 const paymentToneMap: Record<PaymentStatus, string> = {
-  UNPAID:
-    "border-border bg-background text-muted-foreground",
-  PAYMENT_PENDING:
-    "border-[#f2cf27] bg-[#f2cf27]/35 text-[#111111] dark:text-[#f7f5ef]",
-  PAID:
-    "border-[#1f7a5a]/35 bg-[#1f7a5a]/12 text-[#1f7a5a] dark:text-[#75d2a5]",
-  REFUNDED:
-    "border-[#d9362c]/35 bg-[#d9362c]/10 text-[#d9362c] dark:text-[#ff8b83]",
+  UNPAID: brandStatusTones.neutral,
+  PAYMENT_PENDING: brandStatusTones.warning,
+  PAID: brandStatusTones.success,
+  REFUNDED: brandStatusTones.danger,
 };
 
 function StatusBadge({
@@ -221,7 +211,10 @@ export default async function AdminSubmissionsPage({
       .from("submissions")
       .select(selectFields, { count: "exact" })
       .order("updated_at", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      // Rows saved in one statement share timestamps; the unique id keeps
+      // offset pages from repeating or skipping them.
+      .order("id", { ascending: false });
 
     if (filters.status) {
       query = query.eq("status", filters.status);
@@ -542,7 +535,7 @@ export default async function AdminSubmissionsPage({
 
       <div className="mt-6 space-y-3">
         {submissionsError && (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             접수 목록을 불러오지 못했습니다. ({submissionsError.message})
           </div>
         )}

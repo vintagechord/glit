@@ -16,6 +16,7 @@ import {
 import { MelonReviewDocsDownloadForm } from "@/components/admin/review-docs-download";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +144,7 @@ export default async function AdminPage() {
               </h2>
             </div>
             {summary.hasError ? (
-              <span className="rounded-[6px] border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-600">
+              <span className={`rounded-[6px] border-2 px-2.5 py-1 text-[11px] font-bold ${brandStatusTones.danger}`}>
                 일부 집계 확인 필요
               </span>
             ) : null}
@@ -155,21 +156,21 @@ export default async function AdminPage() {
             count={summary.received}
             href="/admin/submissions?type=ALL&status=SUBMITTED"
             icon={ClipboardList}
-            tone="border-[#111111] bg-[#2f8cff] text-white"
+            tone={brandStatusTones.progress}
           />
           <SummaryCard
             title="결제 완료"
             count={summary.paid}
             href="/admin/submissions?type=ALL&payment=PAID"
             icon={CreditCard}
-            tone="border-[#111111] bg-[#5aa832] text-white"
+            tone={brandStatusTones.success}
           />
           <SummaryCard
             title="결과통보 완료"
             count={summary.resultNotified}
             href="/admin/submissions?type=ALL&status=RESULT_READY"
             icon={SendHorizontal}
-            tone="border-[#111111] bg-[#f2cf27] text-[#111111]"
+            tone={brandStatusTones.warning}
           />
         </div>
       </section>

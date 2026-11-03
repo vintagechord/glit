@@ -38,7 +38,7 @@ export function HomeHeroAdBanner() {
                 onClick={event => {
                   setActive({ service, trigger: event.currentTarget });
                 }}
-                className="group relative flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] px-1 py-2 text-center transition hover:border-[#111111] hover:bg-[#f2cf27]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]"
+                className="group relative flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] px-1 py-2 text-center transition hover:-translate-y-0.5 hover:border-[#111111] hover:shadow-[3px_3px_0_#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]"
               >
                 <span className={`flex size-7 items-center justify-center rounded-md ${service.color}`}>
                   <Icon className="size-4" aria-hidden="true" />
@@ -190,16 +190,16 @@ function BroadcastExample({ isEnglish }: { isEnglish: boolean }) {
           <p className="text-xs text-muted-foreground">{isEnglish ? "Your reviewed track" : "방송 신청할 내 곡"}</p>
           <p className="mt-1 text-sm font-bold">{isEnglish ? "Fragments of Dawn" : "새벽의 조각"}</p>
         </div>
-        <span className="ml-auto shrink-0 rounded bg-[#1556a4]/10 px-2 py-1 text-[10px] font-bold text-[#1556a4] dark:bg-blue-400/15 dark:text-blue-300">{isEnglish ? "Eligible" : "방송 적격"}</span>
+        <span className="ml-auto shrink-0 rounded border-2 border-[#111111] bg-[#1556a4] px-2 py-1 text-[10px] font-black text-white dark:border-[#f2cf27]">{isEnglish ? "Eligible" : "방송 적격"}</span>
       </div>
       <ol className="grid grid-cols-3 gap-1.5">
         {(isEnglish ? ["Check results", "Write your story", "Find a station"] : ["결과 확인", "사연 준비", "방송국 신청"]).map((step, index) => (
-          <li key={step} className="rounded bg-[#1556a4]/5 px-2 py-2 text-xs dark:bg-white/5">
-            <span className="mb-1 block text-[10px] font-black text-[#1556a4] dark:text-blue-300">0{index + 1}</span>{step}
+          <li key={step} className="rounded border border-[#111111]/15 bg-[#fffaf0] px-2 py-2 text-xs dark:border-white/20 dark:bg-white/5">
+            <span className="mb-1 block text-[10px] font-black text-[#1556a4] dark:text-[#f2cf27]">0{index + 1}</span>{step}
           </li>
         ))}
       </ol>
-      <div className="rounded-md border-l-2 border-[#1556a4] bg-[#1556a4]/5 p-3 dark:bg-white/5">
+      <div className="rounded-md border-l-4 border-[#1556a4] bg-[#fffaf0] p-3 dark:bg-white/5">
         <p className="text-[10px] font-bold text-muted-foreground">{isEnglish ? "A request with your story" : "내 곡의 이야기를 담은 신청 사연"}</p>
         <p className="mt-1.5 break-keep text-xs leading-5">
           {isEnglish ? "“I wrote this song for the quiet ride home. I hope it keeps your listeners company tonight.”" : "“늦은 퇴근길에 위로가 되길 바라며 만든 곡입니다. 오늘 밤 청취자들과 함께 듣고 싶어요.”"}

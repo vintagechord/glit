@@ -21,6 +21,7 @@ import { summarizeTrackResults } from "@/lib/track-results";
 import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { isMvRatingChipTone, isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type StationItem = {
   id: string;
@@ -1139,7 +1140,7 @@ export function HomeReviewPanel({
           ) : isLoggedIn ? (
             <>
               {isLive ? (
-                <span className="h-2 w-2 rounded-full bg-rose-500 live-blink" />
+                <span className="h-2 w-2 rounded-full bg-[#d9362c] live-blink" />
               ) : null}
               실시간
             </>
@@ -1525,13 +1526,13 @@ export function HomeReviewPanel({
               </div>
             ) : null}
             {trackResultModal.resultNote ? (
-              <div className="mt-4 rounded-xl border border-[#1556a4]/30 bg-white px-3 py-3 dark:border-[#8fb7e8]/40 dark:bg-[#171717]">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1556a4] dark:text-[#b9d8ff]">
+              <div className={`mt-4 rounded-xl border-2 px-3 py-3 ${brandStatusTones.progress}`}>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em]">
                   {["부적격", "수정요청"].includes(trackResultModal.resultLabel)
                     ? "부적격/수정 사유"
                     : "결과 메모"}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80 dark:text-[#d7e7ff]">
+                <p className="mt-2 whitespace-pre-wrap text-sm">
                   {trackResultModal.resultNote}
                 </p>
               </div>

@@ -11,7 +11,7 @@ export const state={};
 export function reset(){
   calls.length=0;
   Object.assign(state,{
-    bytes:new TextEncoder().encode('RIFF1234WAVEdata'),object:false,headError:false,ownerError:null,
+    bytes:new TextEncoder().encode('RIFF1234WAVEdata'),object:false,uploadAborted:false,headError:false,ownerError:null,
     completeFailure:null,stageFailure:null,markFailure:null,receiptReadFailure:false,stageBarrier:null,
     stage:null,live:null,partCount:2,
     grant:{id,submission_id:id,owner_key:'user:fixture-owner',upload_id:'fixture-upload',object_key:'submissions/fixture/test.wav',
@@ -68,7 +68,7 @@ type Fixture = {
   POST: (request: Request) => Promise<Response>;
   reset: () => void;
   state: {
-    bytes: Uint8Array; object: boolean; headError: boolean; ownerError: string | null;
+    bytes: Uint8Array; object: boolean; uploadAborted: boolean; headError: boolean; ownerError: string | null;
     completeFailure: string | null; stageFailure: string | null; markFailure: string | null;
     receiptReadFailure: boolean; stageBarrier: (() => Promise<void>) | null;
     stage: Receipt | null; live: Receipt | null;
@@ -80,11 +80,11 @@ type Fixture = {
 async function handlerFixture(): Promise<Fixture> {
   const modules: Record<string, string> = {
     "multipart-fixture": fixture,
-    "@/lib/b2": `import {state,calls,client} from 'multipart-fixture';export class B2ConfigError extends Error{};export const getB2Config=()=>({client,bucket:'fixture'});export const presignGetUrl=async()=> 'https://fixture.invalid/download';export async function completeMultipartUpload(){calls.push({name:'provider-complete'});const failure=state.completeFailure;state.completeFailure=null;if(failure==='before')throw new Error('connection reset before commit');state.object=true;if(failure==='after')throw new Error('response lost after commit')}`,
+    "@/lib/b2": `import {state,calls,client} from 'multipart-fixture';export class B2ConfigError extends Error{};export const getB2Config=()=>({client,bucket:'fixture'});export const presignGetUrl=async()=> 'https://fixture.invalid/download';export async function completeMultipartUpload(){calls.push({name:'provider-complete'});const failure=state.completeFailure;state.completeFailure=null;if(failure==='before')throw new Error('connection reset before commit');if(failure==='invalid-part')throw Object.assign(new Error('part etag mismatch'),{name:'InvalidPart'});state.object=true;if(failure==='after')throw new Error('response lost after commit')}`,
     "@/lib/payments/submission": `import {state} from 'multipart-fixture';export const ensureSubmissionOwner=async()=>({user:{id:'fixture-owner'},submission:{user_id:'fixture-owner',status:'DRAFT',payment_status:'UNPAID',current_order_id:null},error:state.ownerError});`,
     "@/lib/request-rate-limit": `export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';`,
     "@/lib/supabase/admin": `import {claim,from} from 'multipart-fixture';export const createAdminClient=()=>({rpc:async(name,args)=>{if(name!=='claim_multipart_upload_completion')throw new Error('wrong RPC');return claim(args)},from});`,
-    "@/lib/multipart-upload-grants": `import {state,calls,match} from 'multipart-fixture';export const getMultipartOwnerKey=()=> 'user:fixture-owner';export const getMultipartGrant=async()=>({...state.grant});export const multipartGrantMatches=match;export const abortExpiredMultipartGrant=async()=>{calls.push({name:'abort'});state.grant.status='ABORTED'};export const markMultipartGrantFailed=async()=>{calls.push({name:'failed'});if(state.grant.status==='COMPLETING')state.grant.status='FAILED'};export async function markMultipartGrantCompleted(){calls.push({name:'completed'});const failure=state.markFailure;state.markFailure=null;if(failure==='before')throw new Error('mark failed before commit');if(state.grant.status==='COMPLETED')throw new Error('another request committed');state.grant.status='COMPLETED';if(failure==='after')throw new Error('mark response lost')}`,
+    "@/lib/multipart-upload-grants": `import {state,calls,match} from 'multipart-fixture';export const getMultipartOwnerKey=()=> 'user:fixture-owner';export const getMultipartGrant=async()=>({...state.grant});export const multipartGrantMatches=match;export const abortExpiredMultipartGrant=async()=>{calls.push({name:'abort'});state.grant.status='ABORTED'};export const markMultipartGrantFailed=async()=>{calls.push({name:'failed'});if(state.grant.status!=='COMPLETING')return false;state.grant.status='FAILED';return true};export const abortFailedMultipartGrant=async()=>{calls.push({name:'retire'});if(state.grant.status!=='FAILED')return false;state.grant.status='ABORTED';state.object=false;state.uploadAborted=true;return true};export async function markMultipartGrantCompleted(){calls.push({name:'completed'});const failure=state.markFailure;state.markFailure=null;if(failure==='before')throw new Error('mark failed before commit');if(state.grant.status==='COMPLETED')throw new Error('another request committed');state.grant.status='COMPLETED';if(failure==='after')throw new Error('mark response lost')}`,
   };
   const bundle = await build({ stdin: { contents: "export {POST} from './src/app/api/uploads/multipart/complete/route'; export {state,calls,reset} from 'multipart-fixture';", resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, platform: "node", format: "cjs", packages: "external",
     plugins: [{ name: "multipart-completion-fixture", setup(plugin) {
@@ -199,5 +199,24 @@ test("tampered manifests/metadata, expired grants and other owners cannot finali
     const before=api.calls.filter(call=>call.name==='provider-complete').length;
     assert.equal((await api.POST(request(api,override))).status,expected,failure);
     assert.equal(api.calls.filter(call=>call.name==='provider-complete').length,before,failure);
+  }
+});
+
+test("a rejected first completion retires the grant: upload id aborted and assembled bytes removed", async () => {
+  const api=await handlerFixture();
+  for(const failure of ['invalid-part','wrong-size','bad-signature','unsupported-name']){
+    api.reset();api.state.grant.declared_size_bytes=api.state.bytes.length;
+    if(failure==='invalid-part')api.state.completeFailure='invalid-part';
+    if(failure==='wrong-size')api.state.grant.declared_size_bytes=api.state.bytes.length+1;
+    if(failure==='bad-signature')api.state.bytes=new TextEncoder().encode('PDFX1234FAKEdata');
+    // A grant from before init required an extension with a container check.
+    if(failure==='unsupported-name')Object.assign(api.state.grant,{original_name:'legacy-master',mime_type:'audio/wav'});
+    const response=await api.POST(request(api));
+    assert.equal(response.status,400,failure);
+    assert.equal(api.state.stage,null,failure);
+    assert.equal(api.state.grant.status,'ABORTED',failure);
+    assert.equal(api.state.uploadAborted,true,failure);
+    assert.equal(api.state.object,false,`${failure}: no orphan object is left in B2`);
+    assert.equal(api.calls.filter(call=>call.name==='retire').length,1,failure);
   }
 });

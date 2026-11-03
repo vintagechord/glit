@@ -31,6 +31,7 @@ import {
 } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { creditNoticeErrorMessage } from "@/features/credits/credit-notice-codes";
 import {
   loadUserMagazineRequests,
   type UserMagazineRequest,
@@ -169,13 +170,10 @@ const noticeText = (
   studioRequested?: string | string[],
   localePrefix = "",
 ): CreditActionNoticeState | null => {
-  const rawError = Array.isArray(error) ? error[0] : error;
-  if (rawError) {
-    try {
-      return { type: "error" as const, text: decodeURIComponent(rawError) };
-    } catch {
-      return { type: "error" as const, text: rawError };
-    }
+  // Only known codes become a notice; any other ?error= text is ignored.
+  const errorText = creditNoticeErrorMessage(error, localePrefix);
+  if (errorText) {
+    return { type: "error" as const, text: errorText };
   }
   const redeemedFlag = Array.isArray(redeemed) ? redeemed[0] : redeemed;
   if (redeemedFlag) {

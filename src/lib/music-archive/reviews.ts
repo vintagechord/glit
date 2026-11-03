@@ -44,11 +44,22 @@ export function normalizeSubmissionTitles<T extends { album_tracks?: { track_tit
 
 export type OnsideArchiveReview = { submissionId: string; releaseId: string; trackIds: string[]; status: string };
 
+/**
+ * PRE_REVIEW also means "paid, awaiting material review" (20261023212202):
+ * only an unpaid one is still a draft. Without a payment status the row is
+ * treated as a draft, which is the conservative reading.
+ */
+export function isArchiveDraftSubmission(submission: { status: string; payment_status?: string | null }) {
+  if (["DRAFT", "CANCELLED"].includes(submission.status)) return true;
+  return submission.status === "PRE_REVIEW" && submission.payment_status !== "PAID";
+}
+
 /** Find the exact track scope still needing an application, including partial albums. */
 export function unreviewedArchiveTracks(data: ArchiveData, releaseId: string, reviews: OnsideArchiveReview[], trackId?: string) {
   const tracks = data.tracks.filter(track => track.releaseId === releaseId && track.managed && !track.excluded && !track.mergedInto && (!trackId || track.id === trackId));
   const covered = new Set<string>();
-  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT", "PRE_REVIEW"].includes(review.status))) {
+  // matchArchiveReviews never emits a draft, so a PRE_REVIEW scope here is paid.
+  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT"].includes(review.status))) {
     for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) covered.add(id);
   }
   const latest = new Map<string, typeof data.tasks[number]>();
@@ -63,7 +74,7 @@ export function unreviewedArchiveTracks(data: ArchiveData, releaseId: string, re
 export function additionalStationReviewTracks(data: ArchiveData, releaseId: string, reviews: OnsideArchiveReview[], trackId?: string) {
   const tracks = data.tracks.filter(track => track.releaseId === releaseId && track.managed && !track.excluded && !track.mergedInto && (!trackId || track.id === trackId));
   const completed = new Set<string>(); const ongoing = new Set<string>();
-  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT", "PRE_REVIEW"].includes(review.status))) {
+  for (const review of reviews.filter(review => review.releaseId === releaseId && !["CANCELLED", "DRAFT"].includes(review.status))) {
     const target = ["COMPLETED", "APPROVED", "REJECTED"].includes(review.status) ? completed : ongoing;
     for (const id of review.trackIds.length ? review.trackIds : tracks.map(track => track.id)) target.add(id);
   }
@@ -75,7 +86,7 @@ export function additionalStationReviewTracks(data: ArchiveData, releaseId: stri
   }
   return tracks.filter(track => completed.has(track.id) && !ongoing.has(track.id));
 }
-type MatchSubmission = { id: string; status: string; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] };
+type MatchSubmission = { id: string; status: string; payment_status?: string | null; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] };
 
 /** Caller must supply only the authenticated owner's undeleted album submissions. */
 export function matchArchiveReviews(data: ArchiveData, submissions: MatchSubmission[], libraryId?: string): OnsideArchiveReview[] {
@@ -83,7 +94,7 @@ export function matchArchiveReviews(data: ArchiveData, submissions: MatchSubmiss
   let albumGroups: ReturnType<typeof groupArchiveAlbums> | undefined;
   let tracksById: Map<string, ArchiveData["tracks"][number]> | undefined;
   for (const submission of submissions) {
-    if (["DRAFT", "PRE_REVIEW", "CANCELLED"].includes(submission.status)) continue;
+    if (isArchiveDraftSubmission(submission)) continue;
     const explicit = data.reviewLinks.filter(link => link.submissionId === submission.id);
     if (explicit.length) {
       const scopes = new Map<string, Set<string> | null>();

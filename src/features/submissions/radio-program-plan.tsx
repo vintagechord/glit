@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowUpRight, CalendarDays } from "lucide-react";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import type { RadioProgramGuide } from "@/lib/radio-station-guide";
 import { formatRadioSchedule, getRadioProgramPlan } from "@/lib/radio-program-plans";
 import { radioButtonClass, radioCardClass, radioNoteClass } from "./radio-request-ui";
@@ -35,7 +36,7 @@ export function RadioProgramStrategy({ program, isEnglish = false }: { program: 
       <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{route.songPolicy[locale]}</p>
       <div className="mt-2 flex flex-wrap gap-2"><a href={route.url} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Open participation page" : "참여 경로 열기"}<ArrowUpRight size={13} aria-hidden /></a><a href={route.sourceUrl} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Official instructions" : "공식 안내 근거"}<ArrowUpRight size={13} aria-hidden /></a></div>
     </article>)}
-    <div className="rounded-xl bg-blue-50 p-3 text-sm leading-6 dark:bg-blue-950/40">
+    <div className={`rounded-xl border-2 p-3 text-sm leading-6 ${brandStatusTones.progress}`}>
       <p className="font-semibold">{isEnglish ? "Onside preparation tips" : "온사이드 준비 제안"}</p>
       <ol className="mt-2 list-decimal space-y-1 pl-5">
         {(isEnglish ? ["Listen to a recent show and review three recent playlists. Note a song or segment that connects to your music.", "Write one real experience, why this song fits it, and the exact artist and title. If you are the artist, say so naturally.", "Check the segment’s theme and deadline. Submit ahead of a recorded show; use live messages only when the program invites them.", "After the show, check its dated playlist. If your song is absent, revise the fit or story before another request and follow the board’s posting rules."] : ["최근 방송 한 회와 선곡표 3회를 확인하고 내 곡과 연결되는 분위기·코너를 메모하세요.", "실제 경험 한 가지 → 이 곡과 연결되는 이유 → 정확한 곡명·아티스트 순으로 작성하세요. 본인 곡이라면 그 사실도 자연스럽게 밝히세요.", "코너 주제·접수 기한을 확인하세요. 녹음 코너는 미리 보내고, 실시간 참여는 방송에서 안내하는 채널을 이용하세요.", "방송 뒤 날짜별 선곡표를 확인하세요. 곡이 없다면 분위기나 사연을 다듬고 게시판 규칙에 맞춰 다음 신청을 준비하세요."]).map(item => <li key={item}>{item}</li>)}

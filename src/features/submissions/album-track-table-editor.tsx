@@ -117,9 +117,9 @@ export function AlbumTrackTableEditor<TTrack extends AlbumTrackTableRow>({
               return (
                 <tr
                   key={rowKeys[index] ?? `track-row-${index}`}
-                  className={`grid min-w-0 grid-cols-1 gap-3 rounded-[14px] border-2 border-border/70 p-3 sm:grid-cols-2 md:table-row md:rounded-none md:border-0 md:border-t md:p-0 ${active ? "bg-[#f2cf27]/14" : "bg-background"}`}
+                  className={`grid min-w-0 grid-cols-1 gap-3 rounded-[14px] border-2 bg-background p-3 sm:grid-cols-2 md:table-row md:rounded-none md:border-0 md:border-t md:p-0 ${active ? "border-[var(--bauhaus-ink)]" : "border-border/70"}`}
                 >
-                  <th scope="row" className="col-span-full text-left font-black text-foreground md:px-3 md:py-2 md:text-center">
+                  <th scope="row" className={`col-span-full rounded-[6px] px-2 py-1 text-left font-black md:rounded-none md:px-3 md:py-2 md:text-center ${active ? "bg-[#f2cf27] text-[#111111]" : "text-foreground"}`}>
                     <span className="md:hidden">트랙 </span>{index + 1}
                   </th>
                   {columns.map((column) => (

@@ -3,7 +3,9 @@
  * order list, admin pages and PDF so validation and wording stay identical.
  */
 export type CashReceiptPurpose = "INCOME_DEDUCTION" | "EXPENSE_PROOF";
-export type CashReceiptStatus = "REQUESTED" | "ISSUING" | "ISSUED" | "FAILED" | "CANCELED";
+/** UNCERTAIN: Inicis may have issued it (no readable reply); only an
+ * administrator who checked the Inicis console may settle it. */
+export type CashReceiptStatus = "REQUESTED" | "ISSUING" | "ISSUED" | "FAILED" | "CANCELED" | "UNCERTAIN";
 export type CashReceiptIssueMethod = "INICIS" | "MANUAL";
 
 export type CashReceiptRequestInput = { purpose: CashReceiptPurpose; identifier: string };
@@ -33,6 +35,7 @@ export const CASH_RECEIPT_STATUS_LABELS: Record<CashReceiptStatus, string> = {
   ISSUED: "발급 완료",
   FAILED: "발급 확인 필요",
   CANCELED: "발급 취소",
+  UNCERTAIN: "발급 확인 중",
 };
 
 export const CASH_RECEIPT_IDENTIFIER_HINT: Record<CashReceiptPurpose, string> = {
@@ -40,9 +43,48 @@ export const CASH_RECEIPT_IDENTIFIER_HINT: Record<CashReceiptPurpose, string> = 
   EXPENSE_PROOF: "사업자등록번호 10자리",
 };
 
-/** Customers may change or withdraw a request until it is being issued. */
+/** Customers may change or withdraw a request until it is being issued.
+ * FAILED is a definite rejection; an unknown result (UNCERTAIN) is not. */
 export const isCashReceiptEditable = (status: CashReceiptStatus | null | undefined) =>
   !status || status === "REQUESTED" || status === "FAILED" || status === "CANCELED";
+
+/** The Inicis request behind ISSUING times out after 20 seconds. A claim this
+ * old belongs to a process that died, so its outcome is unknown. */
+export const CASH_RECEIPT_ISSUING_STALE_MS = 5 * 60_000;
+
+/** Issuance may or may not have reached the National Tax Service. */
+export const isCashReceiptResultUnknown = (
+  receipt: { status: CashReceiptStatus; updated_at: string },
+  now = Date.now(),
+) => receipt.status === "UNCERTAIN" || (receipt.status === "ISSUING" &&
+  now - new Date(receipt.updated_at).getTime() > CASH_RECEIPT_ISSUING_STALE_MS);
+
+export type CashReceiptAttention = "ISSUE" | "VERIFY" | "CANCEL_IN_HOMETAX";
+
+export const CASH_RECEIPT_ATTENTION_LABELS: Record<CashReceiptAttention, string> = {
+  ISSUE: "발급 필요",
+  VERIFY: "결과 확인 필요",
+  CANCEL_IN_HOMETAX: "홈택스 취소 필요",
+};
+
+/** Why an administrator must act on a receipt, or null. A receipt issued for
+ * an order whose money went back (refund, cancellation) must be cancelled in
+ * Hometax; an unknown Inicis result must be checked before anything else. */
+export function cashReceiptAttention(
+  receipt: { status: CashReceiptStatus; updated_at: string },
+  orderStatus: string | null | undefined,
+  now = Date.now(),
+): CashReceiptAttention | null {
+  if (isCashReceiptResultUnknown(receipt, now)) return "VERIFY";
+  if (receipt.status === "ISSUED" && orderStatus !== "PAID") return "CANCEL_IN_HOMETAX";
+  if ((receipt.status === "REQUESTED" || receipt.status === "FAILED") && orderStatus === "PAID") return "ISSUE";
+  return null;
+}
+
+/** A receipt PDF for money that was returned would look valid; customers get
+ * it again once the cancellation is recorded (it then prints as cancelled). */
+export const isCashReceiptPdfWithheld = (orderStatus: string | null | undefined, receiptStatus: CashReceiptStatus) =>
+  receiptStatus === "ISSUED" && orderStatus !== "PAID";
 
 export const normalizeCashReceiptIdentifier = (value: string) => value.replace(/[\s-]/g, "");
 

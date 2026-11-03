@@ -31,11 +31,13 @@ export async function AlbumSubmissionPageView({ searchParams, localePrefix = "" 
 
   if (archiveContext && !user) redirect(`${localePrefix}/login?next=${encodeURIComponent(`${localePrefix}/dashboard/new/album/archive?${new URLSearchParams(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === "string"))}`)}`);
   const archiveResult = archiveContext && user ? await getArchiveReviewEntry(user.id, archiveContext).then(entry => ({ entry, error: null })).catch((error: Error) => ({ entry: null, error: error.message })) : null;
-  if (archiveResult?.error) return <div className="mx-auto max-w-3xl px-6 py-12"><p>{archiveResult.error}</p><Link href={`${localePrefix}/mypage/music`} className="mt-5 inline-block underline">내 음악 관리로 돌아가기</Link></div>;
+  // Server-rendered copy: the English language pack only runs after hydration.
+  const isEnglish = localePrefix === "/en";
+  if (archiveResult?.error) return <div className="mx-auto max-w-3xl px-6 py-12"><p>{archiveResult.error}</p><Link href={`${localePrefix}/mypage/music`} className="mt-5 inline-block underline">{isEnglish ? "Return to My Music" : "내 음악 관리로 돌아가기"}</Link></div>;
   const initialApplicant = user ? await loadMemberApplicant(supabase, user) : undefined;
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 text-[15px] leading-relaxed sm:px-6 sm:py-12 sm:text-base">
-      {archiveResult?.entry ? <div><h1 className="text-2xl font-black">심의 신청</h1><p className="mt-2 text-sm text-muted-foreground">음원을 첨부하고 결제를 진행해주세요.</p></div> : <AlbumIntroPanel preparationChecklist={albumPreparationChecklist} />}
+      {archiveResult?.entry ? <div><h1 className="text-2xl font-black">{isEnglish ? "Apply for a Review" : "심의 신청"}</h1><p className="mt-2 text-sm text-muted-foreground">{isEnglish ? "Attach your audio files and proceed to payment." : "음원을 첨부하고 결제를 진행해주세요."}</p></div> : <AlbumIntroPanel preparationChecklist={albumPreparationChecklist} />}
 
       <div className="mt-8">
         <AlbumWizard

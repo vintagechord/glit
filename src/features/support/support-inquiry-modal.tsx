@@ -5,6 +5,7 @@ import { useModalFocus } from "@/lib/use-modal-focus";
 import { usePathname } from "next/navigation";
 import { Loader2, MessageSquareText, SendHorizontal, X } from "lucide-react";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type SupportInquiryModalProps = {
   className?: string;
@@ -196,7 +197,7 @@ export function SupportInquiryModal({
                 </label>
 
                 {error ? (
-                  <div role="alert" className="rounded-[8px] border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-600">
+                  <div role="alert" className={`rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.danger}`}>
                     {error}
                   </div>
                 ) : null}

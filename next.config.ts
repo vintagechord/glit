@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
 
+import { buildImageRemotePatterns } from "./src/lib/image-remote-patterns";
+
+// Only this project's own storage (see src/lib/image-remote-patterns.ts).
+const imageRemotePatterns = buildImageRemotePatterns({
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  SUPABASE_URL: process.env.SUPABASE_URL,
+  B2_S3_ENDPOINT: process.env.B2_S3_ENDPOINT,
+  B2_BUCKET: process.env.B2_BUCKET,
+});
+if (!imageRemotePatterns.some((pattern) => pattern.pathname?.startsWith("/storage/"))) {
+  console.warn("[next.config] NEXT_PUBLIC_SUPABASE_URL is not set; Supabase Storage images will not be optimized.");
+}
+
 const nextConfig: NextConfig = {
   // Reserve memory for on-demand document readers on the existing Free host.
   ...(process.env.REVIEW_DOCS_LOW_MEMORY === "true" ? { cacheMaxMemorySize: 8 * 1024 * 1024 } : {}),
@@ -24,30 +37,7 @@ const nextConfig: NextConfig = {
     // expire early; the default 4 hours made the first visitor afterwards wait
     // for a new optimization.
     minimumCacheTTL: 2678400,
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**.supabase.co",
-        pathname: "/storage/v1/object/public/**",
-      },
-      {
-        protocol: "https",
-        hostname: "**.supabase.co",
-        pathname: "/storage/v1/object/sign/**",
-      },
-      {
-        protocol: "https",
-        hostname: "*.backblazeb2.com",
-      },
-      {
-        protocol: "https",
-        hostname: "s3.*.backblazeb2.com",
-      },
-      {
-        protocol: "https",
-        hostname: "image.genie.co.kr",
-      },
-    ],
+    remotePatterns: imageRemotePatterns,
   },
   // Broadcaster and radio reviews are album reviews, so their former guide
   // pages (already submitted to search engines) point at the album guide.

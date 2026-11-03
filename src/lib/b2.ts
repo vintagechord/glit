@@ -11,9 +11,12 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   ListObjectVersionsCommand,
+  ListPartsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { z } from "zod";
+
+import { knownDownloadContentType } from "@/lib/upload-file-types";
 
 export class B2ConfigError extends Error {
   constructor(message: string) {
@@ -240,11 +243,47 @@ export async function abortMultipartUpload(params: {
   return client.send(command);
 }
 
-export async function presignGetUrl(objectKey: string, expiresIn?: number) {
+/** The name a download is saved under: the key's file part without the
+ * random prefix buildObjectKey adds. */
+export function downloadNameFromObjectKey(objectKey: string) {
+  const name = objectKey.split("/").at(-1) ?? "";
+  return (
+    name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "") ||
+    "download"
+  );
+}
+
+/** RFC 6266 attachment header with an ASCII fallback and the UTF-8 name. */
+export function attachmentContentDisposition(filename: string) {
+  const name =
+    filename.replace(/[\u0000-\u001f\u007f/\\]/g, "_").trim().slice(0, 200) || "download";
+  const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const encoded = encodeURIComponent(name).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
+ * Signed downloads are always attachments with a type chosen from the
+ * extension, so a customer file can never render as a page on the storage
+ * domain whatever type it was uploaded with. <audio>, <video> and <img>
+ * ignore the disposition, so players and thumbnails keep working.
+ */
+export async function presignGetUrl(
+  objectKey: string,
+  expiresIn?: number,
+  options: { filename?: string | null } = {},
+) {
   const { client, bucket, signExpiry } = getB2Config();
+  const filename = options.filename?.trim() || downloadNameFromObjectKey(objectKey);
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: objectKey,
+    ResponseContentDisposition: attachmentContentDisposition(filename),
+    ResponseContentType:
+      knownDownloadContentType(filename) ?? knownDownloadContentType(objectKey),
   });
   const url = await getSignedUrl(client, command, {
     expiresIn: clampExpirySeconds(
@@ -254,6 +293,47 @@ export async function presignGetUrl(objectKey: string, expiresIn?: number) {
     ),
   });
   return url;
+}
+
+/**
+ * Parts B2 holds for an unfinished multipart upload, in part order, or null
+ * once the upload no longer exists (completed or aborted).
+ */
+export async function listMultipartUploadParts(params: {
+  objectKey: string;
+  uploadId: string;
+}) {
+  const { client, bucket } = getB2Config();
+  const parts: Array<{ partNumber: number; etag: string; size: number }> = [];
+  let marker: string | undefined;
+  try {
+    do {
+      const page = await client.send(
+        new ListPartsCommand({
+          Bucket: bucket,
+          Key: params.objectKey,
+          UploadId: params.uploadId,
+          PartNumberMarker: marker,
+        }),
+      );
+      for (const part of page.Parts ?? []) {
+        if (!part.PartNumber || !part.ETag) continue;
+        parts.push({
+          partNumber: part.PartNumber,
+          etag: part.ETag.replaceAll('"', ""),
+          size: Number(part.Size ?? 0),
+        });
+      }
+      marker =
+        page.IsTruncated && page.NextPartNumberMarker
+          ? String(page.NextPartNumberMarker)
+          : undefined;
+    } while (marker);
+  } catch (error) {
+    if (error instanceof Error && error.name === "NoSuchUpload") return null;
+    throw error;
+  }
+  return parts.sort((a, b) => a.partNumber - b.partNumber);
 }
 
 export async function headObject(objectKey: string) {

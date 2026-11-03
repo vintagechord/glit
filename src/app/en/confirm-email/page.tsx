@@ -1,6 +1,6 @@
 import { ConfirmEmailForm } from "@/features/auth/confirm-email-form";
 
-export const metadata = { title: "Verify your signup email", referrer: "no-referrer" as const, robots: { index: false, follow: false } };
+export const metadata = { title: { absolute: "Verify your signup email | Onside" }, referrer: "no-referrer" as const, robots: { index: false, follow: false } };
 
 export default async function EnglishConfirmEmailPage({ searchParams }: { searchParams?: Promise<{ next?: string }> }) {
   const query = await searchParams;

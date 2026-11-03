@@ -10,13 +10,13 @@ test("scheduled mail worker requires its own credential, rejects outage and reco
       p.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "js", contents: ({
         "worker-fixture": "export const state={authorized:false,rpcError:false,drainError:false};export const calls=[];",
         "@/lib/supabase/admin": "import {state,calls} from 'worker-fixture'; export const createAdminClient=()=>({rpc:async(name,args)=>{calls.push(name);return{data:state.authorized,error:state.rpcError?{}:null}},from:()=>({update:values=>({eq:async()=>{calls.push(values);return{error:null}}})})});",
-        "@/lib/email-outbox": "import {state,calls} from 'worker-fixture';export async function drainEmailOutbox(options){calls.push('drain');if(state.drainError)throw Error('fixture');return{claimed:1,accepted:1,retry:0,uncertain:0,failed:0,expired:0}}",
+        "@/lib/email-outbox": "import {state,calls} from 'worker-fixture';export async function drainEmailOutbox(options){calls.push('drain');state.options=options;if(state.drainError)throw Error('fixture');return{claimed:1,accepted:1,retry:0,uncertain:0,failed:0,expired:0}}",
         "@/lib/payments/notification-events": "import {calls} from 'worker-fixture';export async function drainPaidSubmissionNotifications(){calls.push('receipts');return {claimed:1,recorded:1,retry:0}}",
         "@/lib/request-rate-limit": "export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';",
       } as Record<string, string>)[path] }));
     } }],
   });
-  const bundled = { exports: {} as { POST: (r: Request) => Promise<Response>; state: { authorized: boolean; rpcError: boolean; drainError: boolean }; calls: unknown[] } };
+  const bundled = { exports: {} as { POST: (r: Request) => Promise<Response>; maxDuration: number; state: { authorized: boolean; rpcError: boolean; drainError: boolean; options?: { limit: number; batchSize: number; deadline: number } }; calls: unknown[] } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
   const api = bundled.exports;
   const request = (token?: string) => new Request("https://example.invalid/api/internal/email-outbox", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -28,10 +28,33 @@ test("scheduled mail worker requires its own credential, rejects outage and reco
   assert.equal((await api.POST(request("a".repeat(64)))).status, 503);
   assert.ok(!api.calls.includes("drain"));
   api.state.rpcError = false; api.state.authorized = true;
+  const before = Date.now();
   assert.equal((await api.POST(request("a".repeat(64)))).status, 200);
   assert.ok(api.calls.includes("drain"));
   assert.ok(api.calls.includes("receipts"));
+  // The drain gets the function's own deadline, leaving room for the heartbeat.
+  assert.equal(api.maxDuration, 300);
+  assert.equal(api.state.options?.limit, 9);
+  assert.equal(api.state.options?.batchSize, 3);
+  const after = Date.now();
+  // The route reads the clock after `before`, so bound the deadline by both.
+  const deadline = api.state.options!.deadline;
+  assert.ok(deadline >= before + 285_000 && deadline <= after + 285_000, String(deadline - before));
   api.state.drainError = true;
   assert.equal((await api.POST(request("a".repeat(64)))).status, 503);
   assert.ok(api.calls.some(v => typeof v === "object" && v !== null && "last_error" in v && v.last_error === true));
+});
+
+test("the scheduler token check compares digests, not the token text", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../supabase/migrations/", import.meta.url);
+  const latest = readdirSync(dir).filter(name => name.endsWith(".sql")).sort()
+    .filter(name => /create or replace function public\.authorize_email_worker\(/.test(readFileSync(new URL(name, dir), "utf8"))).at(-1);
+  assert.equal(latest, "20261103160100_email_worker_token_digest.sql");
+  const sql = readFileSync(new URL(latest!, dir), "utf8");
+  assert.match(sql, /extensions\.digest\(token, 'sha256'\) = extensions\.digest\(p_token, 'sha256'\)/);
+  assert.doesNotMatch(sql, /token = p_token/);
+  assert.match(sql, /security invoker set search_path = ''/);
+  assert.match(sql, /revoke all on function public\.authorize_email_worker\(text\) from public, anon, authenticated;/);
+  assert.match(sql, /grant execute on function public\.authorize_email_worker\(text\) to service_role;/);
 });

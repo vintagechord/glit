@@ -8,6 +8,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HomeReviewPanel } from "@/features/home/home-review-panel";
 import type { DashboardStatusData } from "@/lib/dashboard-status";
 import { dashboardStatusResource } from "./dashboard-status-resource";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type Props = {
   viewerId: string;
@@ -134,7 +135,7 @@ function DashboardStatusView({
           <span className="sr-only">진행 현황을 불러오는 중</span>
         </div>
       ) : error && !data ? (
-        <div className="rounded-[10px] border-2 border-[#d9362c] bg-[#d9362c]/10 p-8 text-sm font-semibold text-[#d9362c]">
+        <div className={`rounded-[10px] border-2 p-8 text-sm font-semibold ${brandStatusTones.danger}`}>
           <p>{error}</p>
           <button
             type="button"

@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { loadChatHistory, parseChatHistoryCursor, type ChatHistoryCursor } from "@/lib/support-chat-history";
@@ -13,17 +13,26 @@ import {
   parseVisitorChatMessagePayload,
 } from "@/lib/support-chat-request";
 import {
+  consumePersistentRateLimit,
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getServiceRoleKey } from "@/lib/supabase/env";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 const MAX_CHAT_WRITE_BODY_BYTES = 8 * 1024;
 const CHAT_WRITE_LIMIT = 30;
 const CHAT_WRITE_WINDOW_MS = 60_000;
+// A message without a known conversation opens a new one. These shared
+// limits keep junk threads from burying real ones in the admin list.
+const NEW_CONVERSATION_LIMITS = [
+  { limit: 6, windowMs: 60 * 60_000 },
+  { limit: 20, windowMs: 24 * 60 * 60_000 },
+] as const;
+const OPEN_CONVERSATION_CAP = 3;
 
 const markReadSchema = z
   .object({
@@ -110,6 +119,64 @@ async function getViewerUserId() {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+/** Guests are matched by an HMAC of their address, never the raw address. */
+const guestVisitorKey = (identifier: string) =>
+  identifier === "unknown"
+    ? null
+    : createHmac("sha256", getServiceRoleKey())
+        .update(`onside.support-chat.visitor\0${identifier}`)
+        .digest("hex");
+
+const tooManyConversations = (error: string, retryAfterSeconds: number) =>
+  NextResponse.json(
+    { error },
+    { status: 429, headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) } },
+  );
+
+/** Checks run only when a message would open a new conversation. */
+async function enforceNewConversationLimits(
+  request: NextRequest,
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string | null,
+  visitorKey: string | null,
+) {
+  const identifier = getRequestIdentifier(request.headers);
+  for (const window of NEW_CONVERSATION_LIMITS) {
+    const result = await consumePersistentRateLimit({
+      namespace: `support-chat-new-ip-${window.windowMs}`,
+      identifier,
+      ...window,
+    });
+    if (!result.allowed) {
+      return tooManyConversations(
+        "새 상담 요청이 너무 많습니다. 잠시 후 다시 시도하거나 기존 상담방에서 이어서 문의해주세요.",
+        result.retryAfterSeconds,
+      );
+    }
+  }
+  if (!userId && !visitorKey) return null;
+  let openQuery = admin
+    .from("support_chat_conversations")
+    .select("id", { count: "exact", head: true })
+    .is("visitor_left_at", null)
+    .neq("status", "CLOSED");
+  openQuery = userId
+    ? openQuery.eq("user_id", userId)
+    : openQuery.is("user_id", null).eq("visitor_key", visitorKey!);
+  const { count, error } = await openQuery;
+  if (error) {
+    console.error("[support-chat][post] open conversation count error", { code: error.code });
+    return NextResponse.json({ error: "채팅방을 만들지 못했습니다." }, { status: 500 });
+  }
+  if ((count ?? 0) >= OPEN_CONVERSATION_CAP) {
+    return tooManyConversations(
+      `진행 중인 상담이 ${OPEN_CONVERSATION_CAP}개 있습니다. 기존 상담방에서 이어서 문의하거나, 끝난 상담을 나간 뒤 새 상담을 시작해주세요.`,
+      60,
+    );
+  }
+  return null;
 }
 
 const enforceVisitorWriteLimit = (request: NextRequest) => {
@@ -392,10 +459,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (!conversation) {
+    const visitorKey = user ? null : guestVisitorKey(getRequestIdentifier(request.headers));
+    const limitResponse = await enforceNewConversationLimits(request, admin, user?.id ?? null, visitorKey);
+    if (limitResponse) return limitResponse;
     const { data, error } = await admin
       .from("support_chat_conversations")
       .insert({
         access_token: makeAccessToken(),
+        visitor_key: visitorKey,
         user_id: user?.id ?? null,
         guest_name: profile?.name || null,
         guest_email: user?.email || null,

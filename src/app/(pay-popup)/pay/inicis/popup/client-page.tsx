@@ -11,6 +11,7 @@ import {
 import { rememberGuestSubmissionOrderEntries } from "@/lib/guest-submission-cart";
 import { cancelUnopenedInicisOrder, submissionOrderReturnHref } from "@/lib/inicis/popup-recovery";
 import { cleanupInicisPaymentLayer, submitInicisMobileForm } from "@/lib/inicis/popup";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type StdPayInit = {
   ok?: boolean;
@@ -350,7 +351,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
     const receiveResult = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !event.data || typeof event.data !== "object") return;
       const { type, payload } = event.data as { type?: string; payload?: { submissionId?: string } };
-      if (!type || !["INICIS:SUCCESS", "INICIS:FAIL", "INICIS:CANCEL", "INICIS:ERROR"].includes(type)) return;
+      if (!type || !["INICIS:SUCCESS", "INICIS:FAIL", "INICIS:CANCEL", "INICIS:ERROR", "INICIS:CHECKING"].includes(type)) return;
       if (payload?.submissionId && payload.submissionId !== submissionId) return;
       cleanupInicisPaymentLayer();
       window.location.replace(`${submissionOrderReturnHref(submissionId)}&payment=${type.slice(7).toLowerCase()}`);
@@ -439,7 +440,7 @@ export default function InicisPopupClientPage({ searchParams }: Props) {
 
       {error && (
         <div className="p-4">
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className={`rounded-xl border-2 px-4 py-3 text-sm ${brandStatusTones.danger}`}>
             <p className="font-semibold">결제 준비에 실패했습니다.</p>
             <p className="mt-1">{error}</p>
             {submissionId && context !== "karaoke" && context !== "test1000" ? (

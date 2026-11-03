@@ -67,6 +67,19 @@ export const getPasswordUpdateSchema = localized((english) => z.object({
 }));
 export const passwordUpdateSchema = getPasswordUpdateSchema();
 
+/** Signed-in password change: the current password proves it is the owner,
+ * not just whoever holds the session. */
+export const passwordChangeSchema = z.object({
+  currentPassword: z.string({ error: "현재 비밀번호를 입력해주세요." })
+    .min(1, "현재 비밀번호를 입력해주세요.")
+    .max(128, "비밀번호는 128자 이하로 입력해주세요."),
+  newPassword: newPasswordSchema(false),
+  confirmPassword: newPasswordSchema(false),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "비밀번호가 일치하지 않습니다.",
+});
+
 export const getResetEmailSchema = localized(emailSchema);
 export const resetEmailSchema = getResetEmailSchema();
 

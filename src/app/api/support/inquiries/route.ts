@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
+  consumePersistentRateLimit,
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
@@ -13,6 +14,12 @@ export const dynamic = "force-dynamic";
 const MAX_INQUIRY_BODY_BYTES = 16 * 1024;
 const INQUIRY_LIMIT = 5;
 const INQUIRY_WINDOW_MS = 10 * 60_000;
+// The in-memory limit above is per instance; these are shared, so a flood
+// spread across instances still cannot bury real inquiries.
+const SHARED_INQUIRY_LIMITS = [
+  { limit: 10, windowMs: 60 * 60_000 },
+  { limit: 30, windowMs: 24 * 60 * 60_000 },
+] as const;
 
 const inquirySchema = z
   .object({
@@ -58,6 +65,24 @@ export async function POST(request: Request) {
       { error: "문의 제목, 내용, 연락처를 확인해주세요." },
       { status: 400 },
     );
+  }
+
+  const identifier = getRequestIdentifier(request.headers);
+  for (const window of SHARED_INQUIRY_LIMITS) {
+    const shared = await consumePersistentRateLimit({
+      namespace: `support-inquiry-ip-${window.windowMs}`,
+      identifier,
+      ...window,
+    });
+    if (!shared.allowed) {
+      return NextResponse.json(
+        { error: "문의 요청이 너무 많습니다. 잠시 후 다시 시도하거나 고객센터 이메일로 문의해주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.max(1, shared.retryAfterSeconds)) },
+        },
+      );
+    }
   }
 
   const supabase = await createServerSupabase();

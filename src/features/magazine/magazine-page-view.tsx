@@ -27,6 +27,7 @@ import {
 } from "@/lib/credits";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { creditNoticeErrorMessage } from "@/features/credits/credit-notice-codes";
 
 export type MagazinePageSearchParams = {
   tab?: string | string[];
@@ -54,13 +55,10 @@ const noticeText = (
   studioRequested?: string | string[],
   localePrefix: "" | "/en" = "",
 ): CreditActionNoticeState | null => {
-  const rawError = firstParam(error);
-  if (rawError) {
-    try {
-      return { type: "error" as const, text: decodeURIComponent(rawError) };
-    } catch {
-      return { type: "error" as const, text: rawError };
-    }
+  // Only known codes become a notice; any other ?error= text is ignored.
+  const errorText = creditNoticeErrorMessage(error, localePrefix);
+  if (errorText) {
+    return { type: "error" as const, text: errorText };
   }
 
   if (firstParam(redeemed)) {

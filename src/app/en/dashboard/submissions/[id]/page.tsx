@@ -1,6 +1,11 @@
 import { SubmissionDetailPageView, type SubmissionDetailPageProps } from "@/app/dashboard/submissions/[id]/view";
 
-export { metadata } from "@/app/dashboard/submissions/[id]/page";
+// Private member page: English tab title, never indexed (the Korean twin
+// is disallowed in robots.txt).
+export const metadata = {
+  title: { absolute: "Review Detail | Onside" },
+  robots: { index: false, follow: false },
+};
 
 // Route config must be declared directly; Turbopack cannot evaluate re-exports.
 export const dynamic = "force-dynamic";

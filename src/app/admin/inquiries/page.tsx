@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AdminSaveToast } from "@/components/admin/save-toast";
+import { AdminListPager, adminListRange, parseAdminListPage } from "@/components/admin/list-pager";
 import { updateSupportInquiryFormAction } from "@/features/support/actions";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/lib/support-inquiries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,10 @@ type SearchParamsInput = {
   saved?: string | string[];
   error?: string | string[];
   status?: string | string[];
+  page?: string | string[];
 };
+
+const PAGE_SIZE = 50;
 
 type InquiryRow = {
   id: string;
@@ -49,9 +54,9 @@ const statusOptions: SupportInquiryStatus[] = [
 ];
 
 const statusTone: Record<SupportInquiryStatus, string> = {
-  NEW: "border-[#111111] bg-[#f2cf27] text-[#111111]",
-  REVIEWING: "border-[#1556a4]/30 bg-[#1556a4]/10 text-[#1556a4]",
-  ANSWERED: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700",
+  NEW: brandStatusTones.warning,
+  REVIEWING: brandStatusTones.progress,
+  ANSWERED: brandStatusTones.success,
   CLOSED: "border-border bg-muted text-muted-foreground",
 };
 
@@ -88,21 +93,33 @@ export default async function AdminInquiriesPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const savedFlag = toSingle(resolvedSearchParams?.saved);
   const errorFlag = toSingle(resolvedSearchParams?.error);
-  const statusFilter = toSingle(resolvedSearchParams?.status)?.trim() ?? "";
+  const rawStatus = toSingle(resolvedSearchParams?.status)?.trim() ?? "";
+  const statusFilter = statusOptions.includes(rawStatus as SupportInquiryStatus) ? rawStatus : "";
+  const page = parseAdminListPage(resolvedSearchParams?.page);
+  const range = adminListRange(page, PAGE_SIZE);
 
   const admin = createAdminClient();
   let query = admin
     .from("support_inquiries")
-    .select("id, user_id, title, body, contact, status, admin_memo, created_at, updated_at")
+    .select("id, user_id, title, body, contact, status, admin_memo, created_at, updated_at", { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(200);
+    .order("id", { ascending: false });
 
   if (statusFilter) {
     query = query.eq("status", statusFilter);
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query.range(range.from, range.to);
   const inquiries = (data ?? []) as InquiryRow[];
+  const totalCount = count ?? inquiries.length;
+  const hrefForPage = (target: number) => {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set("status", statusFilter);
+    if (target > 1) params.set("page", String(target));
+    const search = params.toString();
+    return search ? `/admin/inquiries?${search}` : "/admin/inquiries";
+  };
+  const currentPageHref = hrefForPage(page);
   const userIds = Array.from(
     new Set(
       inquiries
@@ -151,19 +168,23 @@ export default async function AdminInquiriesPage({
           필터 적용
         </button>
         <span className="ml-auto rounded-[8px] border border-border bg-background px-3 py-2 text-xs font-black text-muted-foreground">
-          {inquiries.length.toLocaleString()}건
+          총 {totalCount.toLocaleString()}건
         </span>
       </form>
 
+      <div className="mt-4 flex justify-end">
+        <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+      </div>
+
       {errorFlag ? (
-        <div className="mt-6 rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
+        <div className={`mt-6 rounded-[10px] border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           문의 상태를 저장하지 못했습니다.
         </div>
       ) : null}
 
       <div className="mt-6 space-y-4">
         {error ? (
-          <div className="rounded-[10px] border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
+          <div className={`rounded-[10px] border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p>문의 목록을 불러오지 못했습니다.</p>
             <details className="mt-1 font-normal">
               <summary className="cursor-pointer font-semibold">오류 상세</summary>
@@ -229,6 +250,7 @@ export default async function AdminInquiriesPage({
                   className="mt-4 grid gap-3 rounded-[10px] border border-border/70 bg-background p-4 md:grid-cols-[160px_1fr_auto]"
                 >
                   <input type="hidden" name="inquiryId" value={inquiry.id} />
+                  <input type="hidden" name="returnTo" value={currentPageHref} />
                   <label className="grid gap-1 text-xs font-black text-muted-foreground">
                     상태
                     <select
@@ -270,6 +292,12 @@ export default async function AdminInquiriesPage({
           </div>
         )}
       </div>
+
+      {totalCount > PAGE_SIZE ? (
+        <div className="mt-6 flex justify-end">
+          <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { studioRewardErrorCode, type CreditNoticeErrorCode } from "./credit-notice-codes";
 import { z } from "zod";
 
 import { isRetiredCreditReward } from "@/lib/credits";
@@ -135,25 +136,6 @@ async function requireAdminUser() {
   return user;
 }
 
-const normalizeStudioRpcError = (message?: string | null) => {
-  const raw = message ?? "";
-  if (raw.includes("LOGIN_REQUIRED")) {
-    return "로그인 후 서비스 이용 요청을 접수할 수 있습니다.";
-  }
-  if (raw.includes("REWARD_NOT_FOUND")) {
-    return "신청 가능한 서비스를 찾을 수 없습니다.";
-  }
-  if (raw.includes("INSUFFICIENT_CREDITS")) {
-    return "보유 크레딧이 부족합니다.";
-  }
-  if (raw.includes("INVALID_RESERVATION_DATE")) {
-    return "이용 희망일은 오늘 이후 날짜로 선택해주세요.";
-  }
-  if (raw.includes("INVALID_RESERVATION_TIME")) {
-    return "이용 희망 시간을 다시 선택해주세요.";
-  }
-  return "서비스 이용 요청 접수에 실패했습니다.";
-};
 
 const buildServiceUseMessage = ({
   serviceName,
@@ -180,7 +162,7 @@ export async function redeemCreditRewardFormAction(
 
   redirect(
     withQuery(redirectPath, {
-      error: "서비스 이용 요청은 이용 희망일과 연락처를 입력해 접수해주세요.",
+      error: "reservation_required" satisfies CreditNoticeErrorCode,
     }),
   );
 }
@@ -206,7 +188,7 @@ export async function createStudioReservationFormAction(
   if (!parsed.success) {
     redirect(
       withQuery(redirectPath, {
-        error: "이용 희망일, 시간, 신청자명, 연락처를 확인해주세요.",
+        error: "invalid_reservation" satisfies CreditNoticeErrorCode,
       }),
     );
   }
@@ -229,7 +211,7 @@ export async function createStudioReservationFormAction(
   if (rewardError || !reward?.is_active || isRetiredCreditReward(reward)) {
     redirect(
       withQuery(redirectPath, {
-        error: normalizeStudioRpcError("REWARD_NOT_FOUND"),
+        error: "reward_not_found" satisfies CreditNoticeErrorCode,
       }),
     );
   }
@@ -247,7 +229,7 @@ export async function createStudioReservationFormAction(
   if (error) {
     redirect(
       withQuery(redirectPath, {
-        error: normalizeStudioRpcError(error.message),
+        error: studioRewardErrorCode(error.message),
       }),
     );
   }

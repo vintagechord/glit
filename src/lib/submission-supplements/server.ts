@@ -3,8 +3,9 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import type { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { abortMultipartUpload, completeMultipartUpload, createMultipartUpload, getB2Config, headObject, presignGetUrl, presignUploadPart, sanitizeFileName } from "@/lib/b2";
-import { abortClaimedMultipartGrant, cleanupExpiredMultipartGrants, createMultipartGrant, getMultipartGrant, getMultipartOwnerKey, getMultipartPartSize } from "@/lib/multipart-upload-grants";
+import { abortMultipartUpload, completeMultipartUpload, createMultipartUpload, getB2Config, headObject, listMultipartUploadParts, presignGetUrl, presignUploadPart, sanitizeFileName } from "@/lib/b2";
+import { abortClaimedMultipartGrant, abortFailedMultipartGrant, cleanupExpiredMultipartGrants, createMultipartGrant, getMultipartGrant, getMultipartOwnerKey, getMultipartPartSize, type MultipartUploadGrant } from "@/lib/multipart-upload-grants";
+import { isMissingUploadObject, multipartCompletionManifest } from "@/lib/multipart-upload-completion";
 import { isSupplementFilenameAllowed, matchesSupplementSignature, SUPPLEMENT_PART_BYTES, supplementActionSchema, supplementMimeType } from "./model";
 import { sendSubmissionUpdateEmail } from "@/lib/email";
 import { resolveSubmissionNotificationRecipient } from "@/lib/admin/notification-recipient";
@@ -118,7 +119,7 @@ export async function performSupplementAction(context: Context, input: z.infer<t
     const { file } = await findFile(context, input.fileId);
     if (file.purged_at) throw new SupplementError("보관이 끝나 삭제된 파일입니다.", 410);
     if (file.status !== "VERIFIED") throw new SupplementError("전송 확인이 완료된 파일만 다운로드할 수 있습니다.");
-    return { url: await presignGetUrl(file.object_key, 300) };
+    return { url: await presignGetUrl(file.object_key, 300, { filename: file.original_name }) };
   }
   // Administrator review never grants permission to upload on another user's behalf.
   const ownsSubmission = context.submission.user_id
@@ -180,20 +181,40 @@ export async function performSupplementAction(context: Context, input: z.infer<t
     return { parts, expiresInSeconds };
   }
   if (input.action === "complete" || input.action === "recheck") {
+    const suppliedParts = input.action === "complete" ? input.parts : null;
     if (grant.status === "ACTIVE") {
-      if (input.action === "recheck") throw new SupplementError("전송 완료 요청 전인 파일입니다. 전송을 취소한 뒤 다시 선택해주세요.");
-      const { error } = await context.db.rpc("claim_multipart_upload_grant", { p_grant_id: grant.id, p_submission_id: context.submission.id, p_upload_id: grant.upload_id, p_object_key: grant.object_key, p_owner_key: ownerKey, p_part_numbers: input.parts.map((part) => part.partNumber) });
+      if (!suppliedParts) throw new SupplementError("전송 완료 요청 전인 파일입니다. 전송을 취소한 뒤 다시 선택해주세요.");
+      // The same manifest-bound claim as /api/uploads/multipart/complete: a
+      // retry must present exactly the ETags first claimed.
+      const { error } = await context.db.rpc("claim_multipart_upload_completion", { p_grant_id: grant.id, p_submission_id: context.submission.id, p_upload_id: grant.upload_id, p_object_key: grant.object_key, p_owner_key: ownerKey, p_part_numbers: suppliedParts.map((part) => part.partNumber), p_manifest_hash: multipartCompletionManifest(suppliedParts) });
       if (error) throw new SupplementError("업로드 조각 또는 유효 시간을 확인해주세요.");
-      await completeMultipartUpload({ objectKey: grant.object_key, uploadId: grant.upload_id, parts: input.parts });
-    } else if (grant.status !== "COMPLETING") {
+    } else if (grant.status === "COMPLETING") {
+      if (suppliedParts) await confirmClaimedManifest(context, grant, suppliedParts);
+    } else {
       throw new SupplementError("이미 종료된 업로드입니다. 파일을 다시 선택해주세요.");
     }
-    // Reconcile an uncertain completion without deleting its object. Explicit
-    // abort can retire this revision's pending file if no object arrived.
-    const head = await headObject(grant.object_key);
+    // The claim commits before B2 assembles the file. When B2 rejected or
+    // lost that request the object is missing, so complete it again with the
+    // claimed parts (a recheck reads them back from B2) instead of waiting
+    // on an object that can never appear.
+    let head = await readHead(grant.object_key);
+    if (!head) {
+      const parts = suppliedParts ?? await recoverClaimedParts(grant);
+      if (parts === "gone") return rejectUpload(context, file.id, grant, "업로드가 종료되어 파일을 확인할 수 없습니다. 파일을 다시 선택해주세요.");
+      if (!parts) throw new SupplementError("전송 확인을 완료하지 못했습니다. 전송을 취소한 뒤 파일을 다시 선택해주세요.");
+      let failure: unknown;
+      try { await completeMultipartUpload({ objectKey: grant.object_key, uploadId: grant.upload_id, parts }); }
+      catch (cause) { failure = cause; }
+      head = await readHead(grant.object_key);
+      if (!head) {
+        if (failure instanceof Error && permanentCompletionFailures.has(failure.name)) {
+          return rejectUpload(context, file.id, grant, "업로드 조각이 일치하지 않습니다. 파일을 다시 선택해주세요.");
+        }
+        throw new SupplementError("파일 저장 결과를 확인 중입니다. 잠시 후 전송 확인을 다시 시도해주세요.", 503);
+      }
+    }
     if (head.ContentLength !== grant.declared_size_bytes) {
-      await mutate(context, "invalidate", { fileId: file.id });
-      throw new SupplementError("업로드된 파일 크기가 일치하지 않습니다. 올바른 파일을 다시 선택해주세요.", 400);
+      return rejectUpload(context, file.id, grant, "업로드된 파일 크기가 일치하지 않습니다. 올바른 파일을 다시 선택해주세요.");
     }
     const { client, bucket } = getB2Config();
     const prefix = await client.send(new GetObjectCommand({ Bucket: bucket, Key: grant.object_key, Range: "bytes=0-511" }));
@@ -203,13 +224,57 @@ export async function performSupplementAction(context: Context, input: z.infer<t
     }
     const bytes = await prefix.Body?.transformToByteArray();
     if (!bytes || !matchesSupplementSignature(file.original_name, bytes)) {
-      await mutate(context, "invalidate", { fileId: file.id });
-      throw new SupplementError("파일 내용과 확장자가 일치하지 않습니다. 올바른 파일을 다시 선택해주세요.", 400);
+      return rejectUpload(context, file.id, grant, "파일 내용과 확장자가 일치하지 않습니다. 올바른 파일을 다시 선택해주세요.");
     }
     await mutate(context, "verify", { fileId: file.id, file: { sizeBytes: head.ContentLength } });
     return { verified: true };
   }
   throw new SupplementError("지원하지 않는 요청입니다.", 400);
+}
+
+const permanentCompletionFailures = new Set(["InvalidPart", "InvalidPartOrder", "EntityTooSmall", "NoSuchUpload"]);
+
+async function readHead(objectKey: string) {
+  try { return await headObject(objectKey); }
+  catch (cause) {
+    if (isMissingUploadObject(cause)) return null;
+    throw cause;
+  }
+}
+
+/** A COMPLETING retry must carry the claimed part list. Claims made before
+ * part lists were bound (no manifest) take the first complete list once. */
+async function confirmClaimedManifest(context: Context, grant: MultipartUploadGrant, parts: Array<{ partNumber: number; etag: string }>) {
+  const manifestHash = multipartCompletionManifest(parts);
+  if (grant.completion_manifest_hash === manifestHash) return;
+  const numbers = new Set(parts.map((part) => part.partNumber));
+  if (!grant.completion_manifest_hash && parts.length === grant.part_count && numbers.size === grant.part_count && parts.every((part) => part.partNumber >= 1 && part.partNumber <= grant.part_count)) {
+    const { data, error } = await context.db.from("multipart_upload_grants").update({ completion_manifest_hash: manifestHash, updated_at: new Date().toISOString() })
+      .eq("id", grant.id).eq("status", "COMPLETING").is("completion_manifest_hash", null).select("id").maybeSingle();
+    if (!error && data) return;
+  }
+  throw new SupplementError("처음 완료 요청과 다른 업로드 조각입니다. 전송을 취소한 뒤 파일을 다시 선택해주세요.");
+}
+
+/** Parts of a claimed upload as B2 holds them, when they are the complete,
+ * correctly sized set the claim bound; "gone" once the upload id is gone. */
+async function recoverClaimedParts(grant: MultipartUploadGrant) {
+  const listed = await listMultipartUploadParts({ objectKey: grant.object_key, uploadId: grant.upload_id });
+  if (!listed) return "gone" as const;
+  const complete = listed.length === grant.part_count && listed.every((part, index) =>
+    part.partNumber === index + 1 && (!part.size || part.size === getMultipartPartSize(grant, index + 1)));
+  if (!complete) return null;
+  const parts = listed.map(({ partNumber, etag }) => ({ partNumber, etag }));
+  if (grant.completion_manifest_hash && grant.completion_manifest_hash !== multipartCompletionManifest(parts)) return null;
+  return parts;
+}
+
+/** Retires a file whose bytes cannot be accepted. The grant becomes FAILED
+ * and is aborted at once, which also deletes any object B2 assembled. */
+async function rejectUpload(context: Context, fileId: string, grant: MultipartUploadGrant, message: string): Promise<never> {
+  await mutate(context, "invalidate", { fileId });
+  await abortFailedMultipartGrant(grant).catch(() => false);
+  throw new SupplementError(message, 400);
 }
 
 type NotificationOutcome = {

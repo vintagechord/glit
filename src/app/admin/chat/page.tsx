@@ -7,6 +7,8 @@ import {
 } from "@/lib/support-chat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { ADMIN_CHAT_PAGE_SIZE, loadAdminChatConversationRows } from "@/features/chat/admin-chat-list";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const dynamic = "force-dynamic";
 
@@ -71,16 +73,12 @@ async function requireAdminPage() {
 export default async function AdminChatPage() {
   await requireAdminPage();
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("support_chat_conversations")
-    .select("*")
-    .order("last_message_at", { ascending: false })
-    .limit(120);
-
-  const conversations = ((data ?? []) as ConversationRow[]).map(
-    mapConversation,
+  const { rows, hasMore, error } = await loadAdminChatConversationRows<ConversationRow>(
+    createAdminClient(),
+    "id, access_token, user_id, guest_name, guest_email, guest_phone, status, last_message_preview, last_message_at, unread_admin_count, unread_visitor_count, visitor_left_at, created_at, updated_at",
+    ADMIN_CHAT_PAGE_SIZE,
   );
+  const conversations = rows.map(mapConversation);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-12">
@@ -89,7 +87,7 @@ export default async function AdminChatPage() {
       </h1>
 
       {error ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+        <div className={`mt-6 rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
           <p className="font-semibold">채팅 목록을 불러오지 못했습니다.</p>
           <details className="mt-1">
             <summary className="cursor-pointer font-semibold">오류 상세</summary>
@@ -98,7 +96,7 @@ export default async function AdminChatPage() {
         </div>
       ) : null}
 
-      <AdminChatClient initialConversations={conversations} />
+      <AdminChatClient initialConversations={conversations} initialHasMore={hasMore} />
     </div>
   );
 }

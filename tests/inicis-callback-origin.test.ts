@@ -58,6 +58,10 @@ async function callbacks() {
 
 test("STDPay bridge and both subscription result routes retain old cookies and opener origin after canonical switch", async t => {
   configure(t);
+  // Subscription billing callbacks answer 410 unless explicitly enabled.
+  const previousBilling = process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED;
+  process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = "1";
+  t.after(() => { if (previousBilling === undefined) delete process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED; else process.env.ONSIDE_SUBSCRIPTION_BILLING_ENABLED = previousBilling; });
   const handlers = await callbacks();
   for (const [host, expected] of [[legacyHost, legacy], ["iamonside.com", canonical], ["attacker.invalid", canonical]]) {
     for (const [handler, path, body, resultPath] of [

@@ -7,8 +7,9 @@ import { NextRequest } from "next/server";
 const ID = "20000000-0000-4000-8000-000000000001";
 const ORDER = "onside-fixture-order";
 const STATE = "30000000-0000-4000-8000-000000000001";
+const REQUEST = "40000000-0000-4000-8000-000000000001";
 const fixtureSource = `
-export const state={payment:{status:'REQUESTED',submission_id:'${ID}',amount_krw:49000,raw_response:{closeState:'${STATE}'},submission:{id:'${ID}',guest_token:'fixture-guest'}},claim:'fresh',approval:{ok:true,data:{resultCode:'0000',MOID:'${ORDER}',TotPrice:'49000',tid:'fixture-tid',mid:'fixture-mid',currency:'WON',payMethod:'Card',applNum:'12345678',applDate:'20261016',applTime:'123456'}},cancelOk:true,persistOk:true,throwApproval:false,wait:null,release:null};
+export const state={payment:{status:'REQUESTED',submission_id:'${ID}',amount_krw:49000,raw_response:{closeState:'${STATE}'},submission:{id:'${ID}',guest_token:'fixture-guest'}},karaoke:null,claim:'fresh',approval:{ok:true,data:{resultCode:'0000',MOID:'${ORDER}',TotPrice:'49000',tid:'fixture-tid',mid:'fixture-mid',currency:'WON',payMethod:'Card',applNum:'12345678',applDate:'20261016',applTime:'123456'}},cancelOk:true,persistOk:true,throwApproval:false,wait:null,release:null};
 export const calls=[];
 `;
 const handlerBundle = build({
@@ -20,10 +21,10 @@ const handlerBundle = build({
       "@/lib/inicis/api": `import {state,calls} from 'approval-fixture';export const isInicisSuccessCode=code=>['00','0000'].includes(String(code));export const requestStdPayApproval=async(args)=>{calls.push({method:'gateway',args});if(state.wait)await state.wait;if(state.throwApproval)throw new Error('network uncertain');return state.approval;};export const requestStdPayNetCancel=async()=>{calls.push({method:'netCancel'});return {ok:state.cancelOk,data:{resultCode:state.cancelOk?'0000':'9999'}};};`,
       "@/lib/inicis/config": `export const getStdPayConfig=()=>({mid:'fixture-mid',signKey:'fixture-sign-key',env:'stg',stdJsUrl:'https://fixture.invalid/sdk.js'});`,
       "@/lib/inicis/crypto": `export const getInicisTimestamp=()=> 'fixture-time';export const makeAuthSecureSignature=()=> 'valid-signature';export const sha256=()=> 'fixture-hash';`,
-      "@/lib/payments/submission": `import {state,calls} from 'approval-fixture';export const getPaymentByOrderId=async()=>({payment:structuredClone(state.payment),error:null});export const markPaymentFailure=async(...args)=>{calls.push({method:'preApprovalFailure',args});return {ok:true};};export const markPaymentSuccess=async(...args)=>{calls.push({method:'paid',args});return {ok:state.persistOk,error:state.persistOk?null:'database response lost',submissionId:'${ID}'};};`,
+      "@/lib/payments/submission": `import {state,calls} from 'approval-fixture';export const getPaymentByOrderId=async()=>({payment:state.karaoke?null:structuredClone(state.payment),error:null});export const markPaymentFailure=async(...args)=>{calls.push({method:'preApprovalFailure',args});return {ok:true};};export const markPaymentSuccess=async(...args)=>{calls.push({method:'paid',args});return {ok:state.persistOk,error:state.persistOk?null:'database response lost',submissionId:'${ID}'};};`,
       "@/lib/payments/notifications": `import {calls} from 'approval-fixture';export const sendPaidSubmissionNotificationsById=async input=>{calls.push({method:'notifications',args:input});return {ok:true};};`,
-      "@/lib/payments/karaoke": `export const getKaraokePaymentByOrderId=async()=>({payment:null});export const markKaraokePaymentFailure=async()=>({ok:true});export const markKaraokePaymentSuccess=async()=>({ok:true});`,
-      "@/lib/supabase/admin": `import {state,calls} from 'approval-fixture';export const createAdminClient=()=>({rpc:async(method,args)=>{calls.push({method,args});if(method==='claim_inicis_submission_approval'){if(state.claim==='invalid')return {data:null,error:{code:'42501'}};const previous=state.claim;state.claim='processing';return {data:[{already_approved:previous==='approved',already_processing:previous==='processing'}],error:null};}return {data:[{final_status:args.p_outcome==='FAILED'?'FAILED':'REVIEW_REQUIRED'}],error:null};}});`,
+      "@/lib/payments/karaoke": `import {state,calls} from 'approval-fixture';export const getKaraokePaymentByOrderId=async()=>({payment:state.karaoke?structuredClone(state.karaoke):null});export const markKaraokePaymentFailure=async(...args)=>{calls.push({method:'karaokePreApprovalFailure',args});return {ok:true};};export const markKaraokePaymentSuccess=async(...args)=>{calls.push({method:'karaokePaid',args});return {ok:state.persistOk,error:state.persistOk?null:'database response lost',requestId:'${REQUEST}'};};`,
+      "@/lib/supabase/admin": `import {state,calls} from 'approval-fixture';export const createAdminClient=()=>({rpc:async(method,args)=>{calls.push({method,args});if(method==='claim_inicis_submission_approval'||method==='claim_inicis_karaoke_approval'){if(state.claim==='invalid')return {data:null,error:{code:'42501'}};const previous=state.claim;state.claim='processing';return {data:[{already_approved:previous==='approved',already_processing:previous==='processing'}],error:null};}return {data:[{final_status:args.p_outcome==='FAILED'?'FAILED':'REVIEW_REQUIRED'}],error:null};}});`,
       "@/lib/payment-result-grant": `import {calls} from 'approval-fixture';export const createPaymentResultGrant=()=>'fixture-grant';export const setPaymentResultGrantCookie=(response)=>{calls.push({method:'grant'});response.cookies.set('payment_result','fixture-grant');};`,
       "@/lib/url": `export const getBaseUrl=()=> 'https://onside.test';`,
     };
@@ -34,7 +35,7 @@ const handlerBundle = build({
 
 type Harness = {
   handleInicisReturn: typeof import("../src/app/api/inicis/return/handler").handleInicisReturn;
-  state: { payment: { status: string }; claim: string; approval: { ok: boolean; data: Record<string, unknown> | null; confirmedFailure?: boolean }; cancelOk: boolean; persistOk: boolean; throwApproval: boolean; wait: Promise<void> | null; release: (() => void) | null };
+  state: { payment: { status: string }; karaoke: Record<string, unknown> | null; claim: string; approval: { ok: boolean; data: Record<string, unknown> | null; confirmedFailure?: boolean }; cancelOk: boolean; persistOk: boolean; throwApproval: boolean; wait: Promise<void> | null; release: (() => void) | null };
   calls: Array<{ method: string; args?: Record<string, unknown> }>;
 };
 const harness = async () => {
@@ -70,12 +71,48 @@ test("Inicis approval claims before the gateway and rejects invalid, terminal, o
   const first = h.handleInicisReturn(callback());
   for (let i = 0; i < 30 && !h.calls.some(call => call.method === "gateway"); i++) await new Promise(resolve => setImmediate(resolve));
   const duplicate = await h.handleInicisReturn(callback());
-  assert.match(duplicate.headers.get("location") ?? "", /status=ERROR/);
+  // The first delivery may already have charged the card: never "failed".
+  assert.match(duplicate.headers.get("location") ?? "", /status=CHECKING/);
   assert.equal(h.calls.filter(call => call.method === "gateway").length, 1);
   h.state.release?.();
   const success = await first;
   assert.match(success.headers.get("location") ?? "", /status=SUCCESS/);
   assert.deepEqual(h.calls.map(call => call.method), ["claim_inicis_submission_approval", "gateway", "claim_inicis_submission_approval", "paid", "grant"]);
+});
+
+const karaokePayment = () => ({ status: "REQUESTED", amount_krw: 49000, raw_response: { closeState: STATE }, request: { id: REQUEST, amount_krw: 49000 } });
+
+test("karaoke approvals are claimed: a concurrent replay never reaches the gateway or its net cancel", async (t) => {
+  silence(t);
+  const h = await harness();
+  h.state.karaoke = karaokePayment();
+  h.state.wait = new Promise(resolve => { h.state.release = resolve; });
+  const first = h.handleInicisReturn(callback());
+  for (let i = 0; i < 30 && !h.calls.some(call => call.method === "gateway"); i++) await new Promise(resolve => setImmediate(resolve));
+  const duplicate = await h.handleInicisReturn(callback());
+  assert.match(duplicate.headers.get("location") ?? "", /status=CHECKING/);
+  assert.match(duplicate.headers.get("location") ?? "", new RegExp(`requestId=${REQUEST}`));
+  h.state.release?.();
+  assert.match((await first).headers.get("location") ?? "", /status=SUCCESS/);
+  assert.deepEqual(h.calls.map(call => call.method), ["claim_inicis_karaoke_approval", "gateway", "claim_inicis_karaoke_approval", "karaokePaid"]);
+  assert.equal(h.calls.some(call => call.method === "netCancel"), false);
+});
+
+test("karaoke outcomes settle through the claim: unknown keeps the lock, a confirmed rejection closes it", async (t) => {
+  silence(t);
+  for (const scenario of ["unknown", "confirmed-rejection", "persistence-uncertain"] as const) {
+    const h = await harness();
+    h.state.karaoke = karaokePayment();
+    if (scenario === "unknown") h.state.approval = { ok: false, data: null };
+    if (scenario === "confirmed-rejection") h.state.approval = { ok: false, data: { resultCode: "9999", resultMsg: "Declined" }, confirmedFailure: true };
+    if (scenario === "persistence-uncertain") h.state.persistOk = false;
+    const response = await h.handleInicisReturn(callback());
+    const settled = h.calls.find(call => call.method === "settle_inicis_karaoke_approval");
+    assert.equal(settled?.args?.p_outcome, scenario === "confirmed-rejection" ? "FAILED" : "UNCERTAIN", scenario);
+    assert.equal(h.calls.some(call => call.method === "karaokePreApprovalFailure"), false, "a claimed attempt is never closed outside the claim");
+    assert.equal(h.calls.some(call => call.method === "netCancel"), false, scenario);
+    assert.match(response.headers.get("location") ?? "", scenario === "confirmed-rejection" ? /status=FAIL&/ : /status=CHECKING&/, scenario);
+  }
 });
 
 test("unknown gateway outcomes stay locked while confirmed rejection is safely closed", async (t) => {
@@ -94,7 +131,11 @@ test("unknown gateway outcomes stay locked while confirmed rejection is safely c
     assert.equal(response.status, 303, scenario);
     assert.match(response.headers.get("location") ?? "", new RegExp(`submissionId=${ID}`));
     const settled = h.calls.find(call => call.method === "settle_inicis_submission_approval");
-    assert.equal(settled?.args?.p_outcome, ["confirmed-rejection", "wrong-order-canceled"].includes(scenario) ? "FAILED" : "UNCERTAIN", scenario);
+    const confirmed = ["confirmed-rejection", "wrong-order-canceled"].includes(scenario);
+    assert.equal(settled?.args?.p_outcome, confirmed ? "FAILED" : "UNCERTAIN", scenario);
+    // An unconfirmed outcome (timeout, exception, lost database reply, failed
+    // net cancel) may have charged the card: the bridge says CHECKING.
+    assert.match(response.headers.get("location") ?? "", confirmed ? /status=FAIL&/ : /status=CHECKING&/, scenario);
     assert.equal(h.calls.filter(call => call.method === "preApprovalFailure").length, 0, scenario);
     if (scenario === "persistence-uncertain") assert.equal(h.calls.filter(call => call.method === "netCancel").length, 0, "an unknown database commit must not cancel a possibly-paid charge");
   }

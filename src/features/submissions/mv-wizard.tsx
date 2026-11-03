@@ -29,6 +29,7 @@ import {
 import {
   buildInlineTranslatedLyrics,
   collectForeignLyricsSegments,
+  LyricsTranslationError,
   requestLyricsTranslations,
 } from "@/lib/lyrics-tools";
 import {
@@ -74,6 +75,16 @@ import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields }
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
 import { useSubmissionCheckpoint } from "./use-submission-checkpoint";
+import {
+  parkGuestDraftSlot,
+  readGuestDraftLeftovers,
+  restoreParkedGuestDraftSlot,
+  retainGuestDraftLeftovers,
+} from "@/lib/submission-guest-drafts";
+import {
+  recordSubmissionVersion,
+  REUSED_DRAFT_LOAD_ERROR,
+} from "@/lib/submission-version";
 import { useSubmissionStepScroll } from "./use-submission-step-scroll";
 
 declare global {
@@ -169,6 +180,7 @@ type MvCheckpointSnapshot = {
 type MvCheckpointController = {
   runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
   markSaved: (snapshot?: MvCheckpointSnapshot, savedAt?: number) => void;
+  markConflict: (error: string) => void;
   clear: () => void;
 };
 
@@ -213,10 +225,10 @@ function MvCreditConsistencyNotice() {
     <aside
       role="note"
       data-testid="mv-credit-consistency-notice"
-      className="rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:p-5"
+      className="rounded-2xl border-2 border-[var(--bauhaus-ink)] bg-card p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+        <span className={`rounded-md border-2 px-2 py-1 text-[11px] font-bold ${brandStatusTones.progress}`}>
           필수 안내
         </span>
         <h3 className="text-sm font-semibold text-foreground">
@@ -467,6 +479,10 @@ export function MvWizard({
   const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
     null,
   );
+  // The row version (updated_at) this tab last loaded or saved. Every save
+  // sends it so an older tab cannot replace newer edits.
+  const submissionVersionsRef = React.useRef(new Map<string, string>());
+  const reusedDraftAttemptRef = React.useRef<string | null>(null);
   const [isPreparingDraft, setIsPreparingDraft] = React.useState(false);
   const [draftError, setDraftError] = React.useState<string | null>(null);
   const [currentServerUpdatedAt, setCurrentServerUpdatedAt] =
@@ -631,7 +647,7 @@ export function MvWizard({
   const requiredFieldClass = React.useCallback(
     (field: MvValidationField) =>
       `w-full rounded-2xl border bg-background px-4 py-3 text-sm text-foreground outline-none transition ${invalidField === field
-        ? "border-red-500 ring-2 ring-red-500/20 focus:border-red-500"
+        ? "border-[#d9362c] ring-1 ring-[#d9362c] focus:border-[#d9362c]"
         : "border-border/70 focus:border-foreground"
       }`,
     [invalidField],
@@ -886,8 +902,47 @@ export function MvWizard({
           submissionId?: string;
           guestToken?: string;
           error?: string;
+          reused?: boolean;
+          updatedAt?: string | null;
         };
+        if (res.ok && json?.submissionId && json.reused) {
+          // The server handed back a draft that already holds saved content.
+          // It must load through the resume prompt: treated as new, autosave
+          // would write this blank form over it. A second miss for the same
+          // draft stops here instead of looping between the two requests.
+          const reusedId = json.submissionId;
+          const retryResume =
+            reusedDraftAttemptRef.current !== reusedId || options?.force;
+          reusedDraftAttemptRef.current = reusedId;
+          if (retryResume) {
+            if (readDraftStorage()?.id !== reusedId) {
+              if (isGuest) {
+                parkGuestDraftSlot(window.localStorage, "mv", {
+                  cartSubmissionIds: [],
+                });
+              }
+              writeDraftStorage({
+                id: reusedId,
+                guestToken: isGuest
+                  ? json.guestToken ?? guestTokenRef.current
+                  : null,
+                mvType,
+              });
+            }
+            draftInitAttemptedRef.current = false;
+            resumePromptHandledRef.current = false;
+            setResumeChecked(false);
+            return null;
+          }
+          setDraftError(REUSED_DRAFT_LOAD_ERROR);
+          return null;
+        }
         if (res.ok && json?.submissionId) {
+          recordSubmissionVersion(
+            submissionVersionsRef.current,
+            json.submissionId,
+            json.updatedAt,
+          );
           if (isGuest && json.guestToken) {
             guestTokenRef.current = json.guestToken;
             if (typeof window !== "undefined") {
@@ -949,6 +1004,7 @@ export function MvWizard({
     mvType,
     onlineBaseSelected,
     onlineOptions,
+    readDraftStorage,
     tvStations,
     writeDraftStorage,
   ]);
@@ -2133,6 +2189,11 @@ export function MvWizard({
     );
 
     const restoredSubmissionId = String(draft.id ?? "");
+    recordSubmissionVersion(
+      submissionVersionsRef.current,
+      restoredSubmissionId,
+      draft.updated_at,
+    );
     submissionIdRef.current = restoredSubmissionId;
     if (restoredSubmissionId) {
       setCheckpointSeed({
@@ -2241,27 +2302,14 @@ export function MvWizard({
     let cancelled = false;
     // Drafts written as a guest in this browser are adopted by the account
     // after login; otherwise they would stay invisible until logout.
-    const readGuestLeftovers = () => {
-      if (isGuest || typeof window === "undefined") return null;
-      try {
-        const raw = window.localStorage.getItem("onside:draft:mv:guest");
-        const parsedRaw = raw ? JSON.parse(raw) as { id?: string; guestToken?: string } : null;
-        const token = window.localStorage.getItem("onside:guest-token:mv:guest") ?? parsedRaw?.guestToken ?? undefined;
-        if (!token) return null;
-        return { id: parsedRaw?.id, guestToken: token };
-      } catch {
-        return null;
-      }
-    };
-    const clearGuestLeftovers = () => {
-      try {
-        window.localStorage.removeItem("onside:draft:mv:guest");
-        window.localStorage.removeItem("onside:guest-token:mv:guest");
-      } catch {
-        // ignore storage errors
-      }
-    };
+    const readGuestLeftovers = () =>
+      isGuest ? null : readGuestDraftLeftovers(window.localStorage, "mv");
     const run = async () => {
+      // A draft parked while a cart item was edited comes back once the
+      // locator slot is free again.
+      if (isGuest && !isFromDraftsTab) {
+        restoreParkedGuestDraftSlot(window.localStorage, "mv");
+      }
       const stored = readDraftStorage();
       const guestLeftovers = readGuestLeftovers();
       if (!isFromDraftsTab && !stored?.id && !guestLeftovers) {
@@ -2270,7 +2318,7 @@ export function MvWizard({
       }
       const storedGuestToken =
         stored?.guestToken ?? (isGuest ? guestTokenRef.current : null);
-      const requestedIds = [stored?.id, guestLeftovers?.id].filter((id): id is string => Boolean(id));
+      const requestedIds = [stored?.id, ...(guestLeftovers?.ids ?? [])].filter((id): id is string => Boolean(id));
       try {
         const res = await fetchWithTimeout("/api/submissions/drafts", {
           method: "POST",
@@ -2279,14 +2327,27 @@ export function MvWizard({
             type: "MV",
             ids: requestedIds.length > 0 ? Array.from(new Set(requestedIds)) : undefined,
             guestToken: isGuest ? storedGuestToken : guestLeftovers?.guestToken,
+            guestTokensBySubmissionId: isGuest
+              ? undefined
+              : guestLeftovers?.guestTokensBySubmissionId,
           }),
         });
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
           claimedIds?: string[];
+          claimFailed?: boolean;
+          retainedGuestTokens?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
-        if (guestLeftovers && res.ok) clearGuestLeftovers();
+        // Forget guest credentials only after the account really adopted
+        // them; a failed claim or a draft mid-save keeps its token.
+        if (guestLeftovers && res.ok && json && !json.claimFailed) {
+          retainGuestDraftLeftovers(
+            window.localStorage,
+            "mv",
+            json.retainedGuestTokens ?? [],
+          );
+        }
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);
@@ -2362,7 +2423,7 @@ export function MvWizard({
         return (
           <mark
             key={`${part}-${index}`}
-            className="rounded bg-red-200/80 px-1 text-red-900 dark:bg-red-500/30 dark:text-red-100"
+            className="rounded bg-[#d9362c] px-1 text-white"
           >
             {part}
           </mark>
@@ -2475,7 +2536,9 @@ export function MvWizard({
       console.error(error);
       setLyricsToolNotice({
         type: "error",
-        message: "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        message:
+          (error instanceof LyricsTranslationError && error.userMessage) ||
+          "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
       });
     } finally {
       setIsTranslatingLyrics(false);
@@ -2867,6 +2930,7 @@ export function MvWizard({
           : source;
         const result = await saveMvSubmissionAction({
           submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(submissionId),
           amountKrw: sourceAmount,
           selectedStationIds: sourceStationIds,
           selectedStationCodes: sourceSelectedCodes,
@@ -2938,8 +3002,16 @@ export function MvWizard({
           applicationFormMode: source.applicationFormMode,
           externalApplicationForm: source.applicationFormMode === "upload",
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            mvCheckpointControllerRef.current?.markConflict(result.error);
+          }
           if (foreground) setNotice({ error: result.error });
           return false;
         }
@@ -3034,6 +3106,7 @@ export function MvWizard({
       }
       const result = await saveMvSubmissionAction({
         submissionId,
+        expectedUpdatedAt: submissionVersionsRef.current.get(submissionId),
         amountKrw: totalAmount,
         selectedStationIds,
         selectedStationCodes,
@@ -3105,8 +3178,16 @@ export function MvWizard({
         applicationFormMode,
         externalApplicationForm: isDownloadedApplicationFlow,
       });
+      recordSubmissionVersion(
+        submissionVersionsRef.current,
+        submissionId,
+        result.updatedAt,
+      );
 
       if (result.error) {
+        if (result.conflict) {
+          mvCheckpointControllerRef.current?.markConflict(result.error);
+        }
         setNotice({ error: result.error });
         return;
       }
@@ -3577,7 +3658,7 @@ export function MvWizard({
             {resumeDeleteError ? (
               <p
                 role="alert"
-                className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600"
+                className={`mt-4 rounded-2xl border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}
               >
                 {resumeDeleteError}
               </p>
@@ -3670,6 +3751,8 @@ export function MvWizard({
         error={mvCheckpoint.error}
         hasRecovery={Boolean(mvCheckpoint.recovery)}
         hasPrevious={Boolean(mvCheckpoint.previous)}
+        conflict={mvCheckpoint.conflict}
+        onReload={() => window.location.reload()}
         onRetry={mvCheckpoint.retry}
         onRecover={recoverMvCheckpoint}
         onDiscardRecovery={mvCheckpoint.discardRecovery}
@@ -3725,7 +3808,7 @@ export function MvWizard({
                   }}
                   className={`text-left rounded-[28px] border p-4 transition sm:p-6 ${active
                     ? "border-[#0071e3] bg-[#0071e3] text-white shadow-[0_20px_44px_rgba(0,113,227,0.24)] dark:border-[#2997ff] dark:bg-[#2997ff] dark:text-[#00101f]"
-                    : "border-border/60 bg-card/80 text-foreground hover:border-primary/40"
+                    : "border-border/60 bg-card/80 text-foreground hover:border-foreground"
                     }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3771,7 +3854,7 @@ export function MvWizard({
                       onClick={() => toggleTvStation(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
-                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        : "border-border/60 bg-background text-foreground hover:border-foreground"
                         }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3811,7 +3894,7 @@ export function MvWizard({
                   onClick={() => setOnlineBaseSelected((prev) => !prev)}
                   className={`text-left rounded-2xl border p-4 transition ${onlineBaseSelected
                     ? mvOptionToneClasses[0]
-                    : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                    : "border-border/60 bg-background text-foreground hover:border-foreground"
                     }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3819,7 +3902,7 @@ export function MvWizard({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold">일반 뮤직비디오 심의</p>
                         <span
-                          className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111]/30 bg-white/45 text-[#111111]" : "border-[#1556a4]/40 bg-[#1556a4]/10 text-[#1556a4]"}`}
+                          className={`rounded-[6px] border px-2 py-0.5 text-[10px] font-black tracking-normal ${onlineBaseSelected ? "border-[#111111] bg-white text-[#111111]" : brandStatusTones.progress}`}
                         >
                           유통사 제출용
                         </span>
@@ -3853,7 +3936,7 @@ export function MvWizard({
                       onClick={() => toggleOnlineOption(code)}
                       className={`text-left rounded-2xl border p-4 transition ${active
                         ? tone
-                        : "border-border/60 bg-background text-foreground hover:border-primary/40"
+                        : "border-border/60 bg-background text-foreground hover:border-foreground"
                         }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3997,7 +4080,7 @@ export function MvWizard({
               </div>
               <div className="mt-5">{renderGuestContactSection()}</div>
               {notice.error && (
-                <div role="alert" className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div role="alert" className={`mt-4 rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4468,7 +4551,7 @@ export function MvWizard({
                       </button>
                     </div>
                     {showLyricsToolNotice && (
-                      <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-primary opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-primary/20 group-hover/lyrics-tools:bg-primary/8 group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-primary/20 group-focus-within/lyrics-tools:bg-primary/8 group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100 dark:text-[#8bc3ff]">
+                      <div className="pointer-events-none mt-0 max-h-0 overflow-hidden rounded-2xl border border-transparent bg-transparent px-4 py-0 text-sm font-semibold leading-relaxed text-white opacity-0 transition-all duration-300 ease-out group-hover/lyrics-tools:pointer-events-auto group-hover/lyrics-tools:mt-2 group-hover/lyrics-tools:max-h-64 group-hover/lyrics-tools:border-[var(--bauhaus-ink)] group-hover/lyrics-tools:bg-[#1556a4] group-hover/lyrics-tools:py-3 group-hover/lyrics-tools:opacity-100 group-focus-within/lyrics-tools:pointer-events-auto group-focus-within/lyrics-tools:mt-2 group-focus-within/lyrics-tools:max-h-64 group-focus-within/lyrics-tools:border-[var(--bauhaus-ink)] group-focus-within/lyrics-tools:bg-[#1556a4] group-focus-within/lyrics-tools:py-3 group-focus-within/lyrics-tools:opacity-100">
                         위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭
                         체크해주세요.
                       </div>
@@ -4477,11 +4560,11 @@ export function MvWizard({
                 </div>
                 {lyricsToolNotice && (
                   <div
-                    className={`mt-3 rounded-2xl border px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
-                      ? "border-red-200/70 bg-red-50 text-red-700"
+                    className={`mt-3 rounded-2xl border-2 px-4 py-2 text-xs font-semibold ${lyricsToolNotice.type === "error"
+                      ? brandStatusTones.danger
                       : lyricsToolNotice.type === "success"
-                        ? "border-emerald-200/70 bg-emerald-50 text-emerald-800"
-                        : "border-primary/20 bg-primary/8 text-primary dark:border-[#2997ff]/30 dark:bg-[#2997ff]/12 dark:text-[#8bc3ff]"
+                        ? brandStatusTones.success
+                        : brandStatusTones.progress
                       }`}
                   >
                     {lyricsToolNotice.message}
@@ -4489,7 +4572,7 @@ export function MvWizard({
                 )}
                 <div
                   className={`relative isolate mt-4 overflow-hidden rounded-2xl border bg-background transition ${invalidField === "lyrics"
-                      ? "border-red-500 ring-2 ring-red-500/20 focus-within:border-red-500"
+                      ? "border-[#d9362c] ring-1 ring-[#d9362c] focus-within:border-[#d9362c]"
                       : "border-border/70 focus-within:border-foreground"
                     }`}
                 >
@@ -4561,7 +4644,7 @@ export function MvWizard({
               {renderGuestContactSection()}
 
               {notice.error && (
-                <div id="mv-basic-error" role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+                <div id="mv-basic-error" role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
                 </div>
               )}
@@ -4775,7 +4858,7 @@ export function MvWizard({
                           <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                             <span role="status" aria-atomic="true">
                               {upload.status === "done" ? (
-                                  <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white dark:border-emerald-500 dark:bg-emerald-700 dark:text-white">
+                                  <span className={`inline-flex items-center rounded-full border-2 px-3 py-1.5 text-xs font-bold ${brandStatusTones.success}`}>
                                     첨부 완료
                                   </span>
                                 ) : (
@@ -4837,7 +4920,7 @@ export function MvWizard({
           </div>
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}
@@ -5237,7 +5320,7 @@ export function MvWizard({
           ) : null}
 
           {notice.error && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+            <div role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
               {notice.error}
             </div>
           )}

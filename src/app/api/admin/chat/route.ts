@@ -9,6 +9,7 @@ import {
 } from "@/lib/support-chat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { loadAdminChatConversationRows, parseAdminChatListLimit } from "@/features/chat/admin-chat-list";
 
 export const dynamic = "force-dynamic";
 
@@ -118,16 +119,12 @@ async function requireAdmin() {
   };
 }
 
-async function listConversations() {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("support_chat_conversations")
-    .select(conversationSelect)
-    .order("last_message_at", { ascending: false })
-    .limit(120);
-
+async function listConversations(limit: number) {
+  const { rows, hasMore, error } = await loadAdminChatConversationRows<ConversationRow>(
+    createAdminClient(), conversationSelect, limit,
+  );
   if (error) throw error;
-  return ((data ?? []) as ConversationRow[]).map(mapConversation);
+  return { conversations: rows.map(mapConversation), hasMore };
 }
 
 
@@ -142,7 +139,9 @@ export async function GET(request: NextRequest) {
 
   try {
     if (!conversationId) {
-      return NextResponse.json({ conversations: await listConversations() });
+      return NextResponse.json(
+        await listConversations(parseAdminChatListLimit(request.nextUrl.searchParams.get("limit"))),
+      );
     }
 
     const { data, error } = await admin

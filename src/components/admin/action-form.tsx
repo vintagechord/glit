@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition, type ComponentProps } from "react";
 import { unstable_rethrow } from "next/navigation";
 import type { AdminActionState } from "@/features/admin/actions";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 type Props = Omit<ComponentProps<"form">, "action" | "onSubmit"> & {
   action: (data: FormData) => Promise<AdminActionState | void>;
@@ -34,8 +35,8 @@ export function AdminActionForm({ action, children, ...props }: Props) {
         {children}
       </fieldset>
       {pending && <p role="status" className="col-span-full text-xs text-muted-foreground">저장 중...</p>}
-      {state.error && <p role="alert" className="col-span-full rounded-xl bg-red-500/10 p-3 text-sm text-red-700">{state.error}</p>}
-      {state.message && <p role="status" className="col-span-full rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-800">{state.message}</p>}
+      {state.error && <p role="alert" className={`col-span-full rounded-xl border-2 p-3 text-sm font-semibold ${brandStatusTones.danger}`}>{state.error}</p>}
+      {state.message && <p role="status" className={`col-span-full rounded-xl border-2 p-3 text-sm font-semibold ${brandStatusTones.success}`}>{state.message}</p>}
     </form>
   );
 }

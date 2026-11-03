@@ -63,3 +63,12 @@ test("admin list and detail forms keep the filtered return path wired", () => {
   assert.match(detailPage, /returnTo=\{adminSubmissionListHref\}/);
   assert.match(actions, /buildSubmissionFormRedirect\(formData, submissionId/);
 });
+
+test("admin submission list pages have a unique tiebreak and keep the quoted search and KST date filters", () => {
+  const listPage = readSource("src/app/admin/submissions/page.tsx");
+  assert.match(listPage, /\.order\("updated_at", \{ ascending: false \}\)\s*\.order\("created_at", \{ ascending: false \}\)\s*(?:\/\/.*\s*)*\.order\("id", \{ ascending: false \}\)/);
+  assert.match(listPage, /return query\.range\(offset, offset \+ PAGE_SIZE - 1\);/);
+  assert.match(listPage, /const pattern = `"%\$\{filters\.q\.replace\(/);
+  assert.match(listPage, /T00:00:00\.000\+09:00/);
+  assert.match(listPage, /T23:59:59\.999\+09:00/);
+});

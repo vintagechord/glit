@@ -4,6 +4,7 @@ import {
 } from "@/features/admin/actions";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 
 export const metadata = {
   title: "배너 관리",
@@ -69,7 +70,7 @@ export default async function AdminBannersPage({
 
       <div className="mt-8 space-y-6">
         {bannersError && (
-          <div className="rounded-2xl border border-dashed border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-600">
+          <div className={`rounded-2xl border-2 border-dashed px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
             <p className="font-semibold">
               {bannerTableMissing || bannerColumnMissing
                 ? "배너 설정을 준비하지 못했습니다."
