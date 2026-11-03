@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdminListPager, adminListRange, parseAdminListPage } from "@/components/admin/list-pager";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDateTime } from "@/lib/format";
@@ -20,39 +21,91 @@ type UserRow = {
   email?: string | null;
 };
 
-export default async function AdminUsersPage() {
-  await requireAdminPage();
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("profiles")
-    .select("user_id, name, company, phone, role, created_at, updated_at")
-    .order("created_at", { ascending: false })
-    .limit(200);
+type SearchParamsInput = {
+  q?: string | string[];
+  page?: string | string[];
+};
 
-  // auth.users에서 이메일을 가져와 병합
-  const ids = (data ?? []).map((item) => item.user_id);
+const PAGE_SIZE = 50;
+// Email matches become a user_id list in the request URL; keep it short.
+const EMAIL_MATCH_LIMIT = 100;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const toSingle = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value) ?? "";
+
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParamsInput>;
+}) {
+  await requireAdminPage();
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const searchQuery = toSingle(resolvedSearchParams?.q).trim().slice(0, 100);
+  const page = parseAdminListPage(resolvedSearchParams?.page);
+  const range = adminListRange(page, PAGE_SIZE);
+  const admin = createAdminClient();
+
+  // Emails live in auth.users; match them first, then search profiles by
+  // name, company, phone or one of the matched ids.
+  let emailMatchIds: string[] = [];
+  let searchWarning: string | null = null;
+  if (searchQuery) {
+    const { data: matches, error: matchError } = await admin.rpc("admin_search_auth_user_ids", {
+      p_query: searchQuery,
+      p_limit: EMAIL_MATCH_LIMIT,
+    });
+    if (matchError) {
+      searchWarning = "이메일 검색을 사용할 수 없어 이름·회사·연락처로만 검색했습니다.";
+    } else {
+      emailMatchIds = ((matches ?? []) as Array<{ user_id?: unknown }>)
+        .map((row) => String(row.user_id ?? ""))
+        .filter((id) => uuidPattern.test(id));
+    }
+  }
+
+  let query = admin
+    .from("profiles")
+    .select("user_id, name, company, phone, created_at, updated_at", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .order("user_id", { ascending: false });
+  if (searchQuery) {
+    // Quote the value so commas or parentheses don't break the or() list.
+    const pattern = `"%${searchQuery.replace(/["\\]/g, "\\$&")}%"`;
+    const terms = [`name.ilike.${pattern}`, `company.ilike.${pattern}`, `phone.ilike.${pattern}`];
+    if (emailMatchIds.length) terms.push(`user_id.in.(${emailMatchIds.join(",")})`);
+    query = query.or(terms.join(","));
+  }
+  const { data, error, count } = await query.range(range.from, range.to);
+  const profiles = (data ?? []) as Omit<UserRow, "email">[];
+  const totalCount = count ?? profiles.length;
+
+  // Ask only for the emails of the members on this page.
+  const ids = profiles.map((item) => item.user_id);
   let emailMap = new Map<string, string | null>();
   let emailError: string | null = null;
   if (ids.length > 0) {
-    // Admin API로 직접 조회해 auth schema 접근 오류를 피한다.
-    const { data: listData, error: listError } = await admin.auth.admin.listUsers({
-      perPage: 1000,
-    });
-    if (listError) {
-      emailError = listError.message;
-    } else if (listData?.users) {
+    const { data: emails, error: emailsError } = await admin.rpc("admin_auth_user_emails", { p_user_ids: ids });
+    if (emailsError) {
+      emailError = emailsError.message;
+    } else {
       emailMap = new Map(
-        listData.users
-          .filter((u) => ids.includes(u.id))
-          .map((u) => [u.id, u.email ?? null]),
+        ((emails ?? []) as Array<{ user_id: string; email: string | null }>).map((row) => [row.user_id, row.email ?? null]),
       );
     }
   }
 
-  const users: UserRow[] = (data ?? []).map((item) => ({
+  const users: UserRow[] = profiles.map((item) => ({
     ...item,
     email: emailMap.get(item.user_id) ?? null,
-  })) as UserRow[];
+  }));
+
+  const hrefForPage = (target: number) => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("q", searchQuery);
+    if (target > 1) params.set("page", String(target));
+    const search = params.toString();
+    return search ? `/admin/users?${search}` : "/admin/users";
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -69,6 +122,43 @@ export default async function AdminUsersPage() {
           관리자 홈
         </Link>
       </div>
+
+      <form className="mt-6 flex flex-wrap items-center gap-3 rounded-[18px] border border-border/60 bg-card/80 p-4" role="search">
+        <label htmlFor="admin-users-q" className="sr-only">회원 검색</label>
+        <input
+          id="admin-users-q"
+          name="q"
+          type="search"
+          defaultValue={searchQuery}
+          maxLength={100}
+          placeholder="이메일, 이름, 회사, 연락처"
+          className="h-10 min-w-[240px] flex-1 rounded-[8px] border-2 border-border bg-background px-3 text-sm font-semibold text-foreground"
+        />
+        <button
+          type="submit"
+          className="h-10 rounded-[8px] border-2 border-[#111111] bg-[#111111] px-4 text-xs font-black text-white transition hover:bg-[#1556a4]"
+        >
+          검색
+        </button>
+        {searchQuery ? (
+          <Link href="/admin/users" className="h-10 rounded-[8px] border-2 border-border bg-background px-4 py-2.5 text-xs font-black text-foreground">
+            검색 해제
+          </Link>
+        ) : null}
+        <span className="ml-auto rounded-[8px] border border-border bg-background px-3 py-2 text-xs font-black text-muted-foreground">
+          총 {totalCount.toLocaleString()}명
+        </span>
+      </form>
+
+      <div className="mt-4 flex justify-end">
+        <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+      </div>
+
+      {searchWarning && (
+        <p role="status" className="mt-4 rounded-2xl border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-semibold text-[#111111]">
+          {searchWarning}
+        </p>
+      )}
 
       {error && (
         <div className="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
@@ -140,13 +230,19 @@ export default async function AdminUsersPage() {
                   colSpan={7}
                   className="px-4 py-6 text-center text-sm text-muted-foreground"
                 >
-                  회원 정보가 없습니다.
+                  {searchQuery ? "검색 결과가 없습니다." : "회원 정보가 없습니다."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {totalCount > PAGE_SIZE ? (
+        <div className="mt-6 flex justify-end">
+          <AdminListPager page={page} totalCount={totalCount} pageSize={PAGE_SIZE} hrefForPage={hrefForPage} />
+        </div>
+      ) : null}
     </div>
   );
 }
