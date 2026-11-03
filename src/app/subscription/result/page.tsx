@@ -1,16 +1,21 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
+import { isSubscriptionBillingEnabled } from "@/lib/payments/subscription-billing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { title: "정기결제 결과", robots: { index: false, follow: false } };
+
 export default async function SubscriptionResult({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (!isSubscriptionBillingEnabled()) notFound();
   const params = await searchParams;
   const orderId = Array.isArray(params.orderId)
     ? params.orderId[0]

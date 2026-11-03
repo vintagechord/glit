@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { validateCashReceiptRequest } from "@/lib/cash-receipts";
+import { isCashReceiptPdfWithheld, validateCashReceiptRequest } from "@/lib/cash-receipts";
 import {
   cashReceiptPdfFilename,
   loadCashReceiptOrder,
@@ -29,9 +29,11 @@ const saveSchema = z.object({
   }).strict().nullable(),
 }).strict();
 
+// A signed-in customer may still hold this browser's proofs for orders placed
+// as a guest before signing in; those orders keep their guest owner.
 async function actorFor(guestTokensBySubmissionId: Record<string, string>) {
   const user = await getServerSessionUser(await createServerSupabase());
-  return { userId: user?.id ?? null, guestTokensBySubmissionId: user ? {} : guestTokensBySubmissionId };
+  return { userId: user?.id ?? null, guestTokensBySubmissionId };
 }
 
 /** Request, change or withdraw a cash receipt for the customer's own bank-transfer order. */
@@ -93,6 +95,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!owned.ok) return orderJson({ error: owned.error }, owned.status);
     const [order, receipts] = await Promise.all([loadCashReceiptOrder(db, orderId.data), loadCashReceiptRows(db, [orderId.data])]);
     const receipt = receipts.get(orderId.data);
+    if (order && receipt && isCashReceiptPdfWithheld(order.status, receipt.status)) {
+      return orderJson({ error: "환불되거나 취소된 주문의 현금영수증은 발급 취소를 진행하고 있습니다. 고객센터로 문의해주세요." }, 409);
+    }
     const pdf = order && receipt ? await renderCashReceiptPdf(order, receipt) : null;
     if (!pdf || !receipt) return orderJson({ error: "발급이 완료된 현금영수증이 없습니다." }, 404);
     return new NextResponse(new Uint8Array(pdf), {

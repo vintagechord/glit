@@ -22,7 +22,7 @@ import { OrderCashReceiptPanel } from "./order-cash-receipt-panel";
 
 const statusLabels: Record<SubmissionOrderStatus, string> = {
   BANK_PENDING: "입금 대기", CARD_PENDING: "결제 확인 대기", PAYPAL_PENDING: "결제 확인 대기",
-  PAID: "결제 완료", FAILED: "결제 실패", CANCELED: "주문 취소", REFUNDED: "환불 완료", REVIEW_REQUIRED: "확인 필요",
+  PAID: "결제 완료", FAILED: "결제 실패", CANCELED: "주문 취소", REFUNDED: "환불 완료", REVIEW_REQUIRED: "결제 확인 중",
 };
 const filters = [
   { id: "all", label: "전체", statuses: [] },
@@ -35,17 +35,19 @@ type FilterId = typeof filters[number]["id"];
  * order is still payable. Customers read that as "waiting for payment",
  * not as a canceled order; returned or settled orders keep their status. */
 const isAwaitingPayment = (order: SubmissionOrder) => order.status === "CANCELED" && order.canReturnToCart;
-const orderStatusLabel = (order: SubmissionOrder) => isAwaitingPayment(order) ? "결제 대기" : statusLabels[order.status];
+/** The card approval is unconfirmed: the customer may already be charged. */
+const isPaymentChecking = (order: SubmissionOrder) => order.status === "REVIEW_REQUIRED" || Boolean(order.paymentChecking);
+const orderStatusLabel = (order: SubmissionOrder) => isPaymentChecking(order) ? "결제 확인 중" : isAwaitingPayment(order) ? "결제 대기" : statusLabels[order.status];
 const matchesFilter = (order: SubmissionOrder, filter: FilterId) => {
   if (filter === "all") return true;
-  if (isAwaitingPayment(order)) return filter === "waiting";
+  if (isAwaitingPayment(order) || isPaymentChecking(order)) return filter === "waiting";
   return (filters.find((entry) => entry.id === filter)!.statuses as readonly string[]).includes(order.status);
 };
 const panelClass = "min-w-0 rounded-[10px] border-2 border-[var(--bauhaus-ink)] bg-card p-4 shadow-[4px_4px_0_var(--bauhaus-shadow)] sm:p-5";
 const buttonClass = "inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background px-3 py-2 text-xs font-black text-foreground transition hover:-translate-y-0.5 disabled:cursor-wait disabled:bg-muted disabled:text-muted-foreground disabled:hover:translate-y-0";
 const orderTone = (order: SubmissionOrder) => order.status === "PAID"
   ? brandStatusTones.progress
-  : !isAwaitingPayment(order) && ["FAILED", "CANCELED", "REFUNDED"].includes(order.status)
+  : !isAwaitingPayment(order) && !isPaymentChecking(order) && ["FAILED", "CANCELED", "REFUNDED"].includes(order.status)
     ? "border-border bg-muted text-muted-foreground"
     : "border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111]";
 const displayItemTitle = (item: SubmissionOrderItem) => item.title?.trim()
@@ -55,6 +57,16 @@ const displayAmount = (amountKrw: number | null, amount: number | null, currency
   if (value === null || !Number.isFinite(value)) return "금액 확인 필요";
   return currency === "KRW" ? `${formatCurrency(value)}원` : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)} ${currency}`;
 };
+/** Shown when the gateway may have charged the card but the approval is not
+ * confirmed yet. Paying again could charge twice. */
+function PaymentCheckingNotice({ className, role = "status" }: { className?: string; role?: "status" | "alert" }) {
+  return <div role={role} className={cn(`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.warning}`, className)}>
+    <p className="font-black">결제 확인 중입니다. 다시 결제하지 마세요.</p>
+    <p className="mt-1 text-xs leading-5">카드 승인 결과를 결제사와 확인하고 있습니다. 이미 결제되었을 수 있으니 확인이 끝날 때까지 다시 결제하지 말아주세요. 확인되면 이 주문에 결제 완료 또는 미승인으로 표시하고 안내해드립니다.</p>
+    <p className="mt-1 text-xs font-semibold leading-5">문의: 고객센터 {APP_CONFIG.supportPhone} · <a href={`mailto:${APP_CONFIG.supportEmail}`} className="underline underline-offset-2">{APP_CONFIG.supportEmail}</a></p>
+  </div>;
+}
+
 const mergeOrders = (previous: SubmissionOrder[], incoming: SubmissionOrder[]) =>
   [...new Map([...previous, ...incoming].map((order) => [order.id, order])).values()]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -97,9 +109,12 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
     try {
       const entries = readGuestSubmissionOrderEntries();
       if (!userId && entries.length === 0) { setOrders([]); setNextOffset(null); return; }
-      const response = await fetchWithTimeout(userId ? `/api/orders?offset=${offset}` : "/api/orders", {
-        method: userId ? "GET" : "POST", cache: "no-store", signal: controller.signal,
-        ...(userId ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guestTokensBySubmissionId: toGuestTokensBySubmissionId(entries), offset }) }),
+      // Orders placed as a guest before signing in stay guest orders; this
+      // browser's proofs keep them listed next to the account's orders.
+      const memberOnly = Boolean(userId) && entries.length === 0;
+      const response = await fetchWithTimeout(memberOnly ? `/api/orders?offset=${offset}` : "/api/orders", {
+        method: memberOnly ? "GET" : "POST", cache: "no-store", signal: controller.signal,
+        ...(memberOnly ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guestTokensBySubmissionId: toGuestTokensBySubmissionId(entries), offset }) }),
       });
       const payload = (await response.json().catch(() => ({}))) as Partial<SubmissionOrdersPage> & { error?: string };
       if (!response.ok || !Array.isArray(payload.orders)) throw new Error(payload.error ?? "주문내역을 불러오지 못했습니다. 다시 시도해주세요.");
@@ -126,7 +141,8 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
       setError(initialError); setLoading(false); setLoaded(true);
       // Back navigation can restore old RSC props. Keep that content visible
       // while revalidating, but avoid a duplicate read after a fresh render.
-      if (initialFetchedAt !== undefined && Date.now() - initialFetchedAt > 5000) void loadOrders();
+      // The server cannot see this browser's guest proofs; read again with them.
+      if (readGuestSubmissionOrderEntries().length > 0 || (initialFetchedAt !== undefined && Date.now() - initialFetchedAt > 5000)) void loadOrders();
     } else {
       setLoaded(false);
       void loadOrders();
@@ -138,7 +154,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
     window.addEventListener("pageshow", restore);
     return () => { activeRequest.current?.abort(); activeRequest.current = null; window.removeEventListener(SUBMISSION_ORDERS_UPDATED_EVENT, refresh); window.removeEventListener("focus", refresh); window.removeEventListener("pageshow", restore); };
   }, [initialError, initialFetchedAt, initialPage, loadOrders, userId]);
-  const hasPendingOrder = orders.some((order) => ["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING"].includes(order.status));
+  const hasPendingOrder = orders.some((order) => ["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING"].includes(order.status) || isPaymentChecking(order));
   React.useEffect(() => {
     if (!hasPendingOrder || returningId) return;
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void loadOrders(0, true); }, 60000);
@@ -170,8 +186,8 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
     } finally { checkoutInFlight.current = false; setReturningId(null); }
   };
   const visibleOrders = orders.filter((order) => matchesFilter(order, filter));
-  const getDetailHref = (item: SubmissionOrderItem) => !item.submissionId ? null
-    : userId ? `${prefix}/mypage/submissions/${item.submissionId}`
+  const getDetailHref = (order: SubmissionOrder, item: SubmissionOrderItem) => !item.submissionId ? null
+    : userId && !order.guestOrder ? `${prefix}/mypage/submissions/${item.submissionId}`
       : guestTokens[item.submissionId] ? `${prefix}/track/${encodeURIComponent(guestTokens[item.submissionId])}` : null;
 
   return (
@@ -189,6 +205,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
       </nav>
       {error && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>{error}</div>}
       {params.get("cashReceipt") === "retry" && <div role="alert" className={`rounded-[8px] border-2 p-4 text-sm leading-6 ${brandStatusTones.danger}`}>입금 신청은 완료됐지만 현금영수증 신청이 저장되지 않았습니다. 아래 주문의 현금영수증에서 다시 신청해주세요.</div>}
+      {params.get("payment") === "checking" && <PaymentCheckingNotice role="alert" />}
       {!loaded && loading ? <div className={panelClass}>주문내역을 불러오는 중입니다...</div> : visibleOrders.length === 0 ? (
         <div className={`${panelClass} space-y-3`}>
           <p className="text-sm text-muted-foreground">{orders.length === 0 ? error ? "새로고침을 눌러 주문내역을 다시 확인해주세요." : "주문 내역이 없습니다." : "해당 상태의 주문이 없습니다."}</p>
@@ -207,10 +224,12 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
               </div>
               <span className={`inline-flex rounded-[6px] border-2 px-2.5 py-1 text-xs font-black ${orderTone(order)}`}>{orderStatusLabel(order)}</span>
             </div>
-            {isAwaitingPayment(order) && <p className="mt-3 text-xs leading-5 text-muted-foreground">결제가 완료되지 않았습니다. 결제하기를 눌러 다시 진행할 수 있습니다.</p>}
+            {isPaymentChecking(order) ? <PaymentCheckingNotice className="mt-3" />
+              : isAwaitingPayment(order) && <p className="mt-3 text-xs leading-5 text-muted-foreground">결제가 완료되지 않았습니다. 결제하기를 눌러 다시 진행할 수 있습니다.</p>}
+            {userId && order.guestOrder && <p className="mt-3 text-xs leading-5 text-muted-foreground">로그인 전에 비회원으로 주문한 내역입니다. 이 브라우저에 저장된 비회원 주문 정보로 표시됩니다.</p>}
             <ul className="mt-4 divide-y divide-border rounded-[8px] border-2 border-border bg-background/70">
               {order.items.map((item) => {
-                const detailHref = getDetailHref(item);
+                const detailHref = getDetailHref(order, item);
                 return <li key={item.id} className="grid gap-2 p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm [overflow-wrap:anywhere] font-black">{item.title?.trim() ? <span data-no-translate>{item.title}</span> : displayItemTitle(item)}</p>
@@ -243,7 +262,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                   : "입금 예정일이 지났습니다. 입금했다면 입금 확인을 기다려주시고, 아직이라면 위 계좌로 입금해주세요."
                 : "입금자명이 다르면 입금 확인이 늦어질 수 있습니다. 이미 입금했다면 입금 확인을 기다려주세요."}</p>
             </div>}
-            <OrderCashReceiptPanel order={order} guestTokens={userId ? {} : guestTokens} onChanged={updateCashReceipt} />
+            <OrderCashReceiptPanel order={order} guestTokens={userId && !order.guestOrder ? {} : guestTokens} onChanged={updateCashReceipt} />
             {order.note && <p className="mt-3 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs leading-6 text-muted-foreground">{order.note}</p>}
             {order.returnedAt && <p className="mt-3 text-xs leading-5 text-muted-foreground">장바구니로 돌린 주문입니다. 기존 주문 이력은 보관됩니다.</p>}
           </article>)}

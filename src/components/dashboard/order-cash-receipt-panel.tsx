@@ -8,9 +8,11 @@ import { downloadEndpointFile } from "@/lib/browser-download";
 import {
   CASH_RECEIPT_PURPOSE_LABELS,
   CASH_RECEIPT_STATUS_LABELS,
+  isCashReceiptPdfWithheld,
   validateCashReceiptRequest,
   type CashReceiptSummary,
 } from "@/lib/cash-receipts";
+import { APP_CONFIG } from "@/lib/config";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { formatDateTime } from "@/lib/format";
 import type { SubmissionOrder } from "@/lib/submission-orders-types";
@@ -75,7 +77,9 @@ export function OrderCashReceiptPanel({ order, guestTokens, onChanged }: {
   };
 
   const canEdit = orderOpen && (!receipt || receipt.canEdit);
-  const issued = receipt?.status === "ISSUED" || (receipt?.status === "CANCELED" && Boolean(receipt.approvalNumber));
+  // A receipt for money that went back is withheld until its cancellation is recorded.
+  const withheld = receipt ? isCashReceiptPdfWithheld(order.status, receipt.status) : false;
+  const issued = !withheld && (receipt?.status === "ISSUED" || (receipt?.status === "CANCELED" && Boolean(receipt.approvalNumber)));
   return (
     <section aria-label="현금영수증" className="mt-4 rounded-[8px] border-2 border-[var(--bauhaus-ink)] bg-background p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -97,9 +101,11 @@ export function OrderCashReceiptPanel({ order, guestTokens, onChanged }: {
       )}
       {!editing && (
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-          {receipt?.status === "ISSUED" ? "국세청 홈택스에서도 발급 내역을 조회할 수 있습니다."
+          {withheld ? "환불되거나 취소된 주문이라 현금영수증 발급 취소를 진행하고 있습니다. 취소가 반영되면 확인서를 다시 받을 수 있습니다."
+            : receipt?.status === "ISSUED" ? "국세청 홈택스에서도 발급 내역을 조회할 수 있습니다."
             : receipt?.status === "REQUESTED" ? (order.status === "PAID" ? "입금이 확인되어 발급을 준비하고 있습니다." : "입금이 확인되면 발급합니다.")
               : receipt?.status === "ISSUING" ? "발급을 처리하고 있습니다."
+                : receipt?.status === "UNCERTAIN" ? `발급 결과를 결제사와 확인하고 있습니다. 확인이 끝날 때까지 신청을 바꾸거나 취소할 수 없습니다. 문의: ${APP_CONFIG.supportPhone}`
                 : receipt?.status === "FAILED" ? "발급 정보를 확인하고 있습니다. 번호가 다르면 수정해주세요."
                   : receipt?.status === "CANCELED" ? "발급이 취소되었습니다. 필요하면 다시 신청해주세요."
                     : "입금 대기 중이거나 입금이 확인된 주문은 현금영수증을 신청할 수 있습니다."}

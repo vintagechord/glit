@@ -9,6 +9,7 @@ import {
   cancelCashReceipt,
   issueCashReceiptViaInicis,
   recordManualCashReceipt,
+  resolveUncertainCashReceipt,
 } from "@/lib/cash-receipts-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -17,7 +18,7 @@ const backTo = (filter: string, orderId: string, query: string) =>
   `/admin/cash-receipts?filter=${encodeURIComponent(filter)}&${query}#order-${orderId}`;
 const formFilter = (formData: FormData) => {
   const value = String(formData.get("filter") ?? "attention");
-  return /^[a-z]{2,20}$/.test(value) ? value : "attention";
+  return /^[A-Za-z]{2,20}$/.test(value) ? value : "attention";
 };
 
 function refresh() {
@@ -34,12 +35,33 @@ export async function issueCashReceiptAction(formData: FormData) {
   redirect(backTo(formFilter(formData), orderId, result.ok ? "saved=issued" : `error=${encodeURIComponent(result.error)}`));
 }
 
+// The admin forms use datetime-local in Korean time.
+const kstIssuedAt = (formData: FormData) => {
+  const issuedAtLocal = String(formData.get("issuedAt") ?? "");
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(issuedAtLocal) ? `${issuedAtLocal}:00+09:00` : "";
+};
+
+/** Records what the Inicis console shows for an issuance whose result never
+ * arrived. Nothing is sent to Inicis here. */
+export async function resolveUncertainCashReceiptAction(formData: FormData) {
+  const actor = await requireAdminAction();
+  const orderId = orderIdSchema.parse(String(formData.get("orderId") ?? ""));
+  const outcome = String(formData.get("outcome") ?? "");
+  const result = outcome === "ISSUED"
+    ? await resolveUncertainCashReceipt(createAdminClient(), orderId, actor.id, {
+      outcome, approvalNumber: String(formData.get("approvalNumber") ?? ""), issuedAt: kstIssuedAt(formData),
+    })
+    : outcome === "NOT_ISSUED"
+      ? await resolveUncertainCashReceipt(createAdminClient(), orderId, actor.id, { outcome, note: String(formData.get("note") ?? "") })
+      : { ok: false as const, error: "확인 결과를 선택해주세요." };
+  refresh();
+  redirect(backTo(formFilter(formData), orderId, result.ok ? `saved=${outcome === "ISSUED" ? "resolvedIssued" : "resolvedFailed"}` : `error=${encodeURIComponent(result.error)}`));
+}
+
 export async function recordManualCashReceiptAction(formData: FormData) {
   const actor = await requireAdminAction();
   const orderId = orderIdSchema.parse(String(formData.get("orderId") ?? ""));
-  const issuedAtLocal = String(formData.get("issuedAt") ?? "");
-  // The admin form uses datetime-local in Korean time.
-  const issuedAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(issuedAtLocal) ? `${issuedAtLocal}:00+09:00` : "";
+  const issuedAt = kstIssuedAt(formData);
   const result = await recordManualCashReceipt(createAdminClient(), orderId, actor.id, {
     approvalNumber: String(formData.get("approvalNumber") ?? ""),
     issuedAt,

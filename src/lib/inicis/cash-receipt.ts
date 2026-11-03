@@ -17,9 +17,10 @@ export function getCashReceiptInicisConfig(env: Record<string, string | undefine
   const mode = getInicisMode();
   const suffix = mode === "prod" ? "PROD" : "STG";
   const mid = clean(env[`INICIS_MID_${suffix}`]);
-  // The INIAPI key/IV belong to the MID; billing already uses the same pair.
-  const apiKey = clean(env[`INICIS_INIAPI_KEY_${suffix}`]) || clean(env[`INICIS_BILLING_API_KEY_${suffix}`]);
-  const apiIv = clean(env[`INICIS_INIAPI_IV_${suffix}`]) || clean(env[`INICIS_BILLING_API_IV_${suffix}`]);
+  // Only the dedicated INIAPI names. Registering the billing names for
+  // receipts would also switch on the legacy subscription billing routes.
+  const apiKey = clean(env[`INICIS_INIAPI_KEY_${suffix}`]);
+  const apiIv = clean(env[`INICIS_INIAPI_IV_${suffix}`]);
   const apiUrl = (clean(env[`INICIS_API_URL_${suffix}`]) || (mode === "prod" ? "https://iniapi.inicis.com" : "https://stginiapi.inicis.com")).replace(/\/+$/, "");
   if (!mid || !apiKey || !apiIv || !/^https:\/\//.test(apiUrl)) return null;
   return { mid, apiKey, apiIv, apiUrl };
