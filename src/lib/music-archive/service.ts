@@ -85,9 +85,10 @@ export async function getArchiveDetail(owner: string, libraryId: string) {
     admin.from("music_archive_attachments").select("id,task_id,file_name,mime_type,size_bytes,created_at").eq("owner_id", owner).eq("library_id", libraryId).is("deleted_at", null),
     admin.from("music_archive_events").select("id,actor_id,action,before_version,after_version,created_at,details").eq("owner_id", owner).eq("library_id", libraryId).order("created_at", { ascending: false }).limit(100),
     (async () => {
-      const rows: { id: string; status: string; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] }[] = [];
+      // payment_status lets matchArchiveReviews count a paid PRE_REVIEW as a review, not a draft.
+      const rows: { id: string; status: string; payment_status?: string | null; melon_url?: string | null; archive_review_context?: unknown; album_tracks?: { track_no?: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null }[] }[] = [];
       for (let offset = 0; ; offset += 1000) {
-        const result = await admin.from("submissions").select("id,status,melon_url,archive_review_context,album_tracks(track_no,track_title,track_title_kr,track_title_en)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).order("created_at", { ascending: false }).order("id").range(offset, offset + 999);
+        const result = await admin.from("submissions").select("id,status,payment_status,melon_url,archive_review_context,album_tracks(track_no,track_title,track_title_kr,track_title_en)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).order("created_at", { ascending: false }).order("id").range(offset, offset + 999);
         archiveDatabaseError(result.error);
         rows.push(...(result.data ?? []));
         if (!result.data || result.data.length < 1000) return rows;
