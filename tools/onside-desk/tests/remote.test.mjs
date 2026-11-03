@@ -181,3 +181,19 @@ test('guest album intake signs the request ID that becomes the lookup code and c
   const insecure = mockClient((url, init) => json({ ok: true, submissionId: id, guestToken: JSON.parse(init.body.toString()).requestId, trackUrl: 'http://onside.example/track/x' })).client;
   await assert.rejects(insecure.registerGuestAlbum({ guest: {} }, { requestId: nonce }), error => error.code === 'INVALID_INTAKE_RESULT');
 });
+
+test('album info sync posts the album-info operation with a fresh request ID and reads the counts', async () => {
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(new URL(url).pathname, `/api/internal/review-desk/${id}`); assert.equal(init.method, 'POST');
+    const body = JSON.parse(init.body.toString());
+    assert.equal(body.operation, 'album-info'); assert.equal(body.requestId, init.headers['x-onside-desk-request']);
+    assert.equal(body.submission.releaseDate, '2026-11-05'); assert.equal(body.tracks[0].trackTitle, '첫 곡');
+    return json({ ok: true, changed: true, albumInfo: { updatedFields: ['release_date'], updatedTracks: 1, insertedTracks: 0 } });
+  });
+  const result = await client.saveAlbumInfo(id, { submission: { releaseDate: '2026-11-05' }, tracks: [{ trackNo: 1, trackTitle: '첫 곡' }] });
+  assert.deepEqual(result, { changed: true, albumInfo: { updatedFields: ['release_date'], updatedTracks: 1, insertedTracks: 0 } });
+  assert.equal(calls.length, 1);
+  await assert.rejects(client.saveAlbumInfo(id, { submission: {} }), error => error.code === 'INVALID_ALBUM_INFO');
+  await assert.rejects(mockClient(() => json({ ok: false })).client.saveAlbumInfo(id, { submission: {}, tracks: [] }), error => error.code === 'INVALID_ALBUM_INFO_RESULT');
+  await assert.rejects(mockClient(() => json({ ok: false, error: '음반 접수에만 신청서 정보를 반영할 수 있습니다.', errorCode: 'INVALID_TYPE' }, 400)).client.saveAlbumInfo(id, { submission: {}, tracks: [] }), error => error.code === 'INVALID_TYPE');
+});

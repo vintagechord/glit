@@ -10,6 +10,7 @@ import {
   loadReviewDocSubmissionBundles,
   recordReviewDocsGeneratedEvents,
 } from "@/lib/admin/review-docs";
+import { persistHydratedReleasedAlbums } from "@/lib/admin/released-album-hydration";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -38,7 +39,9 @@ export async function POST(request: Request) {
   try {
     const supabase = createAdminClient();
     const bundles = await loadReviewDocSubmissionBundles(supabase, parsed.data.ids);
-    const zip = await buildReviewDocsZip(bundles);
+    const zip = await buildReviewDocsZip(bundles, {
+      onHydrated: (hydrated) => persistHydratedReleasedAlbums(supabase, hydrated, auth.user.id),
+    });
     const filename = buildReviewDocsZipFilename(bundles);
     await recordReviewDocsGeneratedEvents({
       supabase,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { sanitizeSubscriptionRefundResponse } from "../src/app/api/service/subscription/inicis_cancel/route";
+import { sanitizeSubscriptionRefundResponse } from "../src/lib/inicis/subscription-refund-response";
 
 const read = (relativePath: string) =>
   readFileSync(new URL(relativePath, import.meta.url), "utf8");

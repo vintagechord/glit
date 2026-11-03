@@ -10,6 +10,7 @@ import {
   loadReviewDocSubmissionBundles,
   recordReviewDocsGeneratedEvents,
 } from "@/lib/admin/review-docs";
+import { persistHydratedReleasedAlbums } from "@/lib/admin/released-album-hydration";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -40,7 +41,12 @@ export async function GET(
   try {
     const supabase = createAdminClient();
     const bundles = await loadReviewDocSubmissionBundles(supabase, [parsed.data.id]);
-    const zip = await buildReviewDocsZip(bundles);
+    // The documents of a released-album (URL) request come from Melon/Genie;
+    // keep the same details on the submission so the admin and customer
+    // application views match the generated forms.
+    const zip = await buildReviewDocsZip(bundles, {
+      onHydrated: (hydrated) => persistHydratedReleasedAlbums(supabase, hydrated, auth.user.id),
+    });
     const filename = buildReviewDocsZipFilename(bundles);
     await recordReviewDocsGeneratedEvents({
       supabase,

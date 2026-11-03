@@ -20,6 +20,7 @@ import { APP_CONFIG } from "@/lib/config";
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { canEditSubmission } from "@/lib/submission-edit-access";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
+import { scheduleReleasedAlbumHydration } from "@/lib/admin/released-album-hydration";
 import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
@@ -1498,6 +1499,12 @@ export async function saveAlbumSubmissionAction(
   }
 
   scheduleReplacedSubmissionFileCleanup(db, replacedFileRefs);
+  // A released-album (URL) request stores only the link. Complete the album
+  // details and tracks from the catalog after the response so the admin and
+  // the customer's application view show them; blank fields only.
+  if (isOneClick && parsed.data.status === "SUBMITTED") {
+    scheduleReleasedAlbumHydration(parsed.data.submissionId);
+  }
 
   const eventMessage =
     parsed.data.status === "SUBMITTED"

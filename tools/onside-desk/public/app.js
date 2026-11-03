@@ -162,7 +162,8 @@ function onlineIntakeMarkup(d) {
       <div class="online-link-row"><span class="label">결과 페이지</span><code class="online-value">${e(online.trackUrl)}</code><button class="button secondary small" data-action="copy-online-url">주소 복사</button><button class="button secondary small" data-action="open-online">열기 ↗</button></div>
       <div class="online-link-row"><span class="label">조회 코드</span><code class="online-value">${e(online.guestToken)}</code><button class="button secondary small" data-action="copy-online-code">코드 복사</button></div>
       <div class="online-link-row"><span class="label">서비스 상태</span><span><span class="badge neutral">${e(ONLINE_STATUS[online.status] || online.status || '확인 중')}</span> <span class="badge ${online.payment_status === 'PAID' ? '' : 'amber'}">${e(online.payment_status === 'PAID' ? '결제 완료' : '결제 대기 · 고객이 결과 페이지에서 결제')}</span></span></div>
-      <p class="helper">방송사별 결과는 <button class="inline-link" data-tab="results">심의 결과</button> 탭이나 웹 관리자에서 저장하면 고객 결과 페이지에 바로 반영됩니다. 등록 후 이 Mac에서 바꾼 곡·가사 정보는 온라인 접수에 반영되지 않습니다.</p></section><hr class="section-divider">`;
+      <div class="online-link-row"><span class="label">신청서 정보</span><span>${online.infoSyncError ? `<span class="badge amber">반영 실패</span> <small>${e(online.infoSyncError)}</small>` : online.infoSyncedAt ? `<span class="badge">${e(formatDate(online.infoSyncedAt, true))} 반영</span>` : '<span class="badge neutral">등록 시점 내용</span>'}</span><button class="button secondary small" data-action="sync-online">온라인에 반영</button></div>
+      <p class="helper">방송사별 결과는 <button class="inline-link" data-tab="results">심의 결과</button> 탭이나 웹 관리자에서 저장하면 고객 결과 페이지에 바로 반영됩니다. 문서 정보 수정에서 바꾼 앨범 정보·곡·가사는 저장과 심의 자료 생성 시 온라인 접수의 신청 상세와 고객 작성 신청서에 함께 반영되며, ‘온라인에 반영’으로 직접 보낼 수도 있습니다.</p></section><hr class="section-divider">`;
   }
   if (s.type !== 'ALBUM') return '';
   const packages = ui.intakePackages?.packages;
@@ -712,6 +713,7 @@ async function action(name, button) {
     else if (name === 'copy-online-url') { await navigator.clipboard.writeText(ui.detail?.online?.trackUrl || ''); toast('결과 페이지 주소를 복사했습니다.'); }
     else if (name === 'copy-online-code') { await navigator.clipboard.writeText(ui.detail?.online?.guestToken || ''); toast('조회 코드를 복사했습니다.'); }
     else if (name === 'open-online') await api(apiPath('/open-online'), { method: 'POST', body: {} });
+    else if (name === 'sync-online') { if (ui.dirty) { toast('수정 중인 내용을 먼저 저장해 주세요.', true); return; } const synced = await api(apiPath('/sync-online'), { method: 'POST', body: {} }); toast(synced.changed ? '온라인 접수에 신청서 정보를 반영했습니다.' : '온라인 접수의 신청서 정보가 이미 같습니다.'); await loadDetail(ui.selected, false); }
     else if (name === 'reload-intake-packages') await loadIntakePackages(true);
     else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; await loadStorage(); }
     else if (name === 'storage-purge') await purgeStorage();

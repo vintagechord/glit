@@ -374,6 +374,8 @@ const normalizeTrack = (track: DbRecord, index: number) => {
     track_title: title,
     track_title_for_docs: trackTitleForDocs,
     track_title_with_title_mark: trackTitleForDocs,
+    // The KBS request form marks title tracks with "[T]" like the review desk.
+    track_title_request: isTitle ? `[T] ${title.replace(/^(?:\[T\]\s*)+/i, "")}` : title,
     track_title_for_filename: title,
     title,
     display_title: title,
@@ -947,7 +949,9 @@ const melonTrackToRecord = (
     existing,
   );
 
-async function hydrateReleasedAlbumBundle(
+/** Completes a released-album (URL) request from Melon/Genie in memory. The
+ * returned bundle is the same object when nothing had to be fetched. */
+export async function hydrateReleasedAlbumBundle(
   bundle: ReviewDocSubmissionBundle,
   options: ExternalReviewDocFetchOptions = {},
 ): Promise<ReviewDocSubmissionBundle> {
@@ -1523,7 +1527,14 @@ async function renderPreparedReviewDocuments(
 
 export async function buildReviewDocsZip(
   bundles: ReviewDocSubmissionBundle[],
-  options: { templateDir?: string; fetcher?: typeof fetch; translate?: TranslationProvider } = {},
+  options: {
+    templateDir?: string;
+    fetcher?: typeof fetch;
+    translate?: TranslationProvider;
+    /** Receives the bundles after Melon/Genie completion, before rendering, so
+     * callers can store what the documents were made from. */
+    onHydrated?: (bundles: ReviewDocSubmissionBundle[]) => Promise<void> | void;
+  } = {},
 ) {
   if (bundles.length === 0) throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
   const applicationDate = seoulTodayParts();
@@ -1531,6 +1542,7 @@ export async function buildReviewDocsZip(
   const hydratedBundles = await Promise.all(
     bundles.map((bundle) => hydrateReleasedAlbumBundle(bundle, { fetcher: options.fetcher })),
   );
+  if (options.onHydrated) await options.onHydrated(hydratedBundles);
   // Both direct Melon/Genie imports and saved URL submissions enter here.
   // Translate once per ZIP so every lyric-bearing form receives identical text.
   const tracks = hydratedBundles.flatMap((bundle) => bundle.tracks);

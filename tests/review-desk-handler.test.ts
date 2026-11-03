@@ -35,6 +35,7 @@ function fixture() {
     async saveStations(_db, input) { calls.push({ name: "bulk-stations", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: true, savedCount: input.stations.length }; },
     async saveOnline(_db, input) { calls.push({ name: "online", input }); return state.saveError ? { ok: false, errorCode: state.saveError, error: "다른 화면에서 변경되었습니다." } : { ok: true, changed: state.changed }; },
     async saveCertificate(_db, input) { calls.push({ name: "certificate", input: { ...input, body: input.body.toString() } }); return { ok: true, changed: state.changed, certificate: { objectKey: "private/b2/path.pdf", originalName: input.filename, uploadedAt: revision } }; },
+    async saveAlbumInfo(_db, input) { calls.push({ name: "album-info", input }); return state.saveError ? { ok: false, errorCode: "INVALID_TYPE", error: "음반 접수에만 신청서 정보를 반영할 수 있습니다." } : { ok: true, changed: state.changed, updatedFields: ["release_date"], updatedTracks: 1, insertedTracks: 0 }; },
     async previewEmail() { calls.push({ name: "preview" }); return { subject: "현재 결과", html: "<p>KBS: 12세 · MBC: 15세</p>", recipientMasked: "te***@example.test", revision: previewRevision, updatedAt: revision, canSend: true, missingAssets: [], warnings: [], attachmentCount: 0 }; },
     async sendSummary(input) { if (input.expectedRevision !== previewRevision || input.expectedUpdatedAt !== revision) return { deliveredCount: 0, skippedCount: 0, failedCount: 0, recipientCount: 0, errorCode: "CONFLICT", error: "미리보기가 변경되었습니다." }; return notify("summary-notice", input); },
     revalidate(id) { calls.push({ name: "revalidate", input: id }); },
@@ -308,4 +309,26 @@ test("desk intake explains package and validation refusals and lists packages", 
   assert.equal((await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }))).status, 400);
   const list = await f.handlers.GET(signedRequest("GET", undefined, { path: intakePath }));
   assert.equal(list.status, 200); assert.equal((await list.json()).packages[0].name, "13곳 패키지");
+});
+
+test("album-info applies the desk's application details through the shared save and reports the counts", async () => {
+  const f = fixture();
+  const body = { operation: "album-info", requestId, submission: { releaseDate: "2026-11-05", genre: "성인가요", distributor: "유통사", productionCompany: "제작사", artistType: "SOLO" },
+    tracks: [{ trackNo: 1, trackTitle: "지금이 딱 좋아", composer: "김수련", lyricist: "김수련", lyrics: "가사", isTitle: true, broadcastSelected: true }] };
+  const response = await f.handlers.POST(signedRequest("POST", body), context);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true); assert.deepEqual(payload.albumInfo, { updatedFields: ["release_date"], updatedTracks: 1, insertedTracks: 0 });
+  const call = f.calls.find(c => c.name === "album-info")?.input as { submissionId: string; actorUserId: string; mode: string; source: string; input: { submission: Record<string, unknown>; tracks: Array<Record<string, unknown>> } };
+  assert.equal(call.submissionId, sid); assert.equal(call.actorUserId, actor); assert.equal(call.mode, "overwrite"); assert.equal(call.source, "심의 데스크");
+  assert.equal(call.input.submission.releaseDate, "2026-11-05"); assert.equal(call.input.submission.title, null);
+  assert.equal(call.input.tracks[0].trackTitle, "지금이 딱 좋아"); assert.equal(call.input.tracks[0].isTitle, true);
+  assert.ok(f.calls.some(c => c.name === "revalidate" && c.input === sid));
+  // Validation happens before any save: a bad date or an empty track title is refused.
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, submission: { releaseDate: "2026.11.05" } }), context)).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, tracks: [{ trackNo: 1, trackTitle: " " }] }), context)).status, 400);
+  assert.equal(f.calls.filter(c => c.name === "album-info").length, 1);
+  f.state.saveError = "INVALID_TYPE";
+  const refused = await f.handlers.POST(signedRequest("POST", body), context);
+  assert.equal(refused.status, 400); assert.equal((await refused.json()).errorCode, "INVALID_TYPE");
 });

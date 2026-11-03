@@ -195,18 +195,31 @@ test("admin selected submission review docs zip uses example-like docx packaging
   assert.deepEqual(tables[2].grid, [1097, 1098, 6821]);
   assert.deepEqual(tables[2].cellCounts, [3, 2, 2, 2, 2, 1]);
   assert.equal(tables[2].hasFixedLayout, true);
-  assert.deepEqual(requestTables[0].rowHeights, [
-    "650",
-    "650",
-    "540",
-    "540",
-    "420",
-    "520",
-    "620",
-    "620",
-  ]);
-  assert.equal(requestTables[0].isCentered, true);
+  // KBS 가요 심의 요청 양식 (2026-11-03 layout): the album title spans the first
+  // two rows, 유통사 sits under 기획사(제작사), 담당자(연락처) shares the
+  // 심의요청곡수 row with 음반형태, and "음반접수용(KBS가요심의곡)" is pushed
+  // to the right margin with a right tab stop instead of spaces.
+  assert.equal(requestTables.length, 1);
+  assert.equal(requestTables[0].grid.length, 15);
+  assert.equal(requestTables[0].rowCount, 8);
+  assert.deepEqual(requestTables[0].cellCounts, [6, 6, 2, 6, 1, 9, 9, 9]);
   assert.equal(requestTables[0].hasFixedLayout, true);
+  assert.equal(requestTables[0].hasCantSplitRows, false);
+  const requestRows = [...songReviewRequestXml.matchAll(/<tr[\s\S]*?<\/tr>/g)].map((row) =>
+    [...row[0].matchAll(/<tc>[\s\S]*?<\/tc>/g)].map((cell) => cell[0].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()),
+  );
+  assert.deepEqual(requestRows[0], ["음반제목", "별고양이", "발매일", "2026. 07. 21.", "기획사(제작사)", "빈티지코드"]);
+  assert.deepEqual(requestRows[1], ["", "", "제작일", "2026. 07. 21.", "유통사", "블렌딩"]);
+  assert.equal(requestRows[2][0], "음반장르");
+  assert.deepEqual(requestRows[3].slice(0, 5), ["심의요청곡수", "2곡", "담당자(연락처)", "정준영(010-9068-9035)", "음반형태"]);
+  assert.match(requestRows[5].join("|"), /트랙\|곡 명\|곡장르\|가 수/);
+  assert.equal(requestRows[6][1], "[T] 별고양이");
+  assert.equal(requestRows[7][1], "별고양이 (Inst.)");
+  const headerParagraph = songReviewRequestXml.match(/<p>(?:(?!<\/p>)[\s\S])*?접수일자[\s\S]*?<\/p>/)?.[0] ?? "";
+  assert.match(headerParagraph, /<tabs><tab [^>]*val="right"[^>]*pos="15138"/);
+  assert.match(headerParagraph, /접수일자 :\s+\d{4}년\s+\d{2}월\s+\d{2}일[\s\S]*?<tab\s*\/>[\s\S]*?음반접수용\(KBS가요심의곡\)/);
+  assert.doesNotMatch(headerParagraph, /\s{10,}/);
+  assert.doesNotMatch(songReviewRequestXml, /tblHeader/);
   assert.equal((reviewFormXml.match(/<br[^>]*type="page"/g) ?? []).length, 2);
   assert.doesNotMatch(reviewFormXml, /<tblpPr/);
   assert.doesNotMatch(songReviewRequestXml, /<tblpPr/);

@@ -11,6 +11,7 @@ import type { loadPurgeCandidates, purgeCustomerFiles } from "./customer-file-pu
 import { PURGE_BATCH_LIMIT } from "./customer-file-purge-limits";
 import { buildGuestAlbumIntakeRecord, guestAlbumIntakeFailure, guestAlbumIntakeSchema, type listGuestAlbumIntakePackages } from "./guest-album-intake";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
+import { albumInfoSchema, type saveManagedAlbumInfo } from "./album-info-save";
 
 const uuid = z.string().uuid();
 const revision = z.string().datetime({ offset: true });
@@ -20,7 +21,10 @@ const stationBody = stationManagementSchema.omit({ actorUserId: true, submission
 const onlineBody = z.object({ operation: z.literal("online"), expectedUpdatedAt: revision, rating: z.enum(["ALL", "12", "15", "18", "19", "REJECT"]), resultMemo: z.string().max(4000).optional(), requestId: uuid.optional() });
 const bulkBody = stationBulkSchema.omit({ actorUserId: true, submissionId: true }).extend({ operation: z.literal("bulk-stations"), requestId: uuid.optional() });
 const sendBody = z.object({ operation: z.enum(["send", "resend"]), expectedUpdatedAt: revision, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), requestId: uuid });
-const bodySchema = z.discriminatedUnion("operation", [stationBody, bulkBody, onlineBody, sendBody]);
+/** The review desk sends the application details it holds for an album it
+ * registered or prepares, so the online application view matches the documents. */
+const albumInfoBody = albumInfoSchema.extend({ operation: z.literal("album-info"), requestId: uuid.optional() });
+const bodySchema = z.discriminatedUnion("operation", [stationBody, bulkBody, onlineBody, sendBody, albumInfoBody]);
 const assetSchema = z.enum(["ratingImage", "usageGuide", "certificate"]);
 const jsonResponse = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
 const failure = (status: number, error: string, errorCode?: string) => jsonResponse({ ok: false, error, ...(errorCode ? { errorCode } : {}) }, status);
@@ -40,6 +44,7 @@ type Dependencies = {
   saveStations: typeof saveManagedStationReviews;
   saveOnline: typeof saveManagedOnlineReview;
   saveCertificate: typeof saveManagedCertificate;
+  saveAlbumInfo: typeof saveManagedAlbumInfo;
   previewEmail: typeof getReviewSummaryEmailPreviewById;
   sendSummary: typeof sendReviewSummaryNotificationById;
   revalidate: (submissionId: string) => void;
@@ -85,7 +90,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         ]);
         const schemaReady = !protocol.error && protocol.data?.protocol === DESK_PROTOCOL_VERSION && !station.error && !outbox.error;
         return jsonResponse({ ok: schemaReady, protocol: DESK_PROTOCOL_VERSION, schemaReady,
-          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true, guestAlbumIntake: true },
+          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true, guestAlbumIntake: true, albumInfoSync: true },
           ...(schemaReady ? {} : { error: "심의 연동 서비스 업데이트가 아직 완료되지 않았습니다." }),
         }, schemaReady ? 200 : 503);
       }
@@ -154,6 +159,13 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         const saved = await deps.saveOnline(auth.db, { ...body, actorUserId: auth.actorId, submissionId: id });
         if (!saved.ok) return saveFailure(saved);
         return finish(auth.db, id, saved.changed === true, null);
+      }
+      if (body.operation === "album-info") {
+        const saved = await deps.saveAlbumInfo(auth.db, {
+          submissionId: id, actorUserId: auth.actorId, input: { submission: body.submission, tracks: body.tracks }, mode: "overwrite", source: "심의 데스크",
+        });
+        if (!saved.ok) return failure(saved.errorCode === "NOT_FOUND" ? 404 : saved.errorCode === "INVALID_TYPE" ? 400 : 500, saved.error, saved.errorCode);
+        return finish(auth.db, id, saved.changed, null, { albumInfo: { updatedFields: saved.updatedFields, updatedTracks: saved.updatedTracks, insertedTracks: saved.insertedTracks } });
       }
       const notification = await deps.sendSummary({ submissionId: id, requestId: auth.requestId,
         expectedRevision: body.expectedRevision, expectedUpdatedAt: body.expectedUpdatedAt });
