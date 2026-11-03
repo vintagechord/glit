@@ -47,7 +47,12 @@ export function buildImageRemotePatterns(env: ImageEnv): RemotePattern[] {
   return patterns;
 }
 
-const imageRemotePatterns = buildImageRemotePatterns(process.env);
+const imageRemotePatterns = buildImageRemotePatterns({
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  SUPABASE_URL: process.env.SUPABASE_URL,
+  B2_S3_ENDPOINT: process.env.B2_S3_ENDPOINT,
+  B2_BUCKET: process.env.B2_BUCKET,
+});
 if (!imageRemotePatterns.some((pattern) => pattern.pathname?.startsWith("/storage/"))) {
   console.warn("[next.config] NEXT_PUBLIC_SUPABASE_URL is not set; Supabase Storage images will not be optimized.");
 }
