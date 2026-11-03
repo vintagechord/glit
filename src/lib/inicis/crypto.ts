@@ -135,14 +135,19 @@ export const makeAuthSecureSignature = (params: {
 export const makeOrderId = (prefix = "SUB") =>
   `${prefix}-${Date.now()}-${randomBytes(4).toString("hex")}`;
 
+// Inicis expects Korean time, but Vercel functions run in UTC. Korea has no
+// daylight saving time, so a fixed +9h offset is exact.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 export const getInicisTimestamp = (date = new Date()) => {
   const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  const kst = new Date(date.getTime() + KST_OFFSET_MS);
   return (
-    date.getFullYear().toString() +
-    pad(date.getMonth() + 1) +
-    pad(date.getDate()) +
-    pad(date.getHours()) +
-    pad(date.getMinutes()) +
-    pad(date.getSeconds())
+    kst.getUTCFullYear().toString() +
+    pad(kst.getUTCMonth() + 1) +
+    pad(kst.getUTCDate()) +
+    pad(kst.getUTCHours()) +
+    pad(kst.getUTCMinutes()) +
+    pad(kst.getUTCSeconds())
   );
 };

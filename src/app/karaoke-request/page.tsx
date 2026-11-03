@@ -33,7 +33,6 @@ export default async function KaraokeRequestPage() {
     // recommendation_public?: boolean | null;
     status: string;
     created_at: string;
-    updated_at: string | null;
   }> = [];
   if (user) {
     // 크레딧 운영 보류: 보유 크레딧 조회 숨김
@@ -46,7 +45,7 @@ export default async function KaraokeRequestPage() {
 
     const { data: requestRows } = await supabase
       .from("karaoke_requests")
-      .select("id, title, artist, file_path, status, created_at, updated_at")
+      .select("id, title, artist, file_path, status, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     requests = requestRows ?? [];

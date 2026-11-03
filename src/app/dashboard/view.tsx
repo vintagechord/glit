@@ -38,6 +38,31 @@ async function StatusContent({
   return <DashboardStatusClient {...props} initialData={status.data ?? null} initialDataAt={status.fetchedAt} />;
 }
 
+type DashboardSearchParams = Record<string, string | string[] | undefined>;
+
+const firstSearchParamValue = (value?: string | string[]) =>
+  Array.isArray(value) ? value[0] : value;
+
+const parseReviewTab = (value?: string | string[]) => {
+  const normalized = firstSearchParamValue(value)?.toLowerCase();
+  if (!normalized) return undefined;
+  if (["mv", "music-video", "musicvideo", "video"].includes(normalized)) {
+    return "mv" as const;
+  }
+  if (["album", "music"].includes(normalized)) {
+    return "album" as const;
+  }
+  return undefined;
+};
+
+// Shared by /dashboard and /en/dashboard: the wizards finish on
+// `?tab=…&refresh=1` in both locales.
+export const readStatusPageSearchParams = (searchParams: DashboardSearchParams) => ({
+  initialReviewTab:
+    parseReviewTab(searchParams.tab) ?? parseReviewTab(searchParams.type),
+  forceStatusRefresh: firstSearchParamValue(searchParams.refresh) === "1",
+});
+
 export async function StatusPageView(config?: ShellConfig) {
   const supabase = await createServerSupabase();
   const user = await getServerSessionUser(supabase);

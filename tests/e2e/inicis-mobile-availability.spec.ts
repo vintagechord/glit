@@ -16,7 +16,7 @@ const item = {
 };
 const mobileInit = {
   orderId: pgOrderId, channel: "mobile",
-  mobile: { actionUrl: mobileGateway, params: { P_INI_PAYMENT: "CARD", P_MID: "fixturemid", P_OID: pgOrderId, P_AMT: "49000", P_GOODS: "음반 심의", P_UNAME: "테스트", P_NEXT_URL: "https://onside.test/api/inicis/mobile/return", P_NOTI: `${pgOrderId}_0f7b2f6e-7f41-4c2a-9c3e-3b2a1d4e5f60`, P_RESERVED: "centerCd=Y&amt_hash=Y", P_CHARSET: "utf8", P_TIMESTAMP: "1761900000000", P_CHKFAKE: "fixture" } },
+  mobile: { actionUrl: mobileGateway, params: { P_INI_PAYMENT: "CARD", P_MID: "fixturemid", P_OID: pgOrderId, P_AMT: "49000", P_GOODS: "음반 심의", P_UNAME: "테스트", P_NEXT_URL: "https://onside.test/api/inicis/mobile/return", P_NOTI: `${pgOrderId}_0f7b2f6e-7f41-4c2a-9c3e-3b2a1d4e5f60`, P_RESERVED: "centerCd=Y&amt_hash=Y&twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N", P_CHARSET: "utf8", P_TIMESTAMP: "1761900000000", P_CHKFAKE: "fixture" } },
   closeUrl: "/api/inicis/close?oid=" + pgOrderId + "&state=0f7b2f6e-7f41-4c2a-9c3e-3b2a1d4e5f60&cancel=1",
 };
 
@@ -92,7 +92,7 @@ test.describe("mobile checkout offers INIpayMobile card payment and bank transfe
     const posted = new URLSearchParams(effects.gateway[0].postData ?? "");
     expect(posted.get("P_INI_PAYMENT")).toBe("CARD");
     expect(posted.get("P_OID")).toBe(pgOrderId);
-    expect(posted.get("P_RESERVED")).toBe("centerCd=Y&amt_hash=Y");
+    expect(posted.get("P_RESERVED")).toBe("centerCd=Y&amt_hash=Y&twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N");
     expect(effects.writes).toEqual([{ path: "/api/inicis/submission/order", body: expect.objectContaining({ submissionId, channel: "mobile", context: "music" }) }]);
     expect(effects.unexpected).toEqual([]);
     expect(effects.errors).toEqual([]);

@@ -7,26 +7,12 @@ import {
   getB2Config,
   presignPutUrl,
 } from "@/lib/b2";
-import {
-  getGuestStorageOwnerId,
-  getStorageLogId,
-} from "@/lib/guest-storage-owner";
-import { ensureSubmissionOwner } from "@/lib/payments/submission";
+import { getStorageLogId } from "@/lib/guest-storage-owner";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
-import {
-  isApplicationFormFile,
-  isApplicationFormMime,
-  isAudioUploadFile,
-  isVideoUploadFile,
-} from "@/lib/submission-files";
-import {
-  getSubmissionUploadBlockMessage,
-  getSubmissionUploadBlockReason,
-} from "@/lib/submission-upload-access";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const schema = z.object({
@@ -42,30 +28,9 @@ const schema = z.object({
     .optional(),
 });
 
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
 const MAX_GENERIC_BYTES = 512 * 1024 * 1024; // 512MB
 const KARAOKE_UPLOAD_LIMIT = 10;
 const KARAOKE_UPLOAD_WINDOW_MS = 60 * 60 * 1_000;
-
-const isAllowedSubmissionUploadFile = (
-  kind: "audio" | "video",
-  filename: string,
-  mimeType?: string | null,
-) => {
-  if (kind === "audio") {
-    return (
-      isAudioUploadFile(filename, mimeType) ||
-      isApplicationFormFile(filename) ||
-      isApplicationFormMime(mimeType)
-    );
-  }
-  return (
-    isVideoUploadFile(filename, mimeType) ||
-    isApplicationFormFile(filename) ||
-    isApplicationFormMime(mimeType)
-  );
-};
 
 export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
@@ -107,83 +72,27 @@ export async function POST(request: Request) {
   const { filename, submissionId, mimeType, sizeBytes, guestToken, title } =
     parsed.data;
   const scope = parsed.data.scope ?? "submission";
-  const inferredKind = (() => {
-    if (parsed.data.kind) return parsed.data.kind;
-    const normalizedMime = (mimeType ?? "").toLowerCase();
-    if (normalizedMime.startsWith("video/")) return "video" as const;
-    if (normalizedMime.startsWith("audio/")) return "audio" as const;
-    const normalizedName = filename.toLowerCase();
-    if (normalizedName.match(/\.(mp4|mov|mkv|webm|avi|wmv|m4v|mpg|mpeg)$/)) {
-      return "video" as const;
-    }
-    return "audio" as const;
-  })();
-
-  const maxSize =
-    scope === "submission"
-      ? inferredKind === "video"
-        ? MAX_VIDEO_BYTES
-        : MAX_AUDIO_BYTES
-      : MAX_GENERIC_BYTES;
-  if (sizeBytes > maxSize) {
+  // Applicant files go through /api/uploads/init (single PUT up to 128MB with
+  // byte quotas) or the multipart grant flow. A 4GB presigned PUT here would
+  // leave untracked objects that no cleanup ever finds, so only the karaoke
+  // scopes remain.
+  if (scope === "submission") {
     return NextResponse.json(
-      {
-        error:
-          scope === "submission"
-            ? inferredKind === "video"
-              ? "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다."
-              : "음원 파일은 최대 4GB까지 업로드할 수 있습니다."
-            : "파일 용량이 허용 한도를 초과했습니다.",
-      },
-      { status: 413 },
+      { error: "이 업로드 방식은 더 이상 지원하지 않습니다. 페이지를 새로고침한 뒤 다시 시도해주세요." },
+      { status: 410 },
     );
   }
-  if (
-    scope === "submission" &&
-    !isAllowedSubmissionUploadFile(inferredKind, filename, mimeType)
-  ) {
+  if (sizeBytes > MAX_GENERIC_BYTES) {
     return NextResponse.json(
-      {
-        error:
-          inferredKind === "video"
-            ? "영상 파일은 MP4/MOV/WMV/MPG 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다."
-            : "음원 파일은 WAV/MP3/ZIP 또는 신청서 파일(HWP/DOC/DOCX)만 업로드할 수 있습니다.",
-      },
-      { status: 400 },
+      { error: "파일 용량이 허용 한도를 초과했습니다." },
+      { status: 413 },
     );
   }
 
   try {
     let objectOwnerId: string | null = null;
 
-    if (scope === "submission") {
-      const { user: ownerUser, submission, error } = await ensureSubmissionOwner(
-        submissionId,
-        guestToken,
-      );
-      if (error === "NOT_FOUND") {
-        return NextResponse.json({ error: "접수를 찾을 수 없습니다." }, { status: 404 });
-      }
-      if (error === "UNAUTHORIZED") {
-        return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
-      }
-      if (error === "FORBIDDEN") {
-        return NextResponse.json({ error: "접수에 대한 권한이 없습니다." }, { status: 403 });
-      }
-      const uploadBlockReason = getSubmissionUploadBlockReason(submission);
-      if (uploadBlockReason) {
-        return NextResponse.json(
-          { error: getSubmissionUploadBlockMessage(uploadBlockReason) },
-          { status: 409 },
-        );
-      }
-      objectOwnerId =
-        submission?.user_id ??
-        ownerUser?.id ??
-        getGuestStorageOwnerId(
-          guestToken ?? submission?.guest_token ?? "new",
-        );
-    } else if (scope === "karaoke_recommendation") {
+    if (scope === "karaoke_recommendation") {
       if (!user) {
         return NextResponse.json(
           { error: "로그인이 필요합니다." },

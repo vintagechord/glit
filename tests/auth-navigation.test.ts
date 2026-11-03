@@ -21,3 +21,10 @@ test("authentication return paths reject external targets and authentication loo
   }
   assert.equal(getAuthReturnPath("/admin/review-docs?fixture=1", true), "/admin/review-docs?fixture=1");
 });
+
+test("authentication return paths reject dot-segment external targets", () => {
+  for (const value of ["/.//evil.example", "/%2e//evil.example", "/en/..//evil.example"]) {
+    assert.equal(getAuthReturnPath(value), null, value);
+    assert.equal(getAuthPageHref("login", value), "/login");
+  }
+});

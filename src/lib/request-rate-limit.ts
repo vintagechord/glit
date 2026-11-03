@@ -133,9 +133,12 @@ export async function consumePersistentRateLimit(
   }
 }
 
+// Vercel overwrites these headers with the connecting client's address.
+// cf-connecting-ip is deliberately ignored: no Cloudflare proxy sits in front
+// of the site, so a client can send any value in it.
 export const getRequestIdentifier = (headers: Pick<Headers, "get">) => {
   const candidates = [
-    headers.get("cf-connecting-ip"),
+    headers.get("x-vercel-forwarded-for")?.split(",")[0],
     headers.get("x-real-ip"),
     headers.get("x-forwarded-for")?.split(",")[0],
   ];

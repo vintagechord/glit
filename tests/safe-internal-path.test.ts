@@ -22,3 +22,15 @@ test("external and backslash-normalized redirect targets are rejected", () => {
     assert.equal(getSafeInternalPath(value), null, value);
   }
 });
+
+test("dot segments that normalize to a scheme-relative host are rejected", () => {
+  for (const value of [
+    "/.//evil.example",
+    "/%2e//evil.example",
+    "/en/..//evil.example",
+    "/mypage/..//evil.example/path?x=1",
+  ]) {
+    assert.equal(getSafeInternalPath(value), null, value);
+  }
+  assert.equal(getSafeInternalPath("/mypage/../dashboard"), "/dashboard");
+});

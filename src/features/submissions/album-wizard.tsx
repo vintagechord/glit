@@ -3724,6 +3724,33 @@ export function AlbumWizard({
     }
   };
 
+  // Back from the file step: restore the authoring layout (album 1 in the
+  // form, the others in albumDrafts) that the earlier steps rebuild the list
+  // from, as the resume path does. Otherwise an additional album selected on
+  // the file step becomes the "current" draft and album 1 drops out.
+  const returnFromUploadStep = () => {
+    if (uploadDrafts && uploadDrafts.length > 0) {
+      if (
+        uploadDraftIndex !== 0 &&
+        uploads.some((upload) => upload.status !== "done")
+      ) {
+        setNotice({ error: "파일 업로드가 완료된 뒤 이전 단계로 이동할 수 있습니다." });
+        return;
+      }
+      const drafts = resolveUploadDrafts();
+      if (!drafts || drafts.length === 0) return;
+      setAlbumDrafts(drafts.slice(1));
+      setUploadDrafts(null);
+      setUploadDraftIndex(0);
+      if (uploadDraftIndex !== 0) {
+        applyDraftToForm(drafts[0], {
+          emailSubmitConfirmed: drafts[0].emailSubmitConfirmed,
+        });
+      }
+    }
+    setStep(hasTrackStep ? 4 : 3);
+  };
+
   const handleStep3Next = async () => {
     if (initialArchiveEntry && !validateBasicInfoStep()) return;
     const draftsForUpload = resolveUploadDrafts();
@@ -5871,7 +5898,7 @@ export function AlbumWizard({
           <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
-              onClick={() => initialArchiveEntry ? router.push(`${localePrefix}/mypage/music?artist=${initialArchiveEntry.context.libraryId}`) : setStep(hasTrackStep ? 4 : 3)}
+              onClick={() => initialArchiveEntry ? router.push(`${localePrefix}/mypage/music?artist=${initialArchiveEntry.context.libraryId}`) : returnFromUploadStep()}
               disabled={isSaving || isAddingAlbum}
               className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
             >

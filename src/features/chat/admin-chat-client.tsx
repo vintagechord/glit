@@ -18,6 +18,8 @@ import {
   supportChatAdminChannelName,
   supportChatChannelName,
   supportChatStatusLabels,
+  readSupportChatAdminSignal,
+  toSupportChatAdminSignal,
   type SupportChatBroadcastPayload,
   type SupportChatConversation,
   type SupportChatMessage,
@@ -276,52 +278,21 @@ export function AdminChatClient({
     [],
   );
 
-  const applyBroadcastPayload = React.useCallback(
-    (payload?: SupportChatBroadcastPayload | null) => {
-      if (!payload) return false;
-
-      if (payload.deletedId) {
-        setConversations((current) =>
-          current.filter((item) => item.id !== payload.deletedId),
-        );
-        if (selectedId === payload.deletedId) {
-          selectConversation(null);
-          setMessages([]);
-        }
-        return true;
-      }
-
-      if (payload.conversation) {
-        setConversations((current) =>
-          upsertConversation(current, payload.conversation!),
-        );
-      }
-      if (payload.message?.conversationId === selectedId) {
-        setMessages((current) => mergeMessage(current, payload.message!));
-      }
-
-      return Boolean(payload.conversation || payload.message);
-    },
-    [selectedId, selectConversation],
-  );
-
-  const handleBroadcastPayload = React.useCallback(
-    (payload?: SupportChatBroadcastPayload | null) => {
-      const handled = applyBroadcastPayload(payload);
-      const conversationId =
-        payload?.message?.conversationId ?? payload?.conversation?.id ?? null;
-
-      if (!handled) {
-        void loadList({ quiet: true });
-      }
-      if (conversationId && conversationId === selectedId) {
-        void loadConversation(conversationId, {
+  // The admin channel is public, so it carries only a conversation id.
+  // Refetch through the admin API instead of trusting a broadcast payload.
+  const handleAdminSignal = React.useCallback(
+    (payload: unknown) => {
+      const signal = readSupportChatAdminSignal(payload);
+      if (!signal) return;
+      void loadList({ quiet: true });
+      if (signal.conversationId === selectedId) {
+        void loadConversation(signal.conversationId, {
           quiet: true,
           markRead: isDocumentVisible(),
         });
       }
     },
-    [applyBroadcastPayload, loadConversation, loadList, selectedId],
+    [loadConversation, loadList, selectedId],
   );
 
   const broadcastChatUpdate = React.useCallback(
@@ -329,22 +300,25 @@ export function AdminChatClient({
       payload: SupportChatBroadcastPayload,
       options?: { conversationChannel?: boolean },
     ) => {
-      const broadcast = {
-        type: "broadcast" as const,
-        event: "message",
-        payload,
-      };
-      const channels = [
-        ...(options?.conversationChannel === false
-          ? []
-          : [channelRef.current]),
-        adminChannelRef.current,
-      ];
-      await Promise.allSettled(
-        channels
-          .filter(Boolean)
-          .map((channel) => channel!.send(broadcast)),
-      );
+      // The full payload goes only to the conversation's own channel, whose
+      // name contains the access token. The shared admin channel gets an id.
+      const signal = toSupportChatAdminSignal(payload);
+      await Promise.allSettled([
+        options?.conversationChannel === false
+          ? undefined
+          : channelRef.current?.send({
+              type: "broadcast",
+              event: "message",
+              payload,
+            }),
+        signal
+          ? adminChannelRef.current?.send({
+              type: "broadcast",
+              event: "message",
+              payload: signal,
+            })
+          : undefined,
+      ]);
     },
     [],
   );
@@ -395,9 +369,7 @@ export function AdminChatClient({
         config: { broadcast: { self: false } },
       })
       .on("broadcast", { event: "message" }, (event) => {
-        handleBroadcastPayload(
-          event.payload as SupportChatBroadcastPayload | undefined,
-        );
+        handleAdminSignal(event.payload);
       })
       .subscribe();
     adminChannelRef.current = channel;
@@ -405,7 +377,7 @@ export function AdminChatClient({
       adminChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [handleBroadcastPayload, supabase]);
+  }, [handleAdminSignal, supabase]);
 
   React.useEffect(() => {
     if (!selectedConversationId || !selectedConversationAccessToken) return;
