@@ -20,6 +20,7 @@ import * as React from "react";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { buildSubmissionCheckoutHref, parseCheckoutSubmissionIds } from "@/lib/submission-checkout";
+import { parkGuestDraftSlot } from "@/lib/submission-guest-drafts";
 import {
   readGuestSubmissionCartEntries,
   rememberGuestSubmissionOrderEntries,
@@ -487,6 +488,15 @@ export function SubmissionCartCheckout({
   const prepareEditStorage = (item: CartItem) => {
     if (typeof window === "undefined") return;
     try {
+      if (!userId) {
+        // A guest's in-progress draft is reachable only through this one
+        // locator slot. Park it so the wizard can offer it again afterwards.
+        parkGuestDraftSlot(
+          window.localStorage,
+          item.type === "ALBUM" ? "album" : "mv",
+          { cartSubmissionIds: items.map((candidate) => candidate.id) },
+        );
+      }
       if (item.type === "ALBUM") {
         const groupItems = items.filter(
           (candidate) =>

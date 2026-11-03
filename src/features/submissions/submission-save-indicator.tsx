@@ -33,7 +33,9 @@ export function SubmissionSaveIndicator({
   error,
   hasRecovery = false,
   hasPrevious = false,
+  conflict = false,
   onRetry,
+  onReload,
   onRecover,
   onDiscardRecovery,
   onRevertToSaved,
@@ -44,7 +46,10 @@ export function SubmissionSaveIndicator({
   error?: string | null;
   hasRecovery?: boolean;
   hasPrevious?: boolean;
+  /** A newer server version exists; offer a reload instead of a retry. */
+  conflict?: boolean;
   onRetry?: () => void | Promise<unknown>;
+  onReload?: () => void;
   onRecover?: () => void;
   onDiscardRecovery?: () => void;
   onRevertToSaved?: () => void;
@@ -128,6 +133,33 @@ export function SubmissionSaveIndicator({
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (conflict) {
+    return (
+      <div
+        role="alert"
+        className={cn(
+          "mx-auto flex max-w-xl flex-col items-center gap-3 rounded-[16px] border-2 border-[#111111] bg-white px-4 py-3 text-center text-sm font-bold leading-6 text-[#111111] shadow-[3px_3px_0_#d9362c] dark:border-[#f2cf27] dark:bg-[#111111] dark:text-white",
+          className,
+        )}
+      >
+        <span className="inline-flex items-center gap-1.5 text-[#d9362c]">
+          <CloudOff aria-hidden="true" className="size-4" />
+          자동 저장을 멈췄습니다
+        </span>
+        <p>{error || "이 신청서가 다른 창이나 기기에서 먼저 저장되었습니다."}</p>
+        {onReload ? (
+          <button
+            type="button"
+            className="min-h-11 rounded-full border-2 border-[#111111] bg-[#f2cf27] px-4 py-2 text-xs font-black text-[#111111]"
+            onClick={onReload}
+          >
+            최신 내용 다시 불러오기
+          </button>
+        ) : null}
       </div>
     );
   }

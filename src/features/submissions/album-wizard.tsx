@@ -75,7 +75,17 @@ import {
   type SubmissionPreflightTarget,
 } from "@/lib/submission-preflight";
 import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import {
+  parkGuestDraftSlot,
+  readGuestDraftLeftovers,
+  restoreParkedGuestDraftSlot,
+  retainGuestDraftLeftovers,
+} from "@/lib/submission-guest-drafts";
 import { mergeSubmissionUploadMetadata } from "@/lib/submission-upload-metadata";
+import {
+  recordSubmissionVersion,
+  REUSED_DRAFT_LOAD_ERROR,
+} from "@/lib/submission-version";
 
 import {
   saveAlbumSubmissionAction,
@@ -354,6 +364,7 @@ const sanitizeAlbumDraftForCheckpoint = (draft: AlbumDraft): AlbumDraft => ({
 type AlbumCheckpointController = {
   runExclusive: <T>(task: () => Promise<T>) => Promise<T>;
   markSaved: (snapshot?: AlbumCheckpointSnapshot, savedAt?: number) => void;
+  markConflict: (error: string) => void;
   clear: () => void;
 };
 
@@ -519,6 +530,10 @@ export function AlbumWizard({
   const draftCreationPromiseRef = React.useRef<Promise<string | null> | null>(
     null,
   );
+  // The row version (updated_at) this tab last loaded or saved, per album.
+  // Every save sends it so an older tab cannot replace newer edits.
+  const submissionVersionsRef = React.useRef(new Map<string, string>());
+  const reusedDraftAttemptRef = React.useRef<string | null>(null);
   const albumCheckpointControllerRef =
     React.useRef<AlbumCheckpointController | null>(null);
   const draftSaveInFlightRef = React.useRef(false);
@@ -987,8 +1002,50 @@ export function AlbumWizard({
           submissionId?: string;
           guestToken?: string;
           error?: string;
+          reused?: boolean;
+          updatedAt?: string | null;
         };
+        if (res.ok && json?.submissionId && json.reused) {
+          // The server handed back a draft that already holds saved content.
+          // It must load through the resume prompt: treated as new, autosave
+          // would write this blank form over it. A second miss for the same
+          // draft stops here instead of looping between the two requests.
+          const reusedId = json.submissionId;
+          const retryResume =
+            reusedDraftAttemptRef.current !== reusedId || options?.force;
+          reusedDraftAttemptRef.current = reusedId;
+          if (retryResume) {
+            const reusedToken = isGuest
+              ? json.guestToken ?? currentGuestTokenRef.current
+              : null;
+            if (!readDraftStorage()?.ids?.includes(reusedId)) {
+              if (isGuest) {
+                parkGuestDraftSlot(window.localStorage, "album", {
+                  cartSubmissionIds: [],
+                });
+              }
+              writeDraftStorage({
+                ids: [reusedId],
+                guestToken: reusedToken,
+                guestTokensBySubmissionId:
+                  isGuest && reusedToken ? { [reusedId]: reusedToken } : undefined,
+              });
+            }
+            draftInitAttemptedRef.current = false;
+            resumePromptHandledRef.current = false;
+            setResumeChecked(false);
+            return null;
+          }
+          draftErrorRef.current = REUSED_DRAFT_LOAD_ERROR;
+          setDraftError(REUSED_DRAFT_LOAD_ERROR);
+          return null;
+        }
         if (res.ok && json?.submissionId) {
+          recordSubmissionVersion(
+            submissionVersionsRef.current,
+            json.submissionId,
+            json.updatedAt,
+          );
           const issuedGuestToken =
             isGuest && json.guestToken
               ? json.guestToken
@@ -1016,7 +1073,7 @@ export function AlbumWizard({
           });
           setCurrentSubmissionId(json.submissionId);
           setCheckpointInitialDataIsServerState(false);
-          setCurrentServerUpdatedAt(new Date().toISOString());
+          setCurrentServerUpdatedAt(json.updatedAt ?? new Date().toISOString());
           return json.submissionId;
         }
         const message =
@@ -1050,6 +1107,7 @@ export function AlbumWizard({
     currentSubmissionId,
     isGuest,
     existingCartSubmission,
+    readDraftStorage,
     writeDraftStorage,
   ]);
 
@@ -1078,10 +1136,16 @@ export function AlbumWizard({
       submissionId?: string;
       guestToken?: string;
       error?: string;
+      updatedAt?: string | null;
     } | null;
     if (!res.ok || !json?.submissionId) {
       throw new Error(json?.error || "추가 앨범 초안을 만들지 못했습니다.");
     }
+    recordSubmissionVersion(
+      submissionVersionsRef.current,
+      json.submissionId,
+      json.updatedAt,
+    );
     const usedIds = new Set([
       currentSubmissionId,
       ...albumDrafts.map((draft) => draft.submissionId),
@@ -2442,6 +2506,13 @@ export function AlbumWizard({
   ) => {
     if (draftRows.length === 0) return;
     setCheckpointInitialDataIsServerState(true);
+    for (const row of draftRows) {
+      recordSubmissionVersion(
+        submissionVersionsRef.current,
+        String(row.id ?? ""),
+        row.updated_at,
+      );
+    }
     const sorted = orderAlbumDraftRowsForResume(
       draftRows,
       storedSubmissionIds,
@@ -2686,30 +2757,14 @@ export function AlbumWizard({
     let cancelled = false;
     // Drafts written as a guest in this browser are adopted by the account
     // after login; otherwise they would stay invisible until logout.
-    const readGuestLeftovers = () => {
-      if (isGuest || typeof window === "undefined") return null;
-      try {
-        const raw = window.localStorage.getItem("onside:draft:album:guest");
-        const parsedRaw = raw ? JSON.parse(raw) as {
-          ids?: string[]; guestToken?: string; guestTokensBySubmissionId?: Record<string, string>;
-        } : null;
-        const token = window.localStorage.getItem("onside:guest-token:album:guest") ?? parsedRaw?.guestToken ?? undefined;
-        const tokens = { ...(parsedRaw?.guestTokensBySubmissionId ?? {}) };
-        if (!token && Object.keys(tokens).length === 0) return null;
-        return { ids: parsedRaw?.ids ?? [], guestToken: token ?? undefined, guestTokensBySubmissionId: tokens };
-      } catch {
-        return null;
-      }
-    };
-    const clearGuestLeftovers = () => {
-      try {
-        window.localStorage.removeItem("onside:draft:album:guest");
-        window.localStorage.removeItem("onside:guest-token:album:guest");
-      } catch {
-        // ignore storage errors
-      }
-    };
+    const readGuestLeftovers = () =>
+      isGuest ? null : readGuestDraftLeftovers(window.localStorage, "album");
     const run = async () => {
+      // A draft parked while a cart item was edited comes back once the
+      // locator slot is free again.
+      if (isGuest && !isFromDraftsTab) {
+        restoreParkedGuestDraftSlot(window.localStorage, "album");
+      }
       const stored = readDraftStorage();
       const guestLeftovers = readGuestLeftovers();
       if (!isFromDraftsTab && (!stored?.ids || stored.ids.length === 0) && !guestLeftovers) {
@@ -2740,9 +2795,19 @@ export function AlbumWizard({
         const json = (await res.json().catch(() => null)) as {
           drafts?: Array<Record<string, unknown>>;
           claimedIds?: string[];
+          claimFailed?: boolean;
+          retainedGuestTokens?: string[];
         } | null;
         if (cancelled || resumePromptHandledRef.current) return;
-        if (guestLeftovers && res.ok) clearGuestLeftovers();
+        // Forget guest credentials only after the account really adopted
+        // them; a failed claim or a draft mid-save keeps its token.
+        if (guestLeftovers && res.ok && json && !json.claimFailed) {
+          retainGuestDraftLeftovers(
+            window.localStorage,
+            "album",
+            json.retainedGuestTokens ?? [],
+          );
+        }
         const drafts = Array.isArray(json?.drafts) ? json!.drafts : [];
         if (drafts.length === 0) {
           setResumeChecked(true);
@@ -3199,6 +3264,7 @@ export function AlbumWizard({
         const artistValue = draft.artistName.trim();
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(draft.submissionId),
           archiveReview: initialArchiveEntry?.context,
           packageId: sourceSnapshot.selectedPackageId ?? undefined,
           amountKrw: albumPrice,
@@ -3262,8 +3328,16 @@ export function AlbumWizard({
               : mapTracksForSave(draft.tracks),
           files: options.includeFiles ? draft.files : undefined,
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          draft.submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            albumCheckpointControllerRef.current?.markConflict(result.error);
+          }
           if (foreground) {
             setNotice({ error: result.error });
           }
@@ -3884,6 +3958,7 @@ export function AlbumWizard({
         }
         const result = await saveAlbumSubmissionAction({
           submissionId: draft.submissionId,
+          expectedUpdatedAt: submissionVersionsRef.current.get(draft.submissionId),
           archiveReview: initialArchiveEntry?.context,
           packageId: selectedPackage?.id,
           amountKrw: albumPrice,
@@ -3959,8 +4034,16 @@ export function AlbumWizard({
               : mapTracksForSave(draft.tracks),
           files: status === "SUBMITTED" ? draft.files : undefined,
         });
+        recordSubmissionVersion(
+          submissionVersionsRef.current,
+          draft.submissionId,
+          result.updatedAt,
+        );
 
         if (result.error) {
+          if (result.conflict) {
+            albumCheckpointControllerRef.current?.markConflict(result.error);
+          }
           setNotice({ error: result.error });
           return;
         }
@@ -4363,6 +4446,8 @@ export function AlbumWizard({
         error={albumCheckpoint.error}
         hasRecovery={Boolean(albumCheckpoint.recovery)}
         hasPrevious={Boolean(albumCheckpoint.previous)}
+        conflict={albumCheckpoint.conflict}
+        onReload={() => window.location.reload()}
         onRetry={albumCheckpoint.retry}
         onRecover={recoverAlbumCheckpoint}
         onDiscardRecovery={albumCheckpoint.discardRecovery}

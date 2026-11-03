@@ -89,6 +89,9 @@ SQL
 wait "$order_bank_pid"
 # Open-day fixes: stale claim expiry, bank depositor details, guest draft adoption, empty draft purge.
 order_psql < "$order_sql_root/tests/sql/open-fixes.sql"
+# The empty-draft purge keeps drafts with any saved form content.
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261103140000_empty_draft_purge_content.sql"
+order_psql < "$order_sql_root/tests/sql/empty-draft-purge.sql"
 # Administrator deletion detaches unpaid orders and refuses paid ones.
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261102170000_admin_delete_submissions.sql"
 order_psql < "$order_sql_root/tests/sql/admin-delete-submissions.sql"

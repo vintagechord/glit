@@ -35,6 +35,10 @@ import {
 import { isSubmissionObjectKeyOwned } from "@/lib/submission-object-key";
 import { resolveSubmissionSaveState } from "@/lib/submission-save-staging";
 import {
+  isSameSubmissionVersion,
+  SUBMISSION_VERSION_CONFLICT_ERROR,
+} from "@/lib/submission-version";
+import {
   validateAlbumSubmittedFields,
   validateMvSubmittedFields,
   validateSubmittedFiles,
@@ -52,6 +56,10 @@ export type SubmissionActionState = {
   submissionId?: string;
   guestToken?: string;
   emailNotice?: string;
+  /** The row version after this save; send it back as expectedUpdatedAt. */
+  updatedAt?: string;
+  /** The row changed since expectedUpdatedAt. Reload before saving again. */
+  conflict?: boolean;
 };
 
 export type SubmissionFileUrlActionState = {
@@ -111,6 +119,19 @@ const releaseSubmissionSaveLease = async ({
       released: data === true,
     });
   }
+};
+
+// The browser's next save must name the version this request produced. The
+// commit (or the release after a failed commit) ran under this request's own
+// lease, and any other writer is refused by its own version check, so the
+// value read here is the state this request left behind.
+const readSubmissionVersion = async (db: SupabaseClient, submissionId: string) => {
+  const { data } = await db
+    .from("submissions")
+    .select("updated_at")
+    .eq("id", submissionId)
+    .maybeSingle();
+  return typeof data?.updated_at === "string" ? data.updated_at : undefined;
 };
 
 const claimSubmissionSaveLease = async ({
@@ -580,9 +601,12 @@ const fileSchema = z.object({
   accessUrl: urlTextSchema.optional(),
 });
 
+const submissionVersionSchema = z.string().max(64).optional();
+
 const albumSubmissionSchema = z.object({
   archiveReview: archiveReviewContextSchema.optional(),
   submissionId: z.string().uuid(),
+  expectedUpdatedAt: submissionVersionSchema,
   albumDraftGroupId: z.string().uuid().optional(),
   albumDraftGroupGuestToken: z.string().min(8).max(120).optional(),
   packageId: z.string().uuid().optional(),
@@ -634,6 +658,7 @@ const albumSubmissionSchema = z.object({
 
 const mvSubmissionSchema = z.object({
   submissionId: z.string().uuid(),
+  expectedUpdatedAt: submissionVersionSchema,
   packageId: z.string().uuid().optional(),
   amountKrw: z.number().int().nonnegative().max(MAX_SUBMISSION_AMOUNT_KRW).optional(),
   selectedStationIds: z
@@ -722,16 +747,18 @@ export async function getSubmissionFileUrlAction(
     return { error: "로그인 정보를 확인할 수 없습니다." };
   }
 
-  if (user) {
-    const { data: ownedSubmission } = await supabase
-      .from("submissions")
-      .select("id, user_id, guest_token")
-      .eq("id", parsed.data.submissionId)
-      .maybeSingle();
-    if (!ownedSubmission) {
-      return { error: "접근 권한이 없습니다." };
-    }
+  // A signed-in member may also open a guest tracking page (an order placed
+  // before login, or someone else's lookup code). When the member lookup
+  // misses, the guest token decides access exactly as for a visitor.
+  const { data: ownedSubmission } = user
+    ? await supabase
+        .from("submissions")
+        .select("id, user_id, guest_token")
+        .eq("id", parsed.data.submissionId)
+        .maybeSingle()
+    : { data: null };
 
+  if (user && ownedSubmission) {
     const { data: fileRow } = await supabase
       .from("submission_files")
       .select("file_path, storage_provider, object_key, purged_at")
@@ -899,6 +926,15 @@ export async function saveAlbumSubmissionAction(
   }
   if (!existingSubmission?.updated_at) {
     return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (
+    parsed.data.expectedUpdatedAt &&
+    !isSameSubmissionVersion(
+      parsed.data.expectedUpdatedAt,
+      existingSubmission.updated_at,
+    )
+  ) {
+    return { error: SUBMISSION_VERSION_CONFLICT_ERROR, conflict: true };
   }
   let archiveEntry: Awaited<ReturnType<typeof getArchiveReviewEntry>> | undefined;
   const storedArchiveContext = existingSubmission.archive_review_context == null ? undefined : storedArchiveReviewContextSchema.safeParse(existingSubmission.archive_review_context);
@@ -1446,14 +1482,18 @@ export async function saveAlbumSubmissionAction(
     });
     return {
       error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      // Claiming and releasing the lease touched updated_at without changing
+      // content; the browser must not mistake that for another tab's save.
+      updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
     };
   }
+  const savedVersion = await readSubmissionVersion(db, parsed.data.submissionId);
 
   if (archiveEntry && user) {
     try { await linkArchiveSubmission(user.id, archiveEntry.context, parsed.data.submissionId); }
     catch (error) {
       console.error("[Archive Review] submission link failed", { submissionId: parsed.data.submissionId, message: error instanceof Error ? error.message : "link error" });
-      return { error: "신청서는 저장되었습니다. 내 음악 관리 연결을 완료하도록 다시 저장해주세요." };
+      return { error: "신청서는 저장되었습니다. 내 음악 관리 연결을 완료하도록 다시 저장해주세요.", updatedAt: savedVersion };
     }
   }
 
@@ -1581,6 +1621,7 @@ export async function saveAlbumSubmissionAction(
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
+    updatedAt: savedVersion,
     emailNotice: buildSubmissionEmailNotice({
       receiptSent: receiptEmailSent,
       bankGuideSent: bankGuideEmailSent,
@@ -1693,6 +1734,15 @@ export async function saveMvSubmissionAction(
   }
   if (!existingSubmission?.updated_at) {
     return { error: "접수 저장 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요." };
+  }
+  if (
+    parsed.data.expectedUpdatedAt &&
+    !isSameSubmissionVersion(
+      parsed.data.expectedUpdatedAt,
+      existingSubmission.updated_at,
+    )
+  ) {
+    return { error: SUBMISSION_VERSION_CONFLICT_ERROR, conflict: true };
   }
   const wasPreviouslySubmitted = ["SUBMITTED", "WAITING_PAYMENT"].includes(
     existingSubmission.status ?? "",
@@ -2062,8 +2112,10 @@ export async function saveMvSubmissionAction(
     });
     return {
       error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
     };
   }
+  const savedVersion = await readSubmissionVersion(db, parsed.data.submissionId);
 
   scheduleReplacedSubmissionFileCleanup(db, replacedFileRefs);
 
@@ -2181,6 +2233,7 @@ export async function saveMvSubmissionAction(
   return {
     submissionId: parsed.data.submissionId,
     guestToken: isGuest ? parsed.data.guestToken : undefined,
+    updatedAt: savedVersion,
     emailNotice: buildSubmissionEmailNotice({
       receiptSent: receiptEmailSent,
       bankGuideSent: bankGuideEmailSent,

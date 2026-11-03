@@ -5,7 +5,7 @@ import { matchArchiveReviews } from "./reviews";
 import { validateArchiveData, type ArchiveContributor, type ArchiveData } from "./model";
 
 export type CreditSubmission = {
-  id: string; status: string; melon_url?: string | null; archive_review_context?: unknown;
+  id: string; status: string; payment_status?: string | null; melon_url?: string | null; archive_review_context?: unknown;
   album_tracks: { id: string; track_no: number; track_title?: string | null; track_title_kr?: string | null; track_title_en?: string | null; composer?: string | null; lyricist?: string | null; arranger?: string | null }[];
 };
 const normalize = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase();
@@ -48,7 +48,9 @@ export async function getOwnedCreditSubmissions(owner: string) {
     // submission_status is a PostgreSQL enum. CANCELLED is a defensive legacy
     // value handled by matchArchiveReviews, but is not a value in this DB enum:
     // including it in the SQL filter rejects the entire query before any rows.
-    const result = await createAdminClient().from("submissions").select("id,status,melon_url,archive_review_context,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,composer,lyricist,arranger)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).not("status", "in", "(DRAFT,PRE_REVIEW)").order("updated_at", { ascending: false }).order("id").range(offset, offset + 999);
+    // PRE_REVIEW is a draft only while unpaid; paid it awaits material review.
+    // matchArchiveReviews drops the unpaid ones using payment_status.
+    const result = await createAdminClient().from("submissions").select("id,status,payment_status,melon_url,archive_review_context,album_tracks(id,track_no,track_title,track_title_kr,track_title_en,composer,lyricist,arranger)").eq("user_id", owner).eq("type", "ALBUM").is("user_deleted_at", null).not("status", "in", "(DRAFT)").order("updated_at", { ascending: false }).order("id").range(offset, offset + 999);
     archiveDatabaseError(result.error);
     submissions.push(...(result.data ?? []));
     if (!result.data || result.data.length < 1000) break;
