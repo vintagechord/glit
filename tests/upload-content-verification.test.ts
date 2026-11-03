@@ -115,7 +115,7 @@ test("single-PUT completion stores the metadata approved at init, not what the b
         const shared = "import {state,calls} from 'put-fixture';";
         const modules: Record<string, string> = {
           "put-fixture": `export const state={bytes:new TextEncoder().encode('%PDF-1.7 business registration'),grant:null}; export const calls=[];`,
-          "@/lib/b2": `${shared} export class B2ConfigError extends Error{}; export const getB2Config=()=>({prefix:'submissions/',bucket:'fixture',client:{send:async command=>{calls.push({name:command.constructor.name});if(command.constructor.name==='HeadObjectCommand')return {ContentLength:state.bytes.length};return {ContentLength:state.bytes.length,Body:{transformToWebStream:()=>new ReadableStream({pull(controller){controller.enqueue(state.bytes);controller.close()}})}}}}});`,
+          "@/lib/b2": `${shared} export class B2ConfigError extends Error{}; export const getB2Config=()=>({prefix:'submissions/',bucket:'fixture',client:{send:async command=>{calls.push({name:command.constructor.name});if(command.constructor.name==='ListObjectsV2Command')return {Contents:[{Key:command.input.Prefix,Size:state.bytes.length}]};if(state.readsRefused)throw Object.assign(new Error('UnknownError'),{name:'403',$metadata:{httpStatusCode:403}});if(command.constructor.name==='HeadObjectCommand')return {ContentLength:state.bytes.length};return {ContentLength:state.bytes.length,Body:{transformToWebStream:()=>new ReadableStream({pull(controller){controller.enqueue(state.bytes);controller.close()}})}}}}});`,
           "@/lib/payments/submission": `export const ensureSubmissionOwner=async()=>({user:{id:'fixture-user'},submission:{id:'fixture',user_id:'fixture-user',status:'DRAFT',payment_status:'UNPAID',current_order_id:null},error:null});`,
           "@/lib/submission-object-key": `export const isSubmissionObjectKeyOwned=()=>true;`,
           "@/lib/request-rate-limit": `export const consumeRateLimit=()=>({allowed:true});export const getRequestIdentifier=()=> 'fixture';`,
@@ -127,7 +127,7 @@ test("single-PUT completion stores the metadata approved at init, not what the b
       });
     } }],
   });
-  type State = { bytes: Uint8Array; grant: Record<string, unknown> | null };
+  type State = { bytes: Uint8Array; grant: Record<string, unknown> | null; readsRefused?: boolean };
   const output = { exports: {} as { POST: (request: Request) => Promise<Response>; state: State; calls: Array<{ name: string; payload?: Record<string, unknown> }> } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
   const api = output.exports;
@@ -172,4 +172,15 @@ test("single-PUT completion stores the metadata approved at init, not what the b
   assert.equal(mismatch.status, 400);
   assert.ok(api.calls.some(call => call.name === "delete"), "rejected bytes are removed unless another row uses the key");
   assert.equal(api.calls.some(call => call.name === "stage"), false);
+
+  // B2 refusing reads under a daily download/Class B cap must not fail the
+  // upload: the listing proves the size and the container check is deferred.
+  api.calls.length = 0; api.state.bytes = new TextEncoder().encode("%PDF-1.7 business registration");
+  api.state.grant = approved(); api.state.readsRefused = true;
+  const capped = await complete({ sizeBytes: api.state.bytes.length });
+  assert.equal(capped.status, 200);
+  assert.equal((await capped.json()).verification.signature, "deferred");
+  assert.ok(api.calls.some(call => call.name === "ListObjectsV2Command"));
+  assert.ok(api.calls.some(call => call.name === "stage"));
+  assert.equal(api.calls.some(call => call.name === "delete"), false);
 });

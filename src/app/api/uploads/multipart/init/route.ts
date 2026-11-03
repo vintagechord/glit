@@ -63,8 +63,8 @@ const PRESIGN_EXPIRES_SECONDS = Math.min(
     Number(
       process.env.B2_MULTIPART_PRESIGN_EXPIRES_SECONDS ??
         process.env.B2_PRESIGN_EXPIRES_SECONDS ??
-        "1200",
-    ) || 1200,
+        "3600",
+    ) || 3600,
   ),
 );
 

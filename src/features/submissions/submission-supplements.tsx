@@ -210,7 +210,9 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
         const response = await fetch(await signedUrl(partNumber), {
           method: "PUT",
           body: file.slice((partNumber - 1) * target.partSize, Math.min(partNumber * target.partSize, file.size)),
-          signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+          // fetch reports no upload progress, so this deadline covers the
+          // whole 16MB part: 5 minutes still lets a ~1.5Mbps link finish.
+          signal: AbortSignal.any([signal, AbortSignal.timeout(300_000)]),
           credentials: "omit",
         });
         const etag = response.headers.get("etag");

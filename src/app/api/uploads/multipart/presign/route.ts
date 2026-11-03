@@ -45,8 +45,8 @@ const PRESIGN_EXPIRES_SECONDS = Math.min(
     Number(
       process.env.B2_MULTIPART_PRESIGN_EXPIRES_SECONDS ??
         process.env.B2_PRESIGN_EXPIRES_SECONDS ??
-        "1200",
-    ) || 1200,
+        "3600",
+    ) || 3600,
   ),
 );
 
@@ -55,7 +55,9 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-multipart-presign-ip",
     identifier: getRequestIdentifier(request.headers),
-    limit: 120,
+    // Each request signs a batch of parts; a slow multi-gigabyte upload
+    // re-signs as URLs near expiry, and several people may share one IP.
+    limit: 600,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {
