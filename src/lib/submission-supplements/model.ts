@@ -1,7 +1,8 @@
+import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media-upload-limit";
 import { z } from "zod";
 import { inspectFileSignature } from "@/lib/file-signature";
 
-export const SUPPLEMENT_MAX_BYTES = 4 * 1024 * 1024 * 1024;
+export const SUPPLEMENT_MAX_BYTES = MEDIA_UPLOAD_MAX_BYTES;
 export const SUPPLEMENT_PART_BYTES = 16 * 1024 * 1024;
 const id = z.string().uuid();
 const note = z.string().trim().max(4000);

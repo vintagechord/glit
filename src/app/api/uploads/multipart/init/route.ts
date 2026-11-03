@@ -1,3 +1,4 @@
+import { MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -43,8 +44,8 @@ const schema = z.object({
   guestToken: z.string().min(8).max(120).optional(),
 });
 
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
-const MAX_VIDEO_BYTES = 4 * 1024 * 1024 * 1024; // 4GB
+const MAX_AUDIO_BYTES = MEDIA_UPLOAD_MAX_BYTES;
+const MAX_VIDEO_BYTES = MEDIA_UPLOAD_MAX_BYTES;
 const MIN_PART_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_PARTS = 10000;
 
@@ -119,10 +120,7 @@ export async function POST(request: Request) {
   if (sizeBytes > maxSize) {
     return NextResponse.json(
       {
-        error:
-          kind === "audio"
-            ? "음원 파일은 최대 4GB까지 업로드할 수 있습니다."
-            : "뮤직비디오는 최대 4GB까지 업로드할 수 있습니다.",
+        error: MEDIA_UPLOAD_TOO_LARGE_MESSAGE,
       },
       { status: 413 },
     );

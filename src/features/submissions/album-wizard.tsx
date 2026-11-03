@@ -96,6 +96,7 @@ import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
+import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
 import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
@@ -259,19 +260,12 @@ const packageToneClasses = [
   },
 ];
 
-const uploadMaxMb = Number(
-  process.env.NEXT_PUBLIC_AUDIO_UPLOAD_MAX_MB ??
-  process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??
-  "4096",
-);
-const uploadMaxBytes = uploadMaxMb * 1024 * 1024;
+// One limit for site uploads; larger files go by email (see media-upload-limit).
+const uploadMaxBytes = MEDIA_UPLOAD_MAX_BYTES;
 // The server-streamed fallback is bound by the Vercel 4.5MB request limit.
 const directUploadMaxBytes = SERVER_UPLOAD_MAX_BYTES;
 const albumMultipartThresholdBytes = 32 * 1024 * 1024;
-const uploadMaxLabel =
-  uploadMaxMb >= 1024
-    ? `${Math.round(uploadMaxMb / 1024)}GB`
-    : `${uploadMaxMb}MB`;
+const uploadMaxLabel = MEDIA_UPLOAD_MAX_LABEL;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
 const adminReviewEmail =
@@ -1648,7 +1642,7 @@ export function AlbumWizard({
         return false;
       }
       if (file.size > uploadMaxBytes) {
-        invalidNotice = `파일 용량은 ${uploadMaxLabel} 이하만 가능합니다.`;
+        invalidNotice = MEDIA_UPLOAD_TOO_LARGE_MESSAGE;
         return false;
       }
       const isAudioFile = isOneClick
@@ -5777,6 +5771,9 @@ export function AlbumWizard({
                       {!initialArchiveEntry && <span className="text-center text-[11px] font-normal text-muted-foreground">
                         * 수록곡이 많은 경우 ZIP으로 압축한 하나의 파일로 업로드해주세요.
                       </span>}
+                      <span className="text-center text-[11px] font-semibold text-foreground">
+                        {MEDIA_UPLOAD_EMAIL_HINT}
+                      </span>
                       {!currentSubmissionId && !isPreparingDraft ? (
                         <button
                           type="button"
