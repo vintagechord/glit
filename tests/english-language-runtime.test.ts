@@ -88,6 +88,7 @@ test("English DOM updates avoid whole subtrees while preserving editable text, e
       document.createTreeWalker = (...args) => { globalThis.__walks++; return originalWalker(...args); };
       EnglishLanguagePack();
     ` });
+    assert.equal(await page.locator("#counter").textContent(), "10초 후 다시 보내기", "the first pass waits for the server HTML to hydrate");
     await page.waitForFunction(() => document.querySelector("#counter")?.textContent === "Resend in 10 seconds").catch((error: Error) => {
       throw new Error(`${error.message}; runtime errors: ${runtimeErrors.join("; ")}`);
     });
@@ -140,8 +141,26 @@ test("English DOM updates avoid whole subtrees while preserving editable text, e
       state.__pathname = "/en/guide";
       state.__mount();
     });
-    await page.waitForFunction(() => document.querySelector("#counter")?.textContent === "Resend in 8 seconds");
+    // Later client navigations translate at once instead of waiting again.
+    await page.waitForFunction(() => document.querySelector("#counter")?.textContent === "Resend in 8 seconds", undefined, { timeout: 1_000 });
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
+
+    // A page reached by client navigation before the first pass is rendered
+    // in the browser, so it does not wait for hydration either.
+    const navigated = await browser.newPage();
+    await navigated.route("https://onside.test/**", (route) => route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: `<html lang="ko"><head><title>FAQ</title></head><body><span id="counter">10초 후 다시 보내기</span></body></html>`,
+    }));
+    await navigated.goto("https://onside.test/en/guide", { waitUntil: "domcontentloaded" });
+    await navigated.addScriptTag({ content: `
+      history.pushState(null, "", "/en/faq");
+      const React = { useEffect(run) { run(); } };
+      const usePathname = () => "/en/faq";
+      ${runtime}
+      EnglishLanguagePack();
+    ` });
+    await navigated.waitForFunction(() => document.querySelector("#counter")?.textContent === "Resend in 10 seconds", undefined, { timeout: 1_000 });
   } finally {
     await browser.close();
   }

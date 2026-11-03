@@ -53,8 +53,10 @@ const heroCtas = [
   },
 ];
 
+// Hidden only while scripts run (data-js comes from the inline layout script)
+// and motion is welcome, so visitors without JavaScript still see the section.
 const scrollRevealBaseClass =
-  "opacity-0 translate-y-6 transition-all duration-700 ease-out will-change-transform data-[reveal-state=visible]:opacity-100 data-[reveal-state=visible]:translate-y-0 motion-reduce:opacity-100 motion-reduce:translate-y-0";
+  "transition-all duration-700 ease-out will-change-transform motion-safe:[html[data-js]_&[data-reveal-state=hidden]]:opacity-0 motion-safe:[html[data-js]_&[data-reveal-state=hidden]]:translate-y-6 motion-reduce:transition-none";
 
 const serviceCards = [
   {

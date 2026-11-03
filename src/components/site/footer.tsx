@@ -21,6 +21,18 @@ const footerPanelClass =
 const footerLegalButtonClass =
   "text-left transition hover:text-[#f2cf27]";
 
+type PolicyModal = "terms" | "privacy" | "refund" | "file" | "partnership";
+
+// Real pages, so the policies open without JavaScript; with it, a plain click
+// shows the same text in the modal. The refund and file rules are published
+// with the terms that refer to them.
+const policyLinks: Array<{ modal: PolicyModal; label: string; path: string }> = [
+  { modal: "terms", label: "이용약관", path: "/terms" },
+  { modal: "privacy", label: "개인정보처리방침", path: "/privacy" },
+  { modal: "refund", label: "환불/취소 규정", path: "/terms#refund" },
+  { modal: "file", label: "파일 보관/삭제 정책", path: "/terms#file-policy" },
+];
+
 export function SiteFooter() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
@@ -31,11 +43,15 @@ export function SiteFooter() {
   const bankAccount = APP_CONFIG.bankAccount;
   const bankHolder = APP_CONFIG.bankHolder;
 
-  const [activeModal, setActiveModal] = React.useState<
-    "terms" | "privacy" | "refund" | "file" | "partnership" | null
-  >(null);
+  const [activeModal, setActiveModal] = React.useState<PolicyModal | null>(null);
 
   const closeModal = () => setActiveModal(null);
+  const openPolicy = (event: React.MouseEvent<HTMLAnchorElement>, modal: PolicyModal) => {
+    // Modified clicks keep the browser's own handling, such as a new tab.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setActiveModal(modal);
+  };
   const [legal, setLegal] = React.useState<LegalContent | null>(null);
   React.useEffect(() => {
     if (!activeModal || legal) return;
@@ -203,34 +219,16 @@ export function SiteFooter() {
               <span className="hidden text-xs text-white/46 group-open:inline">접기</span>
             </summary>
             <div className={footerPanelClass}>
-              <button
-                type="button"
-                onClick={() => setActiveModal("terms")}
-                className={footerLegalButtonClass}
-              >
-                이용약관
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveModal("privacy")}
-                className={footerLegalButtonClass}
-              >
-                개인정보처리방침
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveModal("refund")}
-                className={footerLegalButtonClass}
-              >
-                환불/취소 규정
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveModal("file")}
-                className={footerLegalButtonClass}
-              >
-                파일 보관/삭제 정책
-              </button>
+              {policyLinks.map((policy) => (
+                <a
+                  key={policy.modal}
+                  href={`${siteLinkPrefix}${policy.path}`}
+                  onClick={(event) => openPolicy(event, policy.modal)}
+                  className={footerLinkClass}
+                >
+                  {policy.label}
+                </a>
+              ))}
               <button
                 type="button"
                 onClick={() => setActiveModal("partnership")}

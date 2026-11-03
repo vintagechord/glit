@@ -7,7 +7,8 @@ import { loadAlbumPackages } from "@/lib/review-guide-pricing";
 import { getReviewGuide, MV_PRICE_ROWS, REVIEW_GUIDES, FALLBACK_ALBUM_PACKAGES, type AlbumPackage } from "@/lib/review-guides";
 import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
 
-// Public, crawlable guides: rebuilt hourly so package prices stay current.
+// Public, crawlable guides: rebuilt hourly, and at once when an admin edits
+// packages (the price table reads the tagged public catalog cache).
 export const revalidate = 3600;
 export const dynamicParams = false;
 

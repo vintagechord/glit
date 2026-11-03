@@ -7,6 +7,7 @@ import { CheckCircle2, ImageUp, Info, SendHorizontal } from "lucide-react";
 
 import { createMagazineArtworkUploadAction, createMagazineRequestAction } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { brandStatusTones } from "@/lib/brand-status-tones";
 import { MAGAZINE_REQUEST_CREDIT_COST, MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE } from "@/lib/credits";
 
 const channelOptions = [
@@ -133,14 +134,15 @@ export function MagazineRequestForm({
 
         {notice?.type === "error" ? (
           <div
-            className="mt-5 rounded-[8px] border-2 border-[#d9362c] bg-[#d9362c]/10 px-4 py-3 text-sm font-semibold text-[#d9362c]"
+            role="alert"
+            className={`mt-5 rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.danger}`}
           >
             {notice.text}
           </div>
         ) : null}
 
         {isAuthenticated && !magazineRequestsReady && (
-          <p role="status" className="mt-5 rounded-[8px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <p role="status" className={`mt-5 rounded-[8px] border-2 px-4 py-3 text-sm font-semibold ${brandStatusTones.warning}`}>
             {MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE}
           </p>
         )}

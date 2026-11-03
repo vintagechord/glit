@@ -81,7 +81,7 @@ test("lookup and auth pages remove repeated headers while retaining required con
   const trackForm = readSource("src/features/track/track-lookup-form.tsx");
   const loginPage = readSource("src/features/auth/login-page-view.tsx");
   const loginForm = readSource("src/features/auth/login-form.tsx");
-  const forgotPassword = readSource("src/app/forgot-password/page.tsx");
+  const forgotPassword = readSource("src/app/forgot-password/forgot-password-view.tsx");
 
   assert.doesNotMatch(trackPage, /진행\/결과 조회<\/p>/);
   assert.doesNotMatch(trackPage, /회원은 로그인 후 접수 현황으로 이동/);
