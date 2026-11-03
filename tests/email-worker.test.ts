@@ -36,8 +36,10 @@ test("scheduled mail worker requires its own credential, rejects outage and reco
   assert.equal(api.maxDuration, 300);
   assert.equal(api.state.options?.limit, 9);
   assert.equal(api.state.options?.batchSize, 3);
-  const remaining = api.state.options!.deadline - before;
-  assert.ok(remaining > 280_000 && remaining <= 285_000, String(remaining));
+  const after = Date.now();
+  // The route reads the clock after `before`, so bound the deadline by both.
+  const deadline = api.state.options!.deadline;
+  assert.ok(deadline >= before + 285_000 && deadline <= after + 285_000, String(deadline - before));
   api.state.drainError = true;
   assert.equal((await api.POST(request("a".repeat(64)))).status, 503);
   assert.ok(api.calls.some(v => typeof v === "object" && v !== null && "last_error" in v && v.last_error === true));
