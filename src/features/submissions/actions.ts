@@ -568,7 +568,6 @@ const MAX_SUBMISSION_AMOUNT_KRW = 100_000_000;
 const MAX_STATION_SELECTIONS = 20;
 const MAX_ALBUM_TRACKS = 100;
 const MAX_SUBMISSION_FILES = 100;
-const MAX_UPLOAD_BYTES = MEDIA_UPLOAD_MAX_BYTES;
 const shortTextSchema = z.string().max(500);
 const metadataTextSchema = z.string().max(2_000);
 const narrativeTextSchema = z.string().max(200_000);
@@ -597,7 +596,7 @@ const fileSchema = z.object({
   path: z.string().min(1).max(1_024),
   originalName: z.string().min(1).max(500),
   mime: z.string().max(255).optional(),
-  size: z.number().int().nonnegative().max(MAX_UPLOAD_BYTES),
+  size: z.number().int().nonnegative().max(MEDIA_UPLOAD_MAX_BYTES),
   checksum: z.string().max(256).optional(),
   durationSeconds: z.number().finite().nonnegative().max(86_400).optional(),
   accessUrl: urlTextSchema.optional(),

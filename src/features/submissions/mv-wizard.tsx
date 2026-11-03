@@ -70,7 +70,7 @@ import { AiUsageSelector } from "./ai-usage-selector";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
-import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
+import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, mediaUploadTooLargeMessage } from "@/lib/media-upload-limit";
 import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { getSelectedBroadcastSpecs, kbsMvPurposeNote, type BroadcastSpecFields } from "@/lib/mv-submission-specs";
 import { SubmissionProgress } from "./submission-progress";
@@ -1217,7 +1217,7 @@ export function MvWizard({
         return false;
       }
       if (file.size > uploadMaxBytes) {
-        invalidNotice = MEDIA_UPLOAD_TOO_LARGE_MESSAGE;
+        invalidNotice = mediaUploadTooLargeMessage("video");
         return false;
       }
       const isVideoFile = isVideoUploadFile(file.name, file.type);

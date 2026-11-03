@@ -2732,8 +2732,10 @@ Object.assign(exactTranslations, {
 const phraseTranslations: Array<[RegExp, string]> = [
   [/방송국 (\d+)곳 · 앨범 1건/g, "$1 stations · 1 album"],
   [/파일 첨부 \(사이트 전송 한도 (.+?), 드래그 앤 드롭 가능\)/g, "Attach Files (site transfer limit $1, drag and drop available)"],
-  [/파일 하나는 2GB까지 올릴 수 있습니다\. 2GB가 넘는 파일은 ‘파일은 이메일로 나중에 제출’을 선택하고 (\S+?) 주소로 보내주세요\./g, "Each file can be up to 2 GB. For larger files, choose to send files by email later and send them to $1."],
-  [/2GB가 넘는 파일은 (\S+?) 주소로 이메일 접수해 주세요\./g, "Send files over 2 GB by email to $1."],
+  [/뮤직비디오 파일은 하나당 (\d+GB)까지 올릴 수 있습니다\. \d+GB가 넘는 파일은 ‘파일은 이메일로 나중에 제출’을 선택하고 (\S+?) 주소로 보내주세요\./g, "Each music video file can be up to $1. For larger files, choose to send files by email later and send them to $2."],
+  [/음원 파일은 하나당 (\d+GB)까지 올릴 수 있습니다\. \d+GB가 넘는 파일은 ‘파일은 이메일로 나중에 제출’을 선택하고 (\S+?) 주소로 보내주세요\./g, "Each audio file can be up to $1. For larger files, choose to send files by email later and send them to $2."],
+  [/(\d+GB)가 넘는 파일은 (\S+?) 주소로 이메일 접수해 주세요\./g, "Send files over $1 by email to $2."],
+  [/음원과 뮤직비디오는 파일 하나당 (\d+GB)까지 올릴 수 있습니다\. 더 큰 파일은 (\S+?) 주소로 이메일 접수해 주세요\./g, "Audio and music video files can be up to $1 each. Send larger files by email to $2."],
   [/접수번호/g, "Application ID"],
   [/발급 대기/g, "Pending"],
   [/\[음반심의 파일\]/g, "[Album Review Files]"],

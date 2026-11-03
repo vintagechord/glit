@@ -96,7 +96,7 @@ import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
 import { SubmissionPreflightPanel } from "./submission-preflight-panel";
 import { EmailMaterialsNotice } from "./email-materials-notice";
-import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
+import { MEDIA_UPLOAD_EMAIL_HINT, MEDIA_UPLOAD_MAX_BYTES, MEDIA_UPLOAD_MAX_LABEL, mediaUploadTooLargeMessage } from "@/lib/media-upload-limit";
 import { GuestCartRecoveryNotice } from "./guest-cart-recovery-notice";
 import { SubmissionProgress } from "./submission-progress";
 import { SubmissionSaveIndicator } from "./submission-save-indicator";
@@ -1642,7 +1642,7 @@ export function AlbumWizard({
         return false;
       }
       if (file.size > uploadMaxBytes) {
-        invalidNotice = MEDIA_UPLOAD_TOO_LARGE_MESSAGE;
+        invalidNotice = mediaUploadTooLargeMessage("audio");
         return false;
       }
       const isAudioFile = isOneClick

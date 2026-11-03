@@ -1,4 +1,4 @@
-import { MEDIA_UPLOAD_TOO_LARGE_MESSAGE } from "@/lib/media-upload-limit";
+import { MEDIA_UPLOAD_LIMITS_MESSAGE } from "@/lib/media-upload-limit";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readBoundedJsonBody } from "@/lib/request-body";
@@ -37,7 +37,7 @@ export async function POST(request: Request, route: RouteContext) {
     const body = await readBoundedJsonBody(request, 256 * 1024);
     if (!body.ok) return json({ error: "보완 요청을 확인해주세요." }, body.reason === "too_large" ? 413 : 400);
     const parsed = supplementActionSchema.safeParse(body.value);
-    if (!parsed.success) return json({ error: `파일 정보와 요청 내용을 확인해주세요. ${MEDIA_UPLOAD_TOO_LARGE_MESSAGE}` }, 400);
+    if (!parsed.success) return json({ error: `파일 정보와 요청 내용을 확인해주세요. ${MEDIA_UPLOAD_LIMITS_MESSAGE}` }, 400);
     const context = await getSupplementContext(id, request);
     return json({ ok: true, ...await performSupplementAction(context, parsed.data) });
   } catch (error) { return failure(error); }
