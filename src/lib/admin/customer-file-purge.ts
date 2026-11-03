@@ -73,8 +73,10 @@ export type PurgeResult = {
 /**
  * When the files stopped being needed, or null while they may still be:
  * unpaid, a supplement request still open, an online music video without a
- * published rating, or any broadcaster result still outstanding. A refund
- * stops the review outright, so a refunded submission always qualifies.
+ * published rating, or any broadcaster result still outstanding (an online
+ * music video order can include Mnet/ETN reviews that use the same video).
+ * A refund stops the review outright, so a refunded submission always
+ * qualifies.
  */
 export function reviewFinishedAt(
   submission: PurgeSubmissionRow,
@@ -86,10 +88,10 @@ export function reviewFinishedAt(
   if (supplementRequests.some((request) => OPEN_SUPPLEMENT_STATUSES.has(request.status ?? ""))) return null;
   if (submission.type === "MV_DISTRIBUTION") {
     if (!isRatingCode(submission.mv_desired_rating) || !hasPublishedSubmissionResult(submission)) return null;
-  } else {
-    if (!FINISHED_SUBMISSION_STATUSES.has(submission.status ?? "")) return null;
-    if (reviews.some((review) => !FINAL_STATION_STATUSES.has(review.status ?? ""))) return null;
+  } else if (!FINISHED_SUBMISSION_STATUSES.has(submission.status ?? "")) {
+    return null;
   }
+  if (reviews.some((review) => !FINAL_STATION_STATUSES.has(review.status ?? ""))) return null;
   const latestReview = reviews
     .map((review) => review.updated_at)
     .filter((value): value is string => Boolean(value))
@@ -220,16 +222,28 @@ async function findSharedKeys(db: AdminClient, submissionId: string, keys: strin
   return shared;
 }
 
-async function setPurgedAt(db: AdminClient, files: PurgeFile[], value: string | null) {
+async function updatePurgeColumn(
+  db: AdminClient,
+  files: Array<Pick<PurgeFile, "source" | "id">>,
+  values: { purged_at?: string | null; purge_confirmed_at?: string | null },
+) {
   const uploads = files.filter((file) => file.source === "upload").map((file) => file.id);
   const supplements = files.filter((file) => file.source === "supplement").map((file) => file.id);
   for (const [table, ids] of [["submission_files", uploads], ["submission_supplement_files", supplements]] as const) {
     for (const part of chunk(ids, ID_CHUNK)) {
-      const { error } = await db.from(table).update({ purged_at: value }).in("id", part);
+      const { error } = await db.from(table).update(values).in("id", part);
       if (error) throw new Error(`${table} update failed`);
     }
   }
 }
+
+const setPurgedAt = (db: AdminClient, files: PurgeFile[], value: string | null) =>
+  updatePurgeColumn(db, files, { purged_at: value });
+
+/** The stored versions are gone. Until this is written a marked row counts
+ * as interrupted and resumeInterruptedPurges deletes it again. */
+const confirmPurged = (db: AdminClient, files: Array<Pick<PurgeFile, "source" | "id">>) =>
+  updatePurgeColumn(db, files, { purge_confirmed_at: new Date().toISOString() });
 
 const formatBytes = (bytes: number) =>
   bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)}GB` : `${Math.max(1, Math.round(bytes / 1024 ** 2))}MB`;
@@ -237,7 +251,8 @@ const formatBytes = (bytes: number) =>
 /**
  * Deletes the customer files of finished submissions. Rows are marked first,
  * so a download can never be offered for an object that is already gone; a
- * file whose storage delete fails is unmarked again and stays retryable.
+ * file whose storage delete fails is unmarked again and stays retryable, and
+ * one whose delete was cut off is finished by resumeInterruptedPurges.
  */
 export async function purgeCustomerFiles(
   db: AdminClient,
@@ -287,6 +302,8 @@ export async function purgeCustomerFiles(
       if (failed.length) await setPurgedAt(db, failed, null);
       const deleted = files.filter((file) => !failedKeys.has(file.objectKey));
       const freedBytes = deleted.reduce((sum, file) => sum + file.sizeBytes, 0);
+      // An unconfirmed row is deleted again later, which finds nothing to remove.
+      if (deleted.length) await confirmPurged(db, deleted).catch(() => undefined);
 
       if (deleted.length) {
         await db.from("submission_events").insert({
@@ -313,4 +330,72 @@ export async function purgeCustomerFiles(
     }
   }
   return results;
+}
+
+/** A marked row older than this whose delete never confirmed was cut off. */
+export const INTERRUPTED_PURGE_AGE_MS = 15 * 60 * 1000;
+
+type MarkedRow = { id: string; submission_id?: string | null; storage_provider?: string | null; kind?: string | null; object_key: string | null };
+
+/**
+ * Finishes purges that stopped between marking rows and deleting their
+ * objects (a timed-out or killed function). Those rows are never purge
+ * candidates again, so without this their objects would stay stored for
+ * good. Deleting a key twice is harmless; a key another live or staged row
+ * now uses, or one outside the customer namespaces, is confirmed without
+ * deleting. Returns how many rows it confirmed.
+ */
+export async function resumeInterruptedPurges(
+  db: AdminClient,
+  options: { limit?: number; now?: number; deleteAllVersions?: (objectKey: string) => Promise<number> } = {},
+) {
+  const { prefix } = getB2Config();
+  const limit = Math.max(1, Math.min(200, options.limit ?? 50));
+  const cutoff = new Date((options.now ?? Date.now()) - INTERRUPTED_PURGE_AGE_MS).toISOString();
+  const remove = options.deleteAllVersions ?? deleteObjectAllVersions;
+  const [uploads, supplements] = await Promise.all([
+    db.from("submission_files").select("id, submission_id, kind, storage_provider, object_key")
+      .is("purge_confirmed_at", null).lt("purged_at", cutoff).order("purged_at").limit(limit),
+    db.from("submission_supplement_files").select("id, object_key")
+      .is("purge_confirmed_at", null).lt("purged_at", cutoff).order("purged_at").limit(limit),
+  ]);
+  if (uploads.error || supplements.error) throw new Error("interrupted purge lookup failed");
+  const uploadRows = (uploads.data ?? []) as MarkedRow[];
+  const supplementRows = (supplements.data ?? []) as MarkedRow[];
+  const scoped = new Set(parseSubmissionB2ObjectRefs(uploadRows, prefix).map((ref) => `${ref.submissionId}\u0000${ref.objectKey}`));
+  const work: Array<{ file: Pick<PurgeFile, "source" | "id">; objectKey: string | null; submissionId: string | null }> = [
+    ...uploadRows.map((row) => ({
+      file: { source: "upload" as const, id: row.id },
+      objectKey: scoped.has(`${row.submission_id}\u0000${String(row.object_key ?? "").trim()}`) ? String(row.object_key).trim() : null,
+      submissionId: row.submission_id ?? null,
+    })),
+    ...supplementRows.map((row) => {
+      const key = String(row.object_key ?? "");
+      const submissionId = key.slice(`${prefix.replace(/\/+$/, "")}/supplements/`.length).split("/")[0] ?? "";
+      return {
+        file: { source: "supplement" as const, id: row.id },
+        objectKey: submissionId && isSupplementKeyOf(key, prefix, submissionId) ? key : null,
+        submissionId: submissionId || null,
+      };
+    }),
+  ];
+  const confirmed: Array<Pick<PurgeFile, "source" | "id">> = [];
+  for (const item of work) {
+    try {
+      if (item.objectKey) {
+        const shared = item.file.source === "upload" && item.submissionId
+          ? await findSharedKeys(db, item.submissionId, [item.objectKey])
+          : new Set<string>();
+        if (!shared.has(item.objectKey)) await remove(item.objectKey);
+      }
+      confirmed.push(item.file);
+    } catch (error) {
+      console.error("[customer-file-purge] interrupted purge retry failed", {
+        objectKeyId: item.objectKey ? getStorageLogId(item.objectKey) : null,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  }
+  if (confirmed.length) await confirmPurged(db, confirmed);
+  return confirmed.length;
 }

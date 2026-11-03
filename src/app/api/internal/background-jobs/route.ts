@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { consumeRateLimit, getRequestIdentifier } from "@/lib/request-rate-limit";
+import { readBoundedJsonBody } from "@/lib/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,9 @@ export const maxDuration = 300;
  * pg_cron (`dispatch_background_jobs`) calls this only while durable music
  * archive or review document work is waiting. Both runners use DB leases, so
  * overlapping calls, request after() work and optional CLI workers stay safe.
+ * `dispatch_storage_cleanup` calls it with {"task":"storage-cleanup"} while
+ * expired uploads, abandoned grants, unfinished purges or orphan artwork
+ * wait; that run uses DB leases too.
  */
 export async function POST(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
@@ -26,7 +30,18 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
+  const body = await readBoundedJsonBody(request, 1024);
+  const task = body.ok && (body.value as { task?: unknown } | null)?.task === "storage-cleanup" ? "storage-cleanup" : "default";
   // Answer the short pg_net timeout first; Vercel keeps after() work alive.
+  if (task === "storage-cleanup") {
+    after(async () => {
+      const { runUploadStorageCleanup } = await import("@/lib/upload-storage-cleanup");
+      const report = await runUploadStorageCleanup().catch(() => null);
+      if (!report) console.error("[storage-cleanup] scheduled run failed; the next dispatch retries");
+      else console.info("[storage-cleanup] scheduled run", report);
+    });
+    return NextResponse.json({ ok: true }, { status: 202, headers: { "cache-control": "no-store" } });
+  }
   after(async () => {
     const [{ runArchiveBatch }, { resumeWebReviewJobs }] = await Promise.all([
       import("@/lib/music-archive/sync"),

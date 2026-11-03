@@ -107,8 +107,36 @@ test("single PUTs bind content length and ignore client access URLs", () => {
   assert.match(init, /readBoundedJsonBody/);
   assert.doesNotMatch(complete, /accessUrl: z\.string/);
   assert.doesNotMatch(complete, /providedAccessUrl/);
-  assert.match(complete, /presignGetUrl\(normalizedKey/);
   assert.match(complete, /deleteUnreferencedObjectOnFailure/);
+});
+
+test("single PUT and direct uploads are bound to server-approved metadata and a safe stored type", () => {
+  const init = read("src/app/api/uploads/init/route.ts");
+  const direct = read("src/app/api/uploads/direct/route.ts");
+  const complete = read("src/app/api/uploads/complete/route.ts");
+  const multipartInit = read("src/app/api/uploads/multipart/init/route.ts");
+  const multipartComplete = read("src/app/api/uploads/multipart/complete/route.ts");
+  const migration = read("supabase/migrations/20261103150000_upload_grants_and_storage_cleanup.sql");
+
+  for (const [path, source] of [["init", init], ["direct", direct], ["multipart init", multipartInit]] as const) {
+    assert.match(source, /isAllowedSubmissionUpload\(/, path);
+    assert.match(source, /safeUploadContentType\(/, path);
+    assert.doesNotMatch(source, /isApplicationFormMime|isAudioUploadFile|isVideoUploadFile/, `${path} must not accept a MIME type alone`);
+  }
+  assert.match(init, /createUploadPutGrant\(/);
+  assert.match(direct, /createUploadPutGrant\(/);
+  assert.match(init, /headers: \{ "Content-Type": contentType \}/);
+  assert.match(complete, /getUploadPutGrant\(submissionId, normalizedKey\)/);
+  assert.match(complete, /verifyUploadedObjectSignature\(normalizedKey, grant\.original_name\)/);
+  assert.match(complete, /signature === "unsupported"/);
+  assert.match(multipartComplete, /signature === "unsupported"/);
+  // Download links are signed per request after a permission check.
+  for (const source of [complete, multipartComplete]) {
+    assert.doesNotMatch(source, /presignGetUrl/);
+    assert.match(source, /access_url: null/);
+  }
+  assert.match(migration, /create table if not exists public\.upload_put_grants/);
+  assert.match(migration, /update public\.submission_files set access_url = null/);
 });
 
 test("the unbound legacy Supabase upload route fails closed", () => {

@@ -15,16 +15,11 @@ import {
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import {
-  isApplicationFormFile,
-  isApplicationFormMime,
-  isAudioUploadFile,
-  isResultAttachmentFile,
-  isVideoUploadFile,
-} from "@/lib/submission-files";
-import {
   getSubmissionUploadBlockMessage,
   getSubmissionUploadBlockReason,
 } from "@/lib/submission-upload-access";
+import { isAllowedSubmissionUpload, safeUploadContentType } from "@/lib/upload-file-types";
+import { createUploadPutGrant } from "@/lib/upload-put-grants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,32 +49,6 @@ const configuredExpiresSeconds = Number(
 const EXPIRES_SECONDS = Number.isFinite(configuredExpiresSeconds)
   ? Math.min(60 * 60, Math.max(60, Math.trunc(configuredExpiresSeconds)))
   : 900;
-
-const isAllowedUploadFile = (
-  kind: "audio" | "video" | "etc",
-  filename: string,
-  mimeType: string,
-) => {
-  if (kind === "etc") {
-    return (
-      isResultAttachmentFile(filename, mimeType) ||
-      isApplicationFormFile(filename) ||
-      isApplicationFormMime(mimeType)
-    );
-  }
-  if (kind === "audio") {
-    return (
-      isAudioUploadFile(filename, mimeType) ||
-      isApplicationFormFile(filename) ||
-      isApplicationFormMime(mimeType)
-    );
-  }
-  return (
-    isVideoUploadFile(filename, mimeType) ||
-    isApplicationFormFile(filename) ||
-    isApplicationFormMime(mimeType)
-  );
-};
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -126,7 +95,7 @@ export async function POST(request: Request) {
       { status: 413 },
     );
   }
-  if (!isAllowedUploadFile(kind, filename, mimeType)) {
+  if (!isAllowedSubmissionUpload(kind, filename, mimeType)) {
     return NextResponse.json(
       {
         error:
@@ -225,10 +194,22 @@ export async function POST(request: Request) {
       filename,
     });
 
+    // Completion reads the approved name, type, kind and size from this row.
+    await createUploadPutGrant({
+      submissionId,
+      objectKey: key,
+      originalName: filename,
+      mimeType,
+      uploadKind: kind,
+      declaredSizeBytes: sizeBytes,
+    });
+
+    // The stored type follows the extension, never the declared type.
+    const contentType = safeUploadContentType(filename);
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      ContentType: mimeType,
+      ContentType: contentType,
       ContentLength: sizeBytes,
     });
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: EXPIRES_SECONDS });
@@ -250,7 +231,7 @@ export async function POST(request: Request) {
       bucket,
       uploadUrl,
       method: "PUT",
-      headers: { "Content-Type": mimeType },
+      headers: { "Content-Type": contentType },
       maxSizeBytes: MAX_SINGLE_PUT_BYTES,
       expiresInSeconds: EXPIRES_SECONDS,
       submissionId,

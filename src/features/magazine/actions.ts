@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { consumePersistentRateLimit } from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
@@ -50,7 +51,9 @@ const optionalUrl = z.preprocess((value) => {
 }, z.string().url().optional());
 
 const magazineArtworkBucket = "magazine-artwork";
+// Matches the bucket's file_size_limit and allowed_mime_types.
 const maxArtworkBytes = 20 * 1024 * 1024;
+const MAGAZINE_ARTWORK_UPLOADS_PER_HOUR = 10;
 const artworkImageTypes = new Set([
   "image/jpeg",
   "image/png",
@@ -223,9 +226,31 @@ export async function createMagazineArtworkUploadAction(input: {
     return { error: "로그인한 회원만 크레딧을 사용할 수 있습니다." };
   }
 
+  // Each URL lets the member store a file before any request exists, so the
+  // count is limited across instances and only members who could actually
+  // file a request get one. The bucket enforces size and image type, and the
+  // storage cleanup removes artwork no request uses after a day.
+  const limit = await consumePersistentRateLimit({
+    namespace: "magazine-artwork-upload-user",
+    identifier: user.id,
+    limit: MAGAZINE_ARTWORK_UPLOADS_PER_HOUR,
+    windowMs: 60 * 60 * 1_000,
+  });
+  if (!limit.allowed) {
+    return { error: "대표 이미지 업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." };
+  }
+  const admin = createAdminClient();
+  const creditSummary = await getUserCreditSummary(admin, user.id);
+  if (creditSummary.magazineRequestsReady === false) {
+    return { error: MAGAZINE_REQUEST_UNAVAILABLE_MESSAGE };
+  }
+  if (creditSummary.available < MAGAZINE_REQUEST_CREDIT_COST) {
+    return { error: MAGAZINE_CREDIT_INSUFFICIENT_MESSAGE };
+  }
+
   const safeName = sanitizeStorageFileName(file.name || "artwork.jpg");
   const path = `${user.id}/uploads/${Date.now()}-${randomUUID()}-${safeName}`;
-  const { data, error } = await createAdminClient()
+  const { data, error } = await admin
     .storage.from(magazineArtworkBucket)
     .createSignedUploadUrl(path);
   if (error || !data?.token) {

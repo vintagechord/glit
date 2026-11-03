@@ -24,15 +24,10 @@ import {
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
 import {
-  isApplicationFormFile,
-  isApplicationFormMime,
-  isAudioUploadFile,
-  isVideoUploadFile,
-} from "@/lib/submission-files";
-import {
   getSubmissionUploadBlockMessage,
   getSubmissionUploadBlockReason,
 } from "@/lib/submission-upload-access";
+import { isAllowedSubmissionUpload, safeUploadContentType } from "@/lib/upload-file-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,25 +75,6 @@ const resolvePartSize = (sizeBytes: number) => {
   );
   const rounded = Math.ceil(base / MIN_PART_SIZE) * MIN_PART_SIZE;
   return Math.max(MIN_PART_SIZE, rounded);
-};
-
-const isAllowedUploadFile = (
-  kind: "audio" | "video",
-  filename: string,
-  mimeType: string,
-) => {
-  if (kind === "audio") {
-    return (
-      isAudioUploadFile(filename, mimeType) ||
-      isApplicationFormFile(filename) ||
-      isApplicationFormMime(mimeType)
-    );
-  }
-  return (
-    isVideoUploadFile(filename, mimeType) ||
-    isApplicationFormFile(filename) ||
-    isApplicationFormMime(mimeType)
-  );
 };
 
 export async function POST(request: Request) {
@@ -151,7 +127,7 @@ export async function POST(request: Request) {
       { status: 413 },
     );
   }
-  if (!isAllowedUploadFile(kind, filename, mimeType)) {
+  if (!isAllowedSubmissionUpload(kind, filename, mimeType)) {
     return NextResponse.json(
       {
         error:
@@ -206,9 +182,10 @@ export async function POST(request: Request) {
       filename,
     });
 
+    // The stored type follows the extension, never the declared type.
     const uploadId = await createMultipartUpload({
       objectKey: key,
-      contentType: mimeType,
+      contentType: safeUploadContentType(filename),
     });
     pendingUpload = { objectKey: key, uploadId };
 
