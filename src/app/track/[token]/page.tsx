@@ -1,9 +1,10 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 import { loadCustomerSubmissionDetail } from "@/lib/submissions/customer-detail";
 import { decodeTrackToken } from "@/lib/track-token";
 
@@ -51,7 +52,10 @@ export default async function TrackDetailPage({
     const { data: isAdmin } = await supabase.rpc("is_admin");
     return isAdmin === true ? "admin" : "member";
   }).catch(() => "unknown");
-  if (viewer !== "admin" && viewer !== "unknown") recordCustomerResultViewAfterResponse(detail.submission.id);
+  if (viewer !== "admin" && viewer !== "unknown") {
+    const userAgent = await headers().then((list) => list.get("user-agent"), () => null);
+    recordCustomerResultViewAfterResponse(detail.submission.id, { via: "guest", client: classifyActivityClient(userAgent) });
+  }
 
   return (
     <SubmissionDetailClient

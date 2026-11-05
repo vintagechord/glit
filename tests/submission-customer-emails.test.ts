@@ -16,7 +16,7 @@ function client(requests: URL[], status = 200) {
         const url = new URL(String(input));
         requests.push(url);
         const body = status === 200
-          ? [{ id: "m1", recipient_email: "customer@example.test", subject: "[onside] 결제 완료 및 심의 접수 안내", operation: "payment completed", status: "accepted", attempt_count: 1, created_at: "2026-11-03T10:00:00Z", accepted_at: "2026-11-03T10:00:05Z", next_attempt_at: "2026-11-03T10:00:00Z", opened_at: "2026-11-03T10:20:00Z", open_count: 2 }]
+          ? [{ id: "m1", recipient_email: "customer@example.test", subject: "[onside] 결제 완료 및 심의 접수 안내", operation: "payment completed", status: "accepted", attempt_count: 1, created_at: "2026-11-03T10:00:00Z", accepted_at: "2026-11-03T10:00:05Z", next_attempt_at: "2026-11-03T10:00:00Z", last_attempt_at: "2026-11-03T10:00:01Z", tracking: "open+click", opened_at: "2026-11-03T10:20:00Z", last_opened_at: "2026-11-03T10:40:00Z", open_count: 2, clicked_at: "2026-11-03T10:21:00Z", last_clicked_at: "2026-11-03T10:21:00Z", click_count: 1 }]
           : { message: "fixture failure" };
         return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
       },
@@ -28,7 +28,7 @@ test("the detail page reads only this submission's customer mail, never staff no
   const requests: URL[] = [];
   const result = await loadSubmissionCustomerEmails(client(requests), sid);
   assert.equal(result.error, false);
-  assert.deepEqual(result.emails, [{ id: "m1", recipient: "customer@example.test", subject: "[onside] 결제 완료 및 심의 접수 안내", operation: "payment completed", status: "accepted", attempts: 1, createdAt: "2026-11-03T10:00:00Z", acceptedAt: "2026-11-03T10:00:05Z", nextAttemptAt: "2026-11-03T10:00:00Z", openedAt: "2026-11-03T10:20:00Z", openCount: 2 }]);
+  assert.deepEqual(result.emails, [{ id: "m1", recipient: "customer@example.test", subject: "[onside] 결제 완료 및 심의 접수 안내", operation: "payment completed", status: "accepted", attempts: 1, createdAt: "2026-11-03T10:00:00Z", acceptedAt: "2026-11-03T10:00:05Z", nextAttemptAt: "2026-11-03T10:00:00Z", lastAttemptAt: "2026-11-03T10:00:01Z", tracking: "open+click", openedAt: "2026-11-03T10:20:00Z", lastOpenedAt: "2026-11-03T10:40:00Z", openCount: 2, clickedAt: "2026-11-03T10:21:00Z", lastClickedAt: "2026-11-03T10:21:00Z", clickCount: 1 }]);
   const url = requests[0];
   assert.ok(url.pathname.endsWith("/email_outbox"));
   assert.equal(url.searchParams.get("submission_id"), `eq.${sid}`);

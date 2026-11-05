@@ -45,7 +45,9 @@ import { WbsTrackSelectionForm } from "@/components/admin/wbs-track-selection-fo
 import { describeSubmissionRecipient, recipientSourceLabels, type SubmissionRecipientState } from "@/lib/admin/notification-recipient-edit";
 import { adminSubmissionStageOf, adminSubmissionStages } from "@/lib/admin/submission-stages";
 import { loadSubmissionUploadRecord } from "@/lib/admin/submission-upload-record";
-import { loadCustomerViewRecords, viewedAfterNotice } from "@/lib/admin/customer-view-record";
+import { loadCustomerActivityEvents } from "@/lib/admin/customer-activity";
+import { loadCustomerViewRecords } from "@/lib/admin/customer-view-record";
+import { CustomerActivityRecord } from "@/components/admin/customer-activity-record";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
@@ -783,16 +785,16 @@ export default async function AdminSubmissionDetailPage({
   const customerEmails = await loadSubmissionCustomerEmails(supabase, submission.id);
   // Who receives result and progress mail, and which column the admin may
   // fill when nobody does. A failed lookup shows a notice instead of a form.
-  const [recipientState, uploadRecord, customerViews] = await Promise.all([
+  const [recipientState, uploadRecord, customerViews, customerActivity] = await Promise.all([
     describeSubmissionRecipient(supabase, submission).then(
       (state): SubmissionRecipientState | null => state,
       () => null,
     ),
     loadSubmissionUploadRecord(supabase, submission.id),
     loadCustomerViewRecords(supabase, [submission.id]),
+    loadCustomerActivityEvents(supabase, submission.id),
   ]);
   const customerView = customerViews.records.get(submission.id);
-  const customerSawResult = viewedAfterNotice(customerView, submission.result_notified_at);
   const adminStage = adminSubmissionStageOf(submission);
   const adminStageInfo = adminStage ? adminSubmissionStages[adminStage] : null;
   const reviews = stationReviews ?? [];
@@ -1022,24 +1024,17 @@ export default async function AdminSubmissionDetailPage({
               <span className="select-all break-all font-mono font-semibold text-foreground">{guestLookup.code}</span>
             </>
           ) : null}
-          <span className="font-semibold text-muted-foreground">고객 확인 기록</span>
-          <span className="font-semibold text-foreground">
-            {customerViews.error ? "기록을 불러오지 못했습니다." : customerView ? (
-              <>
-                결과 페이지 마지막 확인 {formatDateTime(customerView.lastViewedAt)} · 첫 확인 {formatDateTime(customerView.firstViewedAt)} · 방문 {customerView.viewCount}회
-                {customerView.downloadCount ? ` · 결과 파일 다운로드 ${customerView.downloadCount}회 (마지막 ${formatDateTime(customerView.lastDownloadAt)})` : ""}
-              </>
-            ) : "고객이 결과 페이지를 연 기록이 없습니다."}
-            {submission.result_notified_at && !customerViews.error ? (
-              <span className={`ml-2 inline-flex rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${customerSawResult ? brandStatusTones.success : brandStatusTones.warning}`}>
-                {customerSawResult ? "결과 안내 후 확인함" : "결과 안내 후 확인 기록 없음"}
-              </span>
-            ) : null}
-          </span>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          고객(회원 본인·조회 코드 소지자)이 결과 페이지를 열거나 결과 파일을 받은 기록입니다. 관리자 미리보기는 기록하지 않습니다. 2026-11-05 이후부터 기록합니다.
-        </p>
+        <CustomerActivityRecord
+          notifiedAt={submission.result_notified_at}
+          view={customerView}
+          viewUnavailable={customerViews.error}
+          events={customerActivity.events}
+          eventsUnavailable={customerActivity.error}
+          emails={customerEmails.emails}
+          emailsUnavailable={customerEmails.error}
+          hasResultFiles={submission.type === "MV_DISTRIBUTION"}
+        />
       </div>
 
       {adminStage === "drafting" ? (

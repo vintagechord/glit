@@ -1,4 +1,4 @@
-import { isValidEmailOpenToken, recordEmailOpenAfterResponse, TRANSPARENT_GIF } from "@/lib/customer-result-tracking";
+import { classifyActivityClient, isValidEmailOpenToken, recordEmailActivityAfterResponse, TRANSPARENT_GIF } from "@/lib/customer-result-tracking";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -6,12 +6,14 @@ export const dynamic = "force-dynamic";
 /** The open-tracking image in customer mail. Always answers with the image;
  * only a correctly signed request for a delivered mail is recorded. */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string; file: string }> },
 ) {
   const { id, file } = await context.params;
   const token = file.toLowerCase().endsWith(".gif") ? file.slice(0, -4) : "";
-  if (isValidEmailOpenToken(id, token)) recordEmailOpenAfterResponse(id.toLowerCase());
+  if (isValidEmailOpenToken(id, token)) {
+    recordEmailActivityAfterResponse(id.toLowerCase(), "mail_open", classifyActivityClient(request.headers.get("user-agent")));
+  }
   return new Response(new Uint8Array(TRANSPARENT_GIF), {
     headers: {
       "Content-Type": "image/gif",

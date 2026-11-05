@@ -96,7 +96,9 @@ export default async function proxy(request: NextRequest) {
   // Consent, identity callbacks and recovery must remain reachable. These
   // handlers perform their own verification; callbacks also own PKCE cookies.
   if (/^\/(?:login|signup|forgot-password|reset-password|find-id|confirm-email|complete-signup|privacy|terms|logout|auth)(?:\/|$)/.test(authPathname) ||
-      /^\/api\/auth(?:\/|$)/.test(authPathname)) {
+      /^\/api\/auth(?:\/|$)/.test(authPathname) ||
+      // Mail links verify their own signature and need no session.
+      /^\/api\/email\/click\//.test(pathname)) {
     return NextResponse.next();
   }
   const isDev = process.env.NODE_ENV !== "production";

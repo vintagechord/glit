@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { getGuideSignedUrl } from "@/lib/mv-assets";
@@ -49,7 +49,7 @@ export async function GET(
   }
 
   try {
-    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: true });
+    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: "mv-guide", client: classifyActivityClient(req.headers.get("user-agent")) });
     const urlSigned = await getGuideSignedUrl();
     return await createAttachmentResponseFromUrl({
       url: urlSigned,
