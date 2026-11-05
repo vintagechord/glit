@@ -39,7 +39,10 @@ import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
 import { StationReviewBulkForm } from "@/components/admin/station-review-bulk-form";
-import { hydrateReleasedAlbumInfoFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction } from "@/features/admin/actions";
+import { hydrateReleasedAlbumInfoFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction, updateSubmissionNotificationEmailFormAction } from "@/features/admin/actions";
+import { describeSubmissionRecipient, recipientSourceLabels, type SubmissionRecipientState } from "@/lib/admin/notification-recipient-edit";
+import { adminSubmissionStageOf, adminSubmissionStages } from "@/lib/admin/submission-stages";
+import { loadSubmissionUploadRecord } from "@/lib/admin/submission-upload-record";
 import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { ReviewDocsSingleDownloadButton } from "@/components/admin/review-docs-download";
 import { safeAdminSubmissionsReturnTo } from "@/lib/admin/submission-navigation";
@@ -295,6 +298,10 @@ export default async function AdminSubmissionDetailPage({
         return "멜론·지니 앨범 정보를 신청서에 반영했습니다.";
       case "album_info_not_released":
         return "발매 음반(URL) 접수가 아니어서 앨범 정보를 불러오지 않았습니다.";
+      case "recipient_email":
+        return "결과 안내 수신 이메일을 저장했습니다. 결과 이메일 발송에서 미리보기 후 보내주세요.";
+      case "recipient_email_unchanged":
+        return "이미 같은 수신 이메일이 저장되어 있습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -767,6 +774,17 @@ export default async function AdminSubmissionDetailPage({
   // The detail page lists only this submission's customer mail; the full
   // outbox lives under 메일 발송 내역 in the admin menu.
   const customerEmails = await loadSubmissionCustomerEmails(supabase, submission.id);
+  // Who receives result and progress mail, and which column the admin may
+  // fill when nobody does. A failed lookup shows a notice instead of a form.
+  const [recipientState, uploadRecord] = await Promise.all([
+    describeSubmissionRecipient(supabase, submission).then(
+      (state): SubmissionRecipientState | null => state,
+      () => null,
+    ),
+    loadSubmissionUploadRecord(supabase, submission.id),
+  ]);
+  const adminStage = adminSubmissionStageOf(submission);
+  const adminStageInfo = adminStage ? adminSubmissionStages[adminStage] : null;
   const reviews = stationReviews ?? [];
   const isStationSubmittedStatus = (status?: string | null) => {
     const normalized = normalizeStationReviewStatus(status);
@@ -945,6 +963,11 @@ export default async function AdminSubmissionDetailPage({
             <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
               ID: {submission.id.slice(0, 8)}
             </span>
+            {adminStageInfo ? (
+              <span className={`rounded-[6px] border-2 px-2.5 py-1 font-black ${adminStageInfo.tone}`}>
+                {adminStageInfo.label}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -991,6 +1014,19 @@ export default async function AdminSubmissionDetailPage({
           ) : null}
         </div>
       </div>
+
+      {adminStage === "drafting" ? (
+        <div className={`mt-6 rounded-2xl border-2 p-5 text-sm ${adminStageInfo?.tone ?? ""}`}>
+          <p className="text-base font-black">신청서 작성 중 · 아직 접수되지 않은 신청입니다</p>
+          <p className="mt-2 leading-6">
+            고객이 파일 업로드 단계에서 멈춘 상태입니다. 결제 수단에 무통장이 선택되어 있어도 주문(입금 요청)이 만들어지지 않았기 때문에
+            접수 완료·무통장 입금 안내 메일은 발송되지 않습니다. 고객이 파일을 올리고 신청을 마치면 안내 메일이 자동 발송됩니다.
+          </p>
+          <p className="mt-2 font-bold">
+            업로드 시도: {uploadRecord.error ? "기록을 불러오지 못했습니다." : uploadRecord.attempts === 0 ? "서버에 도착한 업로드 요청이 없습니다." : `${uploadRecord.attempts}건 (완료 ${uploadRecord.completed}건, 미완료·실패 ${uploadRecord.unfinished}건)`}
+          </p>
+        </div>
+      ) : null}
 
       {submission.payment_status === "PAID" ? <SubmissionSupplements submissionId={submission.id} admin /> : null}
       {!isMvSubmission && isOneclick ? (
@@ -1334,7 +1370,91 @@ export default async function AdminSubmissionDetailPage({
             <div className="mt-4">
               <SubmissionFilesPanel submissionId={submission.id} files={files} />
             </div>
+            <details className="mt-4 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-muted-foreground">
+              <summary className="cursor-pointer font-semibold text-foreground">
+                업로드 기록 · {uploadRecord.error ? "확인 실패" : uploadRecord.attempts === 0 ? "요청 없음" : `요청 ${uploadRecord.attempts}건 · 완료 ${uploadRecord.completed}건 · 미완료·실패 ${uploadRecord.unfinished}건`}
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {uploadRecord.items.map((item) => (
+                  <li key={item.id} className="break-all">
+                    {item.name || "파일명 없음"} · {item.sizeLabel} · {item.statusLabel} · {formatDateTime(item.createdAt)}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 leading-5">
+                고객이 업로드를 시작하면 서버에 요청 기록이 남습니다. 큰 파일(32MB 이상)의 기록은 계속 보관되고, 작은 파일의 요청 기록은 완료 하루 뒤 또는 만료 시 정리됩니다.
+                기록이 없으면 업로드가 서버까지 오지 않은 것입니다(파일 선택 전 이탈 또는 브라우저에서 거절).
+              </p>
+            </details>
           </div>
+
+          <section
+            id="notification-recipient"
+            aria-label="결과 안내 수신 이메일"
+            className={`scroll-mt-24 rounded-[28px] border-2 p-6 text-sm ${recipientState && !recipientState.recipient ? "border-[#d9362c] bg-card" : "border-border/60 bg-card/80"}`}
+          >
+            <h2 className="text-base font-semibold">결과 안내 수신 이메일</h2>
+            {recipientState ? (
+              <>
+                <p className="mt-2 text-sm">
+                  {recipientState.recipient ? (
+                    <>
+                      <span className="break-all font-black">{recipientState.recipient}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">({recipientSourceLabels[recipientState.source]})</span>
+                    </>
+                  ) : (
+                    <span className={`inline-flex rounded-[6px] border-2 px-2 py-0.5 text-xs font-black ${brandStatusTones.danger}`}>
+                      수신 이메일이 없어 결과·진행 안내 메일을 보낼 수 없습니다
+                    </span>
+                  )}
+                </p>
+                {recipientState.editField ? (
+                  <form action={updateSubmissionNotificationEmailFormAction} className="mt-4 space-y-3">
+                    <input type="hidden" name="submissionId" value={submission.id} />
+                    <input type="hidden" name="returnTo" value={adminSubmissionListHref} />
+                    <label className="block text-xs font-semibold text-muted-foreground" htmlFor="notification-email">
+                      {recipientState.recipient ? "다른 주소로 바꾸기" : "고객에게 받은 이메일 주소를 입력하세요"}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        id="notification-email"
+                        name="email"
+                        type="email"
+                        required
+                        maxLength={200}
+                        defaultValue={recipientState.recipient ? "" : recipientState.suggestions[0] ?? ""}
+                        placeholder="name@example.com"
+                        className="min-w-0 flex-1 rounded-2xl border border-border/70 bg-background px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                      <ConfirmSubmitButton
+                        className="rounded-full bg-foreground px-5 py-2.5 text-xs font-semibold text-background"
+                        message="이 주소를 결과 안내 수신 이메일로 저장할까요? 메일은 저장 후 결과 이메일 발송에서 따로 보냅니다."
+                      >
+                        수신 이메일 저장
+                      </ConfirmSubmitButton>
+                    </div>
+                    {recipientState.suggestions.length ? (
+                      <p className="text-xs text-muted-foreground">
+                        같은 회원의 다른 신청서에 적힌 이메일: <span className="break-all font-semibold text-foreground">{recipientState.suggestions.join(", ")}</span>
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {recipientState.editField === "guest_email"
+                        ? "비회원 신청의 이메일로 저장됩니다. 접수 상태·결제·심의 결과는 바뀌지 않습니다."
+                        : "이 신청서의 신청자 이메일로 저장됩니다. 회원 계정과 다른 신청서, 결제·심의 결과는 바뀌지 않습니다."}
+                      {" "}저장만으로는 메일이 나가지 않습니다.
+                    </p>
+                  </form>
+                ) : recipientState.lockedReason ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{recipientState.lockedReason}</p>
+                ) : null}
+              </>
+            ) : (
+              <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">
+                수신 정보를 확인하지 못했습니다. 잠시 후 새로고침해주세요.
+              </p>
+            )}
+          </section>
 
 
           <ReviewEmailControl

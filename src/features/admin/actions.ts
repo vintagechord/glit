@@ -33,6 +33,7 @@ import {
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
 import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
+import { saveSubmissionNotificationEmail } from "@/lib/admin/notification-recipient-edit";
 import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
@@ -2443,4 +2444,20 @@ export async function hydrateReleasedAlbumInfoFormAction(formData: FormData): Pr
   redirect(buildSubmissionFormRedirect(formData, submissionId, {
     saved: result.skipped === "not-released-album" ? "album_info_not_released" : result.changed ? "album_info_hydrated" : "album_info_unchanged",
   }));
+}
+
+/** Lets an administrator give a result-mail address to an application that
+ * has none (an email-less social member's MV request, a guest without email). */
+export async function updateSubmissionNotificationEmailFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (!albumInfoIdSchema.safeParse(submissionId).success) redirect("/admin/submissions?saved=error&savedError=" + encodeURIComponent("접수 ID를 확인해주세요."));
+  const saved = await saveSubmissionNotificationEmail(createAdminClient(), {
+    submissionId, email: String(formData.get("email") ?? ""), actorUserId: actor.id,
+  });
+  if (!saved.ok) redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: saved.error })}#notification-recipient`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: saved.changed ? "recipient_email" : "recipient_email_unchanged" })}#notification-recipient`);
 }

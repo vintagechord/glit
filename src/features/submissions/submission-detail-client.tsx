@@ -835,14 +835,6 @@ export function SubmissionDetailClient({
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
-  const handleOpenSubmissionForm = () => {
-    setIsSubmissionFormOpen(true);
-    window.setTimeout(() => {
-      document
-        .getElementById("submission-form-section")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  };
   const hasFinalResultStarted = isMvDistribution
     ? hasMvDistributionResult
     : stationSummary.delivered > 0 || hasResultDeliverySignal;
@@ -851,6 +843,12 @@ export function SubmissionDetailClient({
     : isMvBroadcast
       ? displayResultDelivered
       : hasAllExpectedStationResults;
+  // A station result (적격·부적격·보완) for any song, not merely the
+  // submission status moving to "result ready".
+  const hasAnyStationResult =
+    stationSummary.delivered > 0 ||
+    stationSummary.actionNeeded > 0 ||
+    hasAnyTrackResultDecision;
   const hasStationSubmissionDone =
     isPaymentDone &&
     ((expectedStationTotal > 0 && stationSummary.submitted >= expectedStationTotal) ||
@@ -923,9 +921,11 @@ export function SubmissionDetailClient({
           : "결과 등급 통보 대기"
         : hasFinalResultDone
           ? "방송사별 결과 반영 완료"
-          : hasFinalResultStarted
-            ? "방송사별 결과 순차 반영"
-            : "방송사별 결과 대기",
+          : hasAnyStationResult
+            ? "결과 통보 중"
+            : hasStationSubmissionDone
+              ? "전체 방송사 접수 완료"
+              : "방송사별 결과 대기",
       state: hasFinalResultDone
         ? "done"
         : hasFinalResultStarted
@@ -1477,6 +1477,10 @@ export function SubmissionDetailClient({
                   </span>
                 ) : null}
               </div>
+              {/* Payment actions stay. The progress-table and application
+                  buttons were removed (owner, 2026-11-05): the station table
+                  and the application sit right below. */}
+              {displayStatus.primaryActionLabel && displayStatus.primaryAction !== "station-review" ? (
               <div className="mt-5 flex flex-wrap gap-2">
                 {displayStatus.primaryActionLabel ? (
                   <button
@@ -1489,14 +1493,8 @@ export function SubmissionDetailClient({
                     {isPreparingCheckout ? "결제 준비 중..." : displayStatus.primaryActionLabel}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={handleOpenSubmissionForm}
-                  className="inline-flex min-h-11 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-5 py-2 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 hover:bg-white dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
-                >
-                  신청서 확인
-                </button>
               </div>
+              ) : null}
               {!isMvSubmission && isPaymentDone && !hasFinalResultDone
                 ? renderProcessTimeline()
                 : null}
