@@ -126,7 +126,7 @@ ${APP_CONFIG.businessName}(이하 "회사")는 온사이드(iamonside.com) 서�
 - 결제: 결제 수단, 결제 금액과 일시, 결제대행사가 제공하는 승인 결과(카드번호는 회사가 저장하지 않음), 무통장 입금 시 입금자명과 입금 예정일
 - 현금영수증·세금계산서: 발급 용도, 휴대폰 번호·사업자등록번호 또는 현금영수증 카드 번호, 세금계산서 발급용 사업자 정보
 - 부가 서비스: 매거진·노래방 신청자 이름, 연락처, 이메일, 앨범 정보와 대표 이미지
-- 자동 수집: 접속 IP, 접속 일시, 브라우저·기기 정보, 서비스 이용 기록, 쿠키, 신청 진행·결과 안내 메일의 열람 여부와 심의 결과 페이지·결과 파일 확인 기록
+- 자동 수집: 접속 IP, 접속 일시, 브라우저·기기 정보, 서비스 이용 기록, 쿠키, 신청 진행·결과 안내 메일의 열람 여부와 메일 속 링크 확인 여부, 심의 결과 페이지·결과 파일 확인 기록(확인 시각과 이용 환경 종류)
 
 3. 처리 및 보유 기간
 회원 정보는 회원 탈퇴 시까지, 심의 신청 내역·결과·필증은 결과 확인과 재발급 요청에 대응하기 위해 회원 탈퇴 또는 삭제 요청 시까지 보관합니다. 제출 파일은 파일 보관/삭제 정책에 따릅니다(심의가 끝나거나 환불된 뒤 관리자가 삭제할 때까지). 다만 아래 기록은 관련 법령에 따라 정해진 기간 동안 보관합니다.
@@ -183,7 +183,7 @@ ${APP_CONFIG.businessName}(이하 "회사")는 온사이드(iamonside.com) 서�
 회사는 만 14세 미만 아동의 회원 가입을 받지 않습니다. 만 14세 미만 아동의 개인정보가 필요한 경우 법정대리인의 동의를 받아 처리합니다.
 
 10. 개인정보 자동 수집 장치의 설치·운영과 거부
-회사는 로그인 유지, 결제 결과 확인, 비회원 신청 내용 임시 저장을 위해 쿠키와 브라우저 저장소를 사용합니다. 광고나 행태정보 수집을 위한 추적 도구는 사용하지 않습니다. 신청 진행·결과 안내 메일에는 고객이 안내를 받았는지 확인하기 위한 열람 확인용 이미지가 들어 있으며, 메일 앱에서 이미지 표시를 끄면 열람 여부가 기록되지 않습니다. 이용자는 브라우저 설정(예: Chrome 설정 > 개인정보 및 보안 > 서드 파티 쿠키)에서 쿠키 저장을 거부하거나 삭제할 수 있으며, 거부하면 로그인과 결제 등 일부 서비스 이용이 어려울 수 있습니다.
+회사는 로그인 유지, 결제 결과 확인, 비회원 신청 내용 임시 저장을 위해 쿠키와 브라우저 저장소를 사용합니다. 광고나 행태정보 수집을 위한 추적 도구는 사용하지 않습니다. 신청 진행·결과 안내 메일에는 고객이 안내를 받았는지 확인하기 위한 열람 확인용 이미지가 들어 있으며, 메일 속 온사이드 링크는 확인 기록을 남긴 뒤 해당 페이지로 연결됩니다. 메일 앱에서 이미지 표시를 끄면 열람 여부가 기록되지 않습니다. 이용자는 브라우저 설정(예: Chrome 설정 > 개인정보 및 보안 > 서드 파티 쿠키)에서 쿠키 저장을 거부하거나 삭제할 수 있으며, 거부하면 로그인과 결제 등 일부 서비스 이용이 어려울 수 있습니다.
 
 11. 개인정보의 안전성 확보 조치
 - 관리적 조치: 내부 관리 계획 수립, 개인정보 취급자 최소화와 교육
@@ -396,7 +396,7 @@ Effective date: ${PRIVACY_POLICY_EFFECTIVE_DATE_EN}
 - Payments: payment method, amount and time, approval results from the payment processor (we do not store card numbers), depositor name and expected deposit date for bank transfers
 - Cash receipts and tax invoices: purpose, mobile number, business registration number or cash receipt card number, business details for tax invoices
 - Additional services: requester name, contact details, email, album information and artwork
-- Collected automatically: IP address, access time, browser and device information, usage records, cookies, whether application and result emails were opened, and visits to the review result page and result files
+- Collected automatically: IP address, access time, browser and device information, usage records, cookies, whether application and result emails were opened and their links followed, and visits to the review result page and result files (time and type of device or mail app)
 
 3. Retention
 Member information is kept until account deletion. Applications, results and certificates are kept until account deletion or a deletion request so that results can be checked and certificates reissued. Submitted files follow the File Storage / Deletion Policy (kept until an administrator deletes them after the review ends or the application is refunded). The following records are kept for the periods required by Korean law:
@@ -453,7 +453,7 @@ You may request access to, correction or deletion of, or suspension of processin
 We do not accept sign-ups from children under 14. If personal information of a child under 14 is needed, we process it only with the consent of a legal guardian.
 
 10. Cookies
-We use cookies and browser storage to keep you signed in, confirm payment results and temporarily save guest applications. We do not use advertising or behavioral tracking tools. Application and result emails contain an image that tells us the notice was opened; if your mail app does not load images, no opening is recorded. You can block or delete cookies in your browser settings; some features such as sign-in and payment may then not work.
+We use cookies and browser storage to keep you signed in, confirm payment results and temporarily save guest applications. We do not use advertising or behavioral tracking tools. Application and result emails contain an image that tells us the notice was opened, and Onside links in them record the visit before opening the page; if your mail app does not load images, no opening is recorded. You can block or delete cookies in your browser settings; some features such as sign-in and payment may then not work.
 
 11. Security Measures
 - Administrative: internal management plan, minimal staff access and training

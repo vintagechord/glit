@@ -24,6 +24,8 @@ export type EmailOutboxStore = {
   finish(row: EmailOutboxRow, result: EmailAttemptResult): Promise<EmailOutboxRow | null>;
   get(id: string): Promise<EmailOutboxRow | null>;
   stats(): Promise<EmailOutboxStats>;
+  /** Notes which tracking the delivered body carries (email_outbox.tracking). */
+  markTracking?(id: string, tracking: string): Promise<void>;
 };
 type Deliver = (message: EmailMessage, expectedProvider: EmailProvider, replyTo?: string | null) => Promise<EmailAttemptResult>;
 
@@ -72,6 +74,10 @@ function createDatabaseStore(): EmailOutboxStore {
       return data as EmailOutboxRow | null;
     },
     async stats() { return await rpc("email_outbox_stats") as EmailOutboxStats; },
+    async markTracking(id, tracking) {
+      const { error } = await createAdminClient().from("email_outbox").update({ tracking }).eq("id", id);
+      if (error) throw dbFailure();
+    },
   };
 }
 
@@ -93,8 +99,9 @@ const unknownResult = (id: string): EmailSendResult => ({ ok: false, outboxId: i
 /** Dependencies are explicit so tests never contact a real mailbox or database. */
 export function createEmailOutboxService({ store, deliver, now = Date.now, decorateHtml }: {
   store: EmailOutboxStore; deliver: Deliver; now?: () => number;
-  /** Adds per-delivery markup (the open-tracking image) without changing the stored body. */
-  decorateHtml?: (row: EmailOutboxRow & { html: string }) => string;
+  /** Adds per-delivery markup (the open image, tracked links) without
+   * changing the stored body; `tracking` says what it added. */
+  decorateHtml?: (row: EmailOutboxRow & { html: string }) => string | { html: string; tracking: string | null };
 }) {
   const sendClaimed = async (row: EmailOutboxRow): Promise<EmailSendResult> => {
     let attempt: EmailAttemptResult;
@@ -103,7 +110,15 @@ export function createEmailOutboxService({ store, deliver, now = Date.now, decor
         attempt = { ok: false, outcome: "failed", reason: "delivery", errorCode: "payload_expired" };
       } else {
         let html = row.html;
-        try { if (decorateHtml) html = decorateHtml({ ...row, html: row.html }); } catch { html = row.html; }
+        let tracking: string | null = null;
+        try {
+          const decorated = decorateHtml ? decorateHtml({ ...row, html: row.html }) : row.html;
+          if (typeof decorated === "string") html = decorated;
+          else ({ html, tracking } = decorated);
+        } catch { html = row.html; tracking = null; }
+        // Without this note the administrator reads the mail as untrackable;
+        // it never holds up the delivery.
+        if (tracking && store.markTracking) await store.markTracking(row.id, tracking).catch(() => undefined);
         attempt = await deliver({
           to: row.recipient_email, subject: row.subject, html, operation: row.operation,
           // Stable across retries. Resend supports provider idempotency; SMTP
@@ -181,13 +196,13 @@ export function createEmailOutboxService({ store, deliver, now = Date.now, decor
 }
 
 export async function enqueueAndSendEmail(message: EmailMessage, provider: EmailProvider, replyTo: string | undefined, deliver: Deliver) {
-  const { withEmailOpenPixel } = await import("@/lib/customer-result-tracking");
-  return createEmailOutboxService({ store: createDatabaseStore(), deliver, decorateHtml: withEmailOpenPixel }).enqueueAndSend(message, provider, replyTo);
+  const { withCustomerEmailTracking } = await import("@/lib/customer-result-tracking");
+  return createEmailOutboxService({ store: createDatabaseStore(), deliver, decorateHtml: withCustomerEmailTracking }).enqueueAndSend(message, provider, replyTo);
 }
 export async function drainEmailOutbox(options: { limit?: number; batchSize?: number; deadline?: number } = {}) {
   const { sendEmailAttempt } = await import("@/lib/email-transport");
-  const { withEmailOpenPixel } = await import("@/lib/customer-result-tracking");
-  return createEmailOutboxService({ store: createDatabaseStore(), deliver: sendEmailAttempt, decorateHtml: withEmailOpenPixel }).drain(options);
+  const { withCustomerEmailTracking } = await import("@/lib/customer-result-tracking");
+  return createEmailOutboxService({ store: createDatabaseStore(), deliver: sendEmailAttempt, decorateHtml: withCustomerEmailTracking }).drain(options);
 }
 export async function getEmailOutboxStats(): Promise<EmailOutboxStats> {
   return createDatabaseStore().stats();

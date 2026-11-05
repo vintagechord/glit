@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { isRatingCode, resolveRatingImageUrl, type RatingCode } from "@/lib/mv-assets";
@@ -75,7 +75,7 @@ export async function GET(
     return NextResponse.json({ error: "등급이 설정되지 않았습니다." }, { status: 404 });
   }
   try {
-    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: true });
+    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: "mv-rating-image", client: classifyActivityClient(req.headers.get("user-agent")) });
     const admin = createAdminClient();
     const ratingAsset = await resolveRatingImageUrl({
       rating,

@@ -1,11 +1,11 @@
 import type { PostgrestError } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
@@ -478,7 +478,11 @@ export async function SubmissionDetailPageView({
     hasGuestPaymentResultGrant ||
     (user?.id && (memberResult.submission as { user_id?: string | null } | null)?.user_id === user.id)
   ) {
-    recordCustomerResultViewAfterResponse(submissionId);
+    const userAgent = await headers().then((list) => list.get("user-agent"), () => null);
+    recordCustomerResultViewAfterResponse(submissionId, {
+      via: hasGuestPaymentResultGrant ? "guest" : "member",
+      client: classifyActivityClient(userAgent),
+    });
   }
 
   return (
