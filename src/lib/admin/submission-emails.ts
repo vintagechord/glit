@@ -29,6 +29,9 @@ export type SubmissionCustomerEmail = {
   createdAt: string;
   acceptedAt: string | null;
   nextAttemptAt: string | null;
+  /** First load of the open-tracking image; null when not seen (or images blocked). */
+  openedAt: string | null;
+  openCount: number;
 };
 
 export const SUBMISSION_CUSTOMER_EMAIL_LIMIT = 100;
@@ -38,7 +41,7 @@ export const SUBMISSION_CUSTOMER_EMAIL_LIMIT = 100;
 export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "from">, submissionId: string) {
   const { data, error } = await db
     .from("email_outbox")
-    .select("id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at")
+    .select("id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at, opened_at, open_count")
     .eq("submission_id", submissionId)
     .in("operation", CUSTOMER_EMAIL_OPERATIONS)
     .order("created_at", { ascending: false })
@@ -54,6 +57,8 @@ export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "fro
     createdAt: String(row.created_at),
     acceptedAt: row.accepted_at ? String(row.accepted_at) : null,
     nextAttemptAt: row.next_attempt_at ? String(row.next_attempt_at) : null,
+    openedAt: row.opened_at ? String(row.opened_at) : null,
+    openCount: Number(row.open_count ?? 0),
   }));
   return { emails, error: false };
 }

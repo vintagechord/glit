@@ -5,6 +5,7 @@ import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
@@ -468,6 +469,16 @@ export async function SubmissionDetailPageView({
       },
     };
   });
+
+  // Only the customer's own visit counts: the member who owns it, or the
+  // guest holding a payment result grant. Administrators can read member
+  // pages through RLS and are excluded.
+  if (
+    hasGuestPaymentResultGrant ||
+    (user?.id && (memberResult.submission as { user_id?: string | null } | null)?.user_id === user.id)
+  ) {
+    recordCustomerResultViewAfterResponse(submissionId);
+  }
 
   return (
     <SubmissionDetailClient

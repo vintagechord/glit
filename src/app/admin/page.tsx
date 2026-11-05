@@ -298,6 +298,14 @@ export default async function AdminPage() {
               </Link>
             </li>
             <li>
+              <Link href={stageHref("notified")} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
+                <span>결과 안내 후 고객 확인 기록 없음 (30일)</span>
+                <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${dashboard.unseenResults ? brandStatusTones.warning : brandStatusTones.neutral}`}>
+                  {dashboard.unseenResults === null ? "–" : dashboard.unseenResults}건
+                </span>
+              </Link>
+            </li>
+            <li>
               <Link href={stageHref("paid")} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
                 <span>결제 완료 후 방송사·영등위 접수 전</span>
                 <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${counts.paid ? brandStatusTones.progress : brandStatusTones.neutral}`}>

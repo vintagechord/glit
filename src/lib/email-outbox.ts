@@ -91,8 +91,10 @@ function rowResult(row: EmailOutboxRow, includeMessageId = true): EmailSendResul
 const unknownResult = (id: string): EmailSendResult => ({ ok: false, outboxId: id, status: "uncertain", queued: false, reason: "delivery", message: outcomeMessage("uncertain") });
 
 /** Dependencies are explicit so tests never contact a real mailbox or database. */
-export function createEmailOutboxService({ store, deliver, now = Date.now }: {
+export function createEmailOutboxService({ store, deliver, now = Date.now, decorateHtml }: {
   store: EmailOutboxStore; deliver: Deliver; now?: () => number;
+  /** Adds per-delivery markup (the open-tracking image) without changing the stored body. */
+  decorateHtml?: (row: EmailOutboxRow & { html: string }) => string;
 }) {
   const sendClaimed = async (row: EmailOutboxRow): Promise<EmailSendResult> => {
     let attempt: EmailAttemptResult;
@@ -100,8 +102,10 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
       if (!row.html || new Date(row.expires_at).getTime() <= now()) {
         attempt = { ok: false, outcome: "failed", reason: "delivery", errorCode: "payload_expired" };
       } else {
+        let html = row.html;
+        try { if (decorateHtml) html = decorateHtml({ ...row, html: row.html }); } catch { html = row.html; }
         attempt = await deliver({
-          to: row.recipient_email, subject: row.subject, html: row.html, operation: row.operation,
+          to: row.recipient_email, subject: row.subject, html, operation: row.operation,
           // Stable across retries. Resend supports provider idempotency; SMTP
           // uncertainty is still held for explicit operator review.
           idempotencyKey: `outbox-${row.id}`, includeMessageId: true, requestId: row.id,
@@ -177,11 +181,13 @@ export function createEmailOutboxService({ store, deliver, now = Date.now }: {
 }
 
 export async function enqueueAndSendEmail(message: EmailMessage, provider: EmailProvider, replyTo: string | undefined, deliver: Deliver) {
-  return createEmailOutboxService({ store: createDatabaseStore(), deliver }).enqueueAndSend(message, provider, replyTo);
+  const { withEmailOpenPixel } = await import("@/lib/customer-result-tracking");
+  return createEmailOutboxService({ store: createDatabaseStore(), deliver, decorateHtml: withEmailOpenPixel }).enqueueAndSend(message, provider, replyTo);
 }
 export async function drainEmailOutbox(options: { limit?: number; batchSize?: number; deadline?: number } = {}) {
   const { sendEmailAttempt } = await import("@/lib/email-transport");
-  return createEmailOutboxService({ store: createDatabaseStore(), deliver: sendEmailAttempt }).drain(options);
+  const { withEmailOpenPixel } = await import("@/lib/customer-result-tracking");
+  return createEmailOutboxService({ store: createDatabaseStore(), deliver: sendEmailAttempt, decorateHtml: withEmailOpenPixel }).drain(options);
 }
 export async function getEmailOutboxStats(): Promise<EmailOutboxStats> {
   return createDatabaseStore().stats();

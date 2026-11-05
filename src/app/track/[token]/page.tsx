@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 import { loadCustomerSubmissionDetail } from "@/lib/submissions/customer-detail";
 import { decodeTrackToken } from "@/lib/track-token";
 
@@ -40,6 +42,16 @@ export default async function TrackDetailPage({
   if (!detail) {
     notFound();
   }
+
+  // The customer opened their result page. An administrator following the
+  // guest link from the admin pages is not the customer.
+  const viewer = await createServerSupabase().then(async (supabase) => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return "guest";
+    const { data: isAdmin } = await supabase.rpc("is_admin");
+    return isAdmin === true ? "admin" : "member";
+  }).catch(() => "unknown");
+  if (viewer !== "admin" && viewer !== "unknown") recordCustomerResultViewAfterResponse(detail.submission.id);
 
   return (
     <SubmissionDetailClient

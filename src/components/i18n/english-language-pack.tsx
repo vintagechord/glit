@@ -1586,6 +1586,7 @@ const exactTranslations: Record<string, string> = {
   "방송사별 결과 순차 반영": "Updating Broadcaster Results",
   "전체 방송사 접수 완료": "Received by All Broadcasters",
   "결과 통보 중": "Results Arriving",
+  "오른쪽 등급 버튼을 누르면 필증·등급 이미지·표시 가이드를 받을 수 있습니다": "Press the rating button on the right to download the certificate, rating mark and display guide",
   "방송사별 결과 반영 완료": "Broadcaster Results Complete",
   "진행": "In Progress",
   "신청서 확인": "View Application",

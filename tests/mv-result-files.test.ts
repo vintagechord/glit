@@ -43,7 +43,7 @@ async function fixture(): Promise<Fixture> {
         const shared = "import {state,calls} from 'mv-result-fixture';";
         const modules: Record<string, string> = {
           "mv-result-fixture": `export const state={isAdmin:true,settings:null,submission:{id:'${submissionId}',type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'APPROVED',result_notified_at:null,mv_desired_rating:'15',certificate_b2_path:'${certificateKey}',certificate_original_name:'current.pdf',certificate_mime:'application/pdf'}};export const calls=[];`,
-          "@/lib/payments/submission": `${shared} export const ensureSubmissionOwner=async()=>({submission:state.submission,error:null});`,
+          "@/lib/payments/submission": `${shared} export const ensureSubmissionOwner=async()=>({submission:state.submission,error:null}); export const ensureSubmissionResultReader=(...args)=>ensureSubmissionOwner(...args);`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:{id:'admin'}}})},rpc:async()=>({data:state.isAdmin})});`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({
             from(){const chain={select(){return chain},eq(){return chain},maybeSingle:async()=>({data:state.settings?{value:state.settings}:null,error:null}),upsert:async(row)=>{calls.push({kind:'settings',value:row.value});state.settings=row.value;return {error:null}}};return chain},
