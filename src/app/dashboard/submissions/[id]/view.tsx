@@ -11,7 +11,7 @@ import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { getStationLogoPath } from "@/lib/station-logos";
 import { getPackageStations, stationNameByCode } from "@/lib/station-reviews";
 import { loadSubmissionDetailRelations, type DetailStationReview } from "@/lib/submissions/detail-relations";
-import { normalizeTrackResults } from "@/lib/track-results";
+import { normalizeTrackResults, sortByTrackNo } from "@/lib/track-results";
 import {
   PAYMENT_RESULT_GRANT_COOKIE,
   readPaymentResultGrant,
@@ -380,6 +380,7 @@ export async function SubmissionDetailPageView({
 
   const initialSubmission = {
     ...resolvedSubmission,
+    album_tracks: sortByTrackNo(resolvedSubmission.album_tracks ?? []),
     payment_status: resolvedSubmission.payment_status ?? "",
     package: packageInfo
       ? {

@@ -21,7 +21,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getPackageStationCodes } from "@/lib/station-reviews";
 import { getStationReviewDisplayStatus } from "@/lib/station-review-display";
-import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults } from "@/lib/track-results";
+import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, sortByTrackNo, summarizeTrackResults } from "@/lib/track-results";
 import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -635,7 +635,7 @@ export default async function AdminSubmissionDetailPage({
     : null;
 
   const applicantEmail = submission.applicant_email ?? submission.guest_email ?? null;
-  const albumTracks = submission.album_tracks ?? [];
+  const albumTracks = sortByTrackNo(submission.album_tracks ?? []);
   const isOneclick = submission.is_oneclick === true;
   const releasedAlbumUrl = parseReleasedAlbumUrl(submission.melon_url);
   const { data: paymentDocumentRaw, error: paymentDocumentError } = paymentDocumentResult;
@@ -1980,7 +1980,7 @@ export default async function AdminSubmissionDetailPage({
                 트랙 리스트
               </p>
               <div className="rounded-2xl border border-border/60 bg-background/70 p-3 text-sm max-h-[600px] overflow-auto space-y-2">
-                {submission.album_tracks.map((track) => (
+                {albumTracks.map((track) => (
                   <div
                     key={`${track.track_no}-${track.track_title}-${track.track_title_kr}`}
                     className="border-b border-border/40 py-2 last:border-b-0"

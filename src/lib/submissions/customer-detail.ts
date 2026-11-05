@@ -5,7 +5,7 @@ import type { SubmissionDetailClient } from "@/features/submissions/submission-d
 import { getPackageStations, stationNameByCode } from "@/lib/station-reviews";
 import { loadSubmissionDetailRelations } from "@/lib/submissions/detail-relations";
 import { SUBMISSION_USER_DETAIL_SELECT } from "@/lib/submissions/select-columns";
-import { normalizeTrackResults } from "@/lib/track-results";
+import { normalizeTrackResults, sortByTrackNo } from "@/lib/track-results";
 
 type ClientProps = React.ComponentProps<typeof SubmissionDetailClient>;
 
@@ -129,6 +129,7 @@ export async function loadCustomerSubmissionDetail(
     created_at: submission.created_at ?? new Date().toISOString(),
     updated_at: updatedAt,
     package: normalizedPackage,
+    album_tracks: sortByTrackNo(submission.album_tracks ?? []),
   } as unknown as ClientProps["initialSubmission"];
 
   return {
