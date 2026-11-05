@@ -150,7 +150,7 @@ export function StationReviewForm({
       ) : null}
       {trackStates.length > 0 ? (
         <div className="min-w-0 md:col-span-3">
-          {maxDecidedTracks ? <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">원음방송 심의 대상이 확인되지 않았습니다. 실제 심의한 3곡의 결과를 입력해주세요. 나머지 곡은 대기로 두세요.</p> : null}
+          {maxDecidedTracks ? <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">원음방송 심의곡이 지정되지 않아 전체 곡이 표시됩니다. 위 「원음방송 심의곡 지정」에서 실제로 접수할 3곡을 저장하면 그 곡만 남습니다. 지정 전에 결과를 입력할 때는 심의한 3곡만 입력하고 나머지는 대기로 두세요.</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               트랙별 결과
