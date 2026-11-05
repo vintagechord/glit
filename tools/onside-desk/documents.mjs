@@ -113,8 +113,9 @@ const templateMarkers={
   'lyrics-all.docx':['{#tracks}','{/tracks}','{manager_name}','{lyrics_with_translation}'],
   'lyrics-track.docx':['{manager_name}','{track_title_with_title_mark}','{lyrics_with_translation}'],
   'lyrics-mv.docx':['{artist_display}','{track_title}','{lyrics_with_translation}'],
-  'pbc-integrated.docx':['{#albums}','{/albums}','{company_actual}','{release_date_md}','{title_track_title}'],
-  'tbs-integrated.docx':['{#albums}','{/albums}','{album_title}','{title_track_title_primary}','{title_track_title_secondary}'],
+  // Owner 2026-11-06: TBS takes 「심의 음반 접수 목록」, PBC 「음원심의신청서」 (same as the web templates).
+  'tbs-integrated.docx':['{#albums}','{/albums}','{company_actual}','{release_date_md}','{title_track_title}'],
+  'pbc-integrated.docx':['{#albums}','{/albums}','{album_title}','{title_track_title_primary}','{title_track_title_secondary}'],
   'wbs-integrated.docx':['{#albums}','{/albums}','{company_actual}','{review_songs_text}'],
 };
 function sanitizeTemplateData(value) {
@@ -269,7 +270,6 @@ export async function generateDocuments({submission,source,tracks=[],stations=[]
     } else if(!pages) warnings.push('가사전체파일의 실제 페이지 수를 확인하지 못해 원문 줄 구성을 유지했습니다. 인쇄 전 검수가 필요합니다.');
     for(const t of data.tracks) await doc(`${label}/${t.track_no_padded}_${safeDocumentName(t.track_title,'곡명 미입력')}.docx`,'lyrics-track.docx',{...data,...t});
     for(const station of ['PBC','TBS','WBS']) await doc(`통합신청서/${station}신청서_통합.docx`,`${station.toLowerCase()}-integrated.docx`,{...data,albums:[data],album_count:1,submission_count:1});
-    warnings.push('첨부 파일명 기준을 유지했습니다: PBC는 「심의 음반 접수 목록」, TBS는 「음원심의신청서」입니다. 방송사 제출처와 양식의 일치를 확인하세요.');
   } else {
     const mvWarnings=[];
     const mv=normalizedTracks([{track_no:1,track_title:first(submission.mv_song_title_official,submission.mv_song_title,submission.mv_song_title_kr,submission.title),lyrics:currentLyrics(submission,'mv_lyrics'),lyrics_with_translation:submission.lyrics_with_translation,translated_lyrics:submission.korean_lyrics_translation,composer:submission.mv_composer,lyricist:submission.mv_lyricist,arranger:submission.mv_arranger,is_instrumental:submission.is_instrumental,instrumental_confirmed:submission.instrumental_confirmed}],mvWarnings,manual)[0];

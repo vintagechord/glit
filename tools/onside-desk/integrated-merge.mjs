@@ -14,15 +14,15 @@ export class IntegratedMergeError extends Error {
 export const MERGE_LIMITS = { files: 50, fileBytes: 2 * 1024 * 1024 };
 export const MERGE_STATIONS = ['TBS', 'WBS', 'PBC'];
 
-// The three table layouts. TBS and PBC are named differently by the desk and
-// the web templates, so files are matched by their table, not their name.
+// The three table layouts. Files are matched by their table, not their name:
+// desk versions before 2.11 wrote the TBS and PBC forms the other way round.
 const LAYOUTS = {
   wbs: { label: 'WBS 원음방송 가요심의신청', headerRows: 1, rowsPerAlbum: 1, numbered: true, keyFrom: 2, detect: (h) => /순서/.test(h) && /심의신청곡/.test(h) },
   list: { label: '심의 음반 접수 목록 (가수명/타이틀명 · CD수량)', headerRows: 1, rowsPerAlbum: 1, numbered: false, keyFrom: 1, detect: (h) => /CD\s*수량/.test(h) || /가수명\s*\/\s*타이틀명/.test(h) },
   twoRow: { label: '음원심의신청서 (일자·가수·신청자/연락처·앨범명·타이틀)', headerRows: 2, rowsPerAlbum: 2, numbered: false, keyFrom: 1, detect: (h) => /앨범명\s*-\s*타이틀곡/.test(h) || (/신청자/.test(h) && /일자/.test(h) && /가수/.test(h)) },
 };
-// The desk's own naming (tools/onside-desk/templates/sources.json).
-const DESK_LAYOUT = { WBS: 'wbs', TBS: 'twoRow', PBC: 'list' };
+// Which form each station takes (owner, 2026-11-06; desk and web templates agree).
+const STATION_LAYOUT = { WBS: 'wbs', TBS: 'list', PBC: 'twoRow' };
 
 const textOf = (xml) => [...xml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
@@ -93,8 +93,8 @@ export function mergeIntegratedForms({ station, files }) {
   if (mismatch) throw new IntegratedMergeError(`${mismatch.name}: 다른 양식의 통합신청서입니다. 같은 방송사·같은 양식의 파일만 합칠 수 있습니다.`);
 
   const warnings = [];
-  if (DESK_LAYOUT[station] !== base.layoutKey) {
-    warnings.push(`선택한 ${station}의 데스크 양식과 다른 「${LAYOUTS[base.layoutKey].label}」 표입니다. 웹 관리자에서 만든 파일일 수 있으니 제출처 양식을 확인하세요.`);
+  if (STATION_LAYOUT[station] !== base.layoutKey) {
+    warnings.push(`${station}는 「${LAYOUTS[STATION_LAYOUT[station]].label}」 양식인데, 올린 파일은 「${LAYOUTS[base.layoutKey].label}」 표입니다. 이전 버전에서 만든 파일이거나 방송사를 잘못 고른 것일 수 있으니 확인하세요.`);
   }
   const seen = new Map();
   const duplicates = [];

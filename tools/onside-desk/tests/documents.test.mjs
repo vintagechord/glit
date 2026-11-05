@@ -24,7 +24,7 @@ test('album packet preserves original lyrics, title roles, source broadcaster ma
  const form=await xml(result.artifacts.find(a=>a.name.includes('/심의폼_')).path),info=await xml(result.artifacts.find(a=>a.name.includes('/앨범정보_')).path);
  assert.equal(form.replaceAll('빈티지코드','실제 회사'),info);
  const pbc=await xml(result.artifacts.find(a=>a.name.includes('PBC신청서')).path),tbs=await xml(result.artifacts.find(a=>a.name.includes('TBS신청서')).path);
- assert.match(pbc,/심의 음반 접수 목록/);assert.match(tbs,/음원심의신청서/);
+ assert.match(tbs,/심의 음반 접수 목록/);assert.match(pbc,/음원심의신청서/);
  const zip=new PizZip(await fs.readFile(result.artifacts.find(a=>a.type==='zip').path),{checkCRC32:true});
  assert.equal(Object.values(zip.files).filter(f=>!f.dir).length,10);assert.ok(Object.values(zip.files).every(f=>f.dir||f.name.endsWith('.docx')));
  const lyrics=await xml(result.artifacts.find(a=>a.name.includes('/01_')).path);assert.match(lyrics,/첫 줄/);assert.match(lyrics,/&amp; &lt;세 번째&gt;/);
