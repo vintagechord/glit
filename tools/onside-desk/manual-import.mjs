@@ -6,7 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { extractDocxBlocks, structureExtractedFile, DOMParser, readBoundedZip } from './manual-document-parser.mjs';
 import { extractHwpBlocks, readCompoundStreams, OLE_SIGNATURE } from './manual-ole.mjs';
-import { cleanLyricRecord, isLabelHint, isReferenceBoilerplateLine, stripReferenceBoilerplate } from './reference-cleanup.mjs';
+import { cleanLyricRecord, isLabelHint, isReferenceBoilerplateLine, readTitleFlagCell, stripReferenceBoilerplate } from './reference-cleanup.mjs';
+import { legacyWordBlocksToDocx, readLegacyWordBlocks } from './manual-doc.mjs';
 
 const MAX_BYTES = 20 * 1024 * 1024, MAX_TEXT = 600000;
 const execFileAsync = promisify(execFile);
@@ -32,7 +33,7 @@ aliases('이전발매곡', '이전발매곡|이전발매이력');
 aliases('트랙수', '심의요청곡수|트랙수|수록곡수|총곡수');
 aliases('곡명', '곡명|곡제목|노래제목|title|tracktitle|트랙|뮤비제목|뮤직비디오명|뮤직비디오제목|영상제목|작품명');
 aliases('트랙번호', '트랙번호|트랙넘버|번호|no|trackno');
-aliases('타이틀여부', '타이틀|타이틀곡|타이틀여부');
+aliases('타이틀여부', '타이틀|타이틀곡|타이틀여부|타이틀곡여부');
 aliases('작사', '작사|작사가|작사자');
 aliases('작곡', '작곡|작곡가|작곡자');
 aliases('편곡', '편곡|편곡자');
@@ -115,7 +116,16 @@ export function extractHwpxBlocks(body) {
 function hasAncestor(node, name, limit) { for (let parent = node.parentNode; parent && parent !== limit; parent = parent.parentNode) if (parent.localName === name) return true; return false; }
 
 async function extractLegacyDoc(body) {
-  if (process.platform !== 'darwin') fail('CONVERTER_UNAVAILABLE', '구형 DOC는 이 Mac의 문서 변환기로 읽습니다. DOCX로 저장하면 다른 환경에서도 읽을 수 있습니다.');
+  // The table-preserving reader first: macOS textutil flattens form tables
+  // into paragraphs, so 타이틀곡여부 and the closing guidance ran into lyrics.
+  try {
+    const extracted = extractDocxBlocks(legacyWordBlocksToDocx(readLegacyWordBlocks(body)));
+    return { ...extracted, format: 'doc', warnings: [...extracted.warnings, '구형 Word DOC의 표 구성을 그대로 읽었습니다. 크레딧·전체 가사와 줄바꿈을 원문과 비교해 주세요.'] };
+  } catch (error) {
+    if (['ENCRYPTED', 'FORMAT_MISMATCH', 'TEXT_LIMIT'].includes(error?.code)) throw error;
+    // Layouts the reader does not understand still get the Mac converter.
+  }
+  if (process.platform !== 'darwin') fail('CONVERTER_UNAVAILABLE', '구형 DOC를 읽지 못했습니다. Word 또는 한글에서 DOCX로 저장 후 다시 불러와 주세요.');
   const streams = readCompoundStreams(body);
   const word = streams.get('WordDocument')?.();
   if (!word || word.length < 32 || word.readUInt16LE(0) !== 0xa5ec) fail('FORMAT_MISMATCH', '실제 구형 Word DOC 파일이 아닙니다. DOCX로 저장 후 다시 불러와 주세요.');
@@ -194,6 +204,15 @@ function normalizeBlocks(result, type, warnings) {
       flush();
       let cells = block.cells.map((cell) => ({ ...cell, text: cell.text.trim() }));
       if (cells.every((cell) => !cell.text)) continue;
+      // "타이틀곡여부 ☑" is one cell on the Onside form (label and check box);
+      // the box may also sit in the next cell. It is a title flag, never lyrics.
+      const flagIndex = cells.findIndex((cell) => readTitleFlagCell(cell.text) !== null);
+      if (flagIndex >= 0 && cells.every((cell, i) => i === flagIndex || !cell.text || /^[☑☒■✓✔□☐]$/.test(cell.text))) {
+        const own = readTitleFlagCell(cells[flagIndex].text);
+        const mark = own === undefined ? (cells.find((cell, i) => i !== flagIndex && cell.text)?.text ?? '') : own ? '☑' : '□';
+        output.push(row('타이틀여부', mark, location));
+        continue;
+      }
       if (cells.length === 1 && index === input.findIndex((item) => item.text.trim()) && !canonical(text) && input.slice(index+1,index+4).some((item) => item.cells?.some((cell) => canonical(cell.text) === '가수명'))) {
         output.push(row('앨범명', text, location)); warnings.push('첫 표 제목을 앨범명으로 읽었습니다. 원문과 앨범명을 확인해 주세요.'); continue;
       }
@@ -225,6 +244,15 @@ function normalizeBlocks(result, type, warnings) {
         }
       }
       if (cells.some((cell) => cell.text)) output.push({...block,cells,text:cells.map((cell) => cell.text).join('\t')});
+      continue;
+    }
+    // The same flag as paragraphs (converted forms): the label, then its box.
+    const flag = readTitleFlagCell(text);
+    if (flag !== null) {
+      flush();
+      let mark = flag === undefined ? '' : flag ? '☑' : '□';
+      if (flag === undefined && input[index + 1] && !input[index + 1].cells && /^[☑☒■✓✔□☐]$/.test(input[index + 1].text.trim())) { mark = input[index + 1].text.trim(); index++; }
+      output.push(row('타이틀여부', mark, location));
       continue;
     }
     if (creditLine(text) && (/^\s*\(/.test(text) || (text.match(/(?:작사|작곡|편곡)\s*[:：]/g) ?? []).length > 1)) {

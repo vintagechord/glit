@@ -13,6 +13,7 @@ import { createSiteMonitor, notificationText, worst } from './monitor.mjs';
 import { upgradeManualMvCases, upgradeManualReferenceCleanup } from './manual-upgrade.mjs';
 import { needsLyricsTranslation } from './manual-translation.mjs';
 import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings } from './core.mjs';
+import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './integrated-merge.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
@@ -68,6 +69,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const monitorSettingsView = () => ({ vercelConfigured: Boolean(monitorSettings.vercelToken), notify: monitorSettings.notify !== false });
   const store = await new Store(dataRoot).init();
   const outputRoot = path.join(dataRoot, '신청별 자료');
+  const mergeRoot = path.join(dataRoot, '통합신청서 합치기');
   await fs.mkdir(outputRoot, { recursive: true, mode: 0o700 });
   await upgradeManualMvCases({ store, outputRoot, importer });
   await upgradeManualReferenceCleanup({ store, outputRoot, importer });
@@ -86,7 +88,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.9.0' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.10.0' };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -401,6 +403,25 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     return { filename, path: path.join(backupDir, filename), message: '관리 내역과 생성 문서를 백업했습니다. 대용량 음원·영상 원본과 연결 키는 제외됩니다.' };
   }
   const sendJSON = (res, status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
+  /** 통합신청서 합치기: uploaded integrated forms of one station become one file kept on this Mac. */
+  async function mergeIntegrated(body) {
+    const files = Array.isArray(body?.files) ? body.files : [];
+    if (files.length > MERGE_LIMITS.files) throw Object.assign(new Error(`한 번에 ${MERGE_LIMITS.files}개까지 합칠 수 있습니다.`), { status: 400 });
+    const decoded = files.map((file) => {
+      const name = typeof file?.name === 'string' ? file.name.normalize('NFC').slice(0, 255) : '';
+      const data = typeof file?.data === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(file.data) ? file.data : '';
+      if (!name || !data) throw Object.assign(new Error('통합신청서 파일을 다시 선택하세요.'), { status: 400 });
+      return { name, body: Buffer.from(data, 'base64') };
+    });
+    let merged;
+    try { merged = mergeIntegratedForms({ station: String(body?.station || ''), files: decoded }); }
+    catch (error) { if (error instanceof IntegratedMergeError) throw Object.assign(error, { status: error.status }); throw error; }
+    const id = randomUUID();
+    const dir = childPath(mergeRoot, id);
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    await fs.writeFile(childPath(dir, merged.filename), merged.buffer, { mode: 0o600, flag: 'wx' });
+    return { id, filename: merged.filename, albums: merged.albums, files: merged.files, duplicates: merged.duplicates, warnings: merged.warnings, layout: merged.layout };
+  }
   async function readJSON(req) {
     const chunks = []; let size = 0;
     for await (const chunk of req) { size += chunk.length; if (size > 3 * 1024 * 1024) throw Object.assign(new Error('입력 데이터가 너무 큽니다.'), { status: 413 }); chunks.push(chunk); }
@@ -547,7 +568,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.9.0' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.10.0' });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -564,6 +585,18 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         const filename = url.searchParams.get('filename');
         if (!filename || filename.length > 500) return sendJSON(res, 400, { error: '기준파일 이름을 확인하세요.' });
         return sendJSON(res, 201, await importManual(await readReference(req), filename, url.searchParams.get('type') || 'ALBUM'));
+      }
+      if (url.pathname === '/api/integrated-merge' && req.method === 'POST') return sendJSON(res, 201, await mergeIntegrated(await readJSON(req)));
+      const mergedFile = url.pathname.match(/^\/api\/integrated-merge\/([a-f0-9-]{36})\/([^/]+)$/);
+      if (mergedFile && req.method === 'GET') {
+        const name = decodeURIComponent(mergedFile[2]);
+        if (!/^(?:TBS|WBS|PBC)신청서_통합_\d+건\.docx$/.test(name)) return sendJSON(res, 404, { error: '합친 통합신청서를 찾을 수 없습니다.' });
+        const file = childPath(mergeRoot, mergedFile[1], name);
+        const stat = await fs.stat(file).catch(() => null);
+        if (!stat) return sendJSON(res, 404, { error: '합친 통합신청서를 찾을 수 없습니다.' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'); res.setHeader('Content-Length', stat.size);
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        return await pipeline(createReadStream(file), res);
       }
       if (url.pathname === '/api/connection' && req.method === 'GET') return sendJSON(res, 200, await remote.health());
       if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await listStorage());

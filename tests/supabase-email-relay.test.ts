@@ -197,16 +197,23 @@ test("relay bounds both declared and streamed body sizes in bytes and cancels ov
 });
 
 test("SMTP failures expose safe retry dispositions and never retry inside the relay", async () => {
-  for (const [error, status, reason, disposition] of [
-    [Object.assign(Error("private SMTP response secret@example.invalid"), { code: "EAUTH" }), 503, "configuration", undefined],
-    [Object.assign(Error("private SMTP response"), { responseCode: 421 }), 429, "rate_limit", "retry"],
-    [Object.assign(Error("private SMTP response"), { responseCode: 550 }), 502, "delivery", "failed"],
-    [Object.assign(Error("private SMTP response"), { command: "CONN" }), 502, "delivery", "retry"],
-    [Object.assign(Error("private SMTP response"), { code: "ETIMEDOUT", command: "DATA" }), 502, "delivery", "uncertain"],
+  for (const [error, status, reason, disposition, codes] of [
+    [Object.assign(Error("private SMTP response secret@example.invalid"), { code: "EAUTH" }), 503, "configuration", undefined, {}],
+    [Object.assign(Error("private SMTP response"), { responseCode: 421 }), 429, "rate_limit", "retry", {}],
+    [Object.assign(Error("private SMTP response"), { responseCode: 550 }), 502, "delivery", "failed", { smtpCode: 550 }],
+    // A bad mailbox is final; only the numeric codes leave the relay.
+    [Object.assign(Error("private SMTP response"), { responseCode: 550, response: "550 5.1.1 <someone@example.invalid>: Recipient address rejected" }), 502, "delivery", "failed", { smtpCode: 550, smtpStatus: "5.1.1" }],
+    // Policy and spam refusals may clear, so the outbox may try again.
+    [Object.assign(Error("private SMTP response"), { responseCode: 554, response: "554 5.7.1 Message rejected for policy reasons secret@example.invalid" }), 502, "delivery", "retry", { smtpCode: 554, smtpStatus: "5.7.1" }],
+    [Object.assign(Error("private SMTP response"), { responseCode: 552 }), 502, "delivery", "retry", { smtpCode: 552 }],
+    [Object.assign(Error("private SMTP response"), { command: "CONN" }), 502, "delivery", "retry", {}],
+    [Object.assign(Error("private SMTP response"), { code: "ETIMEDOUT", command: "DATA" }), 502, "delivery", "uncertain", {}],
   ] as const) {
     const api = fixture({ error });
     const response = await api.handler(request());
-    assert.equal(response.status, status); assert.deepEqual(await response.json(), { ok: false, reason, ...(disposition ? { disposition } : {}) });
+    const json = await response.json();
+    assert.equal(response.status, status); assert.deepEqual(json, { ok: false, reason, ...(disposition ? { disposition } : {}), ...codes });
+    assert.doesNotMatch(JSON.stringify(json), /example\.invalid|policy reasons|Recipient/);
     assert.equal(api.calls.mail.length, 1); assert.equal(api.calls.closed, 1);
   }
   for (const result of [{ accepted: [] }, { accepted: ["wrong@example.invalid"] }, { accepted: [body.to], rejected: [body.to] }]) {
