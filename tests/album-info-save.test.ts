@@ -93,3 +93,33 @@ test("only album submissions accept application details and the schema rejects b
   assert.equal(albumInfoSchema.safeParse({ tracks: [{ trackNo: 0, trackTitle: "x" }] }).success, false);
   assert.deepEqual(albumInfoSchema.parse({ submission: { genre: "  ", releaseDate: "" } }).submission.genre, null);
 });
+
+test("a sync that marks no 원음방송 song keeps the selection made on the admin page", async () => {
+  const selected = existingTracks.map((track, index) => ({ ...track, broadcast_selected: index === 0 }));
+  const { db, writes } = fakeDb({ submission: base, tracks: selected });
+  const input = albumInfoSchema.parse({
+    tracks: [
+      { trackNo: 1, trackTitle: "지금이 딱 좋아", broadcastSelected: false },
+      { trackNo: 2, trackTitle: "지금이 딱 좋아 (MR)", broadcastSelected: false },
+    ],
+  });
+  await saveManagedAlbumInfo(db, { submissionId: sid, actorUserId: "admin", input, mode: "overwrite", source: "심의 데스크" });
+  assert.equal(writes.some((w) => w.table === "album_tracks" && JSON.stringify(w.payload).includes("broadcast_selected")), false);
+
+  // A sync that carries its own selection still replaces it.
+  const next = fakeDb({ submission: base, tracks: selected });
+  await saveManagedAlbumInfo(next.db, { submissionId: sid, actorUserId: "admin", input: albumInfoSchema.parse({
+    tracks: [{ trackNo: 1, trackTitle: "지금이 딱 좋아", broadcastSelected: false }, { trackNo: 2, trackTitle: "지금이 딱 좋아 (MR)", broadcastSelected: true }],
+  }), mode: "overwrite", source: "심의 데스크" });
+  const updates = next.writes.filter((w) => w.table === "album_tracks" && w.op === "update");
+  assert.deepEqual(updates.map((w) => [w.id, w.payload]), [["t1", { broadcast_selected: false }], ["t2", { broadcast_selected: true }]]);
+});
+
+test("filling blanks from Melon/Genie never adds songs to an existing 원음방송 selection", async () => {
+  const selected = existingTracks.map((track, index) => ({ ...track, broadcast_selected: index === 1 }));
+  const { db, writes } = fakeDb({ submission: base, tracks: selected });
+  await saveManagedAlbumInfo(db, { submissionId: sid, actorUserId: null, input: albumInfoSchema.parse({
+    tracks: [{ trackNo: 1, trackTitle: "지금이 딱 좋아", isTitle: true, broadcastSelected: true }],
+  }), mode: "fill-empty", source: "멜론·지니 앨범 정보" });
+  assert.equal(writes.some((w) => w.table === "album_tracks" && JSON.stringify(w.payload).includes("broadcast_selected")), false);
+});

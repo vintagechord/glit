@@ -34,6 +34,7 @@ import {
 import { requireAdminAction } from "@/lib/admin/action-auth";
 import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
 import { saveSubmissionNotificationEmail } from "@/lib/admin/notification-recipient-edit";
+import { saveWbsTrackSelection } from "@/lib/admin/wbs-track-selection";
 import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
@@ -2460,4 +2461,21 @@ export async function updateSubmissionNotificationEmailFormAction(formData: Form
   revalidatePath("/admin/submissions");
   revalidatePath(`/admin/submissions/${submissionId}`);
   redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: saved.changed ? "recipient_email" : "recipient_email_unchanged" })}#notification-recipient`);
+}
+
+/** 원음방송 reviews three songs per album: marks which ones (broadcast_selected). */
+export async function saveWbsTrackSelectionFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const submissionId = String(formData.get("submissionId") ?? "");
+  if (!albumInfoIdSchema.safeParse(submissionId).success) redirect("/admin/submissions?saved=error&savedError=" + encodeURIComponent("접수 ID를 확인해주세요."));
+  const saved = await saveWbsTrackSelection(createAdminClient(), {
+    submissionId,
+    trackIds: formData.getAll("trackIds").map(String),
+    actorUserId: actor.id,
+  });
+  if (!saved.ok) redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: saved.error })}#wbs-track-selection`);
+  revalidatePath("/admin/submissions");
+  revalidatePath(`/admin/submissions/${submissionId}`);
+  revalidateUserDashboards(submissionId);
+  redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: saved.changed ? "wbs_tracks" : "wbs_tracks_unchanged" })}#wbs-track-selection`);
 }

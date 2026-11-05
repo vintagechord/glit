@@ -1,3 +1,4 @@
+import * as React from "react";
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 
@@ -39,7 +40,8 @@ import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
 import { StationReviewBulkForm } from "@/components/admin/station-review-bulk-form";
-import { hydrateReleasedAlbumInfoFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction, updateSubmissionNotificationEmailFormAction } from "@/features/admin/actions";
+import { hydrateReleasedAlbumInfoFormAction, saveWbsTrackSelectionFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction, updateSubmissionNotificationEmailFormAction } from "@/features/admin/actions";
+import { WbsTrackSelectionForm } from "@/components/admin/wbs-track-selection-form";
 import { describeSubmissionRecipient, recipientSourceLabels, type SubmissionRecipientState } from "@/lib/admin/notification-recipient-edit";
 import { adminSubmissionStageOf, adminSubmissionStages } from "@/lib/admin/submission-stages";
 import { loadSubmissionUploadRecord } from "@/lib/admin/submission-upload-record";
@@ -303,6 +305,10 @@ export default async function AdminSubmissionDetailPage({
         return "결과 안내 수신 이메일을 저장했습니다. 결과 이메일 발송에서 미리보기 후 보내주세요.";
       case "recipient_email_unchanged":
         return "이미 같은 수신 이메일이 저장되어 있습니다.";
+      case "wbs_tracks":
+        return "원음방송 심의곡을 저장했습니다. 원음방송에는 선택한 곡만 표시됩니다.";
+      case "wbs_tracks_unchanged":
+        return "원음방송 심의곡이 이미 같게 지정되어 있습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -1631,7 +1637,27 @@ export default async function AdminSubmissionDetailPage({
                           status: item.status ?? "PENDING",
                         }));
 
+                  const wbsSelection = submission.type === "ALBUM" && isWbsReview(stationInfo) && albumTracks.length > 3
+                    ? albumTracks.filter((track) => typeof track.id === "string" && uuidPattern.test(track.id)).map((track, index) => ({
+                        id: track.id as string,
+                        trackNo: track.track_no ?? index + 1,
+                        title: track.track_title ?? track.track_title_kr ?? track.track_title_en ?? "트랙",
+                        isTitle: track.is_title === true,
+                        selected: track.broadcast_selected === true,
+                      }))
+                    : null;
+
                   return (
+                    <React.Fragment key={`${review.id ?? `review-${reviewIndex}`}-${review.updated_at}`}>
+                    {wbsSelection ? (
+                      <WbsTrackSelectionForm
+                        key={`wbs-${wbsSelection.map((track) => `${track.id}:${track.selected}`).join(",")}`}
+                        submissionId={submission.id}
+                        returnTo={adminSubmissionListHref}
+                        tracks={wbsSelection}
+                        action={saveWbsTrackSelectionFormAction}
+                      />
+                    ) : null}
                     <StationReviewForm
                       key={`${review.id ?? `review-${reviewIndex}`}-${review.updated_at}`}
                       submissionId={submission.id}
@@ -1654,6 +1680,7 @@ export default async function AdminSubmissionDetailPage({
                       action={updateStationReviewFormAction}
                       returnTo={adminSubmissionListHref}
                     />
+                    </React.Fragment>
                   );
                 })
               ) : (

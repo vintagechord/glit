@@ -129,6 +129,13 @@ export async function saveManagedAlbumInfo(
     const existing = (existingRows ?? []) as ExistingTrack[];
     const byNo = new Map(existing.map((track) => [Number(track.track_no), track]));
     let hasMainTitle = existing.some((track) => track.is_title === true && track.title_role === "MAIN");
+    // An update that marks no WBS song carries no selection (for example the
+    // desk has none); it must not erase the one chosen on the admin page.
+    const carriesWbsSelection = options.input.tracks.some((track) => track.broadcastSelected === true);
+    // Filling blanks never adds songs to a selection that already exists:
+    // 원음방송 accepts three, and a fourth mark would show every song again.
+    const hasSavedWbsSelection = existing.some((track) => track.broadcast_selected === true);
+    const mayChangeWbs = mode === "fill-empty" ? !hasSavedWbsSelection : carriesWbsSelection;
     const inserts: Record<string, unknown>[] = [];
     for (const track of options.input.tracks) {
       const row = byNo.get(track.trackNo);
@@ -161,7 +168,7 @@ export async function saveManagedAlbumInfo(
           if (next && !hasMainTitle) hasMainTitle = true;
         }
       }
-      if (typeof track.broadcastSelected === "boolean") {
+      if (typeof track.broadcastSelected === "boolean" && mayChangeWbs) {
         const next = mode === "fill-empty" ? row.broadcast_selected === true || track.broadcastSelected : track.broadcastSelected;
         if (next !== (row.broadcast_selected === true)) patch.broadcast_selected = next;
       }
