@@ -1139,18 +1139,27 @@ export function SubmissionDetailClient({
                       title={stationName}
                     >
                       <StationLogoWithFallback station={review.station} />
-                      <div className="hidden min-w-0 sm:block">
-                        <p
-                          className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
-                          title={formatDateTime(review.updated_at)}
-                          aria-label={`Updated ${formatDateTime(review.updated_at)}`}
-                        >
-                          Updated{" "}
-                          <span className="text-foreground/72">
-                            {formatDateTime(review.updated_at)}
-                          </span>
+                      {mvReviewAssets && !mvReviewAssets.rejected ? (
+                        // The result files open from the rating button; the
+                        // update time is already shown in the status card above.
+                        <p className="min-w-0 text-xs font-black leading-5 text-foreground">
+                          오른쪽 등급 버튼을 누르면 필증·등급 이미지·표시 가이드를 받을 수 있습니다
+                          <span aria-hidden="true" className="ml-1 text-[#1556a4] dark:text-[#f2cf27]">→</span>
                         </p>
-                      </div>
+                      ) : (
+                        <div className="hidden min-w-0 sm:block">
+                          <p
+                            className="text-[11px] font-semibold uppercase tracking-normal text-muted-foreground"
+                            title={formatDateTime(review.updated_at)}
+                            aria-label={`Updated ${formatDateTime(review.updated_at)}`}
+                          >
+                            Updated{" "}
+                            <span className="text-foreground/72">
+                              {formatDateTime(review.updated_at)}
+                            </span>
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <ReviewResultControl
                       label={resultDisplayStatus.label}

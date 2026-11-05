@@ -156,7 +156,8 @@ export const findSubmissionById = async (submissionId: string) => {
 
 type SubmissionOwner =
   | { kind: "member"; userId: string }
-  | { kind: "guest"; guestToken: string };
+  | { kind: "guest"; guestToken: string }
+  | { kind: "admin" };
 
 const findSubmissionForOwner = async (
   submissionId: string,
@@ -171,6 +172,9 @@ const findSubmissionForOwner = async (
 
     if (owner.kind === "member") {
       return query.eq("user_id", owner.userId).maybeSingle();
+    }
+    if (owner.kind === "admin") {
+      return query.maybeSingle();
     }
 
     return query
@@ -231,6 +235,27 @@ export const ensureSubmissionOwner = async (
   }
 
   return { user, submission: null, error: "FORBIDDEN" };
+};
+
+/**
+ * Read-only access to a submission's delivered result files: the owner (member
+ * or guest code), or a signed-in administrator previewing the customer page.
+ * Never use this for payments, uploads or any write.
+ */
+export const ensureSubmissionResultReader = async (
+  submissionId: string,
+  guestToken?: string | null,
+) => {
+  const owned = await ensureSubmissionOwner(submissionId, guestToken);
+  if (owned.error !== "FORBIDDEN" || !owned.user) return owned;
+  const supabase = await createServerSupabase();
+  const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
+  if (adminError || isAdmin !== true) return owned;
+  const found = await findSubmissionForOwner(submissionId, { kind: "admin" });
+  if (found.error || !found.submission) {
+    return { user: owned.user, submission: null, error: "NOT_FOUND" };
+  }
+  return { user: owned.user, submission: found.submission, error: null };
 };
 
 export const createSubmissionPaymentOrder = async (
