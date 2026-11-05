@@ -33,6 +33,7 @@ import {
 import {
   summarizeTrackResults,
   resolveStationTrackResults,
+  sortByTrackNo,
   type TrackReviewResult,
 } from "@/lib/track-results";
 import { createClient } from "@/lib/supabase/client";
@@ -545,8 +546,9 @@ export function SubmissionDetailClient({
     (!isPaymentDone &&
       (submission.status === "WAITING_PAYMENT" ||
         submission.status === "PRE_REVIEW"));
+  // Embedded rows arrive in storage order; every list follows the album order.
   const albumTracks = React.useMemo(
-    () => submission.album_tracks ?? [],
+    () => sortByTrackNo(submission.album_tracks ?? []),
     [submission.album_tracks],
   );
   const hasAnyTrackResultDecision = React.useMemo(
@@ -1211,7 +1213,7 @@ export function SubmissionDetailClient({
         ? submissionData.package[0]
         : submissionData.package;
       const nextTracks = Array.isArray(submissionData.album_tracks)
-        ? submissionData.album_tracks
+        ? sortByTrackNo(submissionData.album_tracks)
         : [];
       setSubmission({
         ...submissionData,

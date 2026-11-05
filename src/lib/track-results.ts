@@ -18,6 +18,15 @@ export type AlbumTrackMeta = {
 
 export type ReviewStation = { code?: string | null; name?: string | null } | null;
 
+/** Album order: track number ascending, tracks without a number last, otherwise stable. */
+export function sortByTrackNo<T extends { track_no?: number | null }>(tracks: readonly T[]): T[] {
+  const rank = (value?: number | null) => (typeof value === "number" && Number.isFinite(value) ? value : Number.POSITIVE_INFINITY);
+  return tracks
+    .map((track, index) => ({ track, index }))
+    .sort((a, b) => rank(a.track.track_no) - rank(b.track.track_no) || a.index - b.index)
+    .map(({ track }) => track);
+}
+
 export const isWbsReview = (station?: ReviewStation) =>
   station?.code?.trim().toUpperCase() === "WBS" || /원음/.test(station?.name ?? "");
 
@@ -26,6 +35,7 @@ export function getStationReviewTracks<T extends AlbumTrackMeta>(
   station?: ReviewStation,
   rawTrackResults?: unknown,
 ): T[] {
+  albumTracks = sortByTrackNo(albumTracks);
   if (!isWbsReview(station) || albumTracks.length < 4) return albumTracks;
   const selected = albumTracks.filter((track) => track.broadcast_selected === true);
   if (selected.length > 0 && selected.length <= 3) return selected;
@@ -155,10 +165,10 @@ export function resolveStationTrackResults(
   const invalidWbsDecisions = unknownWbsTargets && normalized.filter((track) => track.status !== "PENDING").length > 3;
   const inheritedStatus = !hasDecisions && !unknownWbsTargets ? overall : "PENDING";
   if (!albumTracks?.length) {
-    return normalized.map((track) => ({
+    return sortByTrackNo(normalized.map((track) => ({
       ...track,
       status: hasDecisions ? track.status : inheritedStatus,
-    }));
+    })));
   }
   return reviewTracks.map((track, index) => {
     const matched = normalized.find((result) =>
@@ -233,7 +243,7 @@ export function summarizeTrackResults(
   counts: { total: number; approved: number; rejected: number; pending: number };
   outcome: TrackOutcome;
 } {
-  const results = normalizeTrackResults(raw, albumTracks);
+  const results = sortByTrackNo(normalizeTrackResults(raw, albumTracks));
   const counts = results.reduce(
     (acc, item) => {
       if (item.status === "APPROVED") acc.approved += 1;
