@@ -121,9 +121,51 @@ function casesScreen() {
 function renderList() { const statPanel = document.querySelector('.stats'); if (statPanel) statPanel.outerHTML = stats(); const list = document.getElementById('case-list'); if (list) list.innerHTML = listMarkup(); const count = document.getElementById('filtered-count'); if (count) count.textContent = filteredCases().length; const last = document.getElementById('last-sync'); if (last) last.textContent = formatDate(ui.data?.lastSync, true); }
 function manualScreen() {
   const category = ui.manualType === 'ALBUM' ? '음반' : '뮤비';
-  screen.innerHTML = `${heading(`관리자 수동 작업 · ${category}`, '이메일·문자 등으로 받은 기준파일과 원본을 이 Mac에서 관리합니다.', `<div class="button-row">${trashButton()}<button class="button primary" data-action="new-manual">＋ 기준파일로 새 작업</button></div>`)}
+  const album = ui.manualType === 'ALBUM';
+  screen.innerHTML = `${heading(`관리자 수동 작업 · ${category}`, '이메일·문자 등으로 받은 기준파일과 원본을 이 Mac에서 관리합니다.', `<div class="button-row">${trashButton()}${album ? `<button class="button secondary" data-action="toggle-merge" aria-expanded="${!!ui.mergeOpen}">${ui.mergeOpen ? '통합신청서 합치기 닫기' : '통합신청서 합치기'}</button>` : ''}<button class="button primary" data-action="new-manual">＋ 기준파일로 새 작업</button></div>`)}
+    ${album && ui.mergeOpen ? integratedMergeMarkup() : ''}
     ${ui.importOpen ? manualImportMarkup() : ''}
     <div class="workbench manual-workbench"><section class="panel case-browser"><div class="panel-head"><h2>${category} 작업 <span class="count" id="filtered-count">${filteredCases().length}</span></h2><span class="toolbar-note">이 Mac에 보관</span></div><div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="작품, 아티스트, 신청자 검색" aria-label="신청 검색" value="${e(ui.query)}"></div><div class="list-options"><select id="stage-filter" aria-label="수동 작업 진행 단계 필터"><option value="all">모든 작업 단계</option>${Object.entries(STAGES).map(([key,text]) => `<option value="${key}"${ui.stage === key ? ' selected' : ''}>${e(text)}</option>`).join('')}</select></div><div class="case-list" id="case-list">${listMarkup()}</div><div class="legend">관리자가 직접 등록한 신청입니다.<br>진행 기록과 생성 자료를 함께 보관합니다.</div></section><section class="panel" id="detail-panel">${detailMarkup()}</section></div>`;
+}
+/** 통합신청서 합치기: several albums' integrated forms of one station become one file. */
+function integratedMergeMarkup() {
+  const files = ui.mergeFiles || [];
+  return `<form id="integrated-merge-form" class="panel manual-import-card"><div><span class="eyebrow">통합신청서 합치기</span><h2>여러 앨범의 통합신청서를 한 파일로</h2><p>같은 방송사의 통합신청서(DOCX)를 모두 올리면 앨범 행을 올린 순서대로 모아 하나의 통합신청서를 만듭니다. 첫 파일의 양식·서식을 그대로 쓰고, 같은 앨범이 두 번 들어 있으면 한 번만 넣습니다.</p></div><fieldset class="manual-import-fields"${ui.merging ? ' disabled' : ''}>
+    <label class="field"><span>방송사</span><select id="merge-station">${['TBS','WBS','PBC'].map(station => `<option value="${station}"${(ui.mergeStation || 'TBS') === station ? ' selected' : ''}>${station}</option>`).join('')}</select></label>
+    <label class="manual-file-picker"><span class="file-symbol">▱</span><span><strong>통합신청서 선택</strong><span id="merge-file-names">${files.length ? e(`${files.length}개 · ${files.map(file => file.name).join(', ')}`) : '같은 방송사의 통합신청서를 2개 이상 함께 선택하세요.'}</span><small>DOCX · 최대 50개 · 다시 선택하면 목록이 바뀝니다</small></span><input id="merge-files" type="file" accept=".docx" multiple aria-label="합칠 통합신청서 파일"></label>
+    <button class="button accent" type="submit">${ui.merging ? '합치는 중…' : '하나의 파일로 생성하기'}</button></fieldset><div id="merge-result" role="status" class="helper">${mergeResultMarkup()}</div></form>`;
+}
+function mergeResultMarkup() {
+  const result = ui.mergeResult;
+  if (ui.mergeError) return `<div class="notice">${e(ui.mergeError)}</div>`;
+  if (!result) return '';
+  return `<div class="notice good"><strong>${e(result.filename)}</strong> — 파일 ${result.files}개에서 앨범 ${result.albums}건을 합쳤습니다. <button class="button secondary small" type="button" data-action="merge-download">다시 받기</button>${result.duplicates?.length ? `<p>같은 앨범이라 한 번만 넣은 파일: ${e(result.duplicates.join(', '))}</p>` : ''}${result.warnings?.length ? `<p>${result.warnings.map(e).join('<br>')}</p>` : ''}<p>양식: ${e(result.layout)}. 제출 전에 열어서 내용을 확인하세요.</p></div>`;
+}
+function downloadMerged() {
+  const result = ui.mergeResult; if (!result) return;
+  const a = document.createElement('a');
+  a.href = `/api/integrated-merge/${encodeURIComponent(result.id)}/${encodeURIComponent(result.filename)}`;
+  a.download = result.filename; document.body.append(a); a.click(); a.remove();
+}
+async function fileBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+async function mergeIntegratedFiles() {
+  const files = ui.mergeFiles || [];
+  if (files.length < 2) { ui.mergeError = '합칠 통합신청서를 2개 이상 선택하세요.'; manualScreen(); return; }
+  if (files.some(file => !/\.docx$/i.test(file.name) || file.size > 2 * 1024 * 1024)) { ui.mergeError = '2MB 이하의 통합신청서 DOCX만 선택하세요.'; manualScreen(); return; }
+  ui.merging = true; ui.mergeError = ''; ui.mergeResult = null; manualScreen();
+  try {
+    const payload = { station: ui.mergeStation || 'TBS', files: await Promise.all(files.map(async file => ({ name: file.name, data: await fileBase64(file) }))) };
+    ui.mergeResult = await api('/api/integrated-merge', { method: 'POST', body: payload });
+    ui.merging = false; manualScreen(); downloadMerged();
+    toast(`${ui.mergeResult.filename}을 만들었습니다.`);
+  } catch (error) {
+    ui.merging = false; ui.mergeError = error.message || '통합신청서를 합치지 못했습니다.'; manualScreen();
+  }
 }
 function manualImportMarkup() {
   const album = ui.manualType === 'ALBUM';
@@ -705,6 +747,8 @@ async function action(name, button) {
   if (button) button.disabled = true;
   try {
     if (name === 'new-manual') { if (!(await discardEdits())) return; ui.importOpen = true; ui.referenceFile = null; manualScreen(); }
+    else if (name === 'toggle-merge') { ui.mergeOpen = !ui.mergeOpen; ui.mergeError = ''; manualScreen(); }
+    else if (name === 'merge-download') downloadMerged();
     else if (name === 'view-trash') { if (!(await discardEdits())) return; ui.nav = 'trash'; render(); }
     else if (name === 'empty-trash') await emptyTrash();
     else if (name === 'edit-manual') { if (!(await discardEdits())) return; ui.tab = 'documents'; ui.docTab = 'edit'; detailRender(); }
@@ -765,6 +809,8 @@ document.addEventListener('change', async event => {
   if (el.closest('#station-result-form, #online-result-form, #certificate-form')) { ui.dirty = true; ui.resultDirtyForm = el.closest('form').id; clearEmailPreview(true); updateResultControls(); }
   if (el.closest('#station-result-form') && el.name === 'status') { el.closest('form').dataset.applyOverallStatus = 'true'; updateRatingRequired(); const next = ['APPROVED','REJECTED'].includes(el.value) ? el.value : 'PENDING'; el.closest('form').querySelectorAll('[name^=trackResult_]').forEach(field => { field.value = next; }); }
   if (el.closest('#station-result-form') && el.name?.startsWith('trackResult_')) el.closest('form').dataset.applyOverallStatus = 'false';
+  if (el.id === 'merge-files') { ui.mergeFiles = [...(el.files || [])]; ui.mergeResult = null; ui.mergeError = ''; const names = document.getElementById('merge-file-names'); if (names) names.textContent = ui.mergeFiles.length ? `${ui.mergeFiles.length}개 · ${ui.mergeFiles.map(file => file.name).join(', ')}` : '같은 방송사의 통합신청서를 2개 이상 함께 선택하세요.'; const result = document.getElementById('merge-result'); if (result) result.innerHTML = ''; return; }
+  if (el.id === 'merge-station') { ui.mergeStation = el.value; return; }
   if (el.id === 'certificate-file') {
     const file = el.files?.[0]; if (file && file.size > 4 * 1024 * 1024) { el.value = ''; ui.certificateFile = null; toast('필증은 4MB 이하 파일을 선택해 주세요.', true); return; }
     ui.certificateFile = file || null; const selection = document.getElementById('certificate-selection'); if (selection) selection.textContent = file ? `${file.name} · ${fileSize(file.size)} · 업로드 전` : '파일을 선택해 주세요.'; return;
@@ -788,7 +834,7 @@ document.addEventListener('change', async event => {
   } catch (error) { toast(error.message, true); el.disabled = false; }
 });
 document.addEventListener('submit', async event => {
-  const form = event.target; if (!['online-register-form','manual-import-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form','monitor-settings-form'].includes(form.id)) return; event.preventDefault();
+  const form = event.target; if (!['online-register-form','manual-import-form','integrated-merge-form','notes-form','edit-form','settings-form','station-result-form','bulk-station-form','online-result-form','certificate-form','monitor-settings-form'].includes(form.id)) return; event.preventDefault();
   const button = form.querySelector('button[type="submit"]'); button.disabled = true;
   try {
     const data = new FormData(form);
@@ -807,6 +853,7 @@ document.addEventListener('submit', async event => {
       toast('비회원 접수로 등록했습니다. 결과 페이지 주소와 조회 코드를 고객에게 전달하세요.'); return;
     }
     if (form.id === 'manual-import-form') { await importManualReference(); return; }
+    if (form.id === 'integrated-merge-form') { await mergeIntegratedFiles(); return; }
     if (form.id === 'monitor-settings-form') {
       const token = String(data.get('vercelToken') || '').trim();
       button.textContent = '저장 · 확인 중…';

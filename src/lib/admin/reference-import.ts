@@ -3,7 +3,6 @@ import path from "node:path";
 import { importReferenceDocument } from "../../../tools/onside-desk/manual-import.mjs";
 import { normalizeReviewDate } from "@/lib/review-docs/model";
 import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
-import { legacyWordBlocksToDocx, LegacyWordError, readLegacyWordBlocks } from "./legacy-word-doc";
 
 /**
  * 관리자 직접 접수: reads the application form (기준파일) a customer sent by
@@ -133,14 +132,9 @@ async function readReference(body: Buffer, fileName: string, kind: IntakeKind): 
     throw new ReferenceImportError("UNSUPPORTED_FORMAT", "HWP, HWPX, DOC, DOCX 신청서만 분석할 수 있습니다. PDF·이미지는 내용을 보고 직접 입력해주세요.");
   }
   try {
-    if (extension === ".doc") {
-      const docx = legacyWordBlocksToDocx(readLegacyWordBlocks(body));
-      const result = await importReferenceDocument({ body: docx, filename: "reference.docx", type: kind }) as DeskImport;
-      return { ...result, format: "doc", warnings: ["구형 Word(DOC) 신청서를 서버에서 읽었습니다. 표·크레딧·가사 줄바꿈을 원문과 비교해 주세요.", ...result.warnings] };
-    }
+    // The desk reader handles DOC with its table-preserving reader (no Mac converter needed).
     return await importReferenceDocument({ body, filename: `reference${extension}`, type: kind }) as DeskImport;
   } catch (error) {
-    if (error instanceof LegacyWordError) throw new ReferenceImportError(error.code, error.message);
     const code = (error as { code?: string }).code;
     if (code && error instanceof Error) throw new ReferenceImportError(code, error.message);
     throw new ReferenceImportError("EXTRACTION_FAILED", "신청서를 읽지 못했습니다. 파일이 손상되지 않았는지 확인하거나 DOCX로 저장해 다시 올려주세요.", 422);

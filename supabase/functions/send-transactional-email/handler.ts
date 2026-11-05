@@ -227,10 +227,20 @@ export function createEmailRelayHandler(dependencies: Dependencies) {
     } catch (error) {
       if (error instanceof RelayFailure) return failure(error.status, error.reason);
       if (controller.signal.aborted) return failure(504, "delivery");
-      const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string } : {};
+      const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string; response?: unknown } : {};
       if (smtp.code === "EAUTH") return failure(503, "configuration");
       if (smtp.responseCode && smtp.responseCode >= 400 && smtp.responseCode < 500) return failure(429, "rate_limit", "retry");
-      if (smtp.responseCode && smtp.responseCode >= 500) return failure(502, "delivery", "failed");
+      if (smtp.responseCode && smtp.responseCode >= 500) {
+        // Only the numeric reply and enhanced status codes leave the relay,
+        // never the server's text (it can quote the recipient).
+        const smtpCode = Number.isInteger(smtp.responseCode) && smtp.responseCode < 600 ? smtp.responseCode : undefined;
+        const smtpStatus = typeof smtp.response === "string" ? /^\d{3}[ -]([245]\.\d{1,3}\.\d{1,3})\b/.exec(smtp.response)?.[1] : undefined;
+        // A bad mailbox or address (5.1.x, or 550/553 without a status) will
+        // not change. Policy, spam and throttling refusals (5.7.x and others)
+        // often clear later, so the outbox may try again within its limit.
+        const permanent = smtpStatus ? smtpStatus.startsWith("5.1.") : smtpCode === 550 || smtpCode === 553;
+        return response(502, { ok: false, reason: "delivery", disposition: permanent ? "failed" : "retry", ...(smtpCode ? { smtpCode } : {}), ...(smtpStatus ? { smtpStatus } : {}) });
+      }
       if (smtp.command === "CONN" || smtp.code === "EDNS") return failure(502, "delivery", "retry");
       return failure(502, "delivery", "uncertain");
     } finally {

@@ -8,6 +8,7 @@ import { ReviewExtractionError, validateReviewUpload } from "./upload-validation
 import { extractDocxBlocks } from "./docx-extract";
 import { assertConverterMemoryAvailable, converterTimeoutSeconds, lowMemoryReviewConversion, watchConverterMemory } from "./converter-memory";
 import { awaitReviewAbort } from "./abort";
+import { isReferenceBoilerplateLine, readTitleFlagCell } from "../../../tools/onside-desk/reference-cleanup.mjs";
 import { emptyReviewData, explicitInstrumental, explicitTitle, normalizeReviewDate, REVIEW_DOC_LIMITS, reviewAlbumSchema, reviewTrackSchema, type ReviewAlbum, type ReviewDocumentData, type ReviewIssue, type ReviewMode, type ReviewSource, type ReviewTrack } from "./model";
 
 export type ReviewUpload = { id: string; name: string; mime: string; buffer: Buffer };
@@ -94,7 +95,7 @@ const labels: Record<string, Field> = {
   그룹솔로: "actType", 구성: "actType", 구성원: "members", 멤버: "members", 이전발매곡: "previousReleases", 심의요청곡수: "declaredTrackCount", 트랙수: "declaredTrackCount", 수록곡수: "declaredTrackCount",
   곡명: "trackTitle", 곡제목: "trackTitle", 노래제목: "trackTitle", title: "trackTitle", tracktitle: "trackTitle", 트랙: "trackTitle",
   트랙번호: "trackNumber", 트랙넘버: "trackNumber", 번호: "trackNumber", no: "trackNumber", trackno: "trackNumber",
-  타이틀: "titleFlag", 타이틀곡: "titleFlag", 타이틀여부: "titleFlag", 작사: "lyricist", 작사가: "lyricist", 작사자: "lyricist", 작곡: "composer", 작곡가: "composer", 작곡자: "composer", 편곡: "arranger", 편곡자: "arranger", 피처링: "featuring", 피쳐링: "featuring", featuring: "featuring", feat: "featuring", 실연자: "performers", 연주자: "performers", 연주: "performers", 실연연주자: "performers",
+  타이틀: "titleFlag", 타이틀곡: "titleFlag", 타이틀여부: "titleFlag", 타이틀곡여부: "titleFlag", 작사: "lyricist", 작사가: "lyricist", 작사자: "lyricist", 작곡: "composer", 작곡가: "composer", 작곡자: "composer", 편곡: "arranger", 편곡자: "arranger", 피처링: "featuring", 피쳐링: "featuring", featuring: "featuring", feat: "featuring", 실연자: "performers", 연주자: "performers", 연주: "performers", 실연연주자: "performers",
   가사: "lyrics", 가사원문: "lyrics", 원문가사: "lyrics", lyrics: "lyrics", 번역: "existingTranslation", 한글번역: "existingTranslation", 번역가사: "existingTranslation", instmr: "instrumental", inst: "instrumental", mr: "instrumental", 연주곡: "instrumental", 반주곡: "instrumental",
 };
 const labelField = (value: string) => labels[value.toLowerCase().replace(/[\s:：.\-_/()[\]]/g, "")];
@@ -111,6 +112,7 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
   let pendingNumber: number | undefined;
   let unused = 0;
   let auxiliary = false;
+  let pendingTitleFlag = false;
   const makeTrack = () => { const t = reviewTrackSchema.parse({ id: randomUUID(), number: pendingNumber || album.tracks.length + 1, sourceIds: [source.id] }); album.tracks.push(t); pendingNumber = undefined; return t; };
   const evidence = (target: ReviewAlbum | ReviewTrack, field: string, value: string, location: string) => target.evidence.push({ sourceId: source.id, field, location, excerpt: value.slice(0, 2000) });
   function assign(field: Field, value: string, location: string) {
@@ -167,6 +169,16 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
     }
     if (b.cells) {
       const values = b.cells.map((c) => c.text.trim());
+      // "타이틀곡여부 ☑" (label and box in one cell, or the box in the next
+      // cell) flags the current song as a title; it is never lyrics.
+      const flagIndex = values.findIndex((v) => readTitleFlagCell(v) !== null);
+      if (flagIndex >= 0 && values.every((v, i) => i === flagIndex || !v || /^[☑☒■✓✔□☐]$/.test(v))) {
+        const own = readTitleFlagCell(values[flagIndex]);
+        const mark = own === undefined ? values.find((v, i) => i !== flagIndex && v) ?? "" : own ? "☑" : "□";
+        if (track) assign("titleFlag", mark, b.location);
+        activeLyrics = undefined; header = undefined; headerTable = undefined;
+        continue;
+      }
       const keys = values.map(labelField);
       const table = b.location.match(/^(.*)\/(?:row:?|행:)\d+(?:\/.*)?$/)?.[1];
       if (headerTable && table && headerTable !== table) header = undefined;
@@ -194,6 +206,21 @@ export function structureExtractedFile(source: ReviewSource, result: ExtractedBl
     for (const raw of b.text.split(/\r?\n/)) {
       const line = raw.trim();
       if (/^(?:참고|안내|담당자|연락처|이메일|신청자)\s*[:：]/.test(line)) { activeLyrics = undefined; continue; }
+      // Submission guidance and footers end the lyrics and are never values.
+      if (isReferenceBoilerplateLine(line)) { activeLyrics = undefined; continue; }
+      const flag = readTitleFlagCell(line);
+      if (flag !== null) {
+        activeLyrics = undefined;
+        if (flag === undefined) pendingTitleFlag = true;
+        else if (track) assign("titleFlag", flag ? "☑" : "□", b.location);
+        continue;
+      }
+      if (/^[☑☒■✓✔□☐]$/.test(line)) {
+        if (pendingTitleFlag && track) assign("titleFlag", line, b.location);
+        pendingTitleFlag = false;
+        continue;
+      }
+      if (line) pendingTitleFlag = false;
       const labeled = line.match(/^([^:：\t]{1,30})\s*[:：\t]\s*(.*)$/);
       if (labeled && labelField(labeled[1])) { assign(labelField(labeled[1]), labeled[2], b.location); continue; }
       const onlyLabel = labelField(line);

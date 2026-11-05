@@ -192,3 +192,43 @@ test('label qualifier lines and applicant guidance never become values or lyrics
   assert.match(result.submission.mv_lyrics, /Hold me close$/);
   assert.match(result.extractedText, /작성하신 신청서를/);
 });
+
+// 2026-11-06 owner report: the Onside form's 「타이틀곡여부 ☑」 cell and the
+// closing CD guidance ran into the lyrics, and title songs were not marked.
+const guidance = [
+  '작성하신 신청서를 onside17@daum.net으로 보내주시면 심의가 진행됩니다. ',
+  '또한 디지털로 발매된 음반의 경우 심의용 CD와 가사집은 저희가 무료로 제작해드리나, 오프라인으로 정식 발매된 음반은 실제 음반으로 심의를 진행해야 하기 때문에 아래 주소로 옵션별 필요한 CD를 발송해 주셔야 합니다. ',
+  'CD보내실 주소 : 서울시 은평구 진흥로 37-6 202호 온사이드',
+  '보내실 CD 장수 : 옵션 1(7개 방송국) – 18장',
+  '                 옵션 2(10개 방송국) – 23장',
+  '                 옵션 3(13개 방송국) – 27장',
+];
+const onsideFormTracks = (titleCell) => table([['아티스트','런치 (LUNCH)'],['음반명','오늘 밤도 안녕','소속사','레시피뮤직']])
+  + table([['곡명','첫 곡','작사자','작사가'],['작곡자','작곡가','편곡자','편곡가'],['가사','첫 줄\n둘째 줄'],[titleCell('☑'),'']])
+  + table([['곡명','둘째 곡','작사자','작사가'],['작곡자','작곡가','편곡자','편곡가'],['가사','다른 가사'],[titleCell('□'),'']])
+  + guidance.map(p).join('');
+
+test('the title check box cell marks title songs and never reaches the lyrics; closing guidance is dropped', async () => {
+  for (const titleCell of [(mark) => `타이틀곡여부\n${mark}`, (mark) => `타 타이틀곡여부\n${mark}`]) {
+    const result = await importReferenceDocument({ body: docx(onsideFormTracks(titleCell)), filename: 'form.docx', type: 'ALBUM' });
+    assert.deepEqual(result.tracks.map((track) => [track.track_title, track.is_title]), [['첫 곡', true], ['둘째 곡', false]]);
+    for (const track of result.tracks) {
+      assert.doesNotMatch(track.lyrics, /타이틀곡여부|☑|□|CD|옵션|작성하신|디지털로/);
+    }
+    assert.equal(result.tracks[0].lyrics, '첫 줄\n둘째 줄');
+  }
+});
+
+test('a form flattened into paragraphs still reads the title box and drops the guidance', async () => {
+  const xml = ['곡명: 첫 곡', '작사: 작사가', '작곡: 작곡가', '가사', '첫 줄', '둘째 줄', '타이틀곡여부', '☑', '곡명: 둘째 곡', '작사: 작사가', '작곡: 작곡가', '가사', '다른 가사', '타이틀곡여부', '□', ...guidance].map(p).join('');
+  const result = await importReferenceDocument({ body: docx(xml), filename: 'flat.docx', type: 'ALBUM' });
+  assert.deepEqual(result.tracks.map((track) => [track.track_title, track.is_title]), [['첫 곡', true], ['둘째 곡', false]]);
+  assert.equal(result.tracks[0].lyrics, '첫 줄\n둘째 줄');
+  assert.equal(result.tracks[1].lyrics, '다른 가사');
+});
+
+test('stored lyrics are cleaned at generation too', async () => {
+  const { cleanLyricRecord } = await import('./reference-cleanup.mjs');
+  const record = cleanLyricRecord({ lyrics: ['마지막 줄', '타이틀곡여부', '☑', ...guidance].join('\n') });
+  assert.equal(record.lyrics, '마지막 줄');
+});

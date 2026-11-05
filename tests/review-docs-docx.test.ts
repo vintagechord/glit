@@ -390,10 +390,10 @@ test("integrated templates repeat the reference album rows and retain the PBC ti
       assert.match(xml, /vMerge[^>]*val="restart"/);
       assert.match(xml, /두 번째 타이틀곡/);
       for (const [row] of [...xml.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/g)].slice(2)) {
-        // Centered vertically merged cells overlapped the next album after a
-        // page break in the multi-page PBC render fixture.
-        assert.doesNotMatch(row, /vAlign val="center"/);
-        assert.match(row, /vAlign val="top"/);
+        // Owner 2026-11-06: values sit in the vertical middle of their cells.
+        // A 28-album render (2026-11-06) showed no overlap across page breaks.
+        assert.match(row, /vAlign val="center"/);
+        assert.doesNotMatch(row, /vAlign val="top"/);
       }
     } else {
       assert.match(xml, /검증 제작사/);
@@ -564,4 +564,20 @@ test("review docs fail clearly when a template is missing or corrupt", async (co
       error.message.includes(invalidContractFilename) &&
       error.message.includes("필수 placeholder"),
   );
+});
+
+test("table values sit in the vertical middle of their cells; lyric cells read from the top", async () => {
+  const { centerTableCells } = await import("../scripts/review-docs/center-table-cells.mjs");
+  const { readFileSync } = await import("node:fs");
+  const PizZipModule = (await import("pizzip")).default;
+  for (const dir of ["templates/review-docs", "tools/onside-desk/templates"]) {
+    for (const name of ["song-review-request.docx", "review-form.docx", "tbs-integrated.docx", "wbs-integrated.docx", "pbc-integrated.docx"]) {
+      const xml = new PizZipModule(readFileSync(new URL(`../${dir}/${name}`, import.meta.url))).file("word/document.xml")!.asText();
+      assert.equal(centerTableCells(xml).changed, 0, `${dir}/${name} has a cell that is not centered`);
+      for (const [cell] of xml.matchAll(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g)) {
+        if (/\{(?:lyrics|lyrics_with_translation)\}/.test(cell.replace(/<[^>]+>/g, ""))) continue;
+        assert.match(cell, /<w:vAlign w:val="center"\/>/, `${dir}/${name}`);
+      }
+    }
+  }
 });

@@ -35,6 +35,7 @@ import {
   type TranslationProvider,
 } from "@/lib/review-docs/translation";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
+import { cleanLyricText } from "../../../tools/onside-desk/reference-cleanup.mjs";
 
 const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
 
@@ -348,18 +349,20 @@ const normalizeTrack = (track: DbRecord, index: number) => {
     `트랙 ${trackNo}`;
   const isTitle = getBoolean(track, "is_title");
   const broadcastSelected = getBoolean(track, "broadcast_selected");
-  const lyrics = getText(track, "lyrics");
-  const translatedLyrics = getText(track, "translated_lyrics");
+  // Stored lyrics can still carry form guidance or the 타이틀곡여부 cell from
+  // an older import; documents never print them.
+  const lyrics = cleanLyricText(getText(track, "lyrics")) ?? "";
+  const translatedLyrics = cleanLyricText(getText(track, "translated_lyrics")) ?? "";
   const lyricist = getText(track, "lyricist");
   const hasInstrumentalTitle = isInstrumentalTitle(title);
   const isInstrumental =
     track.is_instrumental === true ||
     (track.is_instrumental !== false && hasInstrumentalTitle);
   const titleMarkers = [isTitle ? "(타이틀)" : ""].filter(Boolean);
-  const trackTitleForDocs = [title, ...titleMarkers].join(" ");
+  const trackTitleForDocs = [isTitle ? title.replace(/(?:\s*\(타이틀\))+$/, "") : title, ...titleMarkers].join(" ");
   const lyricsDisplay = isInstrumental
     ? "가사 없음 / Instrumental"
-    : compactLyrics(getText(track, "lyrics_with_translation") || lyrics);
+    : compactLyrics(cleanLyricText(getText(track, "lyrics_with_translation")) || lyrics);
   const creditParts = [
     !isInstrumental && lyricist ? `작사: ${lyricist}` : "",
     getText(track, "composer") ? `작곡: ${getText(track, "composer")}` : "",

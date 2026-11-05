@@ -29,6 +29,28 @@ const safeMessageId = (value: unknown) => typeof value === "string" && /^[A-Za-z
 const acceptedAttempt = (messageId: string): EmailAttemptResult => ({ ok: true, outcome: "accepted", messageId });
 const failedAttempt = (outcome: "retry" | "uncertain" | "failed", reason: NonNullable<EmailSendResult["reason"]>, errorCode: string, retryAfterSeconds?: number): EmailAttemptResult => ({ ...failure(reason), outcome, errorCode, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) });
 
+const smtpCodePart = (code: unknown) => (typeof code === "number" && Number.isInteger(code) && code >= 200 && code < 600 ? String(code) : "");
+const smtpStatusPart = (status: unknown) => (typeof status === "string" && /^[245]\.\d{1,3}\.\d{1,3}$/.test(status) ? status.replace(/\./g, "_") : "");
+
+/** SMTP 5xx: a bad mailbox or address (5.1.x, or 550/553 without a status)
+ * is final; policy, spam and throttling refusals may clear, so the outbox
+ * retries them within its attempt limit. Only numeric codes are recorded. */
+export function classifySmtpRejection(code: unknown, status?: unknown): { outcome: "retry" | "failed"; errorCode: string } {
+  const codePart = smtpCodePart(code);
+  const statusPart = smtpStatusPart(status);
+  const permanent = statusPart ? statusPart.startsWith("5_1_") : codePart === "550" || codePart === "553";
+  return { outcome: permanent ? "failed" : "retry", errorCode: ["smtp", codePart || "5xx", statusPart].filter(Boolean).join("_") };
+}
+
+/** The relay's numeric SMTP reply when it sent one, otherwise its HTTP status. */
+function relayErrorCode(httpStatus: number, body: unknown) {
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const codePart = smtpCodePart(record.smtpCode);
+  if (!codePart) return `relay_http_${httpStatus}`;
+  const statusPart = smtpStatusPart(record.smtpStatus);
+  return ["relay_smtp", codePart, statusPart].filter(Boolean).join("_");
+}
+
 type TestDispatcher = (message: EmailMessage, deliver: () => Promise<EmailSendResult>) => Promise<EmailSendResult>;
 let testDispatcher: TestDispatcher | undefined;
 /** Explicit provider-test DI only; production always persists before delivery. */
@@ -106,7 +128,7 @@ export async function sendEmailAttempt(message: EmailMessage, expectedProvider?:
       const outcome = result?.ok === false && ["retry", "failed", "uncertain"].includes(result.disposition)
         ? result.disposition as "retry" | "failed" | "uncertain"
         : reason === "configuration" ? "failed" : reason === "rate_limit" ? "retry" : "uncertain";
-      return failedAttempt(outcome, reason, response.ok ? "invalid_provider_ack" : `relay_http_${response.status}`, reason === "rate_limit" ? 60 : undefined);
+      return failedAttempt(outcome, reason, response.ok ? "invalid_provider_ack" : relayErrorCode(response.status, result), reason === "rate_limit" ? 60 : undefined);
     }
 
     if (config.provider === "smtp" && config.smtp && config.sender.ok) {
@@ -171,12 +193,16 @@ export async function sendEmailAttempt(message: EmailMessage, expectedProvider?:
   } catch (error) {
     if (error instanceof EmailAttachmentError) return failedAttempt(error.code === "attachment_unavailable" ? "retry" : "failed", "delivery", error.code);
     // SMTP errors can include entire server replies. Keep only a fixed category.
-    const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string } : {};
+    const smtp = error && typeof error === "object" ? error as { code?: string; responseCode?: number; command?: string; response?: unknown } : {};
     const reason = smtp.code === "EAUTH" ? "configuration" : "delivery";
-    console.error(`[Email] ${message.operation} failed`, { reason });
+    console.error(`[Email] ${message.operation} failed`, { reason, smtpCode: smtp.responseCode });
     if (reason === "configuration") return failedAttempt("failed", reason, "smtp_auth_rejected");
     if (smtp.responseCode && smtp.responseCode >= 400 && smtp.responseCode < 500) return failedAttempt("retry", "rate_limit", "smtp_temporary_rejection", 60);
-    if (smtp.responseCode && smtp.responseCode >= 500) return failedAttempt("failed", "delivery", "smtp_permanent_rejection");
+    if (smtp.responseCode && smtp.responseCode >= 500) {
+      const smtpStatus = typeof smtp.response === "string" ? /^\d{3}[ -]([245]\.\d{1,3}\.\d{1,3})\b/.exec(smtp.response)?.[1] : undefined;
+      const rejection = classifySmtpRejection(smtp.responseCode, smtpStatus);
+      return failedAttempt(rejection.outcome, "delivery", rejection.errorCode);
+    }
     if (!submissionStarted || smtp.command === "CONN" || smtp.code === "EDNS") return failedAttempt("retry", reason, "connection_unavailable");
     // Resend deduplicates retries with the outbox's stable provider key.
     if (config.provider === "resend" && message.idempotencyKey?.startsWith("outbox-")) return failedAttempt("retry", reason, "provider_unreachable");
