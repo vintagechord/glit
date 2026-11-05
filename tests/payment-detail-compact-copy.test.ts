@@ -71,7 +71,12 @@ test("submission detail combines current status and review progress", () => {
   );
   assert.match(source, /\? currentProcessStep\.value/);
   assert.match(source, /firstIncompleteProcessStepIndex/);
-  assert.match(source, /hasFinalResultStarted[\s\S]*방송사별 결과 순차 반영[\s\S]*방송사별 결과 대기/);
+  // Owner 2026-11-05: every station received → "전체 방송사 접수 완료";
+  // any station result → "결과 통보 중".
+  assert.match(source, /hasAnyStationResult\s*\? "결과 통보 중"\s*: hasStationSubmissionDone\s*\? "전체 방송사 접수 완료"\s*: "방송사별 결과 대기"/);
+  assert.doesNotMatch(source, /방송사별 결과 순차 반영/);
+  assert.doesNotMatch(heroSection, /신청서 확인|handleOpenSubmissionForm/);
+  assert.match(heroSection, /displayStatus\.primaryAction !== "station-review"/);
   assert.doesNotMatch(source, /renderProcessSection/);
 
   const translations = read(

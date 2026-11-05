@@ -5,6 +5,7 @@ const allowedFilterKeys = [
   "status",
   "payment",
   "origin",
+  "stage",
   "from",
   "to",
   "page",
@@ -34,6 +35,8 @@ const normalizeFilterValue = (
       return /^[A-Z0-9_]{1,64}$/.test(trimmed) ? trimmed : "";
     case "origin":
       return allowedOrigins.has(trimmed) ? trimmed : "";
+    case "stage":
+      return /^[a-z_]{1,32}$/.test(trimmed) ? trimmed : "";
     case "from":
     case "to":
       return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : "";

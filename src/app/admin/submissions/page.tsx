@@ -4,6 +4,7 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
+  FilePlus2,
   FileText,
   Filter,
   Search,
@@ -22,6 +23,13 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
+import {
+  adminSubmissionStageKeys,
+  adminSubmissionStageOf,
+  adminSubmissionStages,
+  applyAdminSubmissionStageFilter,
+  isAdminSubmissionStage,
+} from "@/lib/admin/submission-stages";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import {
   ReviewDocsBulkToolbar,
@@ -132,6 +140,7 @@ type AdminSubmissionsSearchParamsInput = {
   payment?: string | string[];
   type?: string | string[];
   origin?: string | string[];
+  stage?: string | string[];
   q?: string | string[];
   from?: string | string[];
   to?: string | string[];
@@ -155,6 +164,8 @@ type SubmissionRow = {
   payment_amount?: number | null;
   created_from?: string | null;
   is_oneclick?: boolean | null;
+  current_order_id?: string | null;
+  result_notified_at?: string | null;
   package?:
     | Array<{ name?: string | null }>
     | { name?: string | null }
@@ -185,6 +196,9 @@ export default async function AdminSubmissionsPage({
     payment: toSingle(resolvedSearchParams.payment),
     type: activeType,
     origin: toSingle(resolvedSearchParams.origin),
+    stage: isAdminSubmissionStage(toSingle(resolvedSearchParams.stage))
+      ? toSingle(resolvedSearchParams.stage)
+      : "",
     q: toSingle(resolvedSearchParams.q),
     from: toDateInputValue(toSingle(resolvedSearchParams.from)),
     to: toDateInputValue(toSingle(resolvedSearchParams.to)),
@@ -197,9 +211,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, package:packages ( name )";
+    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -223,6 +237,9 @@ export default async function AdminSubmissionsPage({
     }
     if (filters.payment) {
       query = query.eq("payment_status", filters.payment);
+    }
+    if (isAdminSubmissionStage(filters.stage)) {
+      query = applyAdminSubmissionStageFilter(query, filters.stage);
     }
     if (activeType !== "ALL") {
       query = query.eq("type", activeType);
@@ -315,6 +332,9 @@ export default async function AdminSubmissionsPage({
   };
 
   const isDraftView = filters.status === "DRAFT";
+  const activeStage = isAdminSubmissionStage(filters.stage)
+    ? adminSubmissionStages[filters.stage]
+    : null;
   const reviewDocSelectableIds =
     activeType === "ALBUM"
       ? submissions.map((submission) => submission.id)
@@ -352,10 +372,17 @@ export default async function AdminSubmissionsPage({
               접수 관리
             </h1>
             <p className="mt-2 text-sm font-semibold text-muted-foreground">
-              {activeTypeLabel} · 총 {totalCount.toLocaleString()}건 · 페이지 {page} / {totalPages}
+              {activeTypeLabel}{activeStage ? ` · ${activeStage.label}` : ""} · 총 {totalCount.toLocaleString()}건 · 페이지 {page} / {totalPages}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/intake"
+              className="inline-flex h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-3 text-xs font-black text-white shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27] dark:shadow-none"
+            >
+              <FilePlus2 className="h-4 w-4" aria-hidden="true" />
+              <span>관리자 직접 접수</span>
+            </Link>
             <Link
               href="/admin/config"
               className="inline-flex h-10 items-center gap-2 rounded-[8px] border-2 border-border bg-card px-3 text-xs font-black text-foreground transition hover:border-[#111111] dark:hover:border-[#f2cf27]"
@@ -457,6 +484,20 @@ export default async function AdminSubmissionsPage({
               <option value="global">해외</option>
             </select>
           </FieldLabel>
+          <FieldLabel label="처리 단계">
+            <select
+              name="stage"
+              defaultValue={filters.stage}
+              className="h-11 w-full min-w-0 rounded-[8px] border-2 border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition focus:border-[#1556a4]"
+            >
+              <option value="">전체 단계</option>
+              {adminSubmissionStageKeys.map((key) => (
+                <option key={key} value={key}>
+                  {adminSubmissionStages[key].label}
+                </option>
+              ))}
+            </select>
+          </FieldLabel>
           <FieldLabel label="상태">
             <select
               name="status"
@@ -551,6 +592,8 @@ export default async function AdminSubmissionsPage({
             const statusLabel =
               labelMap.status[submission.status] ?? submission.status;
             const typeLabel = labelMap.type[submission.type] ?? submission.type;
+            const stage = adminSubmissionStageOf(submission);
+            const stageInfo = stage ? adminSubmissionStages[stage] : null;
             const isGlobalSubmission =
               submission.created_from === "global" ||
               submission.locale === "en" ||
@@ -625,6 +668,9 @@ export default async function AdminSubmissionsPage({
                       상태
                     </span>
                     <div className="flex min-w-0 flex-wrap gap-1.5">
+                      {stageInfo ? (
+                        <StatusBadge label={stageInfo.label} tone={stageInfo.tone} />
+                      ) : null}
                       <StatusBadge
                         label={statusLabel}
                         tone={statusToneMap[submission.status]}
