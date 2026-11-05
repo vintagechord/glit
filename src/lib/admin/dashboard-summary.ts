@@ -7,6 +7,7 @@ import {
   type AdminSubmissionStage,
 } from "./submission-stages";
 import { resolveSubmissionNotificationRecipient } from "./notification-recipient";
+import { loadCustomerViewRecords, viewedAfterNotice } from "./customer-view-record";
 
 export type DashboardSubmission = {
   id: string;
@@ -39,6 +40,8 @@ export type AdminDashboard = {
   bankOrders: DashboardBankOrder[];
   resultNotices: DashboardResultNotice[];
   mailIssues: number | null;
+  /** Results announced in the last 30 days that the customer has not opened since. */
+  unseenResults: number | null;
   failedSections: string[];
 };
 
@@ -75,6 +78,18 @@ async function loadResultPendingRows(db: SupabaseClient): Promise<{ data: Submis
   return { data: (data ?? null) as SubmissionRow[] | null, error };
 }
 
+async function countUnseenResults(db: SupabaseClient, now: Date): Promise<number | null> {
+  const { data, error } = await db.from("submissions").select("id, result_notified_at")
+    .not("result_notified_at", "is", null)
+    .gte("result_notified_at", new Date(now.getTime() - 30 * 86_400_000).toISOString())
+    .order("result_notified_at", { ascending: false }).limit(200);
+  if (error) return null;
+  const rows = (data ?? []) as Array<{ id: string; result_notified_at: string }>;
+  const views = await loadCustomerViewRecords(db, rows.map((row) => row.id));
+  if (views.error) return null;
+  return rows.filter((row) => !viewedAfterNotice(views.records.get(row.id), row.result_notified_at)).length;
+}
+
 /** Everything the admin home shows; each section fails on its own. */
 export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): Promise<AdminDashboard> {
   const failedSections: string[] = [];
@@ -83,7 +98,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
     return stage ? applyAdminSubmissionStageFilter(query, stage) : query.neq("status", "DRAFT");
   };
 
-  const [stageCounts, totalResult, recentResult, ordersResult, resultRows, mailResult] = await Promise.all([
+  const [stageCounts, totalResult, recentResult, ordersResult, resultRows, mailResult, unseenResults] = await Promise.all([
     Promise.all(adminSubmissionStageKeys.map(async (stage) => {
       const { count, error } = await countQuery(stage);
       return [stage, error ? null : count ?? 0] as const;
@@ -97,6 +112,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
     db.from("email_outbox").select("id", { count: "exact", head: true })
       .in("status", ["failed", "uncertain", "expired"])
       .gte("created_at", new Date(now.getTime() - MAIL_ISSUE_DAYS * 86_400_000).toISOString()),
+    countUnseenResults(db, now).catch(() => null),
   ]);
 
   const counts = Object.fromEntries(stageCounts) as Record<AdminSubmissionStage, number | null>;
@@ -105,6 +121,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
   if (ordersResult.error) failedSections.push("입금 확인 대기");
   if (resultRows.error) failedSections.push("결과 안내 대기");
   if (mailResult.error) failedSections.push("메일 발송 확인");
+  if (unseenResults === null) failedSections.push("고객 결과 확인");
 
   let bankOrders: DashboardBankOrder[] = [];
   const orders = (ordersResult.data ?? []) as Array<{ id: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null; created_at: string }>;
@@ -142,6 +159,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
     bankOrders,
     resultNotices,
     mailIssues: mailResult.error ? null : mailResult.count ?? 0,
+    unseenResults,
     failedSections: [...new Set(failedSections)],
   };
 }

@@ -106,7 +106,7 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
       {historyOpen ? (
         <div className="mt-4 space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3 text-sm">
           <p className="text-xs text-muted-foreground">
-            이 접수의 고객에게 보낸 메일만 표시합니다. 관리자 알림 메일은 빠지며, 온사이드 전체 메일은 관리자 홈의 ‘메일 발송 내역’에서 확인합니다. 메일 서버 접수는 수신함 도착과 다릅니다.
+            이 접수의 고객에게 보낸 메일만 표시합니다. 관리자 알림 메일은 빠지며, 온사이드 전체 메일은 관리자 홈의 ‘메일 발송 내역’에서 확인합니다. 메일 서버 접수는 수신함 도착과 다릅니다. 열람 확인은 메일 속 이미지가 열릴 때 기록되므로, 이미지를 차단한 메일 앱에서는 열어도 기록되지 않을 수 있습니다.
           </p>
           {customerEmailsUnavailable ? <p role="alert" className="text-xs text-rose-700">발송 내역을 불러오지 못했습니다. 잠시 후 새로고침해주세요.</p> : null}
           {!customerEmailsUnavailable && customerEmails.length === 0 ? <p className="text-xs text-muted-foreground">이 접수로 고객에게 보낸 메일 기록이 없습니다. 발송 기록은 최근 30일간 보관합니다.</p> : null}
@@ -123,6 +123,17 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
                 <p className="mt-1 break-all text-xs text-muted-foreground">
                   {mail.recipient} · 요청 {seoulTime(mail.createdAt)}{mail.acceptedAt ? ` · 접수 ${seoulTime(mail.acceptedAt)}` : ""} · 시도 {mail.attempts}회{mail.status === "retry" ? ` · 예정 ${seoulTime(mail.nextAttemptAt)}` : ""}
                 </p>
+                {mail.status === "accepted" ? (
+                  <p className="mt-1 text-xs">
+                    {mail.openedAt ? (
+                      <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-2 py-0.5 font-black text-white">
+                        열람 확인 {seoulTime(mail.openedAt)}{mail.openCount > 1 ? ` · ${mail.openCount}회` : ""}
+                      </span>
+                    ) : (
+                      <span className="rounded-[6px] border-2 border-[#111111] bg-white px-2 py-0.5 font-black text-[#111111]">열람 기록 없음</span>
+                    )}
+                  </p>
+                ) : null}
                 {retryableStatuses.has(mail.status) ? (
                   <form action={retryEmailAction} className="mt-2 flex flex-wrap items-center gap-2">
                     <input type="hidden" name="id" value={mail.id} />

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { isRatingCode, resolveRatingImageUrl, type RatingCode } from "@/lib/mv-assets";
 import { isRejectedMvResult } from "@/lib/submission-certificate";
@@ -34,7 +36,7 @@ export async function GET(
   const { id: submissionId } = await context.params;
   const guestToken = req.headers.get("x-submission-guest-token") || undefined;
 
-  const { submission, error } = await ensureSubmissionResultReader(submissionId, guestToken);
+  const { submission, error, viaAdmin } = await ensureSubmissionResultReader(submissionId, guestToken);
   if (error === "UNAUTHORIZED") {
     return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
   }
@@ -73,6 +75,7 @@ export async function GET(
     return NextResponse.json({ error: "등급이 설정되지 않았습니다." }, { status: 404 });
   }
   try {
+    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: true });
     const admin = createAdminClient();
     const ratingAsset = await resolveRatingImageUrl({
       rating,

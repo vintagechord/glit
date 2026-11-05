@@ -247,15 +247,17 @@ export const ensureSubmissionResultReader = async (
   guestToken?: string | null,
 ) => {
   const owned = await ensureSubmissionOwner(submissionId, guestToken);
-  if (owned.error !== "FORBIDDEN" || !owned.user) return owned;
+  if (owned.error !== "FORBIDDEN" || !owned.user) return { ...owned, viaAdmin: false };
   const supabase = await createServerSupabase();
   const { data: isAdmin, error: adminError } = await supabase.rpc("is_admin");
-  if (adminError || isAdmin !== true) return owned;
+  if (adminError || isAdmin !== true) return { ...owned, viaAdmin: false };
   const found = await findSubmissionForOwner(submissionId, { kind: "admin" });
   if (found.error || !found.submission) {
-    return { user: owned.user, submission: null, error: "NOT_FOUND" };
+    return { user: owned.user, submission: null, error: "NOT_FOUND", viaAdmin: true };
   }
-  return { user: owned.user, submission: found.submission, error: null };
+  // viaAdmin: an administrator's preview, which must not count as the
+  // customer seeing the result.
+  return { user: owned.user, submission: found.submission, error: null, viaAdmin: true };
 };
 
 export const createSubmissionPaymentOrder = async (

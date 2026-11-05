@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
+
 import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 import { getGuideSignedUrl } from "@/lib/mv-assets";
 import { ensureSubmissionResultReader } from "@/lib/payments/submission";
@@ -15,7 +17,7 @@ export async function GET(
   const { id: submissionId } = await context.params;
   const guestToken = req.headers.get("x-submission-guest-token") || undefined;
 
-  const { submission, error } = await ensureSubmissionResultReader(submissionId, guestToken);
+  const { submission, error, viaAdmin } = await ensureSubmissionResultReader(submissionId, guestToken);
   if (error === "UNAUTHORIZED") {
     return NextResponse.json({ error: "로그인 또는 조회코드가 필요합니다." }, { status: 401 });
   }
@@ -47,6 +49,7 @@ export async function GET(
   }
 
   try {
+    if (!viaAdmin) recordCustomerResultViewAfterResponse(submissionId, { download: true });
     const urlSigned = await getGuideSignedUrl();
     return await createAttachmentResponseFromUrl({
       url: urlSigned,
