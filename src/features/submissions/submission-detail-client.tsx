@@ -948,52 +948,73 @@ export function SubmissionDetailClient({
     !isMvSubmission && isPaymentDone
       ? currentProcessStep.value
       : displayStatus.currentLabel;
+  // Milestones on the status card's rule (owner, 2026-11-06): the four step
+  // boxes took too much room, so each step is a dot on the line with its
+  // label underneath, and the line is filled up to the current step.
+  const processProgressPercent =
+    ((currentProcessStepIndex + 0.5) / processSteps.length) * 100;
   const renderProcessTimeline = () => (
-    <div className="mt-6 border-t-2 border-[#111111] pt-5 dark:border-[#f2cf27]">
-      <h3 id="review-process-heading" className={detailKickerClass}>
+    <div className="mt-6">
+      <h3 id="review-process-heading" className="sr-only">
         심의 진행 단계
       </h3>
       <ol
         aria-labelledby="review-process-heading"
-        className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        className="relative grid grid-cols-4"
       >
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 top-[9px] h-[2px] bg-[#111111] dark:bg-[#f2cf27]"
+        />
+        <span
+          aria-hidden="true"
+          className="absolute left-0 top-2 h-1 bg-[#1556a4] dark:bg-[#3f8ad8]"
+          style={{ width: `${processProgressPercent}%` }}
+        />
         {processSteps.map((step, index) => (
           <li
             key={step.label}
             aria-current={
               index === currentProcessStepIndex ? "step" : undefined
             }
-            className={[
-              "rounded-[8px] border-2 px-4 py-3 text-sm transition",
-              step.state === "done"
-                ? "border-[#111111] bg-[#1556a4] text-white dark:border-[#f2cf27] dark:bg-[#3f8ad8] dark:text-[#06111f]"
-                : step.state === "active"
-                  ? "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27]"
-                  : "border-border bg-background text-muted-foreground",
-            ].join(" ")}
+            className="relative flex min-w-0 flex-col items-center px-1 text-center"
           >
-            <div className="flex items-center justify-between gap-3">
+            <span className="flex h-5 items-center" aria-hidden="true">
               <span
                 className={[
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-black",
+                  "block rounded-full border-2",
                   step.state === "done"
-                    ? "border-[#111111] bg-white text-[#111111]"
+                    ? "h-4 w-4 border-[#111111] bg-[#1556a4] dark:border-[#f2cf27] dark:bg-[#3f8ad8]"
                     : step.state === "active"
-                      ? "border-[#111111] bg-[#111111] text-[#f2cf27]"
-                      : "border-border bg-muted text-muted-foreground",
+                      ? "h-5 w-5 border-[#111111] bg-[#f2cf27] shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]"
+                      : "h-4 w-4 border-[#111111]/45 bg-background dark:border-white/45",
                 ].join(" ")}
-              >
-                {index + 1}
-              </span>
-              <span className="rounded-[6px] border border-current/30 px-2 py-0.5 text-[11px] font-black uppercase tracking-normal">
-                {step.state === "done"
-                  ? "완료"
+              />
+            </span>
+            <p
+              className={[
+                "mt-2 text-xs font-black leading-snug tracking-normal",
+                step.state === "pending" ? "text-muted-foreground" : "text-foreground",
+              ].join(" ")}
+            >
+              {step.label}
+            </p>
+            <p
+              className={[
+                "mt-1 text-[11px] font-black tracking-normal",
+                step.state === "done"
+                  ? "text-[#1556a4] dark:text-[#3f8ad8]"
                   : step.state === "active"
-                    ? "진행"
-                    : "대기"}
-              </span>
-            </div>
-            <p className="mt-3 font-black tracking-normal">{step.label}</p>
+                    ? "rounded-[4px] bg-[#f2cf27] px-1.5 text-[#111111]"
+                    : "text-muted-foreground",
+              ].join(" ")}
+            >
+              {step.state === "done"
+                ? "완료"
+                : step.state === "active"
+                  ? "진행 중"
+                  : "대기"}
+            </p>
           </li>
         ))}
       </ol>
