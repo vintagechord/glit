@@ -182,44 +182,63 @@ export function CustomerActivityRecord({
         ) : null}
       </div>
 
-      {!emailsUnavailable && emails.length ? (
-        <div className="mt-3">
-          <p className="font-black">고객 안내 메일별 열람</p>
-          <ul className="mt-1 divide-y divide-border/60">
-            {emails.slice(0, 10).map((mail) => (
-              <li key={mail.id} className="grid gap-2 py-2 sm:grid-cols-[170px_1fr]">
-                <span>
-                  <span className="font-bold">{mailOperationLabel(mail.operation)}</span>
-                  <span className="block font-mono text-[11px] text-muted-foreground">{time(mail.acceptedAt ?? mail.createdAt)}</span>
-                </span>
-                <MailReadDetail mail={mail} compact />
-              </li>
-            ))}
-          </ul>
+      {/* The per-mail list and the timeline grow with every mail sent, so they stay folded until asked for. */}
+      <details className="group/mail mt-3 rounded-[8px] border-2 border-[#111111] dark:border-[#f2cf27]">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <span className="font-black">메일 열람 · 상세 기록</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
+              {emailsUnavailable ? "메일 기록 불러오기 실패" : `메일 ${emails.length}건`} · 기록 {timeline.length}건
+            </span>
+            {eventsUnavailable ? <span className={`${badge} ${brandStatusTones.danger}`}>상세 기록 불러오기 실패</span> : null}
+            <span className={`${badge} border-[#111111] bg-[#f2cf27] text-[#111111]`}>
+              <span className="group-open/mail:hidden">펼치기</span>
+              <span className="hidden group-open/mail:inline">접기</span>
+            </span>
+          </span>
+        </summary>
+
+        <div className="border-t-2 border-[#111111] px-3 pb-3 dark:border-[#f2cf27]">
+          {!emailsUnavailable && emails.length ? (
+            <div className="mt-3">
+              <p className="font-black">고객 안내 메일별 열람</p>
+              <ul className="mt-1 divide-y divide-border/60">
+                {emails.slice(0, 10).map((mail) => (
+                  <li key={mail.id} className="grid gap-2 py-2 sm:grid-cols-[170px_1fr]">
+                    <span>
+                      <span className="font-bold">{mailOperationLabel(mail.operation)}</span>
+                      <span className="block font-mono text-[11px] text-muted-foreground">{time(mail.acceptedAt ?? mail.createdAt)}</span>
+                    </span>
+                    <MailReadDetail mail={mail} compact />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="mt-3">
+            <p className="font-black">상세 기록 (최신순)</p>
+            {eventsUnavailable ? <p role="alert" className="mt-1 text-[#d9362c]">상세 기록을 불러오지 못했습니다.</p> : null}
+            {timeline.length ? (
+              <>
+                <ul className="mt-1 divide-y divide-border/60">{recent.map(row)}</ul>
+                {older.length ? (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer font-bold underline underline-offset-4">이전 기록 {older.length}건 더 보기</summary>
+                    <ul className="mt-1 divide-y divide-border/60">{older.map(row)}</ul>
+                  </details>
+                ) : null}
+              </>
+            ) : <p className="mt-1 text-muted-foreground">아직 기록이 없습니다.</p>}
+          </div>
+
+          <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+            열람: 메일 속 확인 이미지가 표시될 때 기록합니다. 이미지를 막은 메일 앱에서는 열어도 기록되지 않고, 일부 메일 서비스는 이미지를 미리 받아 실제 열람이 아닐 수 있습니다(환경 표시 참고).
+            링크 클릭: 메일 속 온사이드 링크를 누를 때 기록하며, 열람보다 확실한 신호입니다({CUSTOMER_ACTIVITY_EVENTS_SINCE} 배포 이후 발송한 메일부터).
+            방문·다운로드: 회원 본인과 조회 코드 소지자만 기록하고 관리자 미리보기는 제외합니다. 방문 합계는 2026-11-05 20:02부터, 시각별 상세 기록과 파일별 다운로드는 {CUSTOMER_ACTIVITY_EVENTS_SINCE} 배포 이후부터 쌓입니다. IP 주소는 저장하지 않고 이용 환경 종류만 남깁니다.
+          </p>
         </div>
-      ) : null}
-
-      <div className="mt-3">
-        <p className="font-black">상세 기록 (최신순)</p>
-        {eventsUnavailable ? <p role="alert" className="mt-1 text-[#d9362c]">상세 기록을 불러오지 못했습니다.</p> : null}
-        {timeline.length ? (
-          <>
-            <ul className="mt-1 divide-y divide-border/60">{recent.map(row)}</ul>
-            {older.length ? (
-              <details className="mt-1">
-                <summary className="cursor-pointer font-bold underline underline-offset-4">이전 기록 {older.length}건 더 보기</summary>
-                <ul className="mt-1 divide-y divide-border/60">{older.map(row)}</ul>
-              </details>
-            ) : null}
-          </>
-        ) : <p className="mt-1 text-muted-foreground">아직 기록이 없습니다.</p>}
-      </div>
-
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-        열람: 메일 속 확인 이미지가 표시될 때 기록합니다. 이미지를 막은 메일 앱에서는 열어도 기록되지 않고, 일부 메일 서비스는 이미지를 미리 받아 실제 열람이 아닐 수 있습니다(환경 표시 참고).
-        링크 클릭: 메일 속 온사이드 링크를 누를 때 기록하며, 열람보다 확실한 신호입니다({CUSTOMER_ACTIVITY_EVENTS_SINCE} 배포 이후 발송한 메일부터).
-        방문·다운로드: 회원 본인과 조회 코드 소지자만 기록하고 관리자 미리보기는 제외합니다. 방문 합계는 2026-11-05 20:02부터, 시각별 상세 기록과 파일별 다운로드는 {CUSTOMER_ACTIVITY_EVENTS_SINCE} 배포 이후부터 쌓입니다. IP 주소는 저장하지 않고 이용 환경 종류만 남깁니다.
-      </p>
+      </details>
     </section>
   );
 }

@@ -64,7 +64,15 @@ test("submission detail combines current status and review progress", () => {
   assert.match(heroSection, /\{currentProcessStageLabel\}/);
   assert.match(heroSection, /renderProcessTimeline\(\)/);
   assert.match(source, /aria-labelledby="review-process-heading"/);
-  assert.match(source, /sm:grid-cols-2 lg:grid-cols-4/);
+  // Owner 2026-11-06: milestone dots on the line replace the four step boxes.
+  const timeline = source.slice(
+    source.indexOf("const renderProcessTimeline"),
+    source.indexOf("const latestStationUpdate"),
+  );
+  assert.match(timeline, /className="relative grid grid-cols-4"/);
+  assert.match(timeline, /width: `\$\{processProgressPercent\}%`/);
+  assert.match(timeline, /rounded-full border-2/);
+  assert.doesNotMatch(timeline, /sm:grid-cols-2 lg:grid-cols-4|rounded-\[8px\] border-2 px-4 py-3/);
   assert.match(
     source,
     /aria-current=\{[\s\S]*?index === currentProcessStepIndex \? "step" : undefined[\s\S]*?\}/,
