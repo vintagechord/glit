@@ -33,6 +33,8 @@ test("영등위 leads the list in a group named 뮤직비디오, with its own pr
   assert.equal(kmrb.group, "뮤직비디오");
   assert.equal(kmrb.album, false);
   assert.equal(kmrb.mv?.base, 30_000);
+  // The customer share was context for ordering, not copy for customers.
+  assert.ok(![kmrb.lead, kmrb.description, ...kmrb.about].some((text) => /가장 많이|비중/.test(text)));
   assert.deepEqual(STATION_GUIDES.filter((guide) => guide.group === "뮤직비디오").map((guide) => guide.code), ["MV_ONLINE", "ETN", "MNET"]);
   const faqs = stationFaqs(kmrb, FALLBACK_ALBUM_PACKAGES);
   assert.ok(faqs.some((faq) => faq.answer.includes("영상 1건 30,000원")));
