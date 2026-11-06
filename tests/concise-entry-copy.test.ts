@@ -11,8 +11,9 @@ test("the home hero keeps the primary heading without repeated supporting copy",
     "src/components/i18n/english-language-pack.tsx",
   );
 
-  assert.match(homePage, /심의 신청부터/);
-  assert.match(homePage, /결과 확인까지/);
+  // Owner 2026-11-07 (SEO): the headline names both services, then keeps the promise.
+  assert.match(homePage, /음반·뮤직비디오 심의,/);
+  assert.match(homePage, /신청부터 결과 확인까지/);
   assert.doesNotMatch(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
   assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
   assert.doesNotMatch(

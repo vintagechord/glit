@@ -2,14 +2,14 @@ import type { MetadataRoute } from "next";
 
 import { getBaseUrl } from "@/lib/url";
 
-// AI-training and bulk SEO crawlers add server load without bringing search
-// visitors. Search engines (Google, Naver, Daum, Bing) and AI search/answer
-// fetchers that cite the site stay allowed under "*".
+// Owner, 2026-11-07: Onside must be findable in AI assistants (ChatGPT,
+// Gemini, Claude, Perplexity...), so their crawlers and fetchers (GPTBot,
+// OAI-SearchBot, Google-Extended, ClaudeBot, PerplexityBot, Applebot, CCBot
+// and the rest) stay allowed under "*" together with the search engines.
+// Only bulk SEO-tool crawlers and scrapers that bring no visitors are blocked.
 const blockedCrawlers = [
-  "GPTBot", "ClaudeBot", "anthropic-ai", "CCBot", "Google-Extended", "Applebot-Extended",
-  "Bytespider", "meta-externalagent", "FacebookBot", "Amazonbot", "cohere-ai", "Diffbot",
-  "omgili", "ImagesiftBot", "Timpibot", "PetalBot", "MJ12bot", "DotBot", "BLEXBot",
-  "DataForSeoBot", "SemrushBot", "AhrefsBot",
+  "Bytespider", "PetalBot", "MJ12bot", "DotBot", "BLEXBot", "DataForSeoBot", "SemrushBot", "AhrefsBot",
+  "ImagesiftBot", "Timpibot", "omgili",
 ];
 
 // Member, operator, callback and token-bearing pages must not be indexed.

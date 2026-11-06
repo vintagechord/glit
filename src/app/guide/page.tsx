@@ -1,6 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
+import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import { pageMetadata } from "@/lib/seo";
+import { getLocalStationLogoSource } from "@/lib/station-logos";
+import { STATION_GUIDES } from "@/lib/station-guides";
 import {
   ArrowRight,
   CheckCircle2,
@@ -92,6 +96,30 @@ export default function GuidePage() {
             <span className="mt-1 block break-keep text-xs font-semibold leading-5 text-muted-foreground group-hover:text-[#111111]">{guide.menuSummary}</span>
           </Link>
         ))}
+      </nav>
+      <nav aria-label="주제별 안내" className="mt-3 grid gap-3 sm:grid-cols-3">
+        {GUIDE_TOPIC_LINKS.map((topic) => (
+          <Link key={topic.path} href={topic.path} className="group rounded-[8px] border-2 border-[#111111] bg-card p-4 transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
+            <span className="flex items-center justify-between gap-2 text-base font-black">{topic.label}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
+            <span className="mt-1 block break-keep text-xs font-semibold leading-5 text-muted-foreground group-hover:text-[#111111]">{topic.summary}</span>
+          </Link>
+        ))}
+      </nav>
+      <nav aria-label="방송국별 안내" className="mt-6">
+        <h2 className="text-sm font-black text-muted-foreground">접수 방송국 {STATION_GUIDES.length}곳 · 방송국별 안내</h2>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {STATION_GUIDES.map((station) => {
+            const logo = getLocalStationLogoSource(station);
+            return (
+              <li key={station.slug}>
+                <Link href={`/guide/stations/${station.slug}`} className="flex min-h-10 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-2.5 text-xs font-black text-[#111111] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] dark:border-[#f2cf27]/70">
+                  {logo ? <Image src={logo.src} alt="" width={40} height={24} className="h-6 w-auto object-contain" /> : null}
+                  {station.shortName}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
 
       <section className="relative mt-8 overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] sm:p-8">

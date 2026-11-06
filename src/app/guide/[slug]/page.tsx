@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 
+import { AlbumPriceTable, MvPriceTable } from "@/components/guide/price-tables";
 import { JsonLd } from "@/components/seo/json-ld";
+import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
-import { getReviewGuide, MV_PRICE_ROWS, REVIEW_GUIDES, FALLBACK_ALBUM_PACKAGES, type AlbumPackage } from "@/lib/review-guides";
+import { getReviewGuide, MV_PRICE_ROWS, REVIEW_GUIDES } from "@/lib/review-guides";
 import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
 
 // Public, crawlable guides: rebuilt hourly, and at once when an admin edits
@@ -20,54 +22,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const guide = getReviewGuide((await params).slug);
   if (!guide) return {};
   return pageMetadata({ title: guide.title, description: guide.description, path: `/guide/${guide.slug}`, keywords: guide.keywords });
-}
-
-const won = (value: number) => `${value.toLocaleString("ko-KR")}원`;
-const stationOrder = FALLBACK_ALBUM_PACKAGES.at(-1)!.stations;
-const sortStations = (stations: string[]) =>
-  stations.slice().sort((a, b) => (stationOrder.indexOf(a) + 1 || 99) - (stationOrder.indexOf(b) + 1 || 99));
-
-function AlbumPriceTable({ packages }: { packages: AlbumPackage[] }) {
-  return (
-    <div className="overflow-x-auto rounded-[8px] border-2 border-[#111111] dark:border-[#f2cf27]">
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">음반 심의 방송국 패키지 비용</caption>
-        <thead className="bg-[#f2cf27] text-[#111111]">
-          <tr><th scope="col" className="whitespace-nowrap px-3 py-3 font-black sm:px-4">패키지</th><th scope="col" className="whitespace-nowrap px-3 py-3 font-black sm:px-4">비용</th><th scope="col" className="px-3 py-3 font-black sm:px-4">접수 방송국</th></tr>
-        </thead>
-        <tbody>
-          {packages.map((item) => (
-            <tr key={item.name} className="border-t-2 border-[#111111] align-top dark:border-[#f2cf27]/40">
-              <th scope="row" className="whitespace-nowrap px-3 py-3 font-black sm:px-4">{item.name}</th>
-              <td className="whitespace-nowrap px-3 py-3 font-black tabular-nums sm:px-4">{won(item.priceKrw)}</td>
-              <td className="break-keep px-3 py-3 text-xs leading-6 text-muted-foreground sm:px-4 sm:text-sm">{sortStations(item.stations).join(", ")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function MvPriceTable() {
-  return (
-    <div className="overflow-x-auto rounded-[8px] border-2 border-[#111111] dark:border-[#f2cf27]">
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">뮤직비디오 심의 비용</caption>
-        <thead className="bg-[#1556a4] text-white">
-          <tr><th scope="col" className="px-3 py-3 font-black sm:px-4">항목</th><th scope="col" className="whitespace-nowrap px-3 py-3 font-black sm:px-4">비용(영상 1건)</th></tr>
-        </thead>
-        <tbody>
-          {MV_PRICE_ROWS.map((row) => (
-            <tr key={row.label} className="border-t-2 border-[#111111] dark:border-[#f2cf27]/40">
-              <th scope="row" className="break-keep px-3 py-3 font-semibold sm:px-4">{row.label}</th>
-              <td className="whitespace-nowrap px-3 py-3 font-black tabular-nums sm:px-4">{won(row.priceKrw)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 export default async function ReviewGuidePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -158,11 +112,18 @@ export default async function ReviewGuidePage({ params }: { params: Promise<{ sl
 
       <section className="mt-10 rounded-[10px] border-2 border-[#111111] bg-[#1556a4] p-5 text-white shadow-[5px_5px_0_#111111] sm:p-6">
         <h2 className="font-display text-xl font-black">함께 보면 좋은 안내</h2>
-        <ul className="mt-4 grid gap-2 sm:grid-cols-3">
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {related.map((item) => (
             <li key={item.slug}>
               <Link href={`/guide/${item.slug}`} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-white/80 px-3 text-sm font-black transition hover:bg-white hover:text-[#111111]">
                 {`${item.menuLabel} 안내`}<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </li>
+          ))}
+          {GUIDE_TOPIC_LINKS.map((item) => (
+            <li key={item.path}>
+              <Link href={item.path} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-white/80 px-3 text-sm font-black transition hover:bg-white hover:text-[#111111]">
+                {item.label}<ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </li>
           ))}

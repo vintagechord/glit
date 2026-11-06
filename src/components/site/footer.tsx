@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { REVIEW_GUIDE_LINKS } from "@/lib/review-guide-links";
+import { GUIDE_TOPIC_LINKS, REVIEW_GUIDE_LINKS } from "@/lib/review-guide-links";
 import * as React from "react";
 import { useModalFocus } from "@/lib/use-modal-focus";
 import { usePathname } from "next/navigation";
@@ -199,6 +199,11 @@ export function SiteFooter() {
               {REVIEW_GUIDE_LINKS.map((guide) => (
                 <Link key={guide.slug} href={`/guide/${guide.slug}`} className={footerLinkClass}>
                   {guide.menuLabel}
+                </Link>
+              ))}
+              {GUIDE_TOPIC_LINKS.map((topic) => (
+                <Link key={topic.path} href={topic.path} className={footerLinkClass}>
+                  {topic.label}
                 </Link>
               ))}
               <Link

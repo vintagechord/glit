@@ -34,19 +34,29 @@ test("member, operator, payment and token pages stay blocked", () => {
   assert.equal(isAllowed("/dashboard/new/mv", allow, disallow), true);
 });
 
-test("search guides are listed, redirects and placeholder pages are not, AI crawlers are blocked", () => {
+test("search guides are listed, redirects and placeholder pages are not, AI assistants may crawl", () => {
   const paths = sitemap().map((entry) => new URL(entry.url).pathname);
-  for (const path of ["/guide/album-review", "/guide/mv-review", "/dashboard/new/album", "/dashboard/new/mv"]) {
+  for (const path of ["/guide/album-review", "/guide/mv-review", "/guide/pricing", "/guide/stations", "/guide/stations/kbs", "/guide/stations/gugak", "/guide/glossary", "/dashboard/new/album", "/dashboard/new/mv"]) {
     assert.ok(paths.includes(path), `${path} should be in the sitemap`);
   }
   for (const merged of ["/guide/broadcast-review", "/guide/radio-review"]) {
     assert.equal(paths.includes(merged), false, `${merged} is part of the album review guide`);
   }
+  for (const alias of ["/en/guide/stations", "/en/guide/stations/kbs", "/en/guide/pricing", "/en/guide/glossary", "/en/guide/album-review"]) {
+    assert.equal(paths.includes(alias), false, `${alias} shares the Korean canonical and must not be listed`);
+  }
   assert.equal(paths.includes("/en/apply"), false, "redirecting aliases must not be listed");
   assert.equal(paths.includes("/studio"), false, "the placeholder Studio page is not indexable");
   const rules = ([] as Array<{ userAgent?: string | string[]; disallow?: string | string[] }>).concat(robots().rules);
-  const blocked = rules.find((rule) => Array.isArray(rule.userAgent) && rule.userAgent.includes("GPTBot"));
-  assert.ok(blocked && ([] as string[]).concat(blocked.disallow ?? []).includes("/"));
+  const blockedAgents = rules.filter((rule) => Array.isArray(rule.userAgent)).flatMap((rule) => rule.userAgent as string[]);
+  // Owner 2026-11-07: ChatGPT, Gemini, Claude and Perplexity must be able to
+  // read the site, so their crawlers stay under the general rules.
+  for (const assistant of ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "Google-Extended", "ClaudeBot", "anthropic-ai", "PerplexityBot", "Applebot-Extended", "CCBot", "Amazonbot", "meta-externalagent"]) {
+    assert.equal(blockedAgents.includes(assistant), false, `${assistant} must not be blocked`);
+  }
+  for (const tool of ["AhrefsBot", "SemrushBot", "MJ12bot", "Bytespider"]) {
+    assert.ok(blockedAgents.includes(tool), `${tool} brings no visitors and stays blocked`);
+  }
   for (const searchBot of ["Googlebot", "Yeti", "Daum", "bingbot"]) {
     assert.equal(rules.some((rule) => ([] as string[]).concat(rule.userAgent ?? []).includes(searchBot)), false, `${searchBot} must stay under the general rules`);
   }

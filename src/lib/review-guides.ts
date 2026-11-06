@@ -29,15 +29,16 @@ export type ReviewGuide = {
   serviceType: string;
 };
 
-export type AlbumPackage = { name: string; stationCount: number; priceKrw: number; stations: string[] };
+/** Station names as shown, plus their codes so the station guides can find the packages that include them. */
+export type AlbumPackage = { name: string; stationCount: number; priceKrw: number; stations: string[]; stationCodes: string[] };
 
 /** Used when the database is unreachable during a build or revalidation. */
 export const FALLBACK_ALBUM_PACKAGES: AlbumPackage[] = [
-  { name: "3곳 패키지", stationCount: 3, priceKrw: 50_000, stations: ["KBS", "MBC", "SBS"] },
-  { name: "7곳 패키지", stationCount: 7, priceKrw: 70_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "WBS 원음방송"] },
-  { name: "10곳 패키지", stationCount: 10, priceKrw: 100_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "Arirang 방송"] },
-  { name: "13곳 패키지", stationCount: 13, priceKrw: 130_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "KISS 디지털 라디오 음악방송", "경인 iFM", "TBN 한국교통방송", "Arirang 방송"] },
-  { name: "15곳 패키지", stationCount: 15, priceKrw: 150_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "KISS 디지털 라디오 음악방송", "Arirang 방송", "경인 iFM", "TBN 한국교통방송", "극동방송(Only CCM)", "국악방송(Only 국악)"] },
+  { name: "3곳 패키지", stationCount: 3, priceKrw: 50_000, stations: ["KBS", "MBC", "SBS"], stationCodes: ["KBS", "MBC", "SBS"] },
+  { name: "7곳 패키지", stationCount: 7, priceKrw: 70_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "WBS 원음방송"], stationCodes: ["KBS", "MBC", "SBS", "TBS", "YTN", "CBS", "WBS"] },
+  { name: "10곳 패키지", stationCount: 10, priceKrw: 100_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "Arirang 방송"], stationCodes: ["KBS", "MBC", "SBS", "TBS", "YTN", "CBS", "PBC", "WBS", "BBS", "ARIRANG"] },
+  { name: "13곳 패키지", stationCount: 13, priceKrw: 130_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "KISS 디지털 라디오 음악방송", "경인 iFM", "TBN 한국교통방송", "Arirang 방송"], stationCodes: ["KBS", "MBC", "SBS", "TBS", "YTN", "CBS", "PBC", "WBS", "BBS", "KISS", "GYEONGIN_IFM", "TBN", "ARIRANG"] },
+  { name: "15곳 패키지", stationCount: 15, priceKrw: 150_000, stations: ["KBS", "MBC", "SBS", "TBS 교통방송", "YTN", "CBS 기독교방송", "PBC 평화방송", "WBS 원음방송", "BBS 불교방송", "KISS 디지털 라디오 음악방송", "Arirang 방송", "경인 iFM", "TBN 한국교통방송", "극동방송(Only CCM)", "국악방송(Only 국악)"], stationCodes: ["KBS", "MBC", "SBS", "TBS", "YTN", "CBS", "PBC", "WBS", "BBS", "KISS", "ARIRANG", "GYEONGIN_IFM", "TBN", "FEBC", "GUGAK"] },
 ];
 
 export const MV_PRICE_ROWS = [

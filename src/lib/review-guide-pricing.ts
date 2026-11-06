@@ -17,6 +17,7 @@ export async function loadAlbumPackages(): Promise<AlbumPackage[]> {
       stationCount: pkg.stationCount,
       priceKrw: pkg.priceKrw,
       stations: pkg.stations.map((station) => station.name),
+      stationCodes: pkg.stations.map((station) => station.code),
     }));
   } catch (error) {
     if (isDynamicServerUsageError(error)) throw error;

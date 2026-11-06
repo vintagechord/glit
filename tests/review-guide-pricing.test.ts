@@ -80,7 +80,7 @@ test("guide prices follow admin package edits and never show test packages", asy
     ? [packageRow("3곳 패키지", 3, price), packageRow("[테스트] 결제 확인", 1, 100)]
     : [] });
   const first = await cache.request(output.exports.loadAlbumPackages);
-  assert.deepEqual(first, [{ name: "3곳 패키지", stationCount: 3, priceKrw: 50_000, stations: ["KBS", "MBC", "SBS"] }]);
+  assert.deepEqual(first, [{ name: "3곳 패키지", stationCount: 3, priceKrw: 50_000, stations: ["KBS", "MBC", "SBS"], stationCodes: ["KBS", "MBC", "SBS"] }]);
   assert.ok([...cache.entries.values()].some((entry) => entry.tags.includes(PUBLIC_CATALOG_CACHE_TAG)), "the guide reads the tagged catalog cache");
 
   price = 55_000;

@@ -14,6 +14,7 @@ import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { JsonLd } from "@/components/seo/json-ld";
+import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import {
   organizationJsonLd,
@@ -127,11 +128,14 @@ export default function Home() {
                 <p className="bauhaus-kicker" style={{ textTransform: "none" }}>
                   Since 2017
                 </p>
+                {/* The headline carries the two service names search engines
+                    and AI assistants match on; the second line keeps the
+                    original promise. */}
                 <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
-                  심의 신청부터
+                  음반·뮤직비디오 심의,
                   <span className="sm:hidden"> </span>
                   <br className="hidden sm:block" />
-                  결과 확인까지
+                  신청부터 결과 확인까지
                 </h1>
               </div>
               <HomeHeroAdBanner />
@@ -224,11 +228,18 @@ export default function Home() {
         <nav aria-label="심의 종류별 안내" className="mt-10 rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
           <h2 className="text-lg font-black text-foreground">심의 종류별 안내</h2>
           <p className="mt-2 break-keep text-sm leading-6 text-muted-foreground">준비물, 비용, 접수 일정과 결과 확인 방법을 심의 종류별로 정리했습니다.</p>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {REVIEW_GUIDES.map((guide) => (
               <li key={guide.slug}>
                 <ReliableLink href={`/guide/${guide.slug}`} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
                   {`${guide.menuLabel} 안내`}<ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </ReliableLink>
+              </li>
+            ))}
+            {GUIDE_TOPIC_LINKS.map((topic) => (
+              <li key={topic.path}>
+                <ReliableLink href={topic.path} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
+                  {topic.label}<ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </ReliableLink>
               </li>
             ))}
