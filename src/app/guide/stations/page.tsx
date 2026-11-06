@@ -4,18 +4,18 @@ import { ArrowRight } from "lucide-react";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
-import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
 import { getLocalStationLogoSource } from "@/lib/station-logos";
-import { packagesIncluding, STATION_GROUPS, STATION_GUIDES, won } from "@/lib/station-guides";
+import { STATION_GROUPS, STATION_GUIDES, stationSummary } from "@/lib/station-guides";
 
 // Public, crawlable: rebuilt hourly so package edits show within the hour.
 export const revalidate = 3600;
 
 export const metadata = pageMetadata({
-  title: "음반 심의 접수 방송국 목록 · KBS·MBC·SBS부터 국악방송까지 17곳",
-  description: "온사이드가 음반 심의와 뮤직비디오 심의를 접수하는 방송국 목록입니다. KBS·MBC·SBS 지상파, YTN·TBS·TBN 보도·교통, CBS·PBC·BBS·WBS·극동방송 종교, KISS·경인 iFM·국악방송, Arirang, 그리고 ETN·Mnet 뮤직비디오 심의까지 방송국별 신청 방법과 포함 패키지를 안내합니다.",
+  title: `음반 심의·뮤직비디오 심의 접수처 · 영등위·KBS·MBC·SBS부터 국악방송까지 ${STATION_GUIDES.length}곳`,
+  description: "온사이드가 뮤직비디오 심의와 음반 심의를 접수하는 곳의 목록입니다. 영등위(영상물등급위원회) 등급분류와 ETN·Mnet 뮤직비디오 심의, KBS·MBC·SBS 지상파, YTN·TBS·TBN 보도·교통, CBS·PBC·BBS·WBS·극동방송 종교, KISS·경인 iFM·국악방송, Arirang까지 접수처별 신청 방법과 비용을 안내합니다.",
   path: "/guide/stations",
-  keywords: ["음반 심의 방송국", "방송국 심의 목록", "라디오 심의 방송국", "KBS MBC SBS 심의", "방송국별 심의", "심의 방송국 패키지"],
+  keywords: ["영등위 심의", "뮤직비디오 심의 접수처", "음반 심의 방송국", "방송국 심의 목록", "라디오 심의 방송국", "KBS MBC SBS 심의", "방송국별 심의", "심의 방송국 패키지"],
 });
 
 export default async function StationGuidesPage() {
@@ -28,7 +28,7 @@ export default async function StationGuidesPage() {
         "@type": "ItemList",
         name: "온사이드 심의 접수 방송국",
         itemListElement: STATION_GUIDES.map((station, index) => ({
-          "@type": "ListItem", position: index + 1, name: station.name, url: new URL(`/guide/stations/${station.slug}`, "https://iamonside.com").toString(),
+          "@type": "ListItem", position: index + 1, name: station.name, url: absoluteUrl(`/guide/stations/${station.slug}`),
         })),
       }} />
 
@@ -46,7 +46,7 @@ export default async function StationGuidesPage() {
         <p className="bauhaus-kicker">방송국별 안내</p>
         <h1 className="font-display mt-4 break-keep text-3xl font-black leading-tight text-foreground sm:text-4xl">음반 심의·뮤직비디오 심의 접수 방송국</h1>
         <p className="mt-5 break-keep text-base leading-8 text-foreground/85">
-          음반 심의는 방송국마다 따로 받습니다. 온사이드는 KBS·MBC·SBS 3곳 패키지부터 15곳 패키지까지 방송국 묶음으로 접수하고, 뮤직비디오 심의는 KBS·MBC·SBS·ETN 방송국별 심의와 온라인 유통용 심의의 Mnet·ETN 추가 옵션으로 접수합니다. 방송국을 고르면 그 방송국의 심의 안내, 포함 패키지와 비용, 결과 확인 방법을 볼 수 있습니다.
+          뮤직비디오를 온라인에 유통하려면 영등위(영상물등급위원회) 등급분류를 받고, 필요하면 Mnet·ETN을 함께 추가합니다. TV에 송출할 뮤직비디오는 KBS·MBC·SBS·ETN 방송국별 심의를 받습니다. 음반 심의는 방송국마다 따로 받으며, 온사이드는 KBS·MBC·SBS 3곳 패키지부터 15곳 패키지까지 방송국 묶음으로 접수합니다. 접수처를 고르면 심의 안내, 포함 패키지와 비용, 결과 확인 방법을 볼 수 있습니다.
         </p>
       </header>
 
@@ -58,13 +58,8 @@ export default async function StationGuidesPage() {
             <h2 className="font-display break-keep text-2xl font-black text-foreground">{group}</h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {stations.map((station) => {
-                const cheapest = packagesIncluding(station.code, packages)[0];
                 const logo = getLocalStationLogoSource(station);
-                const summary = station.album && cheapest
-                  ? `음반 심의 ${cheapest.name}(${won(cheapest.priceKrw)})부터 포함`
-                  : station.mv?.online
-                    ? `온라인 유통용 뮤직비디오 심의 추가 ${won(station.mv.online)}`
-                    : "뮤직비디오 심의";
+                const summary = stationSummary(station, packages);
                 return (
                   <li key={station.slug}>
                     <Link href={`/guide/stations/${station.slug}`} className="group flex min-h-20 items-center gap-4 rounded-[8px] border-2 border-[#111111] bg-card p-4 transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">

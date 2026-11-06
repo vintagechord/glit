@@ -8,7 +8,7 @@ import { albumPreparationItems, mvPreparationItems } from "@/lib/onside-content"
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
 import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
 import { getLocalStationLogoSource } from "@/lib/station-logos";
-import { getStationGuide, josa, packagesIncluding, relatedStationGuides, STATION_GUIDES, stationFaqs, stationRadioGuide, won } from "@/lib/station-guides";
+import { getStationGuide, josa, packagesIncluding, relatedStationGuides, STATION_GUIDES, stationFaqs, stationRadioGuide, stationSchedule, won } from "@/lib/station-guides";
 import { MV_BASE_ONLINE_PRICE_KRW } from "@/lib/submission-station-selection";
 
 // Public, crawlable: rebuilt hourly, so package edits reach every station page.
@@ -25,8 +25,6 @@ export async function generateMetadata({ params }: { params: Promise<{ station: 
   return pageMetadata({ title: guide.title, description: guide.description, path: `/guide/stations/${guide.slug}`, keywords: guide.keywords });
 }
 
-const schedule = "자료와 결제가 확인되면 접수합니다. 서울권 방송국은 보통 3영업일, 경기권은 7영업일 이내 접수를 목표로 하며, 결과는 방송국 일정에 따라 최대 3주 정도 걸릴 수 있습니다.";
-
 export default async function StationGuidePage({ params }: { params: Promise<{ station: string }> }) {
   const guide = getStationGuide((await params).station);
   if (!guide) notFound();
@@ -38,11 +36,22 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
   const path = `/guide/stations/${guide.slug}`;
   const offers = [
     ...including.map((pkg) => ({ name: `음반 심의 ${pkg.name} (${guide.shortName} 포함)`, priceKrw: pkg.priceKrw })),
+    ...(guide.mv?.base ? [{ name: "온라인 유통용 뮤직비디오 심의 (영상물등급위원회 등급분류)", priceKrw: guide.mv.base }] : []),
     ...(guide.mv?.online ? [{ name: `온라인 유통용 뮤직비디오 심의 ${guide.shortName} 추가`, priceKrw: guide.mv.online }] : []),
     ...(guide.mv?.broadcast ? [{ name: `${guide.shortName} 뮤직비디오 심의 (방송국별)`, priceKrw: guide.mv.broadcast }] : []),
   ];
   const kinds = [guide.album ? "음반 심의" : "", guide.mv ? "뮤직비디오 심의" : ""].filter(Boolean).join("·");
   const logo = getLocalStationLogoSource(guide);
+  const kicker = guide.group === "뮤직비디오" ? kinds : `${guide.group} · ${kinds}`;
+  const mvApplyHref = guide.mv?.base || guide.mv?.online ? "/dashboard/new/mv?type=distribution" : "/dashboard/new/mv?type=broadcast";
+  const route = guide.mv?.base
+    ? "온라인 유통용 심의 (Mnet·ETN 추가 선택)"
+    : guide.mv?.online && guide.mv.broadcast ? "온라인 유통용 추가 옵션 · 방송국별 심의" : guide.mv?.online ? "온라인 유통용 추가 옵션" : "방송국별 심의";
+  const applyStep = guide.album
+    ? `${guide.shortName}${josa(guide, "이/가")} 포함된 방송국 패키지 선택`
+    : guide.mv?.base
+      ? "온라인 유통용 심의 선택 (필요하면 Mnet·ETN 추가)"
+      : guide.mv?.online ? `온라인 유통용 심의에 ${guide.shortName} 추가${guide.mv.broadcast ? " 또는 방송국별 심의에서 선택" : ""}` : `방송국별 심의에서 ${guide.shortName} 선택`;
 
   return (
     <article className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
@@ -67,7 +76,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           <span className="flex h-16 w-28 items-center justify-center rounded-[8px] border-2 border-[#111111] bg-white p-2 text-base font-black text-[#111111] dark:border-[#f2cf27]">
             {logo ? <Image src={logo.src} alt={`${guide.name} 로고`} width={96} height={48} className="h-12 w-auto object-contain" priority /> : guide.shortName}
           </span>
-          <p className="bauhaus-kicker">{guide.group} · {kinds}</p>
+          <p className="bauhaus-kicker">{kicker}</p>
         </div>
         <h1 className="font-display mt-4 break-keep text-3xl font-black leading-tight text-foreground sm:text-4xl">{guide.title}</h1>
         <p className="mt-5 break-keep text-base leading-8 text-foreground/85">{guide.lead}</p>
@@ -78,7 +87,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
             </Link>
           ) : null}
           {guide.mv ? (
-            <Link href={guide.mv.online ? "/dashboard/new/mv?type=distribution" : "/dashboard/new/mv?type=broadcast"} className={`inline-flex min-h-12 items-center gap-2 rounded-[8px] border-2 border-[#111111] px-5 text-sm font-black shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 ${guide.album ? "bg-background text-foreground dark:border-[#f2cf27]" : "bg-[#f2cf27] text-[#111111]"}`}>
+            <Link href={mvApplyHref} className={`inline-flex min-h-12 items-center gap-2 rounded-[8px] border-2 border-[#111111] px-5 text-sm font-black shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 ${guide.album ? "bg-background text-foreground dark:border-[#f2cf27]" : "bg-[#f2cf27] text-[#111111]"}`}>
               뮤직비디오 심의 신청하기<ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           ) : null}
@@ -96,13 +105,19 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">
             {guide.album && including[0]
               ? `${including[0].name}(${won(including[0].priceKrw)})부터 ${including.length}개 패키지`
-              : guide.mv?.online && guide.mv.broadcast ? "온라인 유통용 추가 옵션 · 방송국별 심의" : guide.mv?.online ? "온라인 유통용 추가 옵션" : "방송국별 심의"}
+              : route}
           </dd>
         </div>
         {guide.mv?.broadcast ? (
           <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
             <dt className="text-xs font-black text-muted-foreground">{guide.shortName} 뮤직비디오 심의</dt>
             <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">영상 1건 {won(guide.mv.broadcast)} (방송국별 심의)</dd>
+          </div>
+        ) : null}
+        {guide.mv?.base ? (
+          <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
+            <dt className="text-xs font-black text-muted-foreground">비용</dt>
+            <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">영상 1건 {won(guide.mv.base)} · 부가세 포함</dd>
           </div>
         ) : null}
         {guide.mv?.online ? (
@@ -113,7 +128,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
         ) : null}
         <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
           <dt className="text-xs font-black text-muted-foreground">기간</dt>
-          <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">접수 3~7영업일 이내 목표 · 결과 최대 약 3주</dd>
+          <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">{guide.album ? "접수 3~7영업일 이내 목표 · 결과 최대 약 3주" : "자료 확인 후 접수 · 제출처와 보완 여부에 따라 다름"}</dd>
         </div>
       </dl>
 
@@ -161,10 +176,10 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
         </ul>
         <ol className="mt-5 space-y-2 break-keep text-[15px] leading-7 text-foreground/85">
           <li>1. 온라인 신청서 작성과 파일 업로드{guide.album ? " (발매된 앨범은 멜론·지니 링크)" : ""}</li>
-          <li>2. {guide.album ? `${guide.shortName}이 포함된 방송국 패키지 선택` : guide.mv?.online ? `온라인 유통용 심의에 ${guide.shortName} 추가${guide.mv.broadcast ? " 또는 방송국별 심의에서 선택" : ""}` : `방송국별 심의에서 ${guide.shortName} 선택`}</li>
+          <li>2. {applyStep}</li>
           <li>3. 카드 결제 또는 무통장 입금 · 현금영수증·세금계산서 발급 가능</li>
-          <li>4. 접수: {schedule}</li>
-          <li>5. 결과 확인: 조회 코드와 마이페이지에 방송국별 결과가 표시되고, 안내 메일로도 알려드립니다.</li>
+          <li>4. 접수: {stationSchedule(guide)}</li>
+          <li>5. 결과 확인: {guide.mv?.base ? "조회 코드와 마이페이지에서 등급 결과와 영등위 심의필증, 등급 이미지, 등급 표시 사용 예시 PDF를 내려받고, 안내 메일로도 알려드립니다." : "조회 코드와 마이페이지에 방송국별 결과가 표시되고, 안내 메일로도 알려드립니다."}</li>
         </ol>
       </section>
 
@@ -222,7 +237,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           ))}
           <li>
             <Link href="/guide/stations" className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-white/80 px-3 text-sm font-black transition hover:bg-white hover:text-[#111111]">
-              접수 방송국 전체 보기<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              접수처 전체 보기<ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </li>
           <li>

@@ -10,7 +10,7 @@ import { getRadioStationGuide, type RadioStationGuide } from "@/lib/radio-statio
 import type { AlbumPackage, GuideFaq } from "@/lib/review-guides";
 import { MV_BASE_ONLINE_PRICE_KRW, MV_STATION_PRICE_KRW } from "@/lib/submission-station-selection";
 
-export type StationGroup = "지상파" | "보도·교통" | "종교" | "음악·지역" | "국제" | "뮤직비디오 전용";
+export type StationGroup = "뮤직비디오" | "지상파" | "보도·교통" | "종교" | "음악·지역" | "국제";
 
 export type StationGuide = {
   /** Station code in public.stations. */
@@ -21,6 +21,8 @@ export type StationGuide = {
   name: string;
   /** Name used inside sentences, e.g. "KBS", "극동방송". */
   shortName: string;
+  /** English name for the /en alias titles, when shortName is Korean. */
+  englishName?: string;
   /** For names ending in Latin letters: whether the Korean reading ends in a
    * consonant ("Mnet" 엠넷 → true, "KBS" 케이비에스 → false). Hangul names
    * are read from the last syllable. */
@@ -35,8 +37,10 @@ export type StationGuide = {
   genreNote?: string;
   /** Album reviews are submitted to this station through a package. */
   album: boolean;
-  /** Music video review prices in KRW, when the station takes them. */
-  mv?: { online?: number; broadcast?: number };
+  /** Music video review prices in KRW, when the station takes them: the
+   * online distribution base (영등위 등급분류 itself), an add-on to it, or a
+   * per-broadcaster TV review. */
+  mv?: { base?: number; online?: number; broadcast?: number };
   /** Station-specific questions; the generic ones are generated from facts. */
   faqs: GuideFaq[];
 };
@@ -63,7 +67,27 @@ export function josa(guide: Pick<StationGuide, "shortName" | "finalConsonant">, 
   return consonant ? "을" : "를";
 }
 
+// Owner, 2026-11-07: 영등위 is the review most customers ask for, so it
+// leads the list and the 뮤직비디오 group comes first.
 export const STATION_GUIDES: StationGuide[] = [
+  {
+    code: "MV_ONLINE", slug: "kmrb", name: "영상물등급위원회 (영등위)", shortName: "영등위", englishName: "Korea Media Rating Board", group: "뮤직비디오",
+    title: "영등위(영상물등급위원회) 뮤직비디오 심의·등급분류 신청 방법과 비용",
+    description: `영등위(영상물등급위원회) 뮤직비디오 등급분류를 온라인으로 신청하세요. 음원 유통사와 온라인 플랫폼에 올릴 뮤직비디오의 온라인 유통용 심의로, 영상 1건 ${MV_BASE_ONLINE_PRICE_KRW.toLocaleString("ko-KR")}원에 Mnet·ETN을 함께 추가할 수 있습니다. 준비물, 영상 규격, 등급 결과·심의필증·등급 이미지를 안내합니다.`,
+    keywords: ["영등위 심의", "영등위 뮤직비디오 심의", "영상물등급위원회 뮤직비디오", "뮤직비디오 등급분류", "뮤비 등급분류", "영등위 등급분류 신청", "뮤직비디오 온라인 심의", "영등위 심의필증", "뮤직비디오 유통 심의"],
+    lead: "영등위 뮤직비디오 심의는 영상물등급위원회가 뮤직비디오의 관람 등급을 정하는 등급분류 절차입니다. 음원 유통사와 온라인 플랫폼은 이 등급분류 결과를 요구하는 경우가 많습니다. 온사이드에서는 온라인 유통용 심의로 신청하며 Mnet·ETN을 함께 추가할 수 있습니다.",
+    about: [
+      "영상물등급위원회(영등위)는 영상물의 등급을 분류하는 기관입니다. 뮤직비디오 등급은 전체관람가, 12세이상관람가, 15세이상관람가, 청소년관람불가 가운데 하나로 나오며, 기준에 맞지 않으면 심의불가가 됩니다.",
+      "결과가 나오면 영등위 심의필증, 영상에 넣을 등급 이미지, 등급 표시 사용 예시 PDF를 마이페이지와 조회 코드 화면에서 내려받습니다. TV에 송출하려면 이와 별도로 KBS·MBC·SBS·ETN 방송국별 뮤직비디오 심의를 받아야 합니다.",
+    ],
+    album: false,
+    mv: { base: MV_BASE_ONLINE_PRICE_KRW },
+    faqs: [
+      { question: "온라인에 올릴 뮤직비디오도 영등위 심의가 필요한가요?", answer: "음원 유통사와 온라인 플랫폼은 영상물등급위원회 등급분류 결과를 요구하는 경우가 많습니다. 제출처의 요구 사항을 확인하고, 필요하면 온라인 유통용 심의로 신청하세요." },
+      { question: "영등위 심의와 방송국 뮤직비디오 심의는 무엇이 다른가요?", answer: "영등위 심의는 유통사 제출과 온라인 업로드를 위한 등급분류입니다. 방송국별 뮤직비디오 심의는 TV 송출 목적이라 KBS·MBC·SBS·ETN 가운데 방송사를 골라 따로 받으며, 방송사별 제출 규격과 편성 조건을 확인합니다." },
+      { question: "영등위 심의에 맞는 영상 규격은 무엇인가요?", answer: "MOV 또는 MP4, 1920×1080, 29.97fps를 권장합니다. 대용량 영상도 업로드할 수 있으며, 업로드가 어려우면 이메일 제출로 이어서 접수할 수 있습니다." },
+    ],
+  },
   {
     code: "KBS", slug: "kbs", name: "KBS", shortName: "KBS", group: "지상파",
     title: "KBS 음반 심의·뮤직비디오 심의 신청 방법과 비용",
@@ -278,7 +302,7 @@ export const STATION_GUIDES: StationGuide[] = [
     ],
   },
   {
-    code: "ETN", slug: "etn", name: "ETN 연예TV", shortName: "ETN", group: "뮤직비디오 전용",
+    code: "ETN", slug: "etn", name: "ETN 연예TV", shortName: "ETN", group: "뮤직비디오",
     title: "ETN 뮤직비디오 심의 신청 방법과 비용",
     description: "ETN 연예TV 뮤직비디오 심의를 온라인으로 신청하세요. ETN은 온라인 유통용 심의의 추가 옵션과 방송국별 뮤직비디오 심의 두 경로로 선택할 수 있습니다. 비용, 영상 규격, 결과 자료를 안내합니다.",
     keywords: ["ETN 뮤직비디오 심의", "ETN 심의", "ETN 뮤비 심의", "연예TV 뮤직비디오 심의", "ETN 뮤비 등급"],
@@ -294,7 +318,7 @@ export const STATION_GUIDES: StationGuide[] = [
     ],
   },
   {
-    code: "MNET", slug: "mnet", name: "Mnet", shortName: "Mnet", finalConsonant: true, group: "뮤직비디오 전용",
+    code: "MNET", slug: "mnet", name: "Mnet", shortName: "Mnet", finalConsonant: true, group: "뮤직비디오",
     title: "Mnet 뮤직비디오 심의 신청 방법과 비용",
     description: "Mnet 뮤직비디오 심의를 온라인으로 신청하세요. Mnet은 온라인 유통용 뮤직비디오 심의의 추가 옵션으로 선택합니다. 비용, 영상 규격, 결과 자료를 안내합니다.",
     keywords: ["Mnet 뮤직비디오 심의", "엠넷 심의", "Mnet 심의", "엠넷 뮤비 심의", "Mnet 뮤비 등급"],
@@ -311,7 +335,24 @@ export const STATION_GUIDES: StationGuide[] = [
   },
 ];
 
-export const STATION_GROUPS: StationGroup[] = ["지상파", "보도·교통", "종교", "음악·지역", "국제", "뮤직비디오 전용"];
+export const STATION_GROUPS: StationGroup[] = ["뮤직비디오", "지상파", "보도·교통", "종교", "음악·지역", "국제"];
+
+/** Schedules as the album and music video guides state them. */
+export const ALBUM_SCHEDULE = "자료와 결제가 확인되면 접수합니다. 서울권 방송국은 보통 3영업일, 경기권은 7영업일 이내 접수를 목표로 하며, 결과는 방송국 일정에 따라 최대 3주 정도 걸릴 수 있습니다.";
+export const MV_SCHEDULE = "자료와 결제를 확인한 뒤 접수하며, 일정은 제출처와 보완 여부에 따라 달라집니다.";
+export const stationSchedule = (guide: StationGuide) => (guide.album ? ALBUM_SCHEDULE : MV_SCHEDULE);
+
+/** One line on how the station is applied for and what it costs (hub cards, llms.txt). */
+export function stationSummary(guide: StationGuide, packages: AlbumPackage[]) {
+  const cheapest = packagesIncluding(guide.code, packages)[0];
+  const parts = [
+    guide.album && cheapest ? `음반 심의 ${cheapest.name}(${won(cheapest.priceKrw)})부터 포함` : "",
+    guide.mv?.base ? `온라인 유통용 등급분류 ${won(guide.mv.base)} · Mnet·ETN 추가 가능` : "",
+    guide.mv?.online ? `온라인 유통용 뮤직비디오 심의 추가 ${won(guide.mv.online)}` : "",
+    guide.mv?.broadcast && !guide.album ? `방송국별 뮤직비디오 심의 ${won(guide.mv.broadcast)}` : "",
+  ];
+  return parts.filter(Boolean).join(" · ") || "뮤직비디오 심의";
+}
 
 export const getStationGuide = (slug: string) => STATION_GUIDES.find((guide) => guide.slug === slug) ?? null;
 export const getStationGuideByCode = (code: string) => STATION_GUIDES.find((guide) => guide.code === code.trim().toUpperCase()) ?? null;
@@ -340,6 +381,20 @@ export function stationFaqs(guide: StationGuide, packages: AlbumPackage[]): Guid
       answer: `온사이드는 방송국 패키지 단위로 접수합니다. ${short}${josa(guide, "은/는")} ${cheapest.name}(${won(cheapest.priceKrw)}, ${joinStations(cheapest.stations)})부터 포함되며, 그보다 큰 패키지에도 모두 들어 있습니다. 앨범 1건 기준이고 부가세가 포함된 금액입니다.`,
     });
   }
+  if (guide.mv?.base) {
+    // 영등위 is the online distribution review itself: no add-on price and no broadcast airing.
+    faqs.push(
+      {
+        question: `${short} 뮤직비디오 심의 비용은 얼마인가요?`,
+        answer: `온라인 유통용 심의(영상물등급위원회 등급분류)는 영상 1건 ${won(guide.mv.base)}이며 부가세가 포함된 금액입니다. Mnet(${won(MV_STATION_PRICE_KRW.MNET)})·ETN(${won(MV_STATION_PRICE_KRW.ETN)})을 함께 추가할 수 있습니다.`,
+      },
+      {
+        question: `${short} 심의 결과로 무엇을 받나요?`,
+        answer: `등급 결과와 영등위 심의필증, 영상에 넣을 등급 이미지, 등급 표시 사용 예시 PDF를 마이페이지와 조회 코드 화면에서 내려받습니다. 결과가 나오면 안내 메일도 보냅니다. ${MV_SCHEDULE}`,
+      },
+    );
+    return faqs;
+  }
   if (guide.mv?.online) {
     faqs.push({
       question: `${short} 뮤직비디오 심의 비용은 얼마인가요?`,
@@ -353,7 +408,9 @@ export function stationFaqs(guide: StationGuide, packages: AlbumPackage[]): Guid
   }
   faqs.push({
     question: `${short} 심의 결과는 어떻게 확인하나요?`,
-    answer: `접수 후 발급되는 조회 코드나 마이페이지에서 방송국별로 확인합니다. ${short} 결과가 나오면 안내 메일도 보내며, 결과는 방송국 내부 일정에 따라 최대 3주 정도 걸릴 수 있습니다.`,
+    answer: guide.album
+      ? `접수 후 발급되는 조회 코드나 마이페이지에서 방송국별로 확인합니다. ${short} 결과가 나오면 안내 메일도 보내며, 결과는 방송국 내부 일정에 따라 최대 3주 정도 걸릴 수 있습니다.`
+      : `접수 후 발급되는 조회 코드나 마이페이지에서 확인합니다. ${short} 결과가 나오면 안내 메일도 보냅니다. ${MV_SCHEDULE}`,
   });
   faqs.push({
     question: `${short} 심의를 통과하면 방송에 나오나요?`,
