@@ -10,7 +10,7 @@ import { faqItems } from "@/lib/onside-content";
 import { REVIEW_GLOSSARY } from "@/lib/review-glossary";
 import { MV_PRICE_ROWS, REVIEW_GUIDES, type AlbumPackage } from "@/lib/review-guides";
 import { SITE_DESCRIPTION_EN } from "@/lib/seo";
-import { packagesIncluding, STATION_GUIDES, won } from "@/lib/station-guides";
+import { STATION_GUIDES, stationSummary, won } from "@/lib/station-guides";
 
 export function buildLlmsText({ origin, packages }: { origin: string; packages: AlbumPackage[] }) {
   const url = (path: string) => new URL(path, origin).toString();
@@ -48,14 +48,9 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
   push(`- [심의 용어집](${url("/guide/glossary")}): 적격·부적격·보완 요청, 등급분류·필증 등 용어 설명`);
   push(`- [자주 묻는 질문](${url("/faq")})`, `- [온사이드 소개](${url("/about")})`, `- [음반 심의 신청](${url("/dashboard/new/album")})`, `- [뮤직비디오 심의 신청](${url("/dashboard/new/mv")})`, `- [결과 조회](${url("/track")})`);
 
-  push("", "## 방송국별 안내", "", `- [접수 방송국 목록](${url("/guide/stations")})`);
+  push("", "## 접수처별 안내 (영등위·방송국)", "", `- [접수처 목록](${url("/guide/stations")})`);
   for (const station of STATION_GUIDES) {
-    const including = packagesIncluding(station.code, packages);
-    const albumNote = station.album && including[0] ? `음반 심의 ${including[0].name}(${won(including[0].priceKrw)})부터 포함` : "";
-    const mvNote = station.mv
-      ? [station.mv.online ? `온라인 유통용 추가 ${won(station.mv.online)}` : "", station.mv.broadcast ? `방송국별 뮤직비디오 심의 ${won(station.mv.broadcast)}` : ""].filter(Boolean).join(", ")
-      : "";
-    const notes = [albumNote, mvNote, station.genreNote ?? ""].filter(Boolean).join(" · ");
+    const notes = [stationSummary(station, packages), station.genreNote ?? ""].filter(Boolean).join(" · ");
     push(`- [${station.name}](${url(`/guide/stations/${station.slug}`)}): ${notes}`);
   }
 

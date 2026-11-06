@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: { params: Promise<{ station: 
   const kinds = [guide.album ? "Album Review" : "", guide.mv ? "Music Video Review" : ""].filter(Boolean).join(" and ");
   return pageMetadata({
     locale: "en",
-    title: `${guide.shortName} ${kinds} · How to Apply and Pricing`,
-    description: `How to submit a ${kinds.toLowerCase()} to ${guide.name} in Korea through Onside: packages, pricing, materials and results.`,
+    title: `${guide.englishName ?? guide.shortName} ${kinds} · How to Apply and Pricing`,
+    description: `How to submit a ${kinds.toLowerCase()} to ${guide.englishName ?? guide.name} in Korea through Onside: packages, pricing, materials and results.`,
     path: `/guide/stations/${guide.slug}`,
   });
 }

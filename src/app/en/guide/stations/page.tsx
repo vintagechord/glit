@@ -8,7 +8,7 @@ export const revalidate = 3600;
 
 export const metadata = pageMetadata({
   locale: "en",
-  title: "Broadcasters We Submit To · KBS, MBC, SBS and 14 More",
-  description: "Every Korean broadcaster Onside submits album reviews and music video reviews to, with the packages that include each station.",
+  title: "Where We Submit · Korea Media Rating Board, KBS, MBC, SBS and More",
+  description: "Every place Onside submits Korean music video and album reviews to: the Korea Media Rating Board, ETN, Mnet and 15 broadcasters, with packages and pricing.",
   path: "/guide/stations",
 });

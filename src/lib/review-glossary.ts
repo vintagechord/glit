@@ -123,6 +123,7 @@ export const REVIEW_GLOSSARY: GlossarySection[] = [
         term: "영상물등급위원회",
         aliases: ["영등위"],
         definition: "영상물의 등급을 분류하는 기관입니다. 온라인 유통용 뮤직비디오 심의는 이 기관의 등급분류 결과를 받는 절차입니다.",
+        link: { label: "영등위 뮤직비디오 심의 안내", href: "/guide/stations/kmrb" },
       },
       {
         term: "등급분류 결과",

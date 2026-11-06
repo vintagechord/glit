@@ -106,7 +106,7 @@ export default function GuidePage() {
         ))}
       </nav>
       <nav aria-label="방송국별 안내" className="mt-6">
-        <h2 className="text-sm font-black text-muted-foreground">접수 방송국 {STATION_GUIDES.length}곳 · 방송국별 안내</h2>
+        <h2 className="text-sm font-black text-muted-foreground">접수처 {STATION_GUIDES.length}곳 · 영등위·방송국별 안내</h2>
         <ul className="mt-3 flex flex-wrap gap-2">
           {STATION_GUIDES.map((station) => {
             const logo = getLocalStationLogoSource(station);
