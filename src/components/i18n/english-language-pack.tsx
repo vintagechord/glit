@@ -1053,6 +1053,10 @@ const exactTranslations: Record<string, string> = {
   "방송 일정이 있는 경우에만 문의해주세요.":
     "Contact us only when a broadcast schedule exists.",
   "ETN 입고 옵션": "ETN Delivery Option",
+  "ETN 뮤직비디오 입고": "ETN Music Video Delivery",
+  "ETN은 심의 없이 방송용 입고로 접수합니다. 온라인 심의(영등위 등급분류)를 마친 영상만 입고할 수 있습니다.":
+    "ETN takes broadcast delivery without a review. Only videos with a completed online rating can be delivered.",
+  "입고 완료": "Delivered",
   "온라인 Review 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.":
     "ETN delivery is available only for videos with completed online review.",
   "Online Review 완료된 Video에 한하여 ETN Broadcast '입고'만 가능합니다.":

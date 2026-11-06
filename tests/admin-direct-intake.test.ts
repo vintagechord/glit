@@ -71,6 +71,9 @@ test("MV prices and stations follow the wizard's table", () => {
   assert.equal(mvIntakeAmountKrw("MV_BROADCAST", []), null);
   assert.equal(mvIntakeAmountKrw("MV_BROADCAST", ["MNET"]), null);
   assert.equal(mvIntakeAmountKrw("MV_DISTRIBUTION", ["KBS"]), null);
+  // ETN is a broadcast delivery (입고) only since 2026-11-07.
+  assert.equal(mvIntakeAmountKrw("MV_DISTRIBUTION", ["ETN"]), null);
+  assert.deepEqual(mvIntakeAmountKrw("MV_BROADCAST", ["ETN"]), { codes: ["ETN"], amountKrw: 30_000 });
 });
 
 test("the intake request validates album and MV drafts", () => {
@@ -101,6 +104,12 @@ test("the guest MV registration is one admin-only transaction mirroring the albu
   assert.match(sql, /profiles where user_id=p_actor_user_id and role='admin'/);
   assert.match(sql, /where s\.guest_token=p_guest_token;\s+if found then/);
   assert.match(sql, /array\['KBS','MBC','SBS','ETN'\] else array\['MNET','ETN'\]/);
+  // The latest definition keeps ETN out of online distribution intake.
+  const latest = read("supabase/migrations/20261107120000_mv_online_without_etn.sql");
+  assert.match(latest, /create or replace function public\.admin_register_guest_mv\(/);
+  assert.match(latest, /array\['KBS','MBC','SBS','ETN'\] else array\['MNET'\] end;/);
+  assert.match(latest, /revoke all on function public\.admin_register_guest_mv\([^)]*\) from public,anon,authenticated;/);
+  assert.match(latest, /grant execute on function public\.admin_register_guest_mv\([^)]*\) to service_role;/);
   assert.match(sql, /revoke all on function public\.admin_register_guest_mv\([^)]*\) from public,anon,authenticated;/);
   assert.match(sql, /grant execute on function public\.admin_register_guest_mv\([^)]*\) to service_role;/);
 });

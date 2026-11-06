@@ -16,7 +16,7 @@ type Created = { submissionId: string; guestToken: string; trackUrl: string; det
 const kindLabels: Record<IntakeKind, { title: string; note: string }> = {
   ALBUM: { title: "음반 심의", note: "방송사별 음반 접수 · 패키지 선택" },
   MV_DISTRIBUTION: { title: "뮤비 온라인 심의", note: "영등위 · 유통사 제출용" },
-  MV_BROADCAST: { title: "뮤비 방송용 심의", note: "KBS·MBC·SBS·ETN 송출용" },
+  MV_BROADCAST: { title: "뮤비 방송용 심의", note: "KBS·MBC·SBS 심의 · ETN 입고" },
 };
 
 const emptyTrack = (): IntakeTrackDraft => ({

@@ -50,7 +50,8 @@ async function expectOnlineOptions(page: Page) {
   const options = page.locator('[data-preflight-field="reviewOptions"]');
   await expect(options.getByRole("button", { name: /일반 뮤직비디오 심의/ })).toBeVisible();
   await expect(options.getByRole("button", { name: /Mnet 뮤직비디오 심의/ })).toBeVisible();
-  await expect(options.getByRole("button", { name: /ETN 입고 옵션/ })).toBeVisible();
+  // ETN takes broadcast delivery (입고) only since 2026-11-07.
+  await expect(options).not.toContainText("ETN");
   await expect(options).not.toContainText("MBC");
   return options;
 }
@@ -71,6 +72,9 @@ test("online MV excludes MBC while TV broadcast still offers MBC", async ({ page
   await mbc.click();
   await expect(mbc).toContainText("선택됨");
   await expect(totalAmount(page)).toContainText("30,000원");
+  const etn = page.locator('[data-preflight-field="reviewOptions"]').getByRole("button", { name: /ETN 뮤직비디오 입고/ });
+  await expect(etn).toContainText("30,000원");
+  await expect(etn).toContainText("방송용 입고");
 
   await page.getByRole("button", { name: /유통사 제출 & 온라인 업로드/ }).click();
   await expectOnlineOptions(page);
@@ -80,7 +84,7 @@ test("online MV excludes MBC while TV broadcast still offers MBC", async ({ page
 });
 
 for (const source of ["server draft", "local selection"] as const) {
-  test(`restoring an old online MV ${source} removes MBC and its fee without losing valid choices or fields`, async ({ page }) => {
+  test(`restoring an old online MV ${source} removes MBC and ETN and their fees without losing valid choices or fields`, async ({ page }) => {
     const draft = {
       id: submissionId,
       guest_token: guestToken,
@@ -121,9 +125,8 @@ for (const source of ["server draft", "local selection"] as const) {
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
     const options = await expectOnlineOptions(page);
     await expect(options.getByRole("button", { name: /Mnet 뮤직비디오 심의/ })).toContainText("선택됨");
-    await expect(options.getByRole("button", { name: /ETN 입고 옵션/ })).toContainText("선택됨");
-    await expect(totalAmount(page)).toContainText("90,000원");
-    await expect(totalAmount(page)).not.toContainText("120,000원");
+    await expect(totalAmount(page)).toContainText("60,000원");
+    await expect(totalAmount(page)).not.toContainText("90,000원");
 
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();

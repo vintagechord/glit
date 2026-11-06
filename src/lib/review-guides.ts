@@ -44,11 +44,10 @@ export const FALLBACK_ALBUM_PACKAGES: AlbumPackage[] = [
 export const MV_PRICE_ROWS = [
   { label: "온라인 유통용 기본(영상물등급위원회 등급분류)", priceKrw: MV_BASE_ONLINE_PRICE_KRW },
   { label: "온라인 유통용 추가: Mnet", priceKrw: MV_STATION_PRICE_KRW.MNET },
-  { label: "온라인 유통용 추가: ETN", priceKrw: MV_STATION_PRICE_KRW.ETN },
   { label: "방송국별 심의: KBS", priceKrw: MV_STATION_PRICE_KRW.KBS },
   { label: "방송국별 심의: MBC", priceKrw: MV_STATION_PRICE_KRW.MBC },
   { label: "방송국별 심의: SBS", priceKrw: MV_STATION_PRICE_KRW.SBS },
-  { label: "방송국별 심의: ETN", priceKrw: MV_STATION_PRICE_KRW.ETN },
+  { label: "방송용 입고: ETN (심의 없이 입고)", priceKrw: MV_STATION_PRICE_KRW.ETN },
 ];
 
 const commonSchedule = "자료와 결제가 확인되면 접수합니다. 서울권 방송국은 보통 3영업일, 경기권은 7영업일 이내 접수를 목표로 하며, 결과는 방송국 일정에 따라 최대 3주 정도 걸릴 수 있습니다.";
@@ -151,13 +150,13 @@ export const REVIEW_GUIDES: ReviewGuide[] = [
     title: "뮤직비디오 심의(뮤비 심의) 신청 방법과 비용 · 온라인 등급분류·방송국별 심의",
     h1: "뮤직비디오 심의(뮤비 심의) 안내",
     description:
-      "뮤직비디오 심의(뮤비 심의)를 온라인으로 신청하세요. 온라인 유통용 영상물등급위원회 등급분류와 KBS·MBC·SBS·ETN 방송국별 뮤직비디오 심의의 차이, 영상 규격, 비용과 결과 자료를 안내합니다.",
+      "뮤직비디오 심의(뮤비 심의)를 온라인으로 신청하세요. 온라인 유통용 영상물등급위원회 등급분류와 KBS·MBC·SBS 방송국별 뮤직비디오 심의, ETN 방송용 입고의 차이, 영상 규격, 비용과 결과 자료를 안내합니다.",
     keywords: ["뮤직비디오심의", "뮤직비디오 심의", "뮤비심의", "뮤비 심의", "뮤직비디오 등급분류", "영상물등급위원회 뮤직비디오", "MV 심의", "뮤직비디오 방송 심의", "뮤직비디오 방송사 심의"],
     lead:
       "뮤직비디오 심의는 공개하려는 곳에 따라 온라인 유통용 심의와 방송국별 심의로 나뉩니다. 음원 유통사와 온라인 플랫폼에 올릴 영상은 영상물등급위원회 등급분류 결과를 요구하는 경우가 많고, TV에 송출하려면 방송국별로 뮤직비디오 심의를 받아야 합니다. 온사이드는 두 가지를 모두 온라인으로 접수하고 결과 자료를 내려받을 수 있게 안내합니다.",
     facts: [
-      { label: "온라인 유통용", value: "영상물등급위원회 등급분류 · Mnet·ETN 추가 선택" },
-      { label: "방송국별 심의", value: "KBS·MBC·SBS·ETN 중 선택" },
+      { label: "온라인 유통용", value: "영상물등급위원회 등급분류 · Mnet 추가 선택" },
+      { label: "방송국별 심의", value: "KBS·MBC·SBS 심의 · ETN 입고" },
       { label: "영상 규격", value: "MOV 또는 MP4 · 1920×1080 · 29.97fps 권장" },
       { label: "결과 자료", value: "등급 결과·필증·등급 표기 이미지와 사용 안내" },
     ],
@@ -172,7 +171,7 @@ export const REVIEW_GUIDES: ReviewGuide[] = [
       {
         heading: "방송국별 심의 접수 방송사",
         paragraphs: [
-          "TV 송출용 뮤직비디오는 KBS·MBC·SBS·ETN 중 원하는 방송사를 골라 접수합니다. 방송사별로 제출 규격과 편성 조건이 다르므로 신청 단계에서 함께 확인합니다.",
+          "TV 송출용 뮤직비디오는 KBS·MBC·SBS 가운데 원하는 방송사를 골라 심의를 접수합니다. ETN은 심의 없이 방송용 입고로 접수하며, 온라인 심의를 마친 영상만 입고할 수 있습니다. 방송사별로 제출 규격과 편성 조건이 다르므로 신청 단계에서 함께 확인합니다.",
         ],
       },
       {
@@ -189,7 +188,7 @@ export const REVIEW_GUIDES: ReviewGuide[] = [
         heading: "온사이드 뮤직비디오 심의 진행 순서",
         bullets: [
           "1. 신청서 작성과 영상 업로드",
-          "2. 심의 종류 선택: 온라인 유통용(추가로 Mnet·ETN 선택 가능) 또는 방송국별 심의(KBS·MBC·SBS·ETN)",
+          "2. 심의 종류 선택: 온라인 유통용(추가로 Mnet 선택 가능) 또는 방송국별 심의(KBS·MBC·SBS, ETN은 입고)",
           "3. 결제: 카드 결제 또는 무통장 입금, 현금영수증·세금계산서 발급 가능",
           "4. 접수와 진행 안내: 자료 확인 후 접수하며, 제출처와 보완 여부에 따라 일정이 달라집니다.",
           "5. 결과 확인: 등급 결과와 필증, 등급 표기 이미지와 사용 안내를 마이페이지에서 내려받습니다.",
@@ -201,7 +200,7 @@ export const REVIEW_GUIDES: ReviewGuide[] = [
     faqs: [
       { question: "뮤직비디오를 유튜브나 음원 사이트에 올리려면 어떤 심의가 필요한가요?", answer: "온라인 유통용 심의를 선택하세요. 유통사와 플랫폼은 영상물등급위원회 등급분류 결과를 요구하는 경우가 많으며, 온사이드에서 등급 결과와 필증, 등급 표기 자료를 받을 수 있습니다." },
       { question: "온라인 유통용과 방송국별 심의는 무엇이 다른가요?", answer: "온라인 유통용은 유통사 제출·업로드 목적입니다. 방송국별 심의는 TV 송출 목적이라 방송사별 편성, 제출 규격, 로고·등급분류 조건을 별도로 확인합니다." },
-      { question: "뮤직비디오 심의 비용은 얼마인가요?", answer: `온라인 유통용 기본 ${MV_BASE_ONLINE_PRICE_KRW.toLocaleString("ko-KR")}원에 Mnet·ETN을 추가할 수 있고, 방송국별 심의는 방송사별 금액이 더해집니다. 아래 비용 표와 결제 화면에서 총액을 확인할 수 있습니다.` },
+      { question: "뮤직비디오 심의 비용은 얼마인가요?", answer: `온라인 유통용 기본 ${MV_BASE_ONLINE_PRICE_KRW.toLocaleString("ko-KR")}원에 Mnet을 추가할 수 있고, 방송국별 심의와 ETN 입고는 방송사별 금액이 더해집니다. 아래 비용 표와 결제 화면에서 총액을 확인할 수 있습니다.` },
       { question: "영상 규격이 다르면 심의를 받을 수 없나요?", answer: "MOV 또는 MP4, 1920×1080, 29.97fps를 권장합니다. 방송국별 심의는 방송사별 규격 확인이 필요하며, 접수 전에 보완이 필요한지 안내드립니다." },
     ],
     related: ["album-review"],

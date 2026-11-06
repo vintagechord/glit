@@ -13,10 +13,16 @@ export const revalidate = 3600;
 
 export const metadata = pageMetadata({
   title: `음반 심의·뮤직비디오 심의 접수처 · 영등위·KBS·MBC·SBS부터 국악방송까지 ${STATION_GUIDES.length}곳`,
-  description: "온사이드가 뮤직비디오 심의와 음반 심의를 접수하는 곳의 목록입니다. 영등위(영상물등급위원회) 등급분류와 ETN·Mnet 뮤직비디오 심의, KBS·MBC·SBS 지상파, YTN·TBS·TBN 보도·교통, CBS·PBC·BBS·WBS·극동방송 종교, KISS·경인 iFM·국악방송, Arirang까지 접수처별 신청 방법과 비용을 안내합니다.",
+  description: "온사이드가 뮤직비디오 심의와 음반 심의를 접수하는 곳의 목록입니다. 영등위(영상물등급위원회) 등급분류, Mnet 뮤직비디오 심의와 ETN 입고, KBS·MBC·SBS 지상파, YTN·TBS·TBN 보도·교통, CBS·PBC·BBS·WBS·극동방송 종교, KISS·경인 iFM·국악방송, Arirang까지 접수처별 신청 방법과 비용을 안내합니다.",
   path: "/guide/stations",
   keywords: ["영등위 심의", "뮤직비디오 심의 접수처", "음반 심의 방송국", "방송국 심의 목록", "라디오 심의 방송국", "KBS MBC SBS 심의", "방송국별 심의", "심의 방송국 패키지"],
 });
+
+const introRows = [
+  { label: "뮤직비디오 온라인", value: "영등위 등급분류 · Mnet 추가 가능" },
+  { label: "뮤직비디오 TV", value: "KBS·MBC·SBS 심의 · ETN 입고" },
+  { label: "음반", value: "방송국 3곳~15곳 패키지" },
+];
 
 export default async function StationGuidesPage() {
   const packages = await loadAlbumPackages();
@@ -45,9 +51,14 @@ export default async function StationGuidesPage() {
       <header className="mt-5">
         <p className="bauhaus-kicker">방송국별 안내</p>
         <h1 className="font-display mt-4 break-keep text-3xl font-black leading-tight text-foreground sm:text-4xl">음반 심의·뮤직비디오 심의 접수 방송국</h1>
-        <p className="mt-5 break-keep text-base leading-8 text-foreground/85">
-          뮤직비디오를 온라인에 유통하려면 영등위(영상물등급위원회) 등급분류를 받고, 필요하면 Mnet·ETN을 함께 추가합니다. TV에 송출할 뮤직비디오는 KBS·MBC·SBS·ETN 방송국별 심의를 받습니다. 음반 심의는 방송국마다 따로 받으며, 온사이드는 KBS·MBC·SBS 3곳 패키지부터 15곳 패키지까지 방송국 묶음으로 접수합니다. 접수처를 고르면 심의 안내, 포함 패키지와 비용, 결과 확인 방법을 볼 수 있습니다.
-        </p>
+        <dl className="mt-5 grid gap-2 text-sm sm:grid-cols-[150px_1fr]">
+          {introRows.map((row) => (
+            <div key={row.label} className="contents">
+              <dt className="font-black text-foreground">{row.label}</dt>
+              <dd className="break-keep text-foreground/85">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
       </header>
 
       {STATION_GROUPS.map((group) => {

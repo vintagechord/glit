@@ -6,7 +6,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
 import { MV_PRICE_ROWS } from "@/lib/review-guides";
 import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
-import { MV_BASE_ONLINE_PRICE_KRW } from "@/lib/submission-station-selection";
+import { MV_BASE_ONLINE_PRICE_KRW, MV_STATION_PRICE_KRW } from "@/lib/submission-station-selection";
 
 // Public, crawlable: rebuilt hourly and at once when an admin edits packages.
 export const revalidate = 3600;
@@ -28,7 +28,7 @@ export default async function PricingGuidePage() {
     { question: "음반 심의 비용은 어떻게 계산되나요?", answer: `선택한 방송국 패키지 금액이 앨범 1건마다 적용됩니다. ${cheapest ? `${cheapest.name}(${cheapest.stations.join("·")})는 ${won(cheapest.priceKrw)}` : "3곳 패키지는 50,000원"}이고, ${largest ? `${largest.name}는 ${won(largest.priceKrw)}` : "15곳 패키지는 150,000원"}입니다. 모두 부가세가 포함된 금액입니다.` },
     { question: "여러 앨범을 한 번에 신청하면 할인이 되나요?", answer: "모든 앨범에 선택한 방송국 패키지의 정상 가격이 각각 적용됩니다. 여러 앨범을 함께 작성하고 장바구니에서 한 번에 결제할 수 있으며, 결제 전 화면에서 앨범 수와 총액을 확인합니다." },
     { question: "이미 발매된 앨범은 추가 비용이 있나요?", answer: "없습니다. 멜론 또는 지니 앨범 링크로 접수하면 신청서를 따로 쓰지 않고 같은 패키지 금액으로 진행합니다." },
-    { question: "뮤직비디오 심의 비용은 얼마인가요?", answer: `온라인 유통용 심의는 영상물등급위원회 등급분류 기본 ${won(MV_BASE_ONLINE_PRICE_KRW)}에 Mnet·ETN을 각각 추가할 수 있고, TV 송출용 방송국별 심의는 KBS·MBC·SBS·ETN 방송사별 금액이 더해집니다. 영상 1건 기준이며 부가세가 포함된 금액입니다.` },
+    { question: "뮤직비디오 심의 비용은 얼마인가요?", answer: `온라인 유통용 심의는 영상물등급위원회 등급분류 기본 ${won(MV_BASE_ONLINE_PRICE_KRW)}에 Mnet을 추가할 수 있고, TV 송출용 방송국별 심의는 KBS·MBC·SBS 방송사별 금액이, ETN 방송용 입고는 입고비 ${won(MV_STATION_PRICE_KRW.ETN)}이 더해집니다. 영상 1건 기준이며 부가세가 포함된 금액입니다.` },
     { question: "결제 방법과 증빙은 어떻게 되나요?", answer: "PC에서는 카드 결제 또는 무통장 입금, 모바일에서는 무통장 입금을 이용하거나 저장한 신청을 PC에서 이어서 카드 결제할 수 있습니다. 결제 후 현금영수증, 세금계산서, 거래내역서를 발급할 수 있습니다." },
     { question: "긴급 심의는 추가 비용이 있나요?", answer: "일정과 방송국 조건에 따라 다르며 추가 비용이 발생할 수 있습니다. 긴급 접수는 신청 전에 문의해 주세요." },
     { question: "심의용 CD·가사집 제작 비용은 별도인가요?", answer: "정식 CD로 발매한 앨범은 실제 CD가 필요할 수 있고, 디지털 음반은 심의용 CD와 가사집 제작을 지원합니다. 추가 비용 여부는 접수 시 안내합니다." },
@@ -85,7 +85,7 @@ export default async function PricingGuidePage() {
 
       <section className="mt-10">
         <h2 className="font-display text-2xl font-black text-foreground">뮤직비디오 심의 비용</h2>
-        <p className="mt-3 break-keep text-sm leading-7 text-muted-foreground">온라인 유통용 심의는 영상물등급위원회 등급분류 기본 금액에 Mnet·ETN을 추가하는 방식이고, TV 송출용 방송국별 심의는 방송사마다 따로 금액이 붙습니다.</p>
+        <p className="mt-3 break-keep text-sm leading-7 text-muted-foreground">온라인 유통용 심의는 영상물등급위원회 등급분류 기본 금액에 Mnet을 추가하는 방식이고, TV 송출용 방송국별 심의는 방송사마다 따로 금액이 붙습니다. ETN은 심의 없이 방송용 입고로 접수합니다.</p>
         <div className="mt-4"><MvPriceTable /></div>
       </section>
 

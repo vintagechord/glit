@@ -279,12 +279,12 @@ const completionTimeoutMs = 60_000;
 const singlePutAttempts = 3;
 
 const baseOnlinePrice = 30000;
-const etnOptionPrice = 30000;
+const etnDeliveryPrice = 30000;
 const stationPriceMap: Record<string, number> = {
   KBS: 50000,
   MBC: 30000,
   SBS: 30000,
-  ETN: etnOptionPrice,
+  ETN: etnDeliveryPrice,
   MNET: 30000,
 };
 const tvStationCodes = ["KBS", "MBC", "SBS", "ETN"];
@@ -305,17 +305,13 @@ const tvStationDetails: Record<string, { title: string; note: string }> = {
   },
   ETN: {
     title: "ETN 뮤직비디오 입고",
-    note: "온라인 심의 완료 후 ETN 방송 입고 가능합니다.",
+    note: "ETN은 심의 없이 방송용 입고로 접수합니다. 온라인 심의(영등위 등급분류)를 마친 영상만 입고할 수 있습니다.",
   },
 };
 const onlineOptionDetails: Record<string, { title: string; note: string }> = {
   MNET: {
     title: "Mnet 뮤직비디오 심의",
     note: "방송 일정이 있는 경우에만 문의해주세요.",
-  },
-  ETN: {
-    title: "ETN 입고 옵션",
-    note: "온라인 심의 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.",
   },
 };
 const conditionalOnlineOptions = new Set(MV_ONLINE_OPTION_CODES);
@@ -331,12 +327,6 @@ const onlineOptionConfirmDetails: Record<
       "심의 완료 시 등급분류 + Mnet 로고를 삽입하여 온라인 유통이 가능합니다.",
       "제출 규격: WMV 또는 MPG",
       "파일 용량 1GB 미만.",
-    ],
-  },
-  ETN: {
-    title: "ETN 입고 옵션 안내",
-    lines: [
-      "온라인 심의 완료된 영상에 한하여 ETN 방송 '입고'만 가능합니다.",
     ],
   },
 };

@@ -3,7 +3,7 @@ import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata({
   title: "뮤직비디오 심의 신청 · 뮤비 심의 온라인 접수",
-  description: "온라인 유통용 등급분류와 KBS·MBC·SBS·ETN 방송사 뮤직비디오 심의를 온라인으로 신청하세요.",
+  description: "온라인 유통용 등급분류와 KBS·MBC·SBS 방송사 뮤직비디오 심의, ETN 방송용 입고를 온라인으로 신청하세요.",
   path: "/dashboard/new/mv",
   enPath: "/en/dashboard/new/mv",
 });

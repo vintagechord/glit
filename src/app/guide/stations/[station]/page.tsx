@@ -39,18 +39,21 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
     ...(guide.mv?.base ? [{ name: "온라인 유통용 뮤직비디오 심의 (영상물등급위원회 등급분류)", priceKrw: guide.mv.base }] : []),
     ...(guide.mv?.online ? [{ name: `온라인 유통용 뮤직비디오 심의 ${guide.shortName} 추가`, priceKrw: guide.mv.online }] : []),
     ...(guide.mv?.broadcast ? [{ name: `${guide.shortName} 뮤직비디오 심의 (방송국별)`, priceKrw: guide.mv.broadcast }] : []),
+    ...(guide.mv?.delivery ? [{ name: `${guide.shortName} 뮤직비디오 방송용 입고`, priceKrw: guide.mv.delivery }] : []),
   ];
-  const kinds = [guide.album ? "음반 심의" : "", guide.mv ? "뮤직비디오 심의" : ""].filter(Boolean).join("·");
+  const kinds = [guide.album ? "음반 심의" : "", guide.mv ? (guide.mv.delivery ? "뮤직비디오 입고" : "뮤직비디오 심의") : ""].filter(Boolean).join("·");
   const logo = getLocalStationLogoSource(guide);
   const kicker = guide.group === "뮤직비디오" ? kinds : `${guide.group} · ${kinds}`;
   const mvApplyHref = guide.mv?.base || guide.mv?.online ? "/dashboard/new/mv?type=distribution" : "/dashboard/new/mv?type=broadcast";
   const route = guide.mv?.base
-    ? "온라인 유통용 심의 (Mnet·ETN 추가 선택)"
+    ? "온라인 유통용 심의 (Mnet 추가 선택)"
+    : guide.mv?.delivery ? "방송국별 신청에서 입고 선택"
     : guide.mv?.online && guide.mv.broadcast ? "온라인 유통용 추가 옵션 · 방송국별 심의" : guide.mv?.online ? "온라인 유통용 추가 옵션" : "방송국별 심의";
   const applyStep = guide.album
     ? `${guide.shortName}${josa(guide, "이/가")} 포함된 방송국 패키지 선택`
     : guide.mv?.base
-      ? "온라인 유통용 심의 선택 (필요하면 Mnet·ETN 추가)"
+      ? "온라인 유통용 심의 선택 (필요하면 Mnet 추가)"
+      : guide.mv?.delivery ? `방송국별 신청에서 ${guide.shortName} 입고 선택 (KBS·MBC·SBS 심의와 함께 결제 가능)`
       : guide.mv?.online ? `온라인 유통용 심의에 ${guide.shortName} 추가${guide.mv.broadcast ? " 또는 방송국별 심의에서 선택" : ""}` : `방송국별 심의에서 ${guide.shortName} 선택`;
 
   return (
@@ -88,7 +91,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           ) : null}
           {guide.mv ? (
             <Link href={mvApplyHref} className={`inline-flex min-h-12 items-center gap-2 rounded-[8px] border-2 border-[#111111] px-5 text-sm font-black shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 ${guide.album ? "bg-background text-foreground dark:border-[#f2cf27]" : "bg-[#f2cf27] text-[#111111]"}`}>
-              뮤직비디오 심의 신청하기<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              {guide.mv.delivery ? "뮤직비디오 입고 신청하기" : "뮤직비디오 심의 신청하기"}<ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           ) : null}
           <Link href="/track" className="inline-flex min-h-12 items-center rounded-[8px] border-2 border-[#111111] bg-background px-5 text-sm font-black text-foreground shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5 dark:border-[#f2cf27]">결과 조회</Link>
@@ -97,7 +100,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
 
       <dl className="mt-8 grid gap-3 sm:grid-cols-2">
         <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
-          <dt className="text-xs font-black text-muted-foreground">심의 종류</dt>
+          <dt className="text-xs font-black text-muted-foreground">{guide.mv?.delivery ? "신청 종류" : "심의 종류"}</dt>
           <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">{kinds}</dd>
         </div>
         <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
@@ -114,10 +117,10 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
             <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">영상 1건 {won(guide.mv.broadcast)} (방송국별 심의)</dd>
           </div>
         ) : null}
-        {guide.mv?.base ? (
+        {guide.mv?.base || guide.mv?.delivery ? (
           <div className="rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
-            <dt className="text-xs font-black text-muted-foreground">비용</dt>
-            <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">영상 1건 {won(guide.mv.base)} · 부가세 포함</dd>
+            <dt className="text-xs font-black text-muted-foreground">{guide.mv.delivery ? "입고비" : "비용"}</dt>
+            <dd className="mt-1 break-keep text-sm font-black leading-6 text-foreground">영상 1건 {won(guide.mv.base ?? guide.mv.delivery ?? 0)} · 부가세 포함</dd>
           </div>
         ) : null}
         {guide.mv?.online ? (
@@ -133,7 +136,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
       </dl>
 
       <section className="mt-10">
-        <h2 className="font-display break-keep text-2xl font-black text-foreground">{guide.shortName} 심의는 무엇인가요?</h2>
+        <h2 className="font-display break-keep text-2xl font-black text-foreground">{guide.shortName} {guide.mv?.delivery ? "입고" : "심의"}는 무엇인가요?</h2>
         {guide.about.map((paragraph) => <p key={paragraph} className="mt-4 break-keep text-[15px] leading-8 text-foreground/85">{paragraph}</p>)}
         {guide.genreNote ? (
           <p className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] p-4 text-sm font-black leading-7 text-[#111111]">{guide.genreNote}</p>
@@ -165,7 +168,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
       ) : null}
 
       <section className="mt-10">
-        <h2 className="font-display break-keep text-2xl font-black text-foreground">{guide.shortName} 심의 준비물과 진행 순서</h2>
+        <h2 className="font-display break-keep text-2xl font-black text-foreground">{guide.shortName} {guide.mv?.delivery ? "입고" : "심의"} 준비물과 진행 순서</h2>
         <ul className="mt-4 space-y-3">
           {(guide.album ? albumPreparationItems : mvPreparationItems).map((item) => (
             <li key={item} className="flex gap-3 break-keep text-[15px] leading-7 text-foreground/85">
@@ -179,7 +182,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           <li>2. {applyStep}</li>
           <li>3. 카드 결제 또는 무통장 입금 · 현금영수증·세금계산서 발급 가능</li>
           <li>4. 접수: {stationSchedule(guide)}</li>
-          <li>5. 결과 확인: {guide.mv?.base ? "조회 코드와 마이페이지에서 등급 결과와 영등위 심의필증, 등급 이미지, 등급 표시 사용 예시 PDF를 내려받고, 안내 메일로도 알려드립니다." : "조회 코드와 마이페이지에 방송국별 결과가 표시되고, 안내 메일로도 알려드립니다."}</li>
+          <li>5. 결과 확인: {guide.mv?.delivery ? "조회 코드와 마이페이지에 '입고 완료'로 표시되고, 안내 메일로도 알려드립니다." : guide.mv?.base ? "조회 코드와 마이페이지에서 등급 결과와 영등위 심의필증, 등급 이미지, 등급 표시 사용 예시 PDF를 내려받고, 안내 메일로도 알려드립니다." : "조회 코드와 마이페이지에 방송국별 결과가 표시되고, 안내 메일로도 알려드립니다."}</li>
         </ol>
       </section>
 

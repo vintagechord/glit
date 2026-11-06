@@ -1,5 +1,6 @@
 import { normalizeStationReviewStatus } from "@/constants/review-status";
 import { broadcastRatingLabels } from "@/lib/broadcast-rating";
+import { isMvDeliveryOnlyStation } from "@/lib/submission-station-selection";
 import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, summarizeTrackResults, type AlbumTrackMeta } from "@/lib/track-results";
 
 type StationDisplayInput = {
@@ -159,11 +160,14 @@ export function getStationReviewDisplayStatus(
       ? buildStationTrackSummaryText(summary.counts, " / ")
       : null;
 
+  // ETN takes a delivery (입고), not a review: a finished row reads "입고 완료".
+  const delivered = base.key === "APPROVED" && isMvDeliveryOnlyStation(review.station);
   return {
     ...base,
-    ...(base.key === "APPROVED" && review.age_rating && broadcastRatingLabels[review.age_rating]
+    ...(base.key === "APPROVED" && !delivered && review.age_rating && broadcastRatingLabels[review.age_rating]
       ? { label: broadcastRatingLabels[review.age_rating] }
       : {}),
+    ...(delivered ? { label: "입고 완료" } : {}),
     ...(rejectedSongs ?? {}),
     summary,
     summaryText,
