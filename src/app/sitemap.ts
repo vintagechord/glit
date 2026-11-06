@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { REVIEW_GUIDES } from "@/lib/review-guides";
+import { STATION_GUIDES } from "@/lib/station-guides";
 import { getBaseUrl } from "@/lib/url";
 
 type ChangeFrequency = MetadataRoute.Sitemap[number]["changeFrequency"];
@@ -8,8 +9,10 @@ type Page = { path: string; priority: number; changeFrequency: ChangeFrequency; 
 
 // Bump when public page content changes materially; crawlers use it to
 // decide what to refetch.
-const CONTENT_UPDATED = new Date("2026-11-01T00:00:00+09:00");
+const CONTENT_UPDATED = new Date("2026-11-07T00:00:00+09:00");
 
+// The English aliases of the topic and station guides share the Korean
+// canonical, so only the Korean URLs are listed (english: false).
 const publicPages: Page[] = [
   { path: "/", priority: 1, changeFrequency: "weekly", english: true },
   { path: "/dashboard/new", priority: 0.9, changeFrequency: "weekly", english: true },
@@ -17,6 +20,10 @@ const publicPages: Page[] = [
   { path: "/dashboard/new/mv", priority: 0.9, changeFrequency: "weekly", english: true },
   { path: "/guide", priority: 0.9, changeFrequency: "monthly", english: true },
   ...REVIEW_GUIDES.map((guide) => ({ path: `/guide/${guide.slug}`, priority: 0.9, changeFrequency: "monthly" as const })),
+  { path: "/guide/pricing", priority: 0.9, changeFrequency: "monthly" },
+  { path: "/guide/stations", priority: 0.8, changeFrequency: "monthly" },
+  ...STATION_GUIDES.map((station) => ({ path: `/guide/stations/${station.slug}`, priority: 0.8, changeFrequency: "monthly" as const })),
+  { path: "/guide/glossary", priority: 0.7, changeFrequency: "monthly" },
   { path: "/faq", priority: 0.8, changeFrequency: "monthly", english: true },
   { path: "/about", priority: 0.7, changeFrequency: "monthly", english: true },
   { path: "/track", priority: 0.6, changeFrequency: "monthly", english: true },

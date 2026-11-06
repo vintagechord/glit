@@ -81,9 +81,12 @@ export function organizationJsonLd() {
     alternateName: [SITE_NAME_EN, "온사이드 심의", "iamonside"],
     legalName: APP_CONFIG.businessName,
     url: origin,
+    // The legacy site still runs in parallel; naming it ties both to one entity.
+    sameAs: ["https://onside17.com/"],
     logo: absoluteUrl("/brand-logo.png"),
     image: absoluteUrl("/opengraph-image"),
     description: SITE_DESCRIPTION,
+    slogan: SITE_TAGLINE,
     foundingDate: "2017",
     email: APP_CONFIG.supportEmail,
     telephone: APP_CONFIG.supportPhone,
@@ -168,6 +171,31 @@ export function serviceJsonLd(input: {
       priceCurrency: "KRW",
       url: absoluteUrl(input.path),
       availability: "https://schema.org/InStock",
+    })),
+  };
+}
+
+/** A glossary page: schema.org DefinedTermSet with one DefinedTerm per entry. */
+export function definedTermSetJsonLd(input: {
+  name: string;
+  description: string;
+  path: string;
+  terms: Array<{ term: string; definition: string; aliases?: string[] }>;
+}) {
+  const pageUrl = absoluteUrl(input.path);
+  return {
+    "@context": "https://schema.org",
+    "@type": "DefinedTermSet",
+    "@id": `${pageUrl}#terms`,
+    name: input.name,
+    description: input.description,
+    url: pageUrl,
+    hasDefinedTerm: input.terms.map((item) => ({
+      "@type": "DefinedTerm",
+      name: item.term,
+      ...(item.aliases?.length ? { alternateName: item.aliases } : {}),
+      description: item.definition,
+      inDefinedTermSet: `${pageUrl}#terms`,
     })),
   };
 }
