@@ -60,15 +60,31 @@ test("MV station selection may be resolved from canonical IDs", () => {
   assert.deepEqual(
     resolveCanonicalMvStationSelection({
       mvType: "MV_DISTRIBUTION",
-      requestedIds: ["station-mnet", "station-etn"],
+      requestedIds: ["station-mnet"],
       stations,
     }),
     {
       ok: true,
-      stationIds: ["station-mnet", "station-etn"],
-      stationCodes: ["MNET", "ETN"],
-      stationAmountKrw: 60_000,
+      stationIds: ["station-mnet"],
+      stationCodes: ["MNET"],
+      stationAmountKrw: 30_000,
     },
+  );
+});
+
+test("ETN is a 30,000원 broadcast delivery and no longer an online add-on", () => {
+  // Owner 2026-11-07: ETN only accepts 입고, so online MV orders refuse it.
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({ mvType: "MV_DISTRIBUTION", requestedCodes: ["MNET", "ETN"], stations }),
+    { ok: false, reason: "INVALID_CODE" },
+  );
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({ mvType: "MV_DISTRIBUTION", requestedIds: ["station-etn"], stations }),
+    { ok: false, reason: "STATION_NOT_FOUND" },
+  );
+  assert.deepEqual(
+    resolveCanonicalMvStationSelection({ mvType: "MV_BROADCAST", requestedCodes: ["KBS", "ETN"], stations }),
+    { ok: true, stationIds: ["station-kbs", "station-etn"], stationCodes: ["KBS", "ETN"], stationAmountKrw: 80_000 },
   );
 });
 

@@ -38,9 +38,10 @@ export type StationGuide = {
   /** Album reviews are submitted to this station through a package. */
   album: boolean;
   /** Music video review prices in KRW, when the station takes them: the
-   * online distribution base (영등위 등급분류 itself), an add-on to it, or a
-   * per-broadcaster TV review. */
-  mv?: { base?: number; online?: number; broadcast?: number };
+   * online distribution base (영등위 등급분류 itself), an add-on to it, a
+   * per-broadcaster TV review, or a broadcast delivery (입고, ETN) that is not
+   * a review at all. */
+  mv?: { base?: number; online?: number; broadcast?: number; delivery?: number };
   /** Station-specific questions; the generic ones are generated from facts. */
   faqs: GuideFaq[];
 };
@@ -73,18 +74,18 @@ export const STATION_GUIDES: StationGuide[] = [
   {
     code: "MV_ONLINE", slug: "kmrb", name: "영상물등급위원회 (영등위)", shortName: "영등위", englishName: "Korea Media Rating Board", group: "뮤직비디오",
     title: "영등위(영상물등급위원회) 뮤직비디오 심의·등급분류 신청 방법과 비용",
-    description: `영등위(영상물등급위원회) 뮤직비디오 등급분류를 온라인으로 신청하세요. 음원 유통사와 온라인 플랫폼에 올릴 뮤직비디오의 온라인 유통용 심의로, 영상 1건 ${MV_BASE_ONLINE_PRICE_KRW.toLocaleString("ko-KR")}원에 Mnet·ETN을 함께 추가할 수 있습니다. 준비물, 영상 규격, 등급 결과·심의필증·등급 이미지를 안내합니다.`,
+    description: `영등위(영상물등급위원회) 뮤직비디오 등급분류를 온라인으로 신청하세요. 음원 유통사와 온라인 플랫폼에 올릴 뮤직비디오의 온라인 유통용 심의로, 영상 1건 ${MV_BASE_ONLINE_PRICE_KRW.toLocaleString("ko-KR")}원에 Mnet을 함께 추가할 수 있습니다. 준비물, 영상 규격, 등급 결과·심의필증·등급 이미지를 안내합니다.`,
     keywords: ["영등위 심의", "영등위 뮤직비디오 심의", "영상물등급위원회 뮤직비디오", "뮤직비디오 등급분류", "뮤비 등급분류", "영등위 등급분류 신청", "뮤직비디오 온라인 심의", "영등위 심의필증", "뮤직비디오 유통 심의"],
-    lead: "영등위 뮤직비디오 심의는 영상물등급위원회가 뮤직비디오의 관람 등급을 정하는 등급분류 절차입니다. 음원 유통사와 온라인 플랫폼은 이 등급분류 결과를 요구하는 경우가 많습니다. 온사이드에서는 온라인 유통용 심의로 신청하며 Mnet·ETN을 함께 추가할 수 있습니다.",
+    lead: "영등위 뮤직비디오 심의는 영상물등급위원회가 뮤직비디오의 관람 등급을 정하는 등급분류 절차입니다. 음원 유통사와 온라인 플랫폼은 이 등급분류 결과를 요구하는 경우가 많습니다. 온사이드에서는 온라인 유통용 심의로 신청하며 Mnet을 함께 추가할 수 있습니다.",
     about: [
       "영상물등급위원회(영등위)는 영상물의 등급을 분류하는 기관입니다. 뮤직비디오 등급은 전체관람가, 12세이상관람가, 15세이상관람가, 청소년관람불가 가운데 하나로 나오며, 기준에 맞지 않으면 심의불가가 됩니다.",
-      "결과가 나오면 영등위 심의필증, 영상에 넣을 등급 이미지, 등급 표시 사용 예시 PDF를 마이페이지와 조회 코드 화면에서 내려받습니다. TV에 송출하려면 이와 별도로 KBS·MBC·SBS·ETN 방송국별 뮤직비디오 심의를 받아야 합니다.",
+      "결과가 나오면 영등위 심의필증, 영상에 넣을 등급 이미지, 등급 표시 사용 예시 PDF를 마이페이지와 조회 코드 화면에서 내려받습니다. TV에 송출하려면 이와 별도로 KBS·MBC·SBS 방송국별 뮤직비디오 심의를 받거나 ETN에 방송용으로 입고합니다.",
     ],
     album: false,
     mv: { base: MV_BASE_ONLINE_PRICE_KRW },
     faqs: [
       { question: "온라인에 올릴 뮤직비디오도 영등위 심의가 필요한가요?", answer: "음원 유통사와 온라인 플랫폼은 영상물등급위원회 등급분류 결과를 요구하는 경우가 많습니다. 제출처의 요구 사항을 확인하고, 필요하면 온라인 유통용 심의로 신청하세요." },
-      { question: "영등위 심의와 방송국 뮤직비디오 심의는 무엇이 다른가요?", answer: "영등위 심의는 유통사 제출과 온라인 업로드를 위한 등급분류입니다. 방송국별 뮤직비디오 심의는 TV 송출 목적이라 KBS·MBC·SBS·ETN 가운데 방송사를 골라 따로 받으며, 방송사별 제출 규격과 편성 조건을 확인합니다." },
+      { question: "영등위 심의와 방송국 뮤직비디오 심의는 무엇이 다른가요?", answer: "영등위 심의는 유통사 제출과 온라인 업로드를 위한 등급분류입니다. 방송국별 뮤직비디오 심의는 TV 송출 목적이라 KBS·MBC·SBS 가운데 방송사를 골라 따로 받으며, 방송사별 제출 규격과 편성 조건을 확인합니다. ETN은 심의 없이 방송용 입고로 접수합니다." },
       { question: "영등위 심의에 맞는 영상 규격은 무엇인가요?", answer: "MOV 또는 MP4, 1920×1080, 29.97fps를 권장합니다. 대용량 영상도 업로드할 수 있으며, 업로드가 어려우면 이메일 제출로 이어서 접수할 수 있습니다." },
     ],
   },
@@ -303,18 +304,18 @@ export const STATION_GUIDES: StationGuide[] = [
   },
   {
     code: "ETN", slug: "etn", name: "ETN 연예TV", shortName: "ETN", group: "뮤직비디오",
-    title: "ETN 뮤직비디오 심의 신청 방법과 비용",
-    description: "ETN 연예TV 뮤직비디오 심의를 온라인으로 신청하세요. ETN은 온라인 유통용 심의의 추가 옵션과 방송국별 뮤직비디오 심의 두 경로로 선택할 수 있습니다. 비용, 영상 규격, 결과 자료를 안내합니다.",
-    keywords: ["ETN 뮤직비디오 심의", "ETN 심의", "ETN 뮤비 심의", "연예TV 뮤직비디오 심의", "ETN 뮤비 등급"],
-    lead: "ETN 뮤직비디오 심의는 ETN 연예TV에서 뮤직비디오를 방송하기 위한 절차입니다. 온사이드에서는 온라인 유통용 심의를 신청하면서 ETN을 추가 옵션으로 고르거나, TV 송출용 방송국별 심의에서 ETN을 선택할 수 있습니다.",
+    title: "ETN 뮤직비디오 입고 신청 방법과 비용",
+    description: `ETN 연예TV 뮤직비디오 방송용 입고를 온라인으로 신청하세요. ETN은 심의 없이 입고로 접수하며 입고비는 영상 1건 ${MV_STATION_PRICE_KRW.ETN.toLocaleString("ko-KR")}원입니다. 신청 방법, 영상 규격, 입고 조건을 안내합니다.`,
+    keywords: ["ETN 뮤직비디오 입고", "ETN 입고", "ETN 뮤비 입고", "연예TV 뮤직비디오", "ETN 뮤직비디오 심의", "ETN 입고비"],
+    lead: "ETN 뮤직비디오 입고는 ETN 연예TV에 뮤직비디오를 방송용으로 전달해 등록하는 절차입니다. ETN은 심의 없이 입고로 접수하며, 온사이드에서는 뮤직비디오 방송국별 신청에서 ETN 입고를 선택합니다.",
     about: [
-      "ETN 연예TV는 연예·음악 전문 케이블 채널로 뮤직비디오를 방송합니다. 음반 심의 대상은 아니고 뮤직비디오 심의만 접수합니다.",
-      "온라인 유통용 심의(영상물등급위원회 등급분류)에 ETN을 추가하면 한 번의 신청으로 유통용 결과와 ETN 결과를 함께 받습니다.",
+      "ETN 연예TV는 연예·음악 전문 케이블 채널로 뮤직비디오를 방송합니다. 음반 심의 대상은 아니고 뮤직비디오 입고만 접수합니다.",
+      "입고는 온라인 심의(영등위 등급분류)를 마친 영상만 할 수 있습니다. 아직 등급분류가 없다면 영등위 심의를 먼저 받거나 함께 신청하세요.",
     ],
     album: false,
-    mv: { online: mvBroadcast("ETN"), broadcast: mvBroadcast("ETN") },
+    mv: { delivery: MV_STATION_PRICE_KRW.ETN },
     faqs: [
-      { question: "ETN은 음반 심의도 받나요?", answer: "아닙니다. ETN은 뮤직비디오 심의만 접수합니다. 노래 자체의 방송 심의는 KBS·MBC·SBS 등 음반 심의 패키지로 신청하세요." },
+      { question: "ETN은 음반 심의도 받나요?", answer: "아닙니다. ETN은 뮤직비디오 입고만 접수합니다. 노래 자체의 방송 심의는 KBS·MBC·SBS 등 음반 심의 패키지로 신청하세요." },
     ],
   },
   {
@@ -347,7 +348,8 @@ export function stationSummary(guide: StationGuide, packages: AlbumPackage[]) {
   const cheapest = packagesIncluding(guide.code, packages)[0];
   const parts = [
     guide.album && cheapest ? `음반 심의 ${cheapest.name}(${won(cheapest.priceKrw)})부터 포함` : "",
-    guide.mv?.base ? `온라인 유통용 등급분류 ${won(guide.mv.base)} · Mnet·ETN 추가 가능` : "",
+    guide.mv?.base ? `온라인 유통용 등급분류 ${won(guide.mv.base)} · Mnet 추가 가능` : "",
+    guide.mv?.delivery ? `방송용 입고 ${won(guide.mv.delivery)} · 심의 없이 입고` : "",
     guide.mv?.online ? `온라인 유통용 뮤직비디오 심의 추가 ${won(guide.mv.online)}` : "",
     guide.mv?.broadcast && !guide.album ? `방송국별 뮤직비디오 심의 ${won(guide.mv.broadcast)}` : "",
   ];
@@ -386,11 +388,33 @@ export function stationFaqs(guide: StationGuide, packages: AlbumPackage[]): Guid
     faqs.push(
       {
         question: `${short} 뮤직비디오 심의 비용은 얼마인가요?`,
-        answer: `온라인 유통용 심의(영상물등급위원회 등급분류)는 영상 1건 ${won(guide.mv.base)}이며 부가세가 포함된 금액입니다. Mnet(${won(MV_STATION_PRICE_KRW.MNET)})·ETN(${won(MV_STATION_PRICE_KRW.ETN)})을 함께 추가할 수 있습니다.`,
+        answer: `온라인 유통용 심의(영상물등급위원회 등급분류)는 영상 1건 ${won(guide.mv.base)}이며 부가세가 포함된 금액입니다. Mnet(${won(MV_STATION_PRICE_KRW.MNET)})을 함께 추가할 수 있습니다.`,
       },
       {
         question: `${short} 심의 결과로 무엇을 받나요?`,
         answer: `등급 결과와 영등위 심의필증, 영상에 넣을 등급 이미지, 등급 표시 사용 예시 PDF를 마이페이지와 조회 코드 화면에서 내려받습니다. 결과가 나오면 안내 메일도 보냅니다. ${MV_SCHEDULE}`,
+      },
+    );
+    return faqs;
+  }
+  if (guide.mv?.delivery) {
+    // A delivery (입고) is not a review: no rating, no 적격/부적격.
+    faqs.push(
+      {
+        question: `${short} 입고비는 얼마인가요?`,
+        answer: `영상 1건 ${won(guide.mv.delivery)}이며 부가세가 포함된 금액입니다. 뮤직비디오 신청에서 방송국별 신청을 고르고 ${short} 입고를 선택하면 KBS·MBC·SBS 심의와 함께 결제할 수 있습니다.`,
+      },
+      {
+        question: `${short} 입고는 심의와 무엇이 다른가요?`,
+        answer: `입고는 방송 적합성 판정을 따로 받지 않고 뮤직비디오를 ${short}에 방송용으로 전달해 등록하는 절차입니다. 온라인 심의(영등위 등급분류)를 마친 영상만 입고할 수 있습니다.`,
+      },
+      {
+        question: `${short} 입고 결과는 어떻게 확인하나요?`,
+        answer: `접수 후 발급되는 조회 코드나 마이페이지에서 확인합니다. 입고가 끝나면 '입고 완료'로 표시되고 안내 메일도 보냅니다. ${MV_SCHEDULE}`,
+      },
+      {
+        question: `${short} 입고를 마치면 방송에 나오나요?`,
+        answer: `입고는 방송용으로 등록하는 절차이고, 실제 편성은 ${short}${josa(guide, "이/가")} 결정합니다.`,
       },
     );
     return faqs;

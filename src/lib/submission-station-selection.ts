@@ -11,7 +11,15 @@ export type CanonicalAlbumStationSelection =
 
 export const MV_BASE_ONLINE_PRICE_KRW = 30_000;
 
-export const MV_ONLINE_OPTION_CODES: readonly string[] = ["MNET", "ETN"];
+// Owner, 2026-11-07: ETN only accepts broadcast delivery (입고) now, so it is
+// no longer an add-on of the online review; it stays a broadcast choice.
+export const MV_ONLINE_OPTION_CODES: readonly string[] = ["MNET"];
+
+/** Broadcast choices that are a delivery (입고, ETN 30,000원), not a review. */
+export const MV_DELIVERY_ONLY_CODES: readonly string[] = ["ETN"];
+
+export const isMvDeliveryOnlyStation = (station?: { code?: string | null } | null) =>
+  MV_DELIVERY_ONLY_CODES.includes(station?.code?.trim().toUpperCase() ?? "");
 
 export const MV_STATION_PRICE_KRW: Readonly<Record<string, number>> = {
   KBS: 50_000,

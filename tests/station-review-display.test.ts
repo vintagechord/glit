@@ -3,6 +3,15 @@ import test from "node:test";
 
 import { getStationReviewDisplayStatus } from "../src/lib/station-review-display";
 
+test("a finished ETN row reads 입고 완료, other stations keep their result", () => {
+  const etn = { code: "ETN", name: "ETN 연예TV" };
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", station: etn }).label, "입고 완료");
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "15", station: etn }).label, "입고 완료");
+  assert.equal(getStationReviewDisplayStatus({ status: "SENT", station: etn }).label, "접수완료");
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", station: { code: "KBS" } }).label, "적격");
+  assert.equal(getStationReviewDisplayStatus({ status: "APPROVED", age_rating: "15", station: { code: "SBS" } }).label, "15세 이상 시청가");
+});
+
 test("station display status maps waiting submission and waiting result", () => {
   assert.equal(
     getStationReviewDisplayStatus({ status: "NOT_SENT" }).label,

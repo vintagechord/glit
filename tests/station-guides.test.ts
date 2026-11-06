@@ -40,11 +40,30 @@ test("영등위 leads the list in a group named 뮤직비디오, with its own pr
   assert.ok(faqs.some((faq) => faq.answer.includes("영상 1건 30,000원")));
   assert.ok(faqs.some((faq) => faq.answer.includes("영등위 심의필증")));
   assert.ok(!faqs.some((faq) => /방송에 나오나요|추가 30,000원이 더해집니다/.test(faq.question + faq.answer)), "영등위 is the base review, not an add-on or a broadcast");
-  assert.equal(stationSummary(kmrb, FALLBACK_ALBUM_PACKAGES), "온라인 유통용 등급분류 30,000원 · Mnet·ETN 추가 가능");
+  assert.equal(stationSummary(kmrb, FALLBACK_ALBUM_PACKAGES), "온라인 유통용 등급분류 30,000원 · Mnet 추가 가능");
   assert.equal(stationSummary(getStationGuide("kbs")!, FALLBACK_ALBUM_PACKAGES), "음반 심의 3곳 패키지(50,000원)부터 포함");
   // Music video pages state the music video schedule, not the album one.
   assert.ok(!stationFaqs(getStationGuide("mnet")!, FALLBACK_ALBUM_PACKAGES).some((faq) => faq.answer.includes("3주")));
   assert.ok(GUIDE_TOPIC_LINKS[0].summary.includes(`${STATION_GUIDES.length}곳`), "the hub link states the current count");
+});
+
+test("ETN is a 30,000원 broadcast delivery (입고), never an online add-on or a review", () => {
+  const etn = getStationGuide("etn")!;
+  assert.deepEqual(etn.mv, { delivery: 30_000 });
+  assert.match(etn.title, /입고/);
+  assert.equal(stationSummary(etn, FALLBACK_ALBUM_PACKAGES), "방송용 입고 30,000원 · 심의 없이 입고");
+  const faqs = stationFaqs(etn, FALLBACK_ALBUM_PACKAGES);
+  assert.ok(faqs.some((faq) => faq.question === "ETN 입고비는 얼마인가요?" && faq.answer.includes("30,000원")));
+  assert.ok(!faqs.some((faq) => /심의 비용|온라인 유통용 심의 기본/.test(faq.question + faq.answer)));
+  // No guide text offers ETN as an online add-on any more.
+  for (const guide of STATION_GUIDES) {
+    for (const text of [guide.description, guide.lead, ...guide.about, ...guide.faqs.map((faq) => faq.answer)]) {
+      assert.doesNotMatch(text, /Mnet·ETN|ETN·Mnet|KBS·MBC·SBS·ETN/, guide.code);
+    }
+  }
+  const llms = buildLlmsText({ origin: "https://iamonside.com", packages: FALLBACK_ALBUM_PACKAGES });
+  assert.doesNotMatch(llms, /Mnet·ETN|온라인 유통용 추가: ETN|optional Mnet\/ETN/);
+  assert.match(llms, /방송용 입고: ETN \(심의 없이 입고\): 30,000원/);
 });
 
 test("package membership, prices and the generated questions come from the catalog", () => {
