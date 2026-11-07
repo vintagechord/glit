@@ -2125,9 +2125,8 @@ Object.assign(exactTranslations, {
   "이메일 *": "Email *",
   "연락처 *": "Phone *",
   "연락처 (선택)": "Phone (optional)",
-  "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다.": "If the review needs anything from you, we will email this address.",
-  "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다. 이름과 이메일은 심의 조회에도 사용됩니다.":
-    "If the review needs anything from you, we will email this address. Your name and email address are also used to look up the application.",
+  "확인할 내용이 있으면 이메일로 연락드립니다.": "We will email you if we need anything.",
+  "이름과 이메일은 연락과 심의 조회에 사용됩니다.": "Your name and email are used to contact you and to look up the application.",
   "신청자 이메일을 입력해주세요.": "Enter the applicant's email address.",
   "신청자 이메일 형식을 확인해주세요.": "Check the applicant's email address.",
   "비회원 정보(담당자, 이메일)를 입력해주세요.": "Enter the guest contact name and email address.",
@@ -2292,9 +2291,7 @@ Object.assign(exactTranslations, {
   "주연 *": "Lead cast *",
   "제작 정보": "Production information",
   "소속사 *": "Agency *",
-  "아티스트의 소속사명을 입력해주세요.": "Enter the artist's agency.",
-  "심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 소속사명을 표기해야 합니다. 영상에 표기할 소속사명과 대소문자·띄어쓰기·한글/영문까지 똑같이 입력해주세요.":
-    "After the review, the rating logo goes in the video's top right and the agency name in the bottom left. Enter the agency name exactly as it will appear in the video, including capitalization, spacing, and Korean or English spelling.",
+  "영상 좌측 하단에 표기할 소속사명과 똑같이 입력해주세요.": "Enter the agency name exactly as it will appear in the video's bottom left.",
   "앨범명 *": "Album title *",
   "용도 *": "Intended use *",
   "예: 음악사이트 기재": "Example: listing on music services",

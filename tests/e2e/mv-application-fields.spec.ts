@@ -115,9 +115,7 @@ for (const width of [390, 1440]) {
     // One 소속사 field, filed with 영등위 as 제작사 and shown on the video's lower left.
     await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
     await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toHaveCount(0);
-    const agencyHelp = page.locator("#mv-agency-help");
-    await expect(agencyHelp).toContainText("좌측 하단에 소속사명");
-    await expect(agencyHelp).toContainText("대소문자·띄어쓰기·한글/영문까지 똑같이");
+    await expect(page.locator("#mv-agency-help")).toHaveText("영상 좌측 하단에 표기할 소속사명과 똑같이 입력해주세요.");
     await expect(page.getByText("영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.")).toHaveCount(0);
     await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
@@ -189,8 +187,8 @@ test("TV review does not display the online rating or KMRB-only credit notice", 
   await expect(page.getByTestId("mv-credit-consistency-notice")).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "희망등급 (선택)", exact: true })).toHaveCount(0);
   await expect(page.locator('[data-mv-field="agency"]')).toBeVisible();
-  // The rating-logo note belongs to the 영등위 review only.
-  await expect(page.locator("#mv-agency-help")).toHaveText("아티스트의 소속사명을 입력해주세요.");
+  // The lower-left display note belongs to the online review only.
+  await expect(page.locator("#mv-agency-help")).toHaveCount(0);
   await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
   await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
   expect(result.errors).toEqual([]);

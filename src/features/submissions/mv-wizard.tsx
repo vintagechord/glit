@@ -3563,8 +3563,8 @@ export function MvWizard({
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 {isGuest
-                  ? "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다. 이름과 이메일은 심의 조회에도 사용됩니다."
-                  : "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다."}
+                  ? "이름과 이메일은 연락과 심의 조회에 사용됩니다."
+                  : "확인할 내용이 있으면 이메일로 연락드립니다."}
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {isGuest ? (
@@ -4287,7 +4287,11 @@ export function MvWizard({
                       data-mv-field="agency"
                       data-preflight-field="agency"
                       aria-invalid={invalidField === "agency"}
-                      aria-describedby={`mv-agency-help${invalidField === "agency" ? " mv-basic-error" : ""}`}
+                      aria-describedby={
+                      [mvType === "MV_DISTRIBUTION" ? "mv-agency-help" : "", invalidField === "agency" ? "mv-basic-error" : ""]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
                       value={agency}
                       onChange={(event) => {
                         setAgency(event.target.value);
@@ -4295,11 +4299,11 @@ export function MvWizard({
                       }}
                       className={requiredFieldClass("agency")}
                     />
-                    <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
-                      {mvType === "MV_DISTRIBUTION"
-                        ? "심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 소속사명을 표기해야 합니다. 영상에 표기할 소속사명과 대소문자·띄어쓰기·한글/영문까지 똑같이 입력해주세요."
-                        : "아티스트의 소속사명을 입력해주세요."}
-                    </p>
+                    {mvType === "MV_DISTRIBUTION" ? (
+                      <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
+                        영상 좌측 하단에 표기할 소속사명과 똑같이 입력해주세요.
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="mv-albumTitle" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
