@@ -1770,12 +1770,9 @@ export function SubmissionDetailClient({
                       <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_storyline || "-"}</span></p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">제작사</p>
-                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_production_company || "-"}</span></p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">에이전시</p>
-                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_agency || "-"}</span></p>
+                      {/* One field on the MV form: the 소속사 is filed as 제작사. */}
+                      <p className="text-xs text-muted-foreground">소속사</p>
+                      <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_agency || submission.mv_production_company || "-"}</span></p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">앨범 제목</p>

@@ -2223,7 +2223,7 @@ Object.assign(exactTranslations, {
   "옵션 3 (13개 방송국) — 30장": "Option 3 (13 broadcasters) — 30 copies",
   "필수 안내": "Important information",
   "일반심의(영상물등급위원회) · 영상과 신청서 표기 일치": "KMRB review: the video and application must use identical credits",
-  "영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·제작사명·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.": "If the video contains credits or text, every credit—including the video title, production company, agency, cast, and director—must match the submitted application.",
+  "영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.": "If the video contains credits or text, every credit—including the video title, agency, cast, and director—must match the submitted application.",
   "철자, 특수문자, 띄어쓰기, 대소문자까지 모두 동일해야 접수가 가능합니다.": "Spelling, special characters, spacing, and capitalization must all match before submission.",
   "영상과 신청서를 대조하여 다른 표기가 있으면 제출 전에 수정해주세요.": "Compare the video with the application and correct any differences before submitting.",
   "Mnet 뮤직비디오 심의 안내": "Mnet music video review",
@@ -2292,11 +2292,9 @@ Object.assign(exactTranslations, {
   "주연 *": "Lead cast *",
   "제작 정보": "Production information",
   "소속사 *": "Agency *",
-  "아티스트의 소속사·기획사명을 입력해주세요.": "Enter the artist's agency or management company.",
-  "뮤직비디오 제작사 *": "Music video production company *",
-  "뮤직비디오 제작사를 입력해주세요.": "Enter the music video production company.",
-  "심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 제작사명을 넣어야 합니다. 영상에 넣을 제작사명과 대소문자·띄어쓰기·한글/영문 표기까지 똑같이 입력해주세요.":
-    "After the review, the rating logo goes in the video's top right and the production company name in the bottom left. Enter the name exactly as it will appear in the video, including capitalization, spacing, and Korean or English spelling.",
+  "아티스트의 소속사명을 입력해주세요.": "Enter the artist's agency.",
+  "심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 소속사명을 표기해야 합니다. 영상에 표기할 소속사명과 대소문자·띄어쓰기·한글/영문까지 똑같이 입력해주세요.":
+    "After the review, the rating logo goes in the video's top right and the agency name in the bottom left. Enter the agency name exactly as it will appear in the video, including capitalization, spacing, and Korean or English spelling.",
   "앨범명 *": "Album title *",
   "용도 *": "Intended use *",
   "예: 음악사이트 기재": "Example: listing on music services",

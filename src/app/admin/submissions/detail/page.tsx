@@ -1866,7 +1866,7 @@ export default async function AdminSubmissionDetailPage({
             />
             <DetailRow
               label="제작사"
-              value={submission.production_company || submission.mv_production_company || "-"}
+              value={submission.production_company || submission.mv_production_company || submission.mv_agency || "-"}
             />
             <DetailRow
               label="신청자"
@@ -1886,7 +1886,8 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="포맷" value={submission.mv_format || "-"} />
                 <DetailRow label="감독" value={submission.mv_director || "-"} />
                 <DetailRow label="주연" value={submission.mv_lead_actor || "-"} />
-                <DetailRow label="제작사" value={submission.mv_production_company || "-"} />
+                {/* One field on the MV form: the 소속사 is filed as 제작사. */}
+                <DetailRow label="소속사(제작사)" value={submission.mv_agency || submission.mv_production_company || "-"} />
                 <DetailRow label="배급사" value={submission.mv_distribution_company || "-"} />
                 <DetailRow label="용도" value={submission.mv_usage || "-"} />
                 {isMvDistribution ? (

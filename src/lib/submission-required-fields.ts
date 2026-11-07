@@ -166,10 +166,6 @@ export const validateMvSubmittedFields = (input: {
     [input.releaseDate, "영상 공개일자를 입력해주세요."],
     [input.director, "감독 정보를 입력해주세요."],
     [input.leadActor, "주연 정보를 입력해주세요."],
-    // 영등위 cannot take an online review without the production company.
-    ...(input.mvType === "MV_DISTRIBUTION"
-      ? ([[input.productionCompany, "뮤직비디오 제작사를 입력해주세요."]] as Array<[string | null | undefined, string]>)
-      : []),
     [input.agency, "소속사를 입력해주세요."],
     [input.albumTitle, "앨범명을 입력해주세요."],
     [input.distributionCompany, "유통사를 입력해주세요."],

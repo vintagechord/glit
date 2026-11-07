@@ -208,7 +208,6 @@ const validMv = {
   releaseDate: "2026-08-15",
   director: "Director",
   leadActor: "Actor",
-  productionCompany: "Production",
   agency: "Agency",
   albumTitle: "Album",
   distributionCompany: "Distributor",
@@ -249,26 +248,14 @@ test("normal MV submission enforces every wizard-required field", () => {
   assert.ok(validateMvSubmittedFields({ ...validMv, aiUsed: undefined }));
 });
 
-test("online MV requires the production company; the agency stays required", () => {
-  const online = { ...validMv, mvType: "MV_DISTRIBUTION" as const, productionCompany: "ONSIDE Films" };
-  assert.equal(validateMvSubmittedFields(online), null);
-  assert.equal(
-    validateMvSubmittedFields({ ...online, productionCompany: " " }),
-    "뮤직비디오 제작사를 입력해주세요.",
-  );
-  assert.equal(
-    validateMvSubmittedFields({ ...online, agency: "" }),
-    "소속사를 입력해주세요.",
-  );
-  // TV broadcast requests and uploaded forms do not need it on the web form.
-  assert.equal(
-    validateMvSubmittedFields({ ...online, mvType: "MV_BROADCAST", productionCompany: "" }),
-    null,
-  );
-  assert.equal(
-    validateMvSubmittedFields({ ...online, externalApplicationForm: true, productionCompany: "" }),
-    null,
-  );
+test("MV takes one 소속사 field (filed as 제작사): it is required, a separate production company is not", () => {
+  for (const mvType of ["MV_DISTRIBUTION", "MV_BROADCAST"] as const) {
+    assert.equal(validateMvSubmittedFields({ ...validMv, mvType, productionCompany: "" }), null);
+    assert.equal(
+      validateMvSubmittedFields({ ...validMv, mvType, productionCompany: "", agency: "" }),
+      "소속사를 입력해주세요.",
+    );
+  }
 });
 
 test("online MV submissions accept only supported optional desired ratings", () => {

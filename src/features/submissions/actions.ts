@@ -22,7 +22,10 @@ import { canEditSubmission } from "@/lib/submission-edit-access";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media-upload-limit";
 import { scheduleReleasedAlbumHydration } from "@/lib/admin/released-album-hydration";
-import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
+import {
+  normalizeMvDesiredRating,
+  resolveMvProductionCompanyUpdate,
+} from "@/lib/mv-request-options";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1895,7 +1898,6 @@ export async function saveMvSubmissionAction(
       releaseDate: parsed.data.releaseDate,
       director: parsed.data.director,
       leadActor: parsed.data.leadActor,
-      productionCompany: parsed.data.productionCompany,
       agency: parsed.data.agency,
       albumTitle: parsed.data.albumTitle,
       distributionCompany: parsed.data.distributionCompany,
@@ -1938,9 +1940,11 @@ export async function saveMvSubmissionAction(
     mv_director: parsed.data.director?.trim() || null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
-    ...(parsed.data.productionCompany !== undefined
-      ? { mv_production_company: parsed.data.productionCompany.trim() || null }
-      : {}),
+    ...resolveMvProductionCompanyUpdate({
+      mvType: parsed.data.mvType,
+      productionCompany: parsed.data.productionCompany,
+      agency: parsed.data.agency,
+    }),
     mv_agency: parsed.data.agency?.trim() || null,
     mv_album_title: parsed.data.albumTitle?.trim() || null,
     mv_production_date: parsed.data.productionDate || null,

@@ -340,7 +340,6 @@ const validMvInput = (
   releaseDate: "2026-08-15",
   director: "감독",
   leadActor: "주연",
-  productionCompany: "ONSIDE Films",
   agency: "소속사",
   albumTitle: "테스트 앨범",
   distributionCompany: "유통사",
@@ -368,25 +367,11 @@ test("a complete online MV passes preflight", () => {
   assert.deepEqual(result.blockingIssues, []);
 });
 
-test("online MV preflight requires the production company and the agency", () => {
-  // 영등위 cannot take an online review without the production company.
-  const missingCompany = buildMvSubmissionPreflight(validMvInput({ productionCompany: "" }));
-  assert.deepEqual(missingCompany.blockingIssues.map((item) => item.id), ["mv.production-company"]);
-  assert.equal(missingCompany.blockingIssues[0].target.field, "productionCompany");
-  const missingAgency = buildMvSubmissionPreflight(validMvInput({ agency: "" }));
+test("MV preflight requires the 소속사 (filed as 제작사) and no separate production company", () => {
+  const complete = buildMvSubmissionPreflight(validMvInput({ productionCompany: "" }));
+  assert.equal(complete.canSubmit, true);
+  const missingAgency = buildMvSubmissionPreflight(validMvInput({ productionCompany: "", agency: "" }));
   assert.deepEqual(missingAgency.blockingIssues.map((item) => item.id), ["mv.agency"]);
-  // TV broadcast requests do not ask for it, and the uploaded form carries it.
-  assert.equal(
-    buildMvSubmissionPreflight(validMvInput({ mvType: "MV_BROADCAST", selectedOptionCodes: ["MBC"], productionCompany: "" }))
-      .blockingIssues.some((item) => item.id === "mv.production-company"),
-    false,
-  );
-  assert.equal(
-    buildMvSubmissionPreflight(validMvInput({
-      applicationFormMode: "upload", productionCompany: "", files: [], uploads: [], filesSubmittedByEmail: true,
-    })).canSubmit,
-    true,
-  );
 });
 
 test("MV purpose options are checked for both broadcast and distribution flows", () => {

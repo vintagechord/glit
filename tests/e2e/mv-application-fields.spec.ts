@@ -85,7 +85,6 @@ async function fillRequiredApplication(page: Page) {
     releaseDate: "2026-10-20",
     director: "Director Kim",
     leadActor: "Artist Kim",
-    productionCompany: "ONSIDE Films",
     agency: "ONSIDE Music",
     albumTitle: "Our Way",
     distributionCompany: "Fixture Distribution",
@@ -107,19 +106,18 @@ async function fillRequiredApplication(page: Page) {
 }
 
 for (const width of [390, 1440]) {
-  test(`online MV application requires the production company and keeps an optional rating; advancing returns to the section top at ${width}px`, async ({ page }, testInfo) => {
+  test(`MV application has only agency and optional rating; advancing returns to the section top at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const result = await mockMvServices(page);
     await page.goto("/dashboard/new/mv");
     await openApplication(page);
     await expectSectionAtTop(page.getByRole("heading", { name: "신청서 작성", exact: true }));
-    // 영등위 cannot take the review without it: the name goes on the video's lower left.
-    const productionCompany = page.locator('[data-mv-field="productionCompany"]');
-    await expect(productionCompany).toBeVisible();
-    await expect(productionCompany).toHaveAttribute("required", "");
-    await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toBeVisible();
-    await expect(page.locator("#mv-productionCompany-help")).toContainText("좌측 하단에 제작사명");
-    await expect(page.locator("#mv-productionCompany-help")).toContainText("대소문자·띄어쓰기·한글/영문 표기까지 똑같이");
+    // One 소속사 field, filed with 영등위 as 제작사 and shown on the video's lower left.
+    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
+    await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toHaveCount(0);
+    const agencyHelp = page.locator("#mv-agency-help");
+    await expect(agencyHelp).toContainText("좌측 하단에 소속사명");
+    await expect(agencyHelp).toContainText("대소문자·띄어쓰기·한글/영문까지 똑같이");
     await expect(page.getByText("영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.")).toHaveCount(0);
     await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
@@ -138,17 +136,11 @@ for (const width of [390, 1440]) {
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`mv-application-${width}.png`), fullPage: true });
     await fillRequiredApplication(page);
-    await productionCompany.fill("");
-    await page.getByRole("button", { name: "다음 단계", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "뮤직비디오 제작사를 입력해주세요." })).toBeVisible();
-    await expect(productionCompany).toHaveAttribute("aria-invalid", "true");
-    await productionCompany.fill("ONSIDE Films");
     await page.getByRole("button", { name: "다음 단계", exact: true }).scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await expectSectionAtTop(page.getByRole("heading", { name: "파일 첨부", exact: true }));
     await expect.poll(() => result.saves.some(body => body.includes('"agency":"ONSIDE Music"'))).toBe(true);
-    expect(result.saves.some(body => body.includes('"productionCompany":"ONSIDE Films"'))).toBe(true);
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
@@ -197,6 +189,8 @@ test("TV review does not display the online rating or KMRB-only credit notice", 
   await expect(page.getByTestId("mv-credit-consistency-notice")).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "희망등급 (선택)", exact: true })).toHaveCount(0);
   await expect(page.locator('[data-mv-field="agency"]')).toBeVisible();
+  // The rating-logo note belongs to the 영등위 review only.
+  await expect(page.locator("#mv-agency-help")).toHaveText("아티스트의 소속사명을 입력해주세요.");
   await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
   await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
   expect(result.errors).toEqual([]);
@@ -229,15 +223,15 @@ for (const [saved, label] of [
     await expect(page.locator('[data-mv-field="title"]')).toHaveValue("복원 뮤직비디오");
     await expect(page.locator('[data-mv-field="agency"]')).toHaveValue("복원 소속사");
     await expect(page.getByRole("combobox", { name: "희망등급 (선택)", exact: true }).locator("option:checked")).toHaveText(label);
-    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveValue("기존 제작사 정보");
+    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
     await fillRequiredApplication(page);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
     await expect.poll(() => result.saves.some(body => body.includes('"agency":"ONSIDE Music"'))).toBe(true);
-    // The retired format field is omitted, preserving server history instead of
-    // replacing the saved value with an empty string.
-    expect(result.saves.join("\n")).not.toMatch(/"(?:format|mv_format)"\s*:/);
+    // Editing a legacy draft must omit retired fields, preserving server history
+    // instead of replacing saved production/format metadata with empty strings.
+    expect(result.saves.join("\n")).not.toMatch(/"(?:productionCompany|format|mv_production_company|mv_format)"\s*:/);
     expect(result.errors).toEqual([]);
     expect(result.unexpectedMutations).toEqual([]);
   });
@@ -291,7 +285,7 @@ test("members confirm their contact email on the MV application; the phone stays
   await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
   for (const [field, value] of Object.entries({
     title: "Our Way (Official MV)", artistName: "온사이드 아티스트", artistNameOfficial: "ONSIDE Artist",
-    releaseDate: "2026-10-20", director: "Director Kim", leadActor: "Artist Kim", productionCompany: "ONSIDE Films", agency: "ONSIDE Music",
+    releaseDate: "2026-10-20", director: "Director Kim", leadActor: "Artist Kim", agency: "ONSIDE Music",
     albumTitle: "Our Way", distributionCompany: "Fixture Distribution", usage: "온라인 음악사이트 공개",
     songTitleKr: "우리의 길", songTitleEn: "Our Way", songTitleOfficial: "Our Way (우리의 길)",
     composer: "Composer Kim", storyline: "주인공이 새로운 길을 찾아 떠나고 마지막에 목적지에 도착합니다.",

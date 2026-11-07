@@ -204,7 +204,6 @@ type MvValidationField =
   | "releaseDate"
   | "director"
   | "leadActor"
-  | "productionCompany"
   | "agency"
   | "albumTitle"
   | "distributionCompany"
@@ -247,7 +246,7 @@ function MvCreditConsistencyNotice() {
         </h3>
       </div>
       <p className="mt-3 text-sm leading-6 text-foreground">
-        영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·제작사명·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.
+        영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.
       </p>
       <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
         철자, 특수문자, 띄어쓰기, 대소문자까지 모두 동일해야 접수가 가능합니다.
@@ -1130,7 +1129,6 @@ export function MvWizard({
         releaseDate,
         director,
         leadActor,
-        productionCompany,
         agency,
         albumTitle,
         distributionCompany,
@@ -1176,7 +1174,6 @@ export function MvWizard({
       mvType,
       onlineBaseSelected,
       priceChangeAcknowledged,
-      productionCompany,
       releaseDate,
       songTitleEn,
       songTitleKr,
@@ -2679,9 +2676,6 @@ export function MvWizard({
     if (!leadActor.trim()) {
       return markInvalidField("leadActor", "주연 정보를 입력해주세요.");
     }
-    if (mvType === "MV_DISTRIBUTION" && !productionCompany.trim()) {
-      return markInvalidField("productionCompany", "뮤직비디오 제작사를 입력해주세요.");
-    }
     if (!agency.trim()) {
       return markInvalidField("agency", "소속사를 입력해주세요.");
     }
@@ -2945,9 +2939,6 @@ export function MvWizard({
           leadActor: source.leadActor.trim() || undefined,
           storyline: source.storyline.trim() || undefined,
           agency: source.agency.trim() || undefined,
-          ...(source.mvType === "MV_DISTRIBUTION"
-            ? { productionCompany: source.productionCompany.trim() }
-            : {}),
           albumTitle: source.albumTitle.trim() || undefined,
           distributionCompany: source.distributionCompany.trim() || undefined,
           usage: source.usage.trim() || undefined,
@@ -3126,9 +3117,6 @@ export function MvWizard({
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
         agency: agency.trim() || undefined,
-        ...(mvType === "MV_DISTRIBUTION"
-          ? { productionCompany: productionCompany.trim() }
-          : {}),
         albumTitle: albumTitle.trim() || undefined,
         distributionCompany: distributionCompany.trim() || undefined,
         usage: usage.trim() || undefined,
@@ -4287,34 +4275,6 @@ export function MvWizard({
                   제작 정보
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  {mvType === "MV_DISTRIBUTION" ? (
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="mv-productionCompany"
-                        className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
-                      >
-                        뮤직비디오 제작사 *
-                      </label>
-                      <input
-                        id="mv-productionCompany"
-                        data-mv-field="productionCompany"
-                        data-preflight-field="productionCompany"
-                        aria-invalid={invalidField === "productionCompany"}
-                        aria-describedby={`mv-productionCompany-help${invalidField === "productionCompany" ? " mv-basic-error" : ""}`}
-                        value={productionCompany}
-                        onChange={(event) => {
-                          setProductionCompany(event.target.value);
-                          clearInvalidField("productionCompany");
-                        }}
-                        required
-                        className={requiredFieldClass("productionCompany")}
-                      />
-                      <p id="mv-productionCompany-help" className="text-xs leading-5 text-muted-foreground">
-                        심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 제작사명을 넣어야 합니다.
-                        영상에 넣을 제작사명과 대소문자·띄어쓰기·한글/영문 표기까지 똑같이 입력해주세요.
-                      </p>
-                    </div>
-                  ) : null}
                   <div className="space-y-2">
                     <label
                       htmlFor="mv-agency"
@@ -4336,7 +4296,9 @@ export function MvWizard({
                       className={requiredFieldClass("agency")}
                     />
                     <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
-                      아티스트의 소속사·기획사명을 입력해주세요.
+                      {mvType === "MV_DISTRIBUTION"
+                        ? "심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 소속사명을 표기해야 합니다. 영상에 표기할 소속사명과 대소문자·띄어쓰기·한글/영문까지 똑같이 입력해주세요."
+                        : "아티스트의 소속사명을 입력해주세요."}
                     </p>
                   </div>
                   <div className="space-y-2">
