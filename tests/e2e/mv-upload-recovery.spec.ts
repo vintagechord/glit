@@ -24,10 +24,11 @@ for (const state of ["failed", "stalled"] as const) test(`MV ${state} upload can
   });
   try {
     await page.goto("/dashboard/new/mv");
-    await expect.poll(() => drafts).toBeGreaterThan(0);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await page.getByRole("radio", { name: /파일로 제출/ }).click();
     await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
+    // The draft row is reserved only once the application step opens.
+    await expect.poll(() => drafts).toBeGreaterThan(0);
     await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
     await page.locator('[data-preflight-field="guestName"]').fill("검증 담당자");
     await page.locator('[data-preflight-field="guestEmail"]').fill("guest-mv@example.invalid");

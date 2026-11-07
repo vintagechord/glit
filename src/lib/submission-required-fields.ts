@@ -110,9 +110,16 @@ export const validateAlbumSubmittedFields = (input: {
   return null;
 };
 
+const isEmailAddress = (value?: string | null) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value?.trim() ?? "");
+
 export const validateMvSubmittedFields = (input: {
   isAdminReviewer: boolean;
   externalApplicationForm: boolean;
+  /** The guest email, or the member's application contact email. The phone
+   * number is optional for music videos; an email is the one way to reach
+   * the applicant when the review needs something. */
+  contactEmail?: string | null;
   mvType?: "MV_DISTRIBUTION" | "MV_BROADCAST";
   desiredRating?: string | null;
   aiUsed?: boolean | null;
@@ -142,6 +149,10 @@ export const validateMvSubmittedFields = (input: {
     return "희망등급을 전체관람가, 12세이상관람가, 15세이상관람가, 청소년관람불가 중에서 선택해주세요.";
   }
   if (input.isAdminReviewer) return null;
+  if (!hasText(input.contactEmail)) return "신청자 이메일을 입력해주세요.";
+  if (!isEmailAddress(input.contactEmail)) {
+    return "신청자 이메일 형식을 확인해주세요.";
+  }
   if (typeof input.aiUsed !== "boolean") {
     return "AI 활용 여부를 선택해주세요.";
   }

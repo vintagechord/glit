@@ -168,6 +168,9 @@ export type MvSubmissionPreflightInput = {
   guestName?: string | null;
   guestEmail?: string | null;
   guestPhone?: string | null;
+  /** A member's contact for this application (guests use the guest fields). */
+  applicantEmail?: string | null;
+  applicantPhone?: string | null;
   files: MvPreflightFile[];
   uploads?: MvPreflightUpload[];
   filesSubmittedByEmail: boolean;
@@ -709,47 +712,51 @@ const buildPreflightResult = (
   };
 };
 
-const addMvGuestContactIssues = (
+// The operator needs a mailbox to reach the applicant, so the email is
+// required for guests and members alike. The phone number is optional; a
+// number that does not look like a Korean phone is only flagged.
+const addMvContactIssues = (
   issues: SubmissionPreflightIssue[],
   input: MvSubmissionPreflightInput,
 ) => {
-  addRequiredTextIssue(issues, input.guestName, {
-    id: "mv.guest-name",
-    title: "담당자명",
-    field: "guestName",
-    step: 3,
-  });
-  addRequiredTextIssue(issues, input.guestEmail, {
-    id: "mv.guest-email",
+  const isGuest = input.isGuest;
+  if (isGuest) {
+    addRequiredTextIssue(issues, input.guestName, {
+      id: "mv.guest-name",
+      title: "담당자명",
+      field: "guestName",
+      step: 3,
+    });
+  }
+  const email = isGuest ? input.guestEmail : input.applicantEmail;
+  const emailField = isGuest ? "guestEmail" : "applicantEmail";
+  addRequiredTextIssue(issues, email, {
+    id: isGuest ? "mv.guest-email" : "mv.applicant-email",
     title: "이메일",
-    field: "guestEmail",
+    message: "신청자 이메일을 입력해주세요.",
+    field: emailField,
     step: 3,
   });
-  if (hasText(input.guestEmail) && !isValidEmail(input.guestEmail)) {
+  if (hasText(email) && !isValidEmail(email)) {
     issues.push(
       issue(
-        "mv.guest-email-format",
+        isGuest ? "mv.guest-email-format" : "mv.applicant-email-format",
         "blocking",
         "이메일",
         "이메일 형식을 확인해주세요.",
-        { step: 3, field: "guestEmail" },
+        { step: 3, field: emailField },
       ),
     );
   }
-  addRequiredTextIssue(issues, input.guestPhone, {
-    id: "mv.guest-phone",
-    title: "연락처",
-    field: "guestPhone",
-    step: 3,
-  });
-  if (hasText(input.guestPhone) && !isValidPhone(input.guestPhone)) {
+  const phone = isGuest ? input.guestPhone : input.applicantPhone;
+  if (hasText(phone) && !isValidPhone(phone)) {
     issues.push(
       issue(
-        "mv.guest-phone-format",
-        "blocking",
+        isGuest ? "mv.guest-phone-format" : "mv.applicant-phone-format",
+        "warning",
         "연락처",
-        "연락처는 숫자 9~11자리로 입력해주세요.",
-        { step: 3, field: "guestPhone" },
+        "연락처가 숫자 9~11자리가 아닙니다. 번호를 한 번 더 확인해주세요.",
+        { step: 3, field: isGuest ? "guestPhone" : "applicantPhone" },
       ),
     );
   }
@@ -928,10 +935,10 @@ export const buildMvSubmissionPreflight = (
 
   }
 
-  // Guests have no account mailbox: contact details are required in both the
-  // online and the uploaded-form flow so notices and code recovery can reach them.
-  if (!isAdminReviewer && input.isGuest && (isOnlineForm || isDownloadedForm)) {
-    addMvGuestContactIssues(issues, input);
+  // A contact email is required in both the online and the uploaded-form
+  // flow so notices, code recovery and review questions can reach them.
+  if (!isAdminReviewer && (isOnlineForm || isDownloadedForm)) {
+    addMvContactIssues(issues, input);
   }
 
   if (

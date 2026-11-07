@@ -30,3 +30,23 @@ export const normalizeMvDesiredRating = (
   }
   return "";
 };
+
+/**
+ * On the online (영등위) form the 소속사 is the production company: one field,
+ * filed with 영등위 as 제작사 and shown on the video's lower left after the
+ * review. Returns the column update for a save; an empty object keeps the
+ * stored value (TV requests, uploaded forms, older clients' retired input).
+ */
+export const resolveMvProductionCompanyUpdate = (input: {
+  mvType: "MV_DISTRIBUTION" | "MV_BROADCAST";
+  productionCompany?: string;
+  agency?: string;
+}): { mv_production_company?: string | null } => {
+  if (input.productionCompany !== undefined) {
+    return { mv_production_company: input.productionCompany.trim() || null };
+  }
+  const agency = input.agency?.trim();
+  return input.mvType === "MV_DISTRIBUTION" && agency
+    ? { mv_production_company: agency }
+    : {};
+};

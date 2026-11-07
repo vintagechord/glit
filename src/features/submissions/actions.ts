@@ -22,7 +22,10 @@ import { canEditSubmission } from "@/lib/submission-edit-access";
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 import { MEDIA_UPLOAD_MAX_BYTES } from "@/lib/media-upload-limit";
 import { scheduleReleasedAlbumHydration } from "@/lib/admin/released-album-hydration";
-import { normalizeMvDesiredRating } from "@/lib/mv-request-options";
+import {
+  normalizeMvDesiredRating,
+  resolveMvProductionCompanyUpdate,
+} from "@/lib/mv-request-options";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -673,6 +676,7 @@ const mvSubmissionSchema = z.object({
   title: shortTextSchema.optional(),
   artistName: shortTextSchema.optional(),
   applicantEmail: contactTextSchema.optional(),
+  applicantPhone: z.string().max(64).optional(),
   director: shortTextSchema.optional(),
   leadActor: metadataTextSchema.optional(),
   storyline: narrativeTextSchema.optional(),
@@ -1664,7 +1668,11 @@ export async function saveMvSubmissionAction(
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
   const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
-  const applicantEmailValue = parsed.data.applicantEmail?.trim() ?? "";
+  // Members confirm their contact email on the form; a page opened before
+  // that field existed sends none, so the account address stands in.
+  const applicantEmailValue =
+    parsed.data.applicantEmail?.trim() || (isGuest ? "" : user?.email?.trim() ?? "");
+  const applicantPhoneValue = isGuest ? "" : parsed.data.applicantPhone?.trim() ?? "";
   const bankDepositorNameValue = parsed.data.bankDepositorName?.trim() ?? "";
   const paymentDocumentType = parsed.data.paymentDocumentType;
   const cashReceiptPurpose = parsed.data.cashReceiptPurpose;
@@ -1701,14 +1709,11 @@ export async function saveMvSubmissionAction(
   ) {
     return { error: "작성한 신청서 파일을 업로드하거나 이메일 제출을 선택해주세요." };
   }
-  // The uploaded form carries the album details, but the operator still
-  // needs a mailbox for payment, supplement and result notices.
-  if (
-    isSubmitted &&
-    isGuest &&
-    (!guestNameValue || !guestEmailValue || !guestPhoneValue)
-  ) {
-    return { error: "비회원 정보(담당자, 연락처, 이메일)를 입력해주세요." };
+  // The uploaded form carries the video details, but the operator still
+  // needs a mailbox for payment, supplement and result notices. The phone
+  // number is optional for music videos.
+  if (isSubmitted && isGuest && (!guestNameValue || !guestEmailValue)) {
+    return { error: "비회원 정보(담당자, 이메일)를 입력해주세요." };
   }
   if (
     isSubmitted &&
@@ -1883,6 +1888,7 @@ export async function saveMvSubmissionAction(
     const requiredFieldsError = validateMvSubmittedFields({
       isAdminReviewer,
       externalApplicationForm: usesExternalApplicationForm,
+      contactEmail: isGuest ? guestEmailValue : applicantEmailValue,
       mvType: parsed.data.mvType,
       desiredRating: parsed.data.desiredRating,
       aiUsed: parsed.data.aiUsed,
@@ -1934,9 +1940,11 @@ export async function saveMvSubmissionAction(
     mv_director: parsed.data.director?.trim() || null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
-    ...(parsed.data.productionCompany !== undefined
-      ? { mv_production_company: parsed.data.productionCompany.trim() || null }
-      : {}),
+    ...resolveMvProductionCompanyUpdate({
+      mvType: parsed.data.mvType,
+      productionCompany: parsed.data.productionCompany,
+      agency: parsed.data.agency,
+    }),
     mv_agency: parsed.data.agency?.trim() || null,
     mv_album_title: parsed.data.albumTitle?.trim() || null,
     mv_production_date: parsed.data.productionDate || null,
@@ -1964,6 +1972,7 @@ export async function saveMvSubmissionAction(
     package_id: parsed.data.packageId ?? null,
     amount_krw: amountKrw,
     applicant_email: applicantEmailValue || null,
+    applicant_phone: applicantPhoneValue || null,
     mv_base_selected: parsed.data.mvBaseSelected ?? true,
     mv_selected_station_codes: parsed.data.selectedStationCodes ?? [],
     guest_name: isGuest ? guestNameValue || null : null,
@@ -2212,7 +2221,7 @@ export async function saveMvSubmissionAction(
     const kakaoDelivery = (async () => {
       const memberPhoneValue = isGuest ? null : await loadMemberPhone(user?.id);
       return sendKakaoOfficialNotification({
-        phone: guestPhoneValue || memberPhoneValue,
+        phone: guestPhoneValue || applicantPhoneValue || memberPhoneValue,
         title: "뮤직비디오 심의 접수 완료",
         message: `${titleValue || "제목 미입력"} 접수가 완료되었습니다. 진행 상황은 온사이드에서 확인할 수 있습니다.`,
         link,

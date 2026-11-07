@@ -1568,6 +1568,64 @@ export async function buildReviewDocsZip(
   return (await renderPreparedReviewDocuments(prepared, templates)).zip;
 }
 
+// The review desk treats these as "no lyrics" rather than foreign words.
+const NO_LYRICS_PLACEHOLDER =
+  /^(?:가사\s*없음(?:\s*[/／-]\s*(?:instrumental|inst\.?|m\.?r\.?))?|instrumental|inst\.?|m\.?r\.?|연주곡|반주)\s*[.!]?$/i;
+
+const isMvSubmissionType = (type: string) =>
+  type === "MV_DISTRIBUTION" || type === "MV_BROADCAST";
+
+export type MvLyricsDocument = { filename: string; buffer: Buffer };
+
+/**
+ * One 영등위 lyric DOCX from the lyrics typed on a music-video application.
+ * Names and titles follow the review desk (artist name, then the official
+ * song title), and foreign lines get the same "(번역 : …)" pass as the album
+ * documents.
+ */
+export async function buildMvLyricsDocument(
+  submission: DbRecord,
+  options: { templateDir?: string; translate?: TranslationProvider } = {},
+): Promise<MvLyricsDocument> {
+  if (!isMvSubmissionType(getText(submission, "type"))) {
+    throw new ReviewDocsUnsupportedTypeError("뮤직비디오 심의 접수만 가사 DOCX를 만들 수 있습니다.");
+  }
+  const firstText = (...keys: string[]) =>
+    keys.map((key) => getText(submission, key)).find(Boolean) ?? "";
+  const artist = firstText("artist_name", "artist_name_kr", "artist_name_en");
+  const title = firstText("mv_song_title_official", "mv_song_title", "mv_song_title_kr", "title");
+  const lyrics = cleanLyricText(getText(submission, "mv_lyrics")) ?? "";
+  if (!lyrics.trim()) {
+    throw new ReviewDocsInputError(
+      "신청서에 입력된 가사가 없습니다. 첨부한 신청서 파일의 가사를 확인해주세요.",
+    );
+  }
+  const [lyricsWithTranslation] = NO_LYRICS_PLACEHOLDER.test(lyrics.trim())
+    ? ["가사 없음 / Instrumental"]
+    : await translateLyricsForReviewDocuments(
+      [{ lyrics, translatedLyrics: getText(submission, "korean_lyrics_translation") }],
+      { translate: options.translate },
+    );
+  const templates = await loadReviewDocTemplates(options.templateDir, ["lyricsMv"]);
+  let buffer: Buffer;
+  try {
+    buffer = renderReviewDocTemplate({
+      template: templates.lyricsMv,
+      templateName: REVIEW_DOC_TEMPLATE_FILES.lyricsMv,
+      data: {
+        artist_display: artist,
+        track_title: title,
+        lyrics_with_translation: compactLyrics(lyricsWithTranslation),
+      },
+    });
+  } catch (error) {
+    if (error instanceof ReviewDocTemplateRenderError) throw new ReviewDocsRenderError(error.message);
+    throw error;
+  }
+  const filename = `가사_${sanitizeFilenamePart(artist, "가수 미입력")}_${sanitizeFilenamePart(title, "제목 미입력")}.docx`;
+  return { filename, buffer };
+}
+
 /** Renders a confirmed snapshot without network collection, translation or DB writes. */
 export async function generateReviewDocuments(
   data: ReviewDocumentData,

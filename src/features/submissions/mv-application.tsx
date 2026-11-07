@@ -6,7 +6,7 @@ import { MvWizard } from "@/features/submissions/mv-wizard";
 
 import { ApplicationViewerStatus, useApplicationViewer } from "./application-viewer";
 
-type Props = Omit<React.ComponentProps<typeof MvWizard>, "userId" | "userEmail">;
+type Props = Omit<React.ComponentProps<typeof MvWizard>, "userId" | "userEmail" | "initialApplicant">;
 
 /** Music video application on the static page; the viewer is resolved in the browser. */
 export function MvApplication(props: Props) {
@@ -15,7 +15,7 @@ export function MvApplication(props: Props) {
   if (viewer.status === "error") return <ApplicationViewerStatus state={viewer} />;
   return (
     <React.Suspense fallback={<ApplicationViewerStatus state={{ status: "loading", retry: viewer.retry }} />}>
-      <MvWizard key={viewer.viewer.userId ?? "guest"} {...props} userId={viewer.viewer.userId} userEmail={viewer.viewer.userEmail} />
+      <MvWizard key={viewer.viewer.userId ?? "guest"} {...props} userId={viewer.viewer.userId} userEmail={viewer.viewer.userEmail} initialApplicant={viewer.viewer.applicant} />
     </React.Suspense>
   );
 }

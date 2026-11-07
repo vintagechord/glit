@@ -5,7 +5,9 @@ const guestToken = "22222222-2222-4222-8222-222222222222";
 
 // Run the actual Next wizard with fixture-only persistence. No upload, draft,
 // payment, notification or external request can reach a live service.
-async function mockMvServices(page: Page, draft?: Record<string, unknown>) {
+type MemberViewer = { userId: string; userEmail: string; applicant: { name: string; email: string; phone: string } };
+
+async function mockMvServices(page: Page, draft?: Record<string, unknown>, member?: MemberViewer) {
   const allowedOrigin = new URL(test.info().project.use.baseURL ?? "http://localhost:3000").origin;
   const errors: string[] = [];
   const unexpectedMutations: string[] = [];
@@ -16,6 +18,10 @@ async function mockMvServices(page: Page, draft?: Record<string, unknown>) {
     const url = new URL(request.url());
     if (url.pathname === "/api/submissions/drafts") {
       await route.fulfill({ json: { drafts: draft ? [draft] : [] } });
+      return;
+    }
+    if (url.pathname === "/api/account/applicant" && member) {
+      await route.fulfill({ json: member });
       return;
     }
     if (url.pathname === "/api/submissions/draft") {
@@ -106,9 +112,12 @@ for (const width of [390, 1440]) {
     await page.goto("/dashboard/new/mv");
     await openApplication(page);
     await expectSectionAtTop(page.getByRole("heading", { name: "신청서 작성", exact: true }));
+    // One 소속사 field, filed with 영등위 as 제작사 and shown on the video's lower left.
     await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
-    await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
     await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toHaveCount(0);
+    await expect(page.locator("#mv-agency-help")).toHaveText("영상 좌측 하단에 표기할 소속사명과 똑같이 입력해주세요.");
+    await expect(page.getByText("영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.")).toHaveCount(0);
+    await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
 
     const rating = page.getByRole("combobox", { name: "희망등급 (선택)", exact: true });
@@ -158,6 +167,8 @@ for (const mode of ["online", "upload"] as const) {
     }
     if (mode === "upload") {
       await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+      await page.locator('[data-mv-field="guestName"]').fill("테스트 신청자");
+      await page.locator('[data-mv-field="guestEmail"]').fill("fixture@example.com");
       await page.getByRole("button", { name: "파일 업로드로 이동", exact: true }).click();
       await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
       await expect(notice).toBeVisible();
@@ -176,6 +187,8 @@ test("TV review does not display the online rating or KMRB-only credit notice", 
   await expect(page.getByTestId("mv-credit-consistency-notice")).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "희망등급 (선택)", exact: true })).toHaveCount(0);
   await expect(page.locator('[data-mv-field="agency"]')).toBeVisible();
+  // The lower-left display note belongs to the online review only.
+  await expect(page.locator("#mv-agency-help")).toHaveCount(0);
   await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
   await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
   expect(result.errors).toEqual([]);
@@ -221,3 +234,71 @@ for (const [saved, label] of [
     expect(result.unexpectedMutations).toEqual([]);
   });
 }
+
+for (const mode of ["online", "upload"] as const) {
+  test(`guest MV applications require an email but not a phone number in ${mode} mode`, async ({ page }) => {
+    const result = await mockMvServices(page);
+    await page.goto("/dashboard/new/mv");
+    await openApplication(page, mode);
+    if (mode === "online") await fillRequiredApplication(page);
+    else {
+      await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+      await page.locator('[data-mv-field="guestName"]').fill("테스트 신청자");
+    }
+    const phone = page.locator('[data-mv-field="guestPhone"]');
+    await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
+    await expect(phone).not.toHaveAttribute("required", "");
+    await phone.fill("");
+    const email = page.locator('[data-mv-field="guestEmail"]');
+    await email.fill("");
+    const next = page.getByRole("button", { name: mode === "online" ? "다음 단계" : "파일 업로드로 이동", exact: true });
+    await next.click();
+    await expect(page.getByRole("alert").filter({ hasText: "신청자 이메일을 입력해주세요." })).toBeVisible();
+    await expect(email).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toHaveCount(0);
+    await email.fill("fixture@example.com");
+    await next.click();
+    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+    expect(result.errors).toEqual([]);
+    expect(result.unexpectedMutations).toEqual([]);
+  });
+}
+
+test("members confirm their contact email on the MV application; the phone stays optional", async ({ page }) => {
+  const result = await mockMvServices(page, undefined, {
+    userId: "33333333-3333-4333-8333-333333333333",
+    userEmail: "member-account@example.com",
+    applicant: { name: "회원 신청자", email: "member-notice@example.com", phone: "" },
+  });
+  // The page asks /api/account/applicant (mocked above) only when a session
+  // cookie is present; the fixture project name matches no real project.
+  const origin = new URL(test.info().project.use.baseURL ?? "http://localhost:3000").origin;
+  await page.context().addCookies([{ name: "sb-fixture-auth-token", value: "fixture", url: origin }]);
+  await page.goto("/dashboard/new/mv");
+  await openApplication(page);
+  await expect(page.locator('[data-mv-field="guestName"]')).toHaveCount(0);
+  const email = page.locator('[data-mv-field="applicantEmail"]');
+  await expect(email).toHaveValue("member-notice@example.com");
+  await expect(page.locator('[data-mv-field="applicantPhone"]')).toHaveValue("");
+  await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
+  for (const [field, value] of Object.entries({
+    title: "Our Way (Official MV)", artistName: "온사이드 아티스트", artistNameOfficial: "ONSIDE Artist",
+    releaseDate: "2026-10-20", director: "Director Kim", leadActor: "Artist Kim", agency: "ONSIDE Music",
+    albumTitle: "Our Way", distributionCompany: "Fixture Distribution", usage: "온라인 음악사이트 공개",
+    songTitleKr: "우리의 길", songTitleEn: "Our Way", songTitleOfficial: "Our Way (우리의 길)",
+    composer: "Composer Kim", storyline: "주인공이 새로운 길을 찾아 떠나고 마지막에 목적지에 도착합니다.",
+    lyrics: "우리의 길을 함께 걸어요.",
+  })) {
+    await page.locator(`[data-mv-field="${field}"]`).fill(value);
+  }
+  await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  await email.fill("");
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "신청자 이메일을 입력해주세요." })).toBeVisible();
+  await email.fill("member-contact@example.com");
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+  await expect.poll(() => result.saves.some(body => body.includes('"applicantEmail":"member-contact@example.com"'))).toBe(true);
+  expect(result.errors).toEqual([]);
+  expect(result.unexpectedMutations).toEqual([]);
+});

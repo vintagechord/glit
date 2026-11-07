@@ -367,7 +367,7 @@ test("a complete online MV passes preflight", () => {
   assert.deepEqual(result.blockingIssues, []);
 });
 
-test("MV preflight requires the agency but no longer requires a production company", () => {
+test("MV preflight requires the 소속사 (filed as 제작사) and no separate production company", () => {
   const complete = buildMvSubmissionPreflight(validMvInput({ productionCompany: "" }));
   assert.equal(complete.canSubmit, true);
   const missingAgency = buildMvSubmissionPreflight(validMvInput({ productionCompany: "", agency: "" }));
@@ -491,8 +491,13 @@ test("online MV lists all missing application fields instead of stopping at the 
   assert.ok(
     result.blockingIssues.some((item) => item.id === "mv.guest-email-format"),
   );
+  // The phone number is optional for music videos; a doubtful one is only flagged.
   assert.ok(
+    result.warnings.some((item) => item.id === "mv.guest-phone-format"),
+  );
+  assert.equal(
     result.blockingIssues.some((item) => item.id === "mv.guest-phone-format"),
+    false,
   );
   assert.ok(
     result.blockingIssues.some((item) => item.id === "mv.ai-usage-required"),
@@ -621,6 +626,7 @@ test("email delivery is a non-blocking reminder, even when a downloaded applicat
   }));
   const mv = buildMvSubmissionPreflight(validMvInput({
     applicationFormMode: "upload", title: "", isGuest: false, guestName: "", guestEmail: "", guestPhone: "",
+    applicantEmail: "member@example.com", applicantPhone: "",
     files: [], uploads: [], filesSubmittedByEmail: true,
   }));
   for (const [result, materials] of [[album, "작성한 신청서와 음원 파일"], [mv, "작성한 신청서와 영상 파일"]] as const) {
@@ -637,7 +643,7 @@ test("email delivery is a non-blocking reminder, even when a downloaded applicat
   assert.equal(buildMvSubmissionPreflight(validMvInput({ files: [], uploads: [], filesSubmittedByEmail: true })).reminders[0].detail, "보낼 자료: 영상 파일");
 });
 
-test("guests must leave contact details even when the application form is uploaded", () => {
+test("MV applicants must leave an email even when the application form is uploaded", () => {
   const album = buildAlbumSubmissionPreflight(validOnlineInput({
     isGuest: true, applicationFormMode: "upload", applicantName: "", applicantEmail: "bad-address", applicantPhone: "",
     files: [], uploads: [], filesSubmittedByEmail: true,
@@ -650,16 +656,32 @@ test("guests must leave contact details even when the application form is upload
     files: [], uploads: [], filesSubmittedByEmail: true,
   }));
   assert.equal(mv.canSubmit, false);
-  assert.deepEqual(mv.blockingIssues.map((item) => item.id).sort(), ["mv.guest-email", "mv.guest-name", "mv.guest-phone"]);
-  // Members keep the lighter uploaded-form flow: their account mailbox is known.
+  // The phone number is optional for music videos.
+  assert.deepEqual(mv.blockingIssues.map((item) => item.id).sort(), ["mv.guest-email", "mv.guest-name"]);
+  assert.equal(buildMvSubmissionPreflight(validMvInput({
+    applicationFormMode: "upload", guestPhone: "", files: [], uploads: [], filesSubmittedByEmail: true,
+  })).canSubmit, true);
+  // Album members keep the lighter uploaded-form flow: their account mailbox is known.
   assert.equal(buildAlbumSubmissionPreflight(validOnlineInput({
     isGuest: false, applicationFormMode: "upload", applicantName: "", applicantEmail: "", applicantPhone: "",
     files: [], uploads: [], filesSubmittedByEmail: true,
   })).canSubmit, true);
-  assert.equal(buildMvSubmissionPreflight(validMvInput({
-    isGuest: false, applicationFormMode: "upload", guestName: "", guestEmail: "", guestPhone: "",
-    files: [], uploads: [], filesSubmittedByEmail: true,
-  })).canSubmit, true);
+  // MV members confirm a contact email in both modes; the phone stays optional.
+  for (const applicationFormMode of ["upload", "online"] as const) {
+    const member = {
+      isGuest: false, applicationFormMode, guestName: "", guestEmail: "", guestPhone: "", applicantPhone: "",
+      files: [], uploads: [], filesSubmittedByEmail: true,
+    };
+    const missing = buildMvSubmissionPreflight(validMvInput({ ...member, applicantEmail: "" }));
+    assert.equal(missing.canSubmit, false);
+    assert.deepEqual(missing.blockingIssues.map((item) => item.id), ["mv.applicant-email"]);
+    assert.equal(missing.blockingIssues[0].target.field, "applicantEmail");
+    assert.deepEqual(
+      buildMvSubmissionPreflight(validMvInput({ ...member, applicantEmail: "bad-address" })).blockingIssues.map((item) => item.id),
+      ["mv.applicant-email-format"],
+    );
+    assert.equal(buildMvSubmissionPreflight(validMvInput({ ...member, applicantEmail: "member@example.com" })).canSubmit, true);
+  }
   // With contact details present the uploaded-form flow still skips the online fields.
   assert.equal(buildMvSubmissionPreflight(validMvInput({
     applicationFormMode: "upload", title: "", files: [], uploads: [], filesSubmittedByEmail: true,

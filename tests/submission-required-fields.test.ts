@@ -200,6 +200,7 @@ test("released albums require a supported album URL and retain contact and AI re
 const validMv = {
   isAdminReviewer: false,
   externalApplicationForm: false,
+  contactEmail: "applicant@example.com",
   aiUsed: false,
   title: "Video",
   artistName: "Artist",
@@ -247,12 +248,14 @@ test("normal MV submission enforces every wizard-required field", () => {
   assert.ok(validateMvSubmittedFields({ ...validMv, aiUsed: undefined }));
 });
 
-test("MV no longer requires a production company while the agency stays required", () => {
-  assert.equal(validateMvSubmittedFields({ ...validMv, productionCompany: "" }), null);
-  assert.equal(
-    validateMvSubmittedFields({ ...validMv, productionCompany: "", agency: "" }),
-    "소속사를 입력해주세요.",
-  );
+test("MV takes one 소속사 field (filed as 제작사): it is required, a separate production company is not", () => {
+  for (const mvType of ["MV_DISTRIBUTION", "MV_BROADCAST"] as const) {
+    assert.equal(validateMvSubmittedFields({ ...validMv, mvType, productionCompany: "" }), null);
+    assert.equal(
+      validateMvSubmittedFields({ ...validMv, mvType, productionCompany: "", agency: "" }),
+      "소속사를 입력해주세요.",
+    );
+  }
 });
 
 test("online MV submissions accept only supported optional desired ratings", () => {
@@ -287,6 +290,29 @@ test("downloaded MV forms still require AI declaration", () => {
       externalApplicationForm: true,
       aiUsed: null,
     }),
+  );
+});
+
+test("MV submissions need a contact email in both application modes", () => {
+  for (const externalApplicationForm of [false, true]) {
+    const input = { ...validMv, externalApplicationForm };
+    assert.equal(
+      validateMvSubmittedFields({ ...input, contactEmail: "" }),
+      "신청자 이메일을 입력해주세요.",
+    );
+    assert.equal(
+      validateMvSubmittedFields({ ...input, contactEmail: undefined }),
+      "신청자 이메일을 입력해주세요.",
+    );
+    assert.equal(
+      validateMvSubmittedFields({ ...input, contactEmail: "not-an-email" }),
+      "신청자 이메일 형식을 확인해주세요.",
+    );
+  }
+  // The administrator's own review entries are not held to applicant rules.
+  assert.equal(
+    validateMvSubmittedFields({ ...validMv, isAdminReviewer: true, contactEmail: "" }),
+    null,
   );
 });
 
