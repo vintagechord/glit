@@ -90,6 +90,7 @@ const selectMvColumns = [
   "release_date",
   "genre",
   "applicant_email",
+  "applicant_phone",
   "guest_name",
   "guest_company",
   "guest_email",

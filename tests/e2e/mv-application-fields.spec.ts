@@ -5,7 +5,9 @@ const guestToken = "22222222-2222-4222-8222-222222222222";
 
 // Run the actual Next wizard with fixture-only persistence. No upload, draft,
 // payment, notification or external request can reach a live service.
-async function mockMvServices(page: Page, draft?: Record<string, unknown>) {
+type MemberViewer = { userId: string; userEmail: string; applicant: { name: string; email: string; phone: string } };
+
+async function mockMvServices(page: Page, draft?: Record<string, unknown>, member?: MemberViewer) {
   const allowedOrigin = new URL(test.info().project.use.baseURL ?? "http://localhost:3000").origin;
   const errors: string[] = [];
   const unexpectedMutations: string[] = [];
@@ -16,6 +18,10 @@ async function mockMvServices(page: Page, draft?: Record<string, unknown>) {
     const url = new URL(request.url());
     if (url.pathname === "/api/submissions/drafts") {
       await route.fulfill({ json: { drafts: draft ? [draft] : [] } });
+      return;
+    }
+    if (url.pathname === "/api/account/applicant" && member) {
+      await route.fulfill({ json: member });
       return;
     }
     if (url.pathname === "/api/submissions/draft") {
@@ -79,6 +85,7 @@ async function fillRequiredApplication(page: Page) {
     releaseDate: "2026-10-20",
     director: "Director Kim",
     leadActor: "Artist Kim",
+    productionCompany: "ONSIDE Films",
     agency: "ONSIDE Music",
     albumTitle: "Our Way",
     distributionCompany: "Fixture Distribution",
@@ -100,15 +107,21 @@ async function fillRequiredApplication(page: Page) {
 }
 
 for (const width of [390, 1440]) {
-  test(`MV application has only agency and optional rating; advancing returns to the section top at ${width}px`, async ({ page }, testInfo) => {
+  test(`online MV application requires the production company and keeps an optional rating; advancing returns to the section top at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const result = await mockMvServices(page);
     await page.goto("/dashboard/new/mv");
     await openApplication(page);
     await expectSectionAtTop(page.getByRole("heading", { name: "신청서 작성", exact: true }));
-    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
+    // 영등위 cannot take the review without it: the name goes on the video's lower left.
+    const productionCompany = page.locator('[data-mv-field="productionCompany"]');
+    await expect(productionCompany).toBeVisible();
+    await expect(productionCompany).toHaveAttribute("required", "");
+    await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toBeVisible();
+    await expect(page.locator("#mv-productionCompany-help")).toContainText("좌측 하단에 제작사명");
+    await expect(page.locator("#mv-productionCompany-help")).toContainText("대소문자·띄어쓰기·한글/영문 표기까지 똑같이");
+    await expect(page.getByText("영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.")).toHaveCount(0);
     await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
-    await expect(page.getByText("뮤직비디오 제작사 *", { exact: true })).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
 
     const rating = page.getByRole("combobox", { name: "희망등급 (선택)", exact: true });
@@ -125,11 +138,17 @@ for (const width of [390, 1440]) {
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`mv-application-${width}.png`), fullPage: true });
     await fillRequiredApplication(page);
+    await productionCompany.fill("");
+    await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "뮤직비디오 제작사를 입력해주세요." })).toBeVisible();
+    await expect(productionCompany).toHaveAttribute("aria-invalid", "true");
+    await productionCompany.fill("ONSIDE Films");
     await page.getByRole("button", { name: "다음 단계", exact: true }).scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await expectSectionAtTop(page.getByRole("heading", { name: "파일 첨부", exact: true }));
     await expect.poll(() => result.saves.some(body => body.includes('"agency":"ONSIDE Music"'))).toBe(true);
+    expect(result.saves.some(body => body.includes('"productionCompany":"ONSIDE Films"'))).toBe(true);
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
@@ -158,6 +177,8 @@ for (const mode of ["online", "upload"] as const) {
     }
     if (mode === "upload") {
       await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+      await page.locator('[data-mv-field="guestName"]').fill("테스트 신청자");
+      await page.locator('[data-mv-field="guestEmail"]').fill("fixture@example.com");
       await page.getByRole("button", { name: "파일 업로드로 이동", exact: true }).click();
       await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
       await expect(notice).toBeVisible();
@@ -208,16 +229,84 @@ for (const [saved, label] of [
     await expect(page.locator('[data-mv-field="title"]')).toHaveValue("복원 뮤직비디오");
     await expect(page.locator('[data-mv-field="agency"]')).toHaveValue("복원 소속사");
     await expect(page.getByRole("combobox", { name: "희망등급 (선택)", exact: true }).locator("option:checked")).toHaveText(label);
-    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
+    await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveValue("기존 제작사 정보");
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
     await fillRequiredApplication(page);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
     await expect.poll(() => result.saves.some(body => body.includes('"agency":"ONSIDE Music"'))).toBe(true);
-    // Editing a legacy draft must omit retired fields, preserving server history
-    // instead of replacing saved production/format metadata with empty strings.
-    expect(result.saves.join("\n")).not.toMatch(/"(?:productionCompany|format|mv_production_company|mv_format)"\s*:/);
+    // The retired format field is omitted, preserving server history instead of
+    // replacing the saved value with an empty string.
+    expect(result.saves.join("\n")).not.toMatch(/"(?:format|mv_format)"\s*:/);
     expect(result.errors).toEqual([]);
     expect(result.unexpectedMutations).toEqual([]);
   });
 }
+
+for (const mode of ["online", "upload"] as const) {
+  test(`guest MV applications require an email but not a phone number in ${mode} mode`, async ({ page }) => {
+    const result = await mockMvServices(page);
+    await page.goto("/dashboard/new/mv");
+    await openApplication(page, mode);
+    if (mode === "online") await fillRequiredApplication(page);
+    else {
+      await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+      await page.locator('[data-mv-field="guestName"]').fill("테스트 신청자");
+    }
+    const phone = page.locator('[data-mv-field="guestPhone"]');
+    await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
+    await expect(phone).not.toHaveAttribute("required", "");
+    await phone.fill("");
+    const email = page.locator('[data-mv-field="guestEmail"]');
+    await email.fill("");
+    const next = page.getByRole("button", { name: mode === "online" ? "다음 단계" : "파일 업로드로 이동", exact: true });
+    await next.click();
+    await expect(page.getByRole("alert").filter({ hasText: "신청자 이메일을 입력해주세요." })).toBeVisible();
+    await expect(email).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toHaveCount(0);
+    await email.fill("fixture@example.com");
+    await next.click();
+    await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+    expect(result.errors).toEqual([]);
+    expect(result.unexpectedMutations).toEqual([]);
+  });
+}
+
+test("members confirm their contact email on the MV application; the phone stays optional", async ({ page }) => {
+  const result = await mockMvServices(page, undefined, {
+    userId: "33333333-3333-4333-8333-333333333333",
+    userEmail: "member-account@example.com",
+    applicant: { name: "회원 신청자", email: "member-notice@example.com", phone: "" },
+  });
+  // The page asks /api/account/applicant (mocked above) only when a session
+  // cookie is present; the fixture project name matches no real project.
+  const origin = new URL(test.info().project.use.baseURL ?? "http://localhost:3000").origin;
+  await page.context().addCookies([{ name: "sb-fixture-auth-token", value: "fixture", url: origin }]);
+  await page.goto("/dashboard/new/mv");
+  await openApplication(page);
+  await expect(page.locator('[data-mv-field="guestName"]')).toHaveCount(0);
+  const email = page.locator('[data-mv-field="applicantEmail"]');
+  await expect(email).toHaveValue("member-notice@example.com");
+  await expect(page.locator('[data-mv-field="applicantPhone"]')).toHaveValue("");
+  await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
+  for (const [field, value] of Object.entries({
+    title: "Our Way (Official MV)", artistName: "온사이드 아티스트", artistNameOfficial: "ONSIDE Artist",
+    releaseDate: "2026-10-20", director: "Director Kim", leadActor: "Artist Kim", productionCompany: "ONSIDE Films", agency: "ONSIDE Music",
+    albumTitle: "Our Way", distributionCompany: "Fixture Distribution", usage: "온라인 음악사이트 공개",
+    songTitleKr: "우리의 길", songTitleEn: "Our Way", songTitleOfficial: "Our Way (우리의 길)",
+    composer: "Composer Kim", storyline: "주인공이 새로운 길을 찾아 떠나고 마지막에 목적지에 도착합니다.",
+    lyrics: "우리의 길을 함께 걸어요.",
+  })) {
+    await page.locator(`[data-mv-field="${field}"]`).fill(value);
+  }
+  await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  await email.fill("");
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "신청자 이메일을 입력해주세요." })).toBeVisible();
+  await email.fill("member-contact@example.com");
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "파일 첨부", exact: true })).toBeVisible();
+  await expect.poll(() => result.saves.some(body => body.includes('"applicantEmail":"member-contact@example.com"'))).toBe(true);
+  expect(result.errors).toEqual([]);
+  expect(result.unexpectedMutations).toEqual([]);
+});

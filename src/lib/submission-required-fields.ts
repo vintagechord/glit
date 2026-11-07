@@ -110,9 +110,16 @@ export const validateAlbumSubmittedFields = (input: {
   return null;
 };
 
+const isEmailAddress = (value?: string | null) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value?.trim() ?? "");
+
 export const validateMvSubmittedFields = (input: {
   isAdminReviewer: boolean;
   externalApplicationForm: boolean;
+  /** The guest email, or the member's application contact email. The phone
+   * number is optional for music videos; an email is the one way to reach
+   * the applicant when the review needs something. */
+  contactEmail?: string | null;
   mvType?: "MV_DISTRIBUTION" | "MV_BROADCAST";
   desiredRating?: string | null;
   aiUsed?: boolean | null;
@@ -142,6 +149,10 @@ export const validateMvSubmittedFields = (input: {
     return "희망등급을 전체관람가, 12세이상관람가, 15세이상관람가, 청소년관람불가 중에서 선택해주세요.";
   }
   if (input.isAdminReviewer) return null;
+  if (!hasText(input.contactEmail)) return "신청자 이메일을 입력해주세요.";
+  if (!isEmailAddress(input.contactEmail)) {
+    return "신청자 이메일 형식을 확인해주세요.";
+  }
   if (typeof input.aiUsed !== "boolean") {
     return "AI 활용 여부를 선택해주세요.";
   }
@@ -155,6 +166,10 @@ export const validateMvSubmittedFields = (input: {
     [input.releaseDate, "영상 공개일자를 입력해주세요."],
     [input.director, "감독 정보를 입력해주세요."],
     [input.leadActor, "주연 정보를 입력해주세요."],
+    // 영등위 cannot take an online review without the production company.
+    ...(input.mvType === "MV_DISTRIBUTION"
+      ? ([[input.productionCompany, "뮤직비디오 제작사를 입력해주세요."]] as Array<[string | null | undefined, string]>)
+      : []),
     [input.agency, "소속사를 입력해주세요."],
     [input.albumTitle, "앨범명을 입력해주세요."],
     [input.distributionCompany, "유통사를 입력해주세요."],

@@ -38,7 +38,7 @@ for(const mode of ['distribution','broadcast'])test(`English ${mode} MV form tra
  await expectEnglishUi(page);await page.getByRole('button',{name:'Next Step',exact:true}).click();
  await page.getByRole('radio',{name:/Complete Online/}).click();await page.getByRole('button',{name:'Continue with Selection',exact:true}).click();
  await expectEnglishUi(page);
- const values={title:'앨범 가사',artistName:'음원 아티스트',artistNameOfficial:'Fixture',releaseDate:'2026-10-24',director:'Director',leadActor:'Lead',agency:'Agency',albumTitle:'Album',distributionCompany:'Distributor',usage:'Online',songTitleKr:'앨범 가사',songTitleEn:'Song',songTitleOfficial:'Song',composer:'Composer',storyline:'주인공이 마지막에 집으로 돌아옵니다.',lyrics:'우리가 함께 걷는 길',guestName:'Fixture',guestEmail:'fixture@example.invalid',guestPhone:'01012345678'};
+ const values={title:'앨범 가사',artistName:'음원 아티스트',artistNameOfficial:'Fixture',releaseDate:'2026-10-24',director:'Director',leadActor:'Lead',...(mode==='broadcast'?{}:{productionCompany:'Fixture Films'}),agency:'Agency',albumTitle:'Album',distributionCompany:'Distributor',usage:'Online',songTitleKr:'앨범 가사',songTitleEn:'Song',songTitleOfficial:'Song',composer:'Composer',storyline:'주인공이 마지막에 집으로 돌아옵니다.',lyrics:'우리가 함께 걷는 길',guestName:'Fixture',guestEmail:'fixture@example.invalid',guestPhone:'01012345678'};
  for(const [field,value]of Object.entries(values))await page.locator(`[data-mv-field="${field}"]`).fill(value);
  await page.getByRole('button',{name:'Not used',exact:true}).click();await page.getByRole('button',{name:'Next Step',exact:true}).click();await expectEnglishUi(page);
  expect(errors).toEqual([]);

@@ -991,6 +991,12 @@ export default async function AdminSubmissionDetailPage({
               id={submission.id}
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
             />
+          ) : isMvSubmission && submission.mv_lyrics?.trim() ? (
+            <ReviewDocsSingleDownloadButton
+              id={submission.id}
+              kind="mvLyrics"
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
+            />
           ) : null}
           <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} />
         </div>
@@ -1790,7 +1796,7 @@ export default async function AdminSubmissionDetailPage({
                 <p className="flex justify-between gap-4">
                   <span>연락처</span>
                   <span className="text-right text-foreground">
-                    {memberProfile?.phone ?? "-"}
+                    {submission.applicant_phone || memberProfile?.phone || "-"}
                   </span>
                 </p>
                 <p className="flex justify-between gap-4">
@@ -1799,6 +1805,17 @@ export default async function AdminSubmissionDetailPage({
                     {memberEmail ?? applicantEmail ?? "-"}
                   </span>
                 </p>
+                {/* The contact the applicant confirmed on this application. */}
+                {submission.applicant_email &&
+                memberEmail &&
+                submission.applicant_email.trim().toLowerCase() !== memberEmail.trim().toLowerCase() ? (
+                  <p className="flex justify-between gap-4">
+                    <span>신청서 이메일</span>
+                    <span className="break-all text-right text-foreground">
+                      {submission.applicant_email}
+                    </span>
+                  </p>
+                ) : null}
               </div>
             )}
           </div>
@@ -1853,15 +1870,15 @@ export default async function AdminSubmissionDetailPage({
             />
             <DetailRow
               label="신청자"
-              value={submission.applicant_name || memberProfile?.name || "-"}
+              value={submission.applicant_name || submission.guest_name || memberProfile?.name || "-"}
             />
             <DetailRow
               label="신청자 연락처"
-              value={submission.applicant_phone || memberProfile?.phone || "-"}
+              value={submission.applicant_phone || submission.guest_phone || memberProfile?.phone || "-"}
             />
             <DetailRow
               label="신청자 이메일"
-              value={submission.applicant_email || memberEmail || "-"}
+              value={submission.applicant_email || submission.guest_email || memberEmail || "-"}
             />
             {isMvSubmission ? (
               <>

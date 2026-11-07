@@ -48,6 +48,7 @@ import {
   type SubmissionPreflightTarget,
 } from "@/lib/submission-preflight";
 import { getSubmissionCheckpointStorageKey } from "@/lib/submission-checkpoint";
+import type { MemberApplicant } from "@/lib/member-applicant";
 import { MV_ONLINE_OPTION_CODES } from "@/lib/submission-station-selection";
 import {
   MV_DESIRED_RATING_OPTIONS,
@@ -173,6 +174,8 @@ type MvCheckpointSnapshot = {
   guestCompany: string;
   guestEmail: string;
   guestPhone: string;
+  applicantEmail: string;
+  applicantPhone: string;
   paymentMethod: "CARD" | "BANK";
   bankDepositorName: string;
   paymentDocumentType: PaymentDocumentType;
@@ -201,6 +204,7 @@ type MvValidationField =
   | "releaseDate"
   | "director"
   | "leadActor"
+  | "productionCompany"
   | "agency"
   | "albumTitle"
   | "distributionCompany"
@@ -214,7 +218,9 @@ type MvValidationField =
   | "aiUsed"
   | "guestName"
   | "guestEmail"
-  | "guestPhone";
+  | "guestPhone"
+  | "applicantEmail"
+  | "applicantPhone";
 
 const steps = [
   "목적 선택",
@@ -241,7 +247,7 @@ function MvCreditConsistencyNotice() {
         </h3>
       </div>
       <p className="mt-3 text-sm leading-6 text-foreground">
-        영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.
+        영상에 크레딧이나 텍스트가 등장하는 경우, 뮤직비디오 제목·제작사명·소속사명·주연·감독명 등 모든 표기가 제출하는 신청서와 일치해야 합니다.
       </p>
       <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
         철자, 특수문자, 띄어쓰기, 대소문자까지 모두 동일해야 접수가 가능합니다.
@@ -357,12 +363,15 @@ export function MvWizard({
   stations,
   userId,
   userEmail,
+  initialApplicant,
   profanityTerms = [],
   profanityFilterV2Enabled = false,
 }: {
   stations: StationOption[];
   userId?: string | null;
   userEmail?: string | null;
+  /** A member's saved contact details, used to fill the applicant section. */
+  initialApplicant?: MemberApplicant;
   profanityTerms?: ProfanityTerm[];
   profanityFilterV2Enabled?: boolean;
 }) {
@@ -416,6 +425,14 @@ export function MvWizard({
   const [guestCompany, setGuestCompany] = React.useState("");
   const [guestEmail, setGuestEmail] = React.useState("");
   const [guestPhone, setGuestPhone] = React.useState("");
+  // Members confirm a contact email (required) and phone (optional) per
+  // application; the operator uses them when the review needs something.
+  const [applicantEmail, setApplicantEmail] = React.useState(
+    initialApplicant?.email || userEmail || "",
+  );
+  const [applicantPhone, setApplicantPhone] = React.useState(
+    initialApplicant?.phone ?? "",
+  );
   const [paymentMethod, setPaymentMethod] = React.useState<"CARD" | "BANK">(
     "BANK",
   );
@@ -1113,6 +1130,7 @@ export function MvWizard({
         releaseDate,
         director,
         leadActor,
+        productionCompany,
         agency,
         albumTitle,
         distributionCompany,
@@ -1127,6 +1145,8 @@ export function MvWizard({
         guestName,
         guestEmail,
         guestPhone,
+        applicantEmail,
+        applicantPhone,
         files: uploadedFiles,
         uploads,
         filesSubmittedByEmail: emailSubmitConfirmed,
@@ -1135,6 +1155,8 @@ export function MvWizard({
       agency,
       aiUsed,
       albumTitle,
+      applicantEmail,
+      applicantPhone,
       applicationFormMode,
       artistName,
       artistNameOfficial,
@@ -1154,6 +1176,7 @@ export function MvWizard({
       mvType,
       onlineBaseSelected,
       priceChangeAcknowledged,
+      productionCompany,
       releaseDate,
       songTitleEn,
       songTitleKr,
@@ -2046,6 +2069,14 @@ export function MvWizard({
       setGuestCompany(String(draft.guest_company ?? ""));
       setGuestEmail(String(draft.guest_email ?? ""));
       setGuestPhone(String(draft.guest_phone ?? ""));
+    } else {
+      // Keep the profile defaults when an older draft saved no contact.
+      if (typeof draft.applicant_email === "string" && draft.applicant_email.trim()) {
+        setApplicantEmail(draft.applicant_email);
+      }
+      if (typeof draft.applicant_phone === "string" && draft.applicant_phone.trim()) {
+        setApplicantPhone(draft.applicant_phone);
+      }
     }
 
     const selection = storedSelection?.mvType === draftType ? storedSelection : null;
@@ -2569,9 +2600,24 @@ export function MvWizard({
     const artistNameValue = artistName.trim();
     const guestNameValue = guestName.trim();
     const guestEmailValue = guestEmail.trim();
-    const guestPhoneValue = guestPhone.trim();
     const isValidEmail = (value: string) =>
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    // Both application modes need a mailbox to reach the applicant; the
+    // phone number is optional.
+    const validateApplicantContact = () => {
+      if (isGuest && !guestNameValue) {
+        return markInvalidField("guestName", "비회원 담당자명을 입력해주세요.");
+      }
+      const emailField = isGuest ? "guestEmail" : "applicantEmail";
+      const emailValue = isGuest ? guestEmailValue : applicantEmail.trim();
+      if (!emailValue) {
+        return markInvalidField(emailField, "신청자 이메일을 입력해주세요.");
+      }
+      if (!isValidEmail(emailValue)) {
+        return markInvalidField(emailField, "신청자 이메일 형식을 확인해주세요.");
+      }
+      return true;
+    };
 
     if (isAdminReviewer) {
       setInvalidField(null);
@@ -2609,7 +2655,7 @@ export function MvWizard({
       if (aiUsed === null) {
         return markInvalidField("aiUsed", "AI 활용 여부를 선택해주세요.");
       }
-      return true;
+      return validateApplicantContact();
     }
 
     if (!titleValue) {
@@ -2632,6 +2678,9 @@ export function MvWizard({
     }
     if (!leadActor.trim()) {
       return markInvalidField("leadActor", "주연 정보를 입력해주세요.");
+    }
+    if (mvType === "MV_DISTRIBUTION" && !productionCompany.trim()) {
+      return markInvalidField("productionCompany", "뮤직비디오 제작사를 입력해주세요.");
     }
     if (!agency.trim()) {
       return markInvalidField("agency", "소속사를 입력해주세요.");
@@ -2681,18 +2730,7 @@ export function MvWizard({
       setNotice({ error: "온라인 심의 옵션을 선택해주세요." });
       return false;
     }
-    if (isGuest && !guestNameValue) {
-      return markInvalidField("guestName", "비회원 담당자명을 입력해주세요.");
-    }
-    if (isGuest && !guestEmailValue) {
-      return markInvalidField("guestEmail", "비회원 이메일을 입력해주세요.");
-    }
-    if (isGuest && !guestPhoneValue) {
-      return markInvalidField("guestPhone", "비회원 연락처를 입력해주세요.");
-    }
-    if (isGuest && guestEmailValue && !isValidEmail(guestEmailValue)) {
-      return markInvalidField("guestEmail", "비회원 이메일 형식을 확인해주세요.");
-    }
+    if (!validateApplicantContact()) return false;
     if (
       requirePayment &&
       paymentMethod === "BANK" &&
@@ -2781,6 +2819,8 @@ export function MvWizard({
     guestCompany,
     guestEmail,
     guestPhone,
+    applicantEmail,
+    applicantPhone,
     paymentMethod,
     bankDepositorName,
     paymentDocumentType,
@@ -2905,6 +2945,9 @@ export function MvWizard({
           leadActor: source.leadActor.trim() || undefined,
           storyline: source.storyline.trim() || undefined,
           agency: source.agency.trim() || undefined,
+          ...(source.mvType === "MV_DISTRIBUTION"
+            ? { productionCompany: source.productionCompany.trim() }
+            : {}),
           albumTitle: source.albumTitle.trim() || undefined,
           distributionCompany: source.distributionCompany.trim() || undefined,
           usage: source.usage.trim() || undefined,
@@ -2937,6 +2980,8 @@ export function MvWizard({
           guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
           guestEmail: isGuest ? guestEmailValue || undefined : undefined,
           guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
+          applicantEmail: isGuest ? undefined : source.applicantEmail.trim() || undefined,
+          applicantPhone: isGuest ? undefined : source.applicantPhone.trim() || undefined,
           paymentMethod: source.paymentMethod,
           bankDepositorName:
             source.paymentMethod === "BANK"
@@ -3081,6 +3126,9 @@ export function MvWizard({
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
         agency: agency.trim() || undefined,
+        ...(mvType === "MV_DISTRIBUTION"
+          ? { productionCompany: productionCompany.trim() }
+          : {}),
         albumTitle: albumTitle.trim() || undefined,
         distributionCompany: distributionCompany.trim() || undefined,
         usage: usage.trim() || undefined,
@@ -3109,6 +3157,8 @@ export function MvWizard({
         guestCompany: isGuest ? guestCompanyValue || undefined : undefined,
         guestEmail: isGuest ? guestEmailValue || undefined : undefined,
         guestPhone: isGuest ? guestPhoneValue || undefined : undefined,
+        applicantEmail: isGuest ? undefined : applicantEmail.trim() || undefined,
+        applicantPhone: isGuest ? undefined : applicantPhone.trim() || undefined,
         paymentMethod: submissionPaymentMethod,
         bankDepositorName:
           submissionPaymentMethod === "BANK" && !deferPayment
@@ -3336,6 +3386,8 @@ export function MvWizard({
       setGuestCompany(snapshot.guestCompany);
       setGuestEmail(snapshot.guestEmail);
       setGuestPhone(snapshot.guestPhone);
+      if (typeof snapshot.applicantEmail === "string") setApplicantEmail(snapshot.applicantEmail);
+      if (typeof snapshot.applicantPhone === "string") setApplicantPhone(snapshot.applicantPhone);
       setPaymentMethod(snapshot.paymentMethod);
       setBankDepositorName(snapshot.bankDepositorName);
       setPaymentDocumentType(snapshot.paymentDocumentType);
@@ -3509,89 +3561,103 @@ export function MvWizard({
     );
   };
 
-  // Guests have no account mailbox; both application modes collect the same
-  // contact details for payment/result notices and lookup-code recovery.
-  const renderGuestContactSection = () =>
-    isGuest ? (
+  // Both application modes collect a contact email (required) and phone
+  // (optional) so the operator can reach the applicant when the review
+  // needs something. Guests also give a name for lookup-code recovery;
+  // members start from their saved profile details.
+  const renderApplicantContactSection = () => {
+    const emailField: MvValidationField = isGuest ? "guestEmail" : "applicantEmail";
+    const phoneField: MvValidationField = isGuest ? "guestPhone" : "applicantPhone";
+    return (
             <div className="rounded-[28px] border border-border/60 bg-background/80 p-4 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 신청자 정보
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                이름과 이메일은 심의 조회시에 사용됩니다.
+                {isGuest
+                  ? "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다. 이름과 이메일은 심의 조회에도 사용됩니다."
+                  : "심의 중 확인할 내용이 있으면 이 이메일로 연락드립니다."}
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {isGuest ? (
+                  <>
+                    <div className="space-y-2">
+                      <label htmlFor="mv-guestName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        담당자명 *
+                      </label>
+                      <input
+                        id="mv-guestName"
+                        data-mv-field="guestName"
+                        data-preflight-field="guestName"
+                        aria-invalid={invalidField === "guestName"}
+                        aria-describedby={invalidField === "guestName" ? "mv-basic-error" : undefined}
+                        value={guestName}
+                        onChange={(event) => {
+                          setGuestName(event.target.value);
+                          clearInvalidField("guestName");
+                        }}
+                        required
+                        className={requiredFieldClass("guestName")}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="mv-guestCompany" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        회사/기획사
+                      </label>
+                      <input
+                        id="mv-guestCompany"
+                        value={guestCompany}
+                        onChange={(event) => setGuestCompany(event.target.value)}
+                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                      />
+                    </div>
+                  </>
+                ) : null}
                 <div className="space-y-2">
-                  <label htmlFor="mv-guestName" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    담당자명 *
-                  </label>
-                  <input
-                    id="mv-guestName"
-                  data-mv-field="guestName"
-                    data-preflight-field="guestName"
-                    aria-invalid={invalidField === "guestName"}
-                  aria-describedby={invalidField === "guestName" ? "mv-basic-error" : undefined}
-                    value={guestName}
-                    onChange={(event) => {
-                      setGuestName(event.target.value);
-                      clearInvalidField("guestName");
-                    }}
-                    required
-                    className={requiredFieldClass("guestName")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    회사/기획사
-                  </label>
-                  <input
-                    value={guestCompany}
-                    onChange={(event) => setGuestCompany(event.target.value)}
-                    className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="mv-guestEmail" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <label htmlFor={`mv-${emailField}`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     이메일 *
                   </label>
                   <input
-                    id="mv-guestEmail"
-                  data-mv-field="guestEmail"
-                    data-preflight-field="guestEmail"
-                    aria-invalid={invalidField === "guestEmail"}
-                  aria-describedby={invalidField === "guestEmail" ? "mv-basic-error" : undefined}
+                    id={`mv-${emailField}`}
+                    data-mv-field={emailField}
+                    data-preflight-field={emailField}
+                    aria-invalid={invalidField === emailField}
+                    aria-describedby={invalidField === emailField ? "mv-basic-error" : undefined}
                     type="email"
-                    value={guestEmail}
+                    autoComplete="email"
+                    value={isGuest ? guestEmail : applicantEmail}
                     onChange={(event) => {
-                      setGuestEmail(event.target.value);
-                      clearInvalidField("guestEmail");
+                      if (isGuest) setGuestEmail(event.target.value);
+                      else setApplicantEmail(event.target.value);
+                      clearInvalidField(emailField);
                     }}
                     required
-                    className={requiredFieldClass("guestEmail")}
+                    className={requiredFieldClass(emailField)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="mv-guestPhone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    연락처 *
+                  <label htmlFor={`mv-${phoneField}`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    연락처 (선택)
                   </label>
                   <input
-                    id="mv-guestPhone"
-                  data-mv-field="guestPhone"
-                    data-preflight-field="guestPhone"
-                    aria-invalid={invalidField === "guestPhone"}
-                  aria-describedby={invalidField === "guestPhone" ? "mv-basic-error" : undefined}
-                    value={guestPhone}
+                    id={`mv-${phoneField}`}
+                    data-mv-field={phoneField}
+                    data-preflight-field={phoneField}
+                    type="tel"
+                    autoComplete="tel"
+                    value={isGuest ? guestPhone : applicantPhone}
                     onChange={(event) => {
-                      setGuestPhone(event.target.value);
-                      clearInvalidField("guestPhone");
+                      if (isGuest) setGuestPhone(event.target.value);
+                      else setApplicantPhone(event.target.value);
+                      clearInvalidField(phoneField);
                     }}
-                    required
-                    className={requiredFieldClass("guestPhone")}
+                    className={requiredFieldClass(phoneField)}
                   />
                 </div>
               </div>
             </div>
-    ) : null;
+    );
+  };
 
   return (
     <div className="min-w-0 space-y-8 text-[15px] leading-relaxed [overflow-wrap:anywhere] [&_input]:min-w-0 [&_select]:min-w-0 sm:text-base [&_input]:text-base [&_textarea]:text-base [&_select]:text-base [&_label]:text-sm">
@@ -4043,7 +4109,7 @@ export function MvWizard({
                   context="mv"
                 />
               </div>
-              <div className="mt-5">{renderGuestContactSection()}</div>
+              <div className="mt-5">{renderApplicantContactSection()}</div>
               {notice.error && (
                 <div role="alert" className={`mt-4 rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>
                   {notice.error}
@@ -4221,6 +4287,34 @@ export function MvWizard({
                   제작 정보
                 </p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  {mvType === "MV_DISTRIBUTION" ? (
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="mv-productionCompany"
+                        className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+                      >
+                        뮤직비디오 제작사 *
+                      </label>
+                      <input
+                        id="mv-productionCompany"
+                        data-mv-field="productionCompany"
+                        data-preflight-field="productionCompany"
+                        aria-invalid={invalidField === "productionCompany"}
+                        aria-describedby={`mv-productionCompany-help${invalidField === "productionCompany" ? " mv-basic-error" : ""}`}
+                        value={productionCompany}
+                        onChange={(event) => {
+                          setProductionCompany(event.target.value);
+                          clearInvalidField("productionCompany");
+                        }}
+                        required
+                        className={requiredFieldClass("productionCompany")}
+                      />
+                      <p id="mv-productionCompany-help" className="text-xs leading-5 text-muted-foreground">
+                        심의가 끝나면 영상 우측 상단에 등급 로고, 좌측 하단에 제작사명을 넣어야 합니다.
+                        영상에 넣을 제작사명과 대소문자·띄어쓰기·한글/영문 표기까지 똑같이 입력해주세요.
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="space-y-2">
                     <label
                       htmlFor="mv-agency"
@@ -4242,7 +4336,7 @@ export function MvWizard({
                       className={requiredFieldClass("agency")}
                     />
                     <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
-                      영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.
+                      아티스트의 소속사·기획사명을 입력해주세요.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -4606,7 +4700,7 @@ export function MvWizard({
                 </p>
               </div>
 
-              {renderGuestContactSection()}
+              {renderApplicantContactSection()}
 
               {notice.error && (
                 <div id="mv-basic-error" role="alert" className={`rounded-2xl border-2 px-4 py-3 text-xs font-semibold ${brandStatusTones.danger}`}>

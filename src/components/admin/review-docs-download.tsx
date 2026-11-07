@@ -52,12 +52,16 @@ function parseDownloadFilename(header: string | null, fallback: string) {
   return quotedMatch?.[1] ?? fallback;
 }
 
-async function downloadFromResponse(response: Response, fallbackFilename: string) {
+async function downloadFromResponse(
+  response: Response,
+  fallbackFilename: string,
+  fallbackError = "심의자료 ZIP 파일을 생성할 수 없습니다.",
+) {
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
-    throw new Error(payload?.error ?? "심의자료 ZIP 파일을 생성할 수 없습니다.");
+    throw new Error(payload?.error ?? fallbackError);
   }
 
   const blob = await response.blob();
@@ -365,27 +369,46 @@ export function MelonReviewDocsDownloadForm() {
   );
 }
 
+const singleDownloads = {
+  album: {
+    path: "review-docs",
+    label: "DOCX ZIP 다운로드",
+    filename: "review-docs.zip",
+    error: "심의자료 ZIP 파일을 생성할 수 없습니다.",
+  },
+  // The 영등위 lyric Word file, made from the lyrics on an MV application.
+  mvLyrics: {
+    path: "mv-lyrics",
+    label: "가사 DOCX 다운로드",
+    filename: "lyrics.docx",
+    error: "가사 DOCX 파일을 만들 수 없습니다.",
+  },
+} as const;
+
 export function ReviewDocsSingleDownloadButton({
   id,
   className,
+  kind = "album",
 }: {
   id: string;
   className?: string;
+  kind?: keyof typeof singleDownloads;
 }) {
   const [error, setError] = React.useState("");
   const [isDownloading, setIsDownloading] = React.useState(false);
+  const download = singleDownloads[kind];
 
   const handleDownload = async () => {
     setError("");
     setIsDownloading(true);
     try {
-      const response = await fetch(`/api/admin/submissions/${id}/review-docs`);
-      await downloadFromResponse(response, "review-docs.zip");
+      const response = await fetch(`/api/admin/submissions/${id}/${download.path}`);
+      await downloadFromResponse(response, download.filename, download.error);
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
           ? downloadError.message
-          : "심의자료 ZIP 파일을 생성할 수 없습니다.",
+          : download.error,
       );
     } finally {
       setIsDownloading(false);
@@ -405,7 +428,7 @@ export function ReviewDocsSingleDownloadButton({
         ) : (
           <Download className="h-4 w-4" aria-hidden="true" />
         )}
-        <span>{isDownloading ? "생성 중" : "DOCX ZIP 다운로드"}</span>
+        <span>{isDownloading ? "생성 중" : download.label}</span>
       </button>
       {error ? (
         <p
