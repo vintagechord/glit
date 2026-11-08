@@ -21,7 +21,6 @@ import {
   pageMetadata,
   SITE_DESCRIPTION,
   SITE_NAME,
-  SITE_TAGLINE,
   websiteJsonLd,
 } from "@/lib/seo";
 
@@ -32,7 +31,10 @@ import {
 export const revalidate = 3600;
 
 export const metadata: Metadata = pageMetadata({
-  title: `${SITE_NAME} | ${SITE_TAGLINE} · 방송국 심의 대행`,
+  // Naver ranks the home page for the review terms, so every one people
+  // search with (음반·음원·앨범·뮤직비디오 심의, 대행) sits in the title or
+  // the description.
+  title: `${SITE_NAME} | 음반 심의·음원 심의·뮤직비디오 심의 대행 · 온라인 접수`,
   absoluteTitle: true,
   description: SITE_DESCRIPTION,
   path: "/",

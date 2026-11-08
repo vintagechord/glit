@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { GUIDE_CONTENT_UPDATED } from "@/lib/onside-trust";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import { STATION_GUIDES } from "@/lib/station-guides";
 import { getBaseUrl } from "@/lib/url";
@@ -7,9 +8,9 @@ import { getBaseUrl } from "@/lib/url";
 type ChangeFrequency = MetadataRoute.Sitemap[number]["changeFrequency"];
 type Page = { path: string; priority: number; changeFrequency: ChangeFrequency; english?: boolean };
 
-// Bump when public page content changes materially; crawlers use it to
-// decide what to refetch.
-const CONTENT_UPDATED = new Date("2026-11-07T00:00:00+09:00");
+// Bump GUIDE_CONTENT_UPDATED when public page content changes materially;
+// crawlers use it to decide what to refetch, and the guides show the same date.
+const CONTENT_UPDATED = new Date(`${GUIDE_CONTENT_UPDATED}T00:00:00+09:00`);
 
 // The English aliases of the topic and station guides share the Korean
 // canonical, so only the Korean URLs are listed (english: false).
@@ -30,8 +31,8 @@ const publicPages: Page[] = [
   { path: "/support", priority: 0.6, changeFrequency: "monthly", english: true },
   { path: "/magazine", priority: 0.5, changeFrequency: "weekly", english: true },
   { path: "/forms", priority: 0.4, changeFrequency: "monthly", english: true },
-  { path: "/login", priority: 0.3, changeFrequency: "yearly", english: true },
-  { path: "/signup", priority: 0.3, changeFrequency: "yearly", english: true },
+  // Login and signup stay crawlable but are left out: they answer no search,
+  // and the sitemap should point crawlers at the guides.
   { path: "/terms", priority: 0.2, changeFrequency: "yearly", english: true },
   { path: "/privacy", priority: 0.2, changeFrequency: "yearly", english: true },
 ];

@@ -3,15 +3,28 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 
 import { AboutRevealSection } from "@/components/about/about-reveal-section";
+import { GuideTrustFacts } from "@/components/guide/trust-facts";
+import { JsonLd } from "@/components/seo/json-ld";
 import { SiteLogo } from "@/components/site/site-logo";
-import { pageMetadata } from "@/lib/seo";
+import { absoluteUrl, organizationJsonLd, pageMetadata } from "@/lib/seo";
+import { getBaseUrl } from "@/lib/url";
+
+const ABOUT_DESCRIPTION =
+  "온사이드는 2017년부터 음반 심의(앨범·음원 심의)와 뮤직비디오 심의 접수를 대행해 온 (주)빈티지하우스의 온라인 심의 서비스입니다. TV·라디오 방송국 15곳의 음반 심의와 영등위 등급분류·방송국별 뮤직비디오 심의를 온라인으로 접수하고 결과를 한곳에서 안내합니다.";
 
 export const metadata = pageMetadata({
   title: "회사소개 · 2017년부터 이어온 음반·뮤직비디오 심의 대행",
-  description: "온사이드는 2017년부터 음반 심의와 뮤직비디오 심의 접수를 대행해 온 (주)빈티지하우스의 온라인 심의 서비스입니다.",
+  description: ABOUT_DESCRIPTION,
   path: "/about",
   enPath: "/en/about",
 });
+
+// The "who is this" facts search engines and AI assistants quote; each one is
+// already stated elsewhere on the site (guides, footer, terms).
+const serviceFacts = [
+  { label: "음반 심의", value: "앨범·음원(디지털 싱글) 심의 · KBS·MBC·SBS 등 TV·라디오 방송국 15곳" },
+  { label: "뮤직비디오 심의", value: "영등위 등급분류(온라인 유통용, Mnet 추가) · KBS·MBC·SBS 방송국별 심의 · ETN 입고" },
+];
 
 export default function AboutPage() {
   return (
@@ -81,7 +94,23 @@ export default function AboutPage() {
         </section>
 
         <AboutRevealSection />
+
+        <GuideTrustFacts heading="온사이드 한눈에" leadFacts={serviceFacts} />
       </div>
+      <JsonLd data={organizationJsonLd()} />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "AboutPage",
+          "@id": `${absoluteUrl("/about")}#webpage`,
+          url: absoluteUrl("/about"),
+          name: "온사이드 회사소개",
+          description: ABOUT_DESCRIPTION,
+          inLanguage: "ko-KR",
+          isPartOf: { "@id": `${getBaseUrl()}/#website` },
+          mainEntity: { "@id": `${getBaseUrl()}/#organization` },
+        }}
+      />
     </div>
   );
 }

@@ -5,17 +5,18 @@ import { getBaseUrl } from "@/lib/url";
 
 export const SITE_NAME = "온사이드";
 export const SITE_NAME_EN = "Onside";
-export const SITE_TAGLINE = "음반심의·뮤직비디오 심의 온라인 접수";
+export const SITE_TAGLINE = "음반·음원·뮤직비디오 심의 온라인 접수";
 export const SITE_DESCRIPTION =
-  "음반심의(앨범심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 TV·라디오 방송국의 음반 심의와 영상물등급위원회 등급분류·방송국별 뮤직비디오 심의까지, 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 한곳에서 안내합니다.";
+  "음반 심의(앨범·음원 심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 TV·라디오 방송국의 음반 심의와 영상물등급위원회 등급분류·방송국별 뮤직비디오 심의까지, 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 한곳에서 안내합니다.";
 export const SITE_DESCRIPTION_EN =
   "Submit Korean broadcast music reviews online: album reviews for KBS, MBC, SBS and radio stations, and music video reviews and ratings. Onside has handled review submissions since 2017.";
 
 /** Search terms people use for the services Onside provides. */
 export const SEO_KEYWORDS = [
   "음반심의", "음반 심의", "앨범심의", "앨범 심의", "뮤직비디오심의", "뮤직비디오 심의", "뮤비심의", "뮤비 심의",
-  "방송국심의", "방송국 심의", "방송심의", "라디오심의", "라디오 심의", "가요심의", "음원심의", "음원 방송 심의",
-  "KBS 심의", "MBC 심의", "SBS 심의", "뮤직비디오 등급분류", "영상물등급위원회 뮤직비디오", "심의 대행", "음반심의 대행",
+  "방송국심의", "방송국 심의", "방송심의", "라디오심의", "라디오 심의", "가요심의", "음원심의", "음원 심의", "음원 방송 심의",
+  "KBS 심의", "MBC 심의", "SBS 심의", "뮤직비디오 등급분류", "영상물등급위원회 뮤직비디오", "영등위 심의", "심의 대행",
+  "음반심의 대행", "음원 심의 대행", "앨범 심의 대행", "뮤직비디오 심의 대행", "뮤비 심의 대행",
 ];
 
 /** Built from src/app/opengraph-image.tsx at deploy time. */
@@ -97,7 +98,16 @@ export function organizationJsonLd() {
       addressCountry: "KR",
     },
     areaServed: { "@type": "Country", name: "대한민국" },
-    knowsAbout: ["음반 심의", "뮤직비디오 심의", "방송국 심의", "라디오 심의", "뮤직비디오 등급분류"],
+    knowsAbout: ["음반 심의", "앨범 심의", "음원 심의", "뮤직비디오 심의", "뮤비 심의", "방송국 심의", "라디오 심의", "뮤직비디오 등급분류", "영상물등급위원회 등급분류"],
+    // The two services, so search engines and assistants tie each guide to this business.
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: "심의 대행",
+      itemListElement: [
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "음반 심의 대행", alternateName: ["앨범 심의", "음원 심의", "방송국 심의", "라디오 심의"], url: absoluteUrl("/guide/album-review") } },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "뮤직비디오 심의 대행", alternateName: ["뮤비 심의", "영등위 뮤직비디오 등급분류", "방송국 뮤직비디오 심의"], url: absoluteUrl("/guide/mv-review") } },
+      ],
+    },
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer support",
@@ -119,6 +129,28 @@ export function websiteJsonLd() {
     url: origin,
     inLanguage: ["ko-KR", "en"],
     publisher: { "@id": `${origin}/#organization` },
+  };
+}
+
+/**
+ * A guide page as a WebPage: who publishes it and when its facts were last
+ * reviewed, the freshness and authorship signals search engines read.
+ */
+export function webPageJsonLd(input: { name: string; description: string; path: string; dateModified: string }) {
+  const origin = getBaseUrl();
+  const pageUrl = absoluteUrl(input.path);
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${pageUrl}#webpage`,
+    url: pageUrl,
+    name: input.name,
+    description: input.description,
+    inLanguage: "ko-KR",
+    dateModified: input.dateModified,
+    isPartOf: { "@id": `${origin}/#website` },
+    publisher: { "@id": `${origin}/#organization` },
+    author: { "@id": `${origin}/#organization` },
   };
 }
 

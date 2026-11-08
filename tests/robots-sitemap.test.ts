@@ -62,6 +62,18 @@ test("search guides are listed, redirects and placeholder pages are not, AI assi
   }
 });
 
+test("the guides carry every review term people search with, and login pages stay out of the sitemap", async () => {
+  const { REVIEW_GUIDES } = await import("../src/lib/review-guides");
+  const [album, mv] = REVIEW_GUIDES;
+  // 음원 심의 is the same broadcaster review, so the album guide answers it (owner #61: two review types only).
+  for (const text of [album.title, album.h1, album.description]) assert.ok(text.includes("음원 심의"), `album guide text should name 음원 심의: ${text}`);
+  for (const term of ["앨범 심의", "음원 심의 대행", "음반심의 대행"]) assert.ok(album.keywords.includes(term), `album keywords keep ${term}`);
+  assert.ok(mv.title.includes("뮤비 심의") && mv.title.includes("대행"), "the music video guide title names 뮤비 심의 and 대행");
+  assert.ok(mv.faqs.some((faq) => faq.question.includes("영등위")), "the music video guide answers the 영등위 question");
+  const paths = sitemap().map((entry) => new URL(entry.url).pathname);
+  for (const path of ["/login", "/signup", "/en/login", "/en/signup"]) assert.equal(paths.includes(path), false, `${path} answers no search and stays out of the sitemap`);
+});
+
 test("the client-side guide link list matches the guide content", async () => {
   const { REVIEW_GUIDES } = await import("../src/lib/review-guides");
   const { REVIEW_GUIDE_LINKS } = await import("../src/lib/review-guide-links");
