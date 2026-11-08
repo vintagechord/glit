@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
 
+import { GuideTrustFacts, GuideUpdatedLine } from "@/components/guide/trust-facts";
 import { JsonLd } from "@/components/seo/json-ld";
 import { albumPreparationItems, mvPreparationItems } from "@/lib/onside-content";
+import { GUIDE_CONTENT_UPDATED } from "@/lib/onside-trust";
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
-import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
+import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd, webPageJsonLd } from "@/lib/seo";
 import { getLocalStationLogoSource } from "@/lib/station-logos";
 import { getStationGuide, josa, packagesIncluding, relatedStationGuides, STATION_GUIDES, stationFaqs, stationRadioGuide, stationSchedule, won } from "@/lib/station-guides";
 import { MV_BASE_ONLINE_PRICE_KRW } from "@/lib/submission-station-selection";
@@ -61,6 +63,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
       <JsonLd data={breadcrumbJsonLd([{ name: "홈", path: "/" }, { name: "심의 안내", path: "/guide" }, { name: "방송국별 안내", path: "/guide/stations" }, { name: guide.name, path }])} />
       <JsonLd data={serviceJsonLd({ name: `${guide.shortName} ${kinds} 대행`, serviceType: `${kinds} 대행`, description: guide.description, path, offers })} />
       <JsonLd data={faqJsonLd(faqs)} />
+      <JsonLd data={webPageJsonLd({ name: guide.title, description: guide.description, path, dateModified: GUIDE_CONTENT_UPDATED })} />
 
       <nav aria-label="현재 위치" className="text-xs font-bold text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-1.5">
@@ -82,6 +85,7 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           <p className="bauhaus-kicker">{kicker}</p>
         </div>
         <h1 className="font-display mt-4 break-keep text-3xl font-black leading-tight text-foreground sm:text-4xl">{guide.title}</h1>
+        <GuideUpdatedLine />
         <p className="mt-5 break-keep text-base leading-8 text-foreground/85">{guide.lead}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           {guide.album ? (
@@ -215,6 +219,8 @@ export default async function StationGuidePage({ params }: { params: Promise<{ s
           <p className="mt-4 break-keep text-sm leading-7 text-muted-foreground">{radio.followUp.ko} 링크는 {radio.verifiedAt}에 확인한 공식 주소이며, 온사이드가 대신 신청하지는 않습니다.</p>
         </section>
       ) : null}
+
+      <GuideTrustFacts />
 
       <section className="mt-10">
         <h2 className="font-display text-2xl font-black text-foreground">자주 묻는 질문</h2>

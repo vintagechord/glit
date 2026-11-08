@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
+import { JsonLd } from "@/components/seo/json-ld";
+import { GUIDE_CONTENT_UPDATED } from "@/lib/onside-trust";
 import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
-import { pageMetadata } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMetadata, webPageJsonLd } from "@/lib/seo";
 import { getLocalStationLogoSource } from "@/lib/station-logos";
 import { STATION_GUIDES } from "@/lib/station-guides";
 import {
@@ -17,13 +19,16 @@ import {
 
 import { albumPreparationItems, mvPreparationItems } from "@/lib/onside-content";
 
+const GUIDE_INDEX_TITLE = "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물";
+const GUIDE_INDEX_DESCRIPTION =
+  "음반 심의(앨범·음원 심의)와 뮤직비디오 심의(뮤비 심의)의 신청 절차와 준비물, 비용, 결과 확인 방법을 한눈에 확인하세요. TV·라디오 방송국 심의는 음반 심의에, 영등위 등급분류와 방송국별 심의는 뮤직비디오 심의에 속합니다.";
+
 export const metadata = pageMetadata({
-  title: "심의 안내 · 음반 심의·뮤직비디오 심의 절차와 준비물",
-  description:
-    "음반 심의(앨범 심의)와 뮤직비디오 심의의 신청 절차와 준비물, 비용, 결과 확인 방법을 한눈에 확인하세요. TV·라디오 방송국 심의는 음반 심의에, 온라인 등급분류와 방송국별 심의는 뮤직비디오 심의에 속합니다.",
+  title: GUIDE_INDEX_TITLE,
+  description: GUIDE_INDEX_DESCRIPTION,
   path: "/guide",
   enPath: "/en/guide",
-  keywords: ["심의 안내", "음반심의 절차", "뮤직비디오 심의 절차", "방송국 심의", "라디오 심의", "심의 준비물"],
+  keywords: ["심의 안내", "음반심의 절차", "음원 심의 방법", "뮤직비디오 심의 절차", "뮤비 심의 방법", "방송국 심의", "라디오 심의", "심의 준비물"],
 });
 
 const reviewFlowSteps = [
@@ -84,6 +89,8 @@ const reviewTypeCards = [
 export default function GuidePage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
+      <JsonLd data={breadcrumbJsonLd([{ name: "홈", path: "/" }, { name: "심의 안내", path: "/guide" }])} />
+      <JsonLd data={webPageJsonLd({ name: GUIDE_INDEX_TITLE, description: GUIDE_INDEX_DESCRIPTION, path: "/guide", dateModified: GUIDE_CONTENT_UPDATED })} />
       <p className="bauhaus-kicker">이용가이드</p>
       <h1 className="font-display mt-4 text-3xl font-black text-foreground">심의 안내</h1>
       <p className="mt-4 max-w-3xl break-keep text-[15px] leading-8 text-foreground/85">

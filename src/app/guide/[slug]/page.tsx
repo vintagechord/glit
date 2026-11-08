@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 
 import { AlbumPriceTable, MvPriceTable } from "@/components/guide/price-tables";
+import { GuideTrustFacts, GuideUpdatedLine } from "@/components/guide/trust-facts";
 import { JsonLd } from "@/components/seo/json-ld";
+import { GUIDE_CONTENT_UPDATED } from "@/lib/onside-trust";
 import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { loadAlbumPackages } from "@/lib/review-guide-pricing";
 import { getReviewGuide, MV_PRICE_ROWS, REVIEW_GUIDES } from "@/lib/review-guides";
-import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd } from "@/lib/seo";
+import { breadcrumbJsonLd, faqJsonLd, pageMetadata, serviceJsonLd, webPageJsonLd } from "@/lib/seo";
+import { STATION_GUIDES } from "@/lib/station-guides";
 
 // Public, crawlable guides: rebuilt hourly, and at once when an admin edits
 // packages (the price table reads the tagged public catalog cache).
@@ -33,12 +36,16 @@ export default async function ReviewGuidePage({ params }: { params: Promise<{ sl
     ? MV_PRICE_ROWS.map((row) => ({ name: row.label, priceKrw: row.priceKrw }))
     : packages.map((item) => ({ name: `음반 심의 ${item.name}`, priceKrw: item.priceKrw }));
   const related = guide.related.map((slug) => getReviewGuide(slug)).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  // Every station page this review type reaches, so "KBS 음반 심의" or
+  // "영등위 뮤직비디오 심의" searches land one click away.
+  const stations = STATION_GUIDES.filter((station) => (guide.pricing === "mv" ? Boolean(station.mv) : station.album));
 
   return (
     <article className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <JsonLd data={breadcrumbJsonLd([{ name: "홈", path: "/" }, { name: "심의 안내", path: "/guide" }, { name: guide.menuLabel, path }])} />
       <JsonLd data={serviceJsonLd({ name: guide.h1, serviceType: guide.serviceType, description: guide.description, path, offers })} />
       <JsonLd data={faqJsonLd(guide.faqs)} />
+      <JsonLd data={webPageJsonLd({ name: guide.title, description: guide.description, path, dateModified: GUIDE_CONTENT_UPDATED })} />
 
       <nav aria-label="현재 위치" className="text-xs font-bold text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-1.5">
@@ -53,6 +60,7 @@ export default async function ReviewGuidePage({ params }: { params: Promise<{ sl
       <header className="mt-5">
         <p className="bauhaus-kicker">심의 가이드</p>
         <h1 className="font-display mt-4 break-keep text-3xl font-black leading-tight text-foreground sm:text-4xl">{guide.h1}</h1>
+        <GuideUpdatedLine />
         <p className="mt-5 break-keep text-base leading-8 text-foreground/85">{guide.lead}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href={guide.cta.href} className="inline-flex min-h-12 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-5 text-sm font-black text-[#111111] shadow-[3px_3px_0_#111111] transition hover:-translate-y-0.5">
@@ -92,11 +100,26 @@ export default async function ReviewGuidePage({ params }: { params: Promise<{ sl
         </section>
       ))}
 
+      <nav aria-labelledby="guide-stations-heading" className="mt-10">
+        <h2 id="guide-stations-heading" className="font-display break-keep text-2xl font-black text-foreground">{guide.pricing === "mv" ? "접수처별 뮤직비디오 심의 안내" : "방송국별 음반 심의 안내"}</h2>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {stations.map((station) => (
+            <li key={station.slug}>
+              <Link href={`/guide/stations/${station.slug}`} className="inline-flex min-h-10 items-center rounded-[8px] border-2 border-[#111111] bg-card px-3 text-xs font-black text-foreground transition hover:-translate-y-0.5 hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
+                {`${station.shortName} ${guide.pricing === "mv" ? (station.mv?.delivery ? "입고" : "심의") : "음반 심의"}`}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       <section className="mt-10">
         <h2 className="font-display text-2xl font-black text-foreground">{guide.pricing === "mv" ? "뮤직비디오 심의 비용" : "음반 심의 비용"}</h2>
         <p className="mt-3 break-keep text-sm leading-7 text-muted-foreground">음반 심의는 앨범 1건, 뮤직비디오 심의는 영상 1건 기준이며 부가세가 포함된 금액입니다. 결제 전 화면에서 선택한 항목과 총액을 다시 확인할 수 있습니다.</p>
         {guide.pricing === "album" ? <div className="mt-4"><AlbumPriceTable packages={packages} /></div> : <div className="mt-4"><MvPriceTable /></div>}
       </section>
+
+      <GuideTrustFacts />
 
       <section className="mt-10">
         <h2 className="font-display text-2xl font-black text-foreground">자주 묻는 질문</h2>
