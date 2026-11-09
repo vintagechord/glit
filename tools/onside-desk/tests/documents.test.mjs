@@ -66,6 +66,21 @@ test('MV filenames fit filesystem byte limits without shortening document conten
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 
+test('MV documents name the artist by the official credit; the 한글/영문 name is reference only',{skip:process.platform!=='darwin'},async()=>{
+ const dir=await output();try {
+  const submission={...base,type:'MV_DISTRIBUTION',artist_name:'쏠(SOLE) / SOLE',artist_name_kr:'SOLE (쏠)',title:'영상',mv_song_title:'노래',mv_lyrics:'가사 원문'};
+  const result=await generateDocuments({submission,outputDir:dir,settings:{pagination:false}});
+  const lyric=result.artifacts.find(a=>a.type==='doc');
+  assert.match(lyric.name,/가사_SOLE \(쏠\)_노래\.doc$/);
+  const content=await docText(lyric.path);assert.ok(content.includes('SOLE (쏠)'));assert.ok(!content.includes('쏠(SOLE) / SOLE'));
+  const copy=await fs.readFile(result.artifacts.find(a=>a.name.includes('영등위_복사붙여넣기')).path,'utf8');
+  assert.ok(copy.includes('SOLE (쏠)'));assert.ok(!copy.includes('쏠(SOLE) / SOLE'));
+  // Requests from before the official field keep the name they have.
+  const legacy=await generateDocuments({submission:{...submission,artist_name_kr:null},outputDir:dir,settings:{pagination:false}});
+  assert.ok((await docText(legacy.artifacts.find(a=>a.type==='doc').path)).includes('쏠(SOLE) / SOLE'));
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+
 test('explicitly cleared contact settings remain blank instead of restoring defaults',async()=>{
  const dir=await output();try {
   const result=await generateDocuments({submission:base,tracks:tracks.slice(0,1),outputDir:dir,settings:{pagination:false,managerName:'',managerPhone:'',managerEmail:'',companyName:''}});

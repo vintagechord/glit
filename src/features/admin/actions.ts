@@ -2092,6 +2092,8 @@ export async function saveSubmissionAdminFormAction(
   const paymentStatus = String(formData.get("paymentStatus") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
   const artistName = String(formData.get("artistName") ?? "").trim();
+  // MV only: the official credit staff read lives in artist_name_kr.
+  const artistNameOfficial = String(formData.get("artistNameOfficial") ?? "").trim();
 
   const parsedSubmissionId = uuidValueSchema.safeParse(submissionId);
   const parsedOperationalStage = adminOperationalStageEnum.safeParse(operationalStage);
@@ -2116,7 +2118,7 @@ export async function saveSubmissionAdminFormAction(
   const [{ data: currentSubmission, error: currentSubmissionError }, currentMemo] = await Promise.all([
     supabase
       .from("submissions")
-      .select("id, type, mv_desired_rating, status, payment_status, current_order_id, title, artist_name")
+      .select("id, type, mv_desired_rating, status, payment_status, current_order_id, title, artist_name, artist_name_kr")
       .eq("id", submissionId)
       .maybeSingle(),
     loadSubmissionAdminMemo(supabase, submissionId),
@@ -2198,6 +2200,8 @@ export async function saveSubmissionAdminFormAction(
   if (!currentSubmissionRow.current_order_id) submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;
+  const isMvRow = currentSubmissionRow.type?.startsWith("MV_") ?? false;
+  if (isMvRow && artistNameOfficial) submissionUpdate.artist_name_kr = artistNameOfficial;
 
   const { data: updatedSubmission, error: submissionError } = await supabase
     .from("submissions")
@@ -2251,7 +2255,8 @@ export async function saveSubmissionAdminFormAction(
       ? `결제 상태: ${paymentStatusLabelMap[nextPaymentStatus] ?? nextPaymentStatus}`
       : null,
     title && currentSubmissionRow.title !== title ? "작품명이 정리되었습니다." : null,
-    artistName && currentSubmissionRow.artist_name !== artistName
+    (artistName && currentSubmissionRow.artist_name !== artistName) ||
+    (isMvRow && artistNameOfficial && currentSubmissionRow.artist_name_kr !== artistNameOfficial)
       ? "아티스트명이 정리되었습니다."
       : null,
   ].filter(Boolean);

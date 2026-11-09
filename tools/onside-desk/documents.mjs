@@ -81,7 +81,8 @@ function normalizedTracks(tracks,warnings,manual=false) {
   });
 }
 function makeData(submission,tracks,settings,warnings) {
-  const artist=first(submission.artist_name,submission.artist_name_kr,submission.artist_name_en);
+  // MV forms keep the official credit (영등위 takes only that) in artist_name_kr and the 한글/영문 reference in artist_name.
+  const artist=String(submission.type||'').startsWith('MV_')?first(submission.artist_name_kr,submission.artist_name,submission.artist_name_en):first(submission.artist_name,submission.artist_name_kr,submission.artist_name_en);
   const album=first(submission.title,submission.mv_album_title);
   const actualCompany=first(submission.production_company,submission.mv_production_company,submission.guest_company,submission.applicant_company,submission.company);
   const workDate=text(settings.applicationDate)||todaySeoul(), today=dateParts(workDate);

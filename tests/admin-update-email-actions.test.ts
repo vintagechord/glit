@@ -232,3 +232,22 @@ test("staff notes are saved only to the administrator-only memo table, never on 
   }
   assert.equal("admin_memo" in api.state.submission && api.state.submission.admin_memo !== null, false);
 });
+
+test("main admin form corrects the MV 아티스트명 공식 표기 and ignores it on albums", async () => {
+  const api = await fixture();
+  Object.assign(api.state.submission, { type: "MV_DISTRIBUTION", artist_name: "쏠(SOLE) / SOLE", artist_name_kr: "SOLE" });
+  const form = new FormData();
+  for (const [key, value] of Object.entries({ submissionId, status: "PRE_REVIEW", paymentStatus: "PAID", title: "Original", artistName: "쏠(SOLE) / SOLE", artistNameOfficial: "SOLE (쏠)" })) form.set(key, value);
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.state.submission.artist_name_kr, "SOLE (쏠)");
+  assert.equal(api.state.submission.artist_name, "쏠(SOLE) / SOLE");
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+
+  Object.assign(api.state.submission, { type: "ALBUM", artist_name: "Artist", artist_name_kr: "아티스트" });
+  form.set("artistName", "Artist"); form.set("artistNameOfficial", "Ignored");
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
+  assert.equal(api.state.submission.artist_name_kr, "아티스트");
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+});

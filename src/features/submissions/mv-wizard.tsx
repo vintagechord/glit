@@ -4300,7 +4300,7 @@ export function MvWizard({
                       className={requiredFieldClass("agency")}
                     />
                     {mvType === "MV_DISTRIBUTION" ? (
-                      <p id="mv-agency-help" className="text-xs leading-5 text-muted-foreground">
+                      <p id="mv-agency-help" className={`rounded-[8px] border-2 px-3 py-2 text-xs font-black leading-5 ${brandStatusTones.warning}`}>
                         영상 좌측 하단에 표기할 소속사명과 똑같이 입력해주세요.
                       </p>
                     ) : null}

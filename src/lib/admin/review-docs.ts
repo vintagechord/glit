@@ -1579,9 +1579,9 @@ export type MvLyricsDocument = { filename: string; buffer: Buffer };
 
 /**
  * One 영등위 lyric DOCX from the lyrics typed on a music-video application.
- * Names and titles follow the review desk (artist name, then the official
- * song title), and foreign lines get the same "(번역 : …)" pass as the album
- * documents.
+ * 영등위 takes the official credits only: the 아티스트명 공식 표기 and the
+ * official song title, as on the review desk. Foreign lines get the same
+ * "(번역 : …)" pass as the album documents.
  */
 export async function buildMvLyricsDocument(
   submission: DbRecord,
@@ -1592,7 +1592,7 @@ export async function buildMvLyricsDocument(
   }
   const firstText = (...keys: string[]) =>
     keys.map((key) => getText(submission, key)).find(Boolean) ?? "";
-  const artist = firstText("artist_name", "artist_name_kr", "artist_name_en");
+  const artist = firstText("artist_name_kr", "artist_name", "artist_name_en");
   const title = firstText("mv_song_title_official", "mv_song_title", "mv_song_title_kr", "title");
   const lyrics = cleanLyricText(getText(submission, "mv_lyrics")) ?? "";
   if (!lyrics.trim()) {
