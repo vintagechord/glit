@@ -34,7 +34,7 @@ async function fixture(): Promise<Fixture> {
                 if(table==='submission_payments')return {data:{submission_id:'${submissionId}',status:state.paymentStatus,raw_response:null},error:null};
                 if(table==='profiles')return {data:{phone:null,notification_email:state.notificationEmail},error:null};
                 if(table==='paid_submission_notification_events')return {data:[],error:null};
-                let rows=(table==='submission_orders'?state.orders:table==='submission_order_items'?state.orderItems:state.rows).filter(row=>filters.every(({method,args:[key,value]})=>method==='eq'||method==='is'?row[key]===value:method==='in'?value.includes(row[key]):method==='or'&&key==='payment_status.is.null,payment_status.eq.UNPAID'?row.payment_status===null||row.payment_status==='UNPAID':true));
+                let rows=(table==='submission_orders'?state.orders:table==='submission_order_items'?state.orderItems:table==='submission_order_cash_receipts'?(state.receipts??[]):state.rows).filter(row=>filters.every(({method,args:[key,value]})=>method==='eq'||method==='is'?row[key]===value:method==='in'?value.includes(row[key]):method==='or'&&key==='payment_status.is.null,payment_status.eq.UNPAID'?row.payment_status===null||row.payment_status==='UNPAID':true));
                 return {data:structuredClone(rows),error:null};
               };
               q.maybeSingle=async()=>{const value=result();return {...value,data:Array.isArray(value.data)?value.data[0]??null:value.data}};
@@ -139,6 +139,8 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
     assert.equal(email?.email, guest ? "guest@example.invalid" : "member@example.invalid");
     assert.equal(email?.idempotencyKey, `bank-request:${h.state.nextOrderId}:${email?.email}`);
     assert.equal(email?.orderId, h.state.nextOrderId);
+    assert.equal(email?.submissionId, submissionId, "the notice appears in the application's admin mail history");
+    assert.equal(email?.cashReceipt, null);
     assert.equal(email?.totalAmountKrw, 3500);
     assert.deepEqual((email?.items as Array<{ title: string; amountKrw: number }>).map(item => [item.title, item.amountKrw]), [["Fixture title", 1000], ["Second title", 2500]]);
     if (guest) assert.ok(String(email?.link).endsWith("/track/legacy-private-guest-token"));
@@ -146,14 +148,49 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
   }
 });
 
-test("bank requests send social members' payment instructions to the saved profile contact", async () => {
-  const h = await fixture(); h.state.rows = [row()];
-  h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };
+test("bank requests send email-less social members the account and whole order at their saved profile contact", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.rows = [row(), { ...row(), id: otherId, title: "Second title", applicant_email: "other-contact@example.invalid", amount_krw: 2500 }];
+  h.state.user = { id: memberId, identities: [{ provider: "kakao" }] };
   h.state.notificationEmail = "saved@example.invalid";
-  assert.equal((await h.POST(bankRequest(false, [submissionId]))).status, 200);
-  const notices = h.calls.filter(call => call.method === "payment-email");
-  assert.equal(notices.length, 1); assert.equal(notices[0].input?.email, "saved@example.invalid");
-  assert.equal(notices[0].input?.items, undefined);
+  assert.equal((await h.POST(bankRequest(false, [submissionId, otherId]))).status, 200);
+  assert.equal(h.calls.some(call => call.method === "payment-email"), false);
+  const emails = h.calls.filter(call => call.method === "bank-email");
+  assert.equal(emails.length, 1);
+  const email = emails[0].input!;
+  assert.equal(email.email, "saved@example.invalid");
+  assert.equal(email.idempotencyKey, `bank-request:${h.state.nextOrderId}:saved@example.invalid`);
+  assert.equal(email.totalAmountKrw, 3500);
+  assert.equal(email.depositorName, "홍길동");
+  assert.equal((email.items as unknown[]).length, 2);
+  assert.doesNotMatch(String(email.link), /track|legacy-private/);
+});
+
+test("bank requests send the whole order to an email-less member's one application contact", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.user = { id: memberId, identities: [{ provider: "kakao" }] };
+  h.state.rows = [row(), { ...row(), id: otherId, title: "Second title", amount_krw: 2500 }];
+  assert.equal((await h.POST(bankRequest(false, [submissionId, otherId]))).status, 200);
+  const emails = h.calls.filter(call => call.method === "bank-email");
+  assert.equal(emails.length, 1);
+  assert.equal(emails[0].input?.email, "third-party@example.invalid");
+  assert.equal(emails[0].input?.totalAmountKrw, 3500);
+  assert.equal(h.calls.some(call => call.method === "payment-email"), false);
+});
+
+test("the bank notice repeats the stored cash receipt request with the number masked", async () => {
+  const h = await fixture();
+  h.state.rows = [row()];
+  (h.state as unknown as { receipts: Row[] }).receipts = [{
+    order_id: h.state.nextOrderId, purpose: "INCOME_DEDUCTION", identifier: "01012345678", status: "REQUESTED",
+    requested_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }];
+  assert.equal((await h.POST(bankRequest())).status, 200);
+  const email = h.calls.find(call => call.method === "bank-email")?.input;
+  assert.deepEqual(email?.cashReceipt, { purposeLabel: "개인 소득공제용", identifierMasked: "010-****-5678" });
+  assert.doesNotMatch(JSON.stringify(email), /01012345678/);
 });
 
 test("bank requests keep no-email social application contacts separate and direct totals behind login", async () => {

@@ -17,8 +17,8 @@ const orderIdSchema = z.string().uuid();
 const backTo = (filter: string, orderId: string, query: string) =>
   `/admin/cash-receipts?filter=${encodeURIComponent(filter)}&${query}#order-${orderId}`;
 const formFilter = (formData: FormData) => {
-  const value = String(formData.get("filter") ?? "attention");
-  return /^[A-Za-z]{2,20}$/.test(value) ? value : "attention";
+  const value = String(formData.get("filter") ?? "open");
+  return /^[A-Za-z]{2,20}$/.test(value) ? value : "open";
 };
 
 function refresh() {

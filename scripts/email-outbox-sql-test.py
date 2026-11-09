@@ -35,7 +35,7 @@ try:
         "grant usage on schema public to anon,authenticated,service_role;"
         "create table public.submissions(id uuid primary key,result_notified_at timestamptz,updated_at timestamptz default now());"
         "grant select,update on public.submissions to service_role;")
-    for name in ["*_email_worker_and_rate_limits.sql", "*_durable_email_outbox.sql", "*_review_email_attachment_refs.sql"]:
+    for name in ["*_email_worker_and_rate_limits.sql", "*_durable_email_outbox.sql", "*_review_email_attachment_refs.sql", "*_email_outbox_keep_sent_bodies.sql"]:
         path = sorted((root / "supabase/migrations").glob(name))[-1]
         sql(path.read_text())
         print("PASS", path.name)

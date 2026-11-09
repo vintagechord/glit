@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CashReceiptPurpose } from "@/lib/cash-receipts";
 
 import {
   adminSubmissionStageKeys,
@@ -30,6 +31,8 @@ export type DashboardBankOrder = {
   depositDueAt: string | null;
   amountKrw: number | null;
   createdAt: string;
+  /** The customer asked for a cash receipt with this order (not withdrawn). */
+  cashReceiptPurpose: CashReceiptPurpose | null;
 };
 
 export type DashboardResultNotice = DashboardSubmission & { hasRecipient: boolean | null };
@@ -127,10 +130,16 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
   let bankOrders: DashboardBankOrder[] = [];
   const orders = (ordersResult.data ?? []) as Array<{ id: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null; created_at: string }>;
   if (orders.length) {
-    const { data: items, error } = await db.from("submission_order_items")
-      .select("order_id, submission_id, title").in("order_id", orders.map((order) => order.id));
-    if (error) failedSections.push("입금 확인 대기");
+    const orderIds = orders.map((order) => order.id);
+    const [{ data: items, error }, receiptResult] = await Promise.all([
+      db.from("submission_order_items").select("order_id, submission_id, title").in("order_id", orderIds),
+      db.from("submission_order_cash_receipts").select("order_id, purpose, status").in("order_id", orderIds),
+    ]);
+    if (error || receiptResult.error) failedSections.push("입금 확인 대기");
     const rows = (items ?? []) as Array<{ order_id: string; submission_id: string | null; title: string | null }>;
+    const receipts = new Map(((receiptResult.data ?? []) as Array<{ order_id: string; purpose: CashReceiptPurpose; status: string }>)
+      .filter((receipt) => receipt.status !== "CANCELED")
+      .map((receipt) => [receipt.order_id, receipt.purpose]));
     bankOrders = orders.map((order) => {
       const orderItems = rows.filter((item) => item.order_id === order.id);
       return {
@@ -141,6 +150,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
         depositDueAt: order.deposit_due_at,
         amountKrw: order.amount_krw,
         createdAt: order.created_at,
+        cashReceiptPurpose: receipts.get(order.id) ?? null,
       };
     });
   }

@@ -32,7 +32,8 @@ function fixture(deliver: Parameters<typeof createEmailOutboxService>[0]["delive
       current.last_error_code = result.errorCode ?? null; current.last_error_reason = result.reason ?? null;
       current.provider_message_id = result.messageId ?? null; current.lease_token = null;
       current.next_attempt_at = new Date(now + 30_000 * 2 ** (row.attempt_count - 1)).toISOString();
-      if (result.outcome === "accepted") current.html = null;
+      // finish_email_outbox keeps delivered bodies for the admin original view, except sign-in links.
+      if (result.outcome === "accepted" && ["signup verification", "password reset"].includes(current.operation)) current.html = null;
       return { ...current };
     },
     async get(id) { return rows.get(id) ?? null; },
@@ -52,13 +53,13 @@ async function withEnv(run: () => Promise<void>) {
   }
 }
 
-test("durable enqueue precedes delivery, claims only its own ID, and acceptance clears body", async () => {
+test("durable enqueue precedes delivery, claims only its own ID, and acceptance keeps the customer body", async () => {
   const f = fixture(async request => { assert.match(request.idempotencyKey!, /^outbox-/); assert.equal(request.requestId, request.idempotencyKey!.slice(7)); return accepted; });
   const result = await f.service.enqueueAndSend({ ...message, submissionId: "11111111-1111-4111-8111-111111111111", markResultNotified: true }, "supabase-smtp", "support@example.invalid");
   assert.equal(result.ok, true); assert.equal(result.status, "accepted");
   assert.deepEqual(f.calls, ["enqueue", `claim:${result.outboxId}`, "deliver", "finish"]);
   const row = f.rows.get(result.outboxId!)!;
-  assert.equal(row.html, null); assert.equal(row.mark_result_notified, true);
+  assert.equal(row.html, message.html); assert.equal(row.mark_result_notified, true);
   assert.equal(row.reply_to, "support@example.invalid"); assert.match(row.idempotency_key, /^[a-f0-9]{64}$/);
 });
 
@@ -81,7 +82,7 @@ test("definite temporary failures retry later with one stable provider key", asy
     assert.equal((await f.service.drain()).claimed, 0);
     f.advance(30_000);
     assert.deepEqual(await f.service.drain(), { claimed: 1, accepted: 1, retry: 0, uncertain: 0, failed: 0, expired: 0 });
-    assert.equal(keys[0], keys[1]); assert.equal(f.rows.get(first.outboxId!)!.html, null);
+    assert.equal(keys[0], keys[1]); assert.equal(f.rows.get(first.outboxId!)!.status, "accepted");
   });
 });
 

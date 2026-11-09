@@ -3,6 +3,7 @@ export const metadata = {
 };
 
 import Link from "next/link";
+import { CASH_RECEIPT_PURPOSE_LABELS } from "@/lib/cash-receipts";
 import {
   AlertTriangle,
   ClipboardList,
@@ -225,6 +226,11 @@ export default async function AdminPage() {
                       </span>
                     </span>
                     <span className="flex flex-wrap items-center gap-1.5">
+                      {order.cashReceiptPurpose ? (
+                        <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${brandStatusTones.progress}`}>
+                          현금영수증 {CASH_RECEIPT_PURPOSE_LABELS[order.cashReceiptPurpose]}
+                        </span>
+                      ) : null}
                       {due ? (
                         <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${overdue ? brandStatusTones.danger : brandStatusTones.warning}`}>
                           {overdue ? "기한 지남" : "입금 예정"} {due}
