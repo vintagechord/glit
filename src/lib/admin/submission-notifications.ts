@@ -5,6 +5,7 @@ import { sendResultEmail, sendReviewSummaryEmail, sendSubmissionUpdateEmail } fr
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 import { EmailAttachmentError, inspectOnlineMvBundleReadiness, prepareOnlineMvAttachmentRefs } from "@/lib/email-attachments";
 import { RATING_LABELS, isRatingCode } from "@/lib/mv-assets";
@@ -33,7 +34,7 @@ const emptyOutcome = (): SubmissionNotificationOutcome => ({
 async function loadContext(submissionId: string) {
   const db = createAdminClient();
   const { data: submission, error } = await db.from("submissions")
-    .select("id, title, artist_name, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at, status, result_status, result_notified_at, mv_desired_rating, mv_rating, certificate_b2_path, certificate_original_name")
+    .select("id, title, artist_name, artist_name_kr, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at, status, result_status, result_notified_at, mv_desired_rating, mv_rating, certificate_b2_path, certificate_original_name")
     .eq("id", submissionId).maybeSingle();
   if (error || !submission) return null;
 
@@ -92,7 +93,7 @@ export function sendSubmissionUpdateNotificationById(input: {
 }) {
   return deliver(input.submissionId, (context, email) => sendSubmissionUpdateEmail({
     email, title: context.submission.title ?? "제목 미입력",
-    artist: context.submission.artist_name ?? null,
+    artist: officialArtistName(context.submission),
     kind: context.submission.type?.startsWith("MV") ? "MV" : "ALBUM",
     headline: input.headline, summary: input.summary, subject: input.subject, link: context.link,
     submissionId: context.submission.id, markResultNotified: input.markResultNotified,
@@ -108,7 +109,7 @@ export function sendSubmissionResultNotificationById(input: {
 }) {
   return deliver(input.submissionId, (context, email) => sendResultEmail({
     email, title: context.submission.title ?? "제목 미입력",
-    artist: context.submission.artist_name ?? null, resultStatus: input.resultStatus,
+    artist: officialArtistName(context.submission), resultStatus: input.resultStatus,
     // Full result details stay behind the existing account/guest access check.
     resultMemo: null, link: context.link, submissionId: context.submission.id, markResultNotified: true,
     idempotencyKey: `submission-result-${createHash("sha256").update(JSON.stringify([
@@ -132,7 +133,7 @@ export async function sendOnlineMvResultNotificationById(input: { submissionId: 
     const refs = await prepareOnlineMvAttachmentRefs(context.submission, context.db);
     const ratingLabel = isRatingCode(readiness.rating) ? RATING_LABELS[readiness.rating] : readiness.rating;
     return deliver(input.submissionId, (latest, email) => sendSubmissionUpdateEmail({
-      email, title: latest.submission.title ?? "제목 미입력", artist: latest.submission.artist_name, kind: "MV",
+      email, title: latest.submission.title ?? "제목 미입력", artist: officialArtistName(latest.submission), kind: "MV",
       headline: `영등위 심의 결과: ${ratingLabel}`,
       summary: `확정 등급은 ${ratingLabel}입니다. 등급 이미지, 등급 표시 사용 예시 PDF, 영등위 심의필증을 첨부했습니다. 개인 결과 페이지에서도 같은 세 파일을 다운로드할 수 있습니다. 사용 예시에 따라 등급을 표시해주세요.`,
       subject: `[onside] 영등위 심의 결과 및 첨부파일 — ${ratingLabel}`,

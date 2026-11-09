@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { sendOrderBankTransferEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { runAfterResponse } from "@/lib/next/after-response";
 import { readBoundedJsonBody } from "@/lib/request-body";
 import {
@@ -50,6 +51,7 @@ type CartBankSubmission = {
   type: string | null;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr: string | null;
   amount_krw: number | null;
   status: string | null;
   payment_status: string | null;
@@ -139,7 +141,7 @@ export async function POST(req: NextRequest) {
   let submissionQuery = admin
     .from("submissions")
     .select(
-      "id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email",
+      "id, user_id, guest_token, type, title, artist_name, artist_name_kr, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email",
     )
     .in("id", submissionIds);
   submissionQuery = user
@@ -306,7 +308,7 @@ export async function POST(req: NextRequest) {
   // Reload before enqueueing so initial delivery and later repairs use the
   // same order-specific key, including after a cart is reopened and reordered.
   const { data: refreshedRows, error: refreshError } = await admin.from("submissions")
-    .select("id, user_id, guest_token, type, title, artist_name, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email")
+    .select("id, user_id, guest_token, type, title, artist_name, artist_name_kr, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email")
     .in("id", submissionIds);
   if (refreshError || !refreshedRows || refreshedRows.length !== submissionIds.length) {
     return NextResponse.json({ error: "입금 요청은 저장되었지만 안내를 준비하지 못했습니다. 같은 주문으로 다시 요청해주세요." }, { status: 503 });
@@ -372,7 +374,7 @@ export async function POST(req: NextRequest) {
           const result = await sendSubmissionUpdateEmail({
             email,
             title: submission.title ?? "제목 미입력",
-            artist: submission.artist_name,
+            artist: officialArtistName(submission),
             kind: getKind(submission.type),
             headline: "입금 요청이 접수되었습니다.",
             summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
@@ -399,7 +401,7 @@ export async function POST(req: NextRequest) {
       );
       const items = orderSubmissions.map((submission) => ({
         title: submission.title,
-        artist: submission.artist_name,
+        artist: officialArtistName(submission),
         kind: getKind(submission.type),
         amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
       }));

@@ -7,6 +7,7 @@ import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 type PayPalMode = "sandbox" | "production";
 
@@ -15,7 +16,9 @@ type PayPalSubmission = {
   user_id: string | null;
   guest_token: string | null;
   title: string | null;
+  type?: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   status: string | null;
   payment_status: string | null;
   current_order_id?: string | null;
@@ -311,9 +314,9 @@ const selectGlobalSubmission = async (
 ) => {
   const admin = createAdminClient();
   const withGlobal =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, current_order_id, payment_method, payment_provider, payment_amount, payment_currency, paypal_order_id";
+    "id, user_id, guest_token, type, title, artist_name, artist_name_kr, status, payment_status, current_order_id, payment_method, payment_provider, payment_amount, payment_currency, paypal_order_id";
   const fallback =
-    "id, user_id, guest_token, title, artist_name, status, payment_status, current_order_id, payment_method";
+    "id, user_id, guest_token, type, title, artist_name, artist_name_kr, status, payment_status, current_order_id, payment_method";
 
   let primaryQuery = admin
     .from("submissions")
@@ -554,9 +557,10 @@ export const createPayPalOrderForSubmission = async ({
     `/api/paypal/capture?cancel=1&submissionId=${encodeURIComponent(submission.id)}&state=${encodeURIComponent(returnState)}`,
     baseUrl,
   );
+  const productArtist = officialArtistName(submission);
   const productName =
-    submission.title && submission.artist_name
-      ? `${submission.artist_name} - ${submission.title}`
+    submission.title && productArtist
+      ? `${productArtist} - ${submission.title}`
       : submission.title ?? "Korean Broadcast Review Submission";
 
   const accessToken = await getAccessToken();

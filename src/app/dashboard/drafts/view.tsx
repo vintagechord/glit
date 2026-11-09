@@ -14,6 +14,7 @@ import {
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 type ShellConfig = {
   contextLabel?: string;
@@ -31,7 +32,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
 
   const { data, error } = await supabase
     .from("submissions")
-    .select("id, type, status, payment_status, title, artist_name, is_oneclick, updated_at")
+    .select("id, type, status, payment_status, title, artist_name, artist_name_kr, is_oneclick, updated_at")
     .eq("user_id", user.id)
     .in("status", ["DRAFT", "PRE_REVIEW"])
     .or("payment_status.is.null,payment_status.in.(UNPAID,PAYMENT_PENDING)")
@@ -49,6 +50,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     payment_status: string | null;
     title: string | null;
     artist_name: string | null;
+    artist_name_kr: string | null;
     is_oneclick: boolean | null;
     updated_at: string | null;
   }>).map((row) => ({
@@ -57,7 +59,7 @@ export async function DraftSubmissionsPageView(config?: ShellConfig) {
     status: row.status,
     paymentStatus: row.payment_status,
     title: row.title,
-    artistName: row.artist_name,
+    artistName: officialArtistName(row),
     isOneclick: row.is_oneclick,
     updatedAt: row.updated_at,
   }));
