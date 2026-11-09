@@ -4,6 +4,7 @@ import { UncertainPaymentResolver } from "@/components/admin/uncertain-payment-r
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime, formatCurrency } from "@/lib/format";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = {
@@ -25,7 +26,9 @@ type PaymentRow = {
   submission: {
     id: string;
     title: string | null;
+    type: string | null;
     artist_name: string | null;
+    artist_name_kr: string | null;
     payment_method: string | null;
     payment_status: string | null;
   } | null;
@@ -72,7 +75,9 @@ export default async function AdminPaymentsPage({ searchParams }: {
         submission:submissions (
           id,
           title,
+          type,
           artist_name,
+          artist_name_kr,
           payment_method,
           payment_status
         )
@@ -169,7 +174,7 @@ export default async function AdminPaymentsPage({ searchParams }: {
                     <div className="max-w-xs">
                       <p className="truncate">
                         {row.submission?.title || "제목 없음"}{" "}
-                        <span className="text-muted-foreground">/ {row.submission?.artist_name || "아티스트 없음"}</span>
+                        <span className="text-muted-foreground">/ {(row.submission && officialArtistName(row.submission)) || "아티스트 없음"}</span>
                       </p>
                       {row.result_message ? (
                         <p className="text-[11px] text-muted-foreground line-clamp-1">{row.result_message}</p>

@@ -15,8 +15,8 @@ const mvSubmission = (overrides: Record<string, unknown> = {}) => ({
   id: "00000000-0000-4000-8000-000000000031",
   type: "MV_DISTRIBUTION",
   title: "뮤직비디오 제목",
-  artist_name: "검증 가수",
-  artist_name_kr: "검증 가수 공식",
+  artist_name: "검증가수(VERIFY) / VERIFY",
+  artist_name_kr: "VERIFY (검증가수)",
   mv_song_title: "검증곡",
   mv_song_title_kr: "검증곡",
   mv_song_title_official: "검증곡 (Verify Song)",
@@ -33,9 +33,11 @@ test("an MV application's typed lyrics become one 영등위 lyric Word file", as
       return segments.map(() => "보고 싶어");
     },
   });
-  assert.equal(document.filename, "가사_검증 가수_검증곡 (Verify Song).docx");
+  // 영등위 takes the official artist credit, not the 한글/영문 reference name.
+  assert.equal(document.filename, "가사_VERIFY (검증가수)_검증곡 (Verify Song).docx");
   const text = visible(document.buffer);
-  assert.match(text, /검증 가수 - 검증곡 \(Verify Song\)/);
+  assert.match(text, /VERIFY \(검증가수\) - 검증곡 \(Verify Song\)/);
+  assert.doesNotMatch(text, /VERIFY \/ VERIFY|검증가수\(VERIFY\)/);
   assert.match(text, /오늘도 너를 기다려/);
   // Foreign lines get the same automatic translation as the album documents.
   assert.match(text, /I miss you \(번역 : 보고 싶어\)/);
@@ -68,9 +70,10 @@ test("the MV lyric file needs typed lyrics and an MV submission", async () => {
   );
 });
 
-test("titles fall back like the review desk when the official title is missing", async () => {
+test("names fall back like the review desk when the official credits are missing", async () => {
   const document = await buildMvLyricsDocument(
-    mvSubmission({ artist_name: "", mv_song_title_official: "", mv_song_title: "", mv_lyrics: "다시 만나" }),
+    mvSubmission({ artist_name_kr: null, mv_song_title_official: "", mv_song_title: "", mv_lyrics: "다시 만나" }),
   );
-  assert.equal(document.filename, "가사_검증 가수 공식_검증곡.docx");
+  // MV requests from before the official field keep the 한글/영문 name.
+  assert.equal(document.filename, "가사_검증가수(VERIFY) VERIFY_검증곡.docx");
 });

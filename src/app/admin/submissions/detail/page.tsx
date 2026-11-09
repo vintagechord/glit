@@ -26,6 +26,7 @@ import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { loadSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { AdminSaveToast } from "@/components/admin/save-toast";
@@ -74,6 +75,7 @@ type SubmissionRow = {
   user_id?: string | null;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   ai_used?: boolean | null;
   release_date?: string | null;
   genre?: string | null;
@@ -969,7 +971,7 @@ export default async function AdminSubmissionDetailPage({
             {submission.title || (isOneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {submission.artist_name || (isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
+            {officialArtistName(submission) || (isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
             <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
@@ -1225,9 +1227,22 @@ export default async function AdminSubmissionDetailPage({
                 누락된 표시 정보를 보완합니다.
               </p>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {isMvSubmission ? (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      아티스트명 공식 표기
+                    </label>
+                    <input
+                      name="artistNameOfficial"
+                      defaultValue={submission.artist_name_kr ?? ""}
+                      placeholder="아티스트명 공식 표기를 입력해주세요."
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                    />
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    아티스트명
+                    {isMvSubmission ? "아티스트명 (한글/영문)" : "아티스트명"}
                   </label>
                   <input
                     name="artistName"
@@ -1882,6 +1897,7 @@ export default async function AdminSubmissionDetailPage({
             />
             {isMvSubmission ? (
               <>
+                <DetailRow label="아티스트명 (한글/영문)" value={submission.artist_name || "-"} />
                 <DetailRow label="러닝타임" value={submission.mv_runtime || "-"} />
                 <DetailRow label="포맷" value={submission.mv_format || "-"} />
                 <DetailRow label="감독" value={submission.mv_director || "-"} />

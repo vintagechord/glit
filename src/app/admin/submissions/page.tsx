@@ -21,6 +21,7 @@ import {
 } from "@/constants/review-status";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime } from "@/lib/format";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 import {
@@ -151,6 +152,7 @@ type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   status: ReviewStatus;
   payment_status: PaymentStatus | null;
   type: string;
@@ -211,9 +213,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -256,6 +258,7 @@ export default async function AdminSubmissionsPage({
       const terms = [
         `title.ilike.${pattern}`,
         `artist_name.ilike.${pattern}`,
+        `artist_name_kr.ilike.${pattern}`,
       ];
       if (includeGuestColumns) {
         terms.push(`guest_name.ilike.${pattern}`);
@@ -635,7 +638,7 @@ export default async function AdminSubmissionsPage({
                       </span>
                     </Link>
                     <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">
-                      {submission.artist_name || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {typeLabel}
+                      {officialArtistName(submission) || (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {typeLabel}
                       {hasGuestColumns && submission.guest_name
                         ? ` · ${submission.guest_name}`
                         : ""}
