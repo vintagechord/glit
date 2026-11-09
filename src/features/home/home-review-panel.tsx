@@ -22,6 +22,7 @@ import { loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import { downloadEndpointFile } from "@/lib/browser-download";
 import { isMvRatingChipTone, isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 type StationItem = {
   id: string;
@@ -41,6 +42,7 @@ type SubmissionSummary = {
   id: string;
   title: string | null;
   artist_name?: string | null;
+  artist_name_kr?: string | null;
   type?: string | null;
   status: string;
   created_at?: string | null;
@@ -370,7 +372,7 @@ function getSubmissionLabels(submission?: SubmissionSummary | null) {
       summary: "나의 심의",
     };
   }
-  const artist = submission.artist_name?.trim() || "아티스트 미입력";
+  const artist = officialArtistName(submission) || "아티스트 미입력";
   const title = submission.title?.trim() || "제목 미입력";
   return {
     artist,
@@ -741,7 +743,7 @@ export function HomeReviewPanel({
           const { data } = await supabase
             .from("submissions")
             .select(
-              "id, title, artist_name, status, updated_at, payment_status, current_order_id, type, result_status, result_notified_at, mv_desired_rating, certificate_b2_path, certificate_original_name",
+              "id, title, artist_name, artist_name_kr, status, updated_at, payment_status, current_order_id, type, result_status, result_notified_at, mv_desired_rating, certificate_b2_path, certificate_original_name",
             )
             .eq("id", activeSubmissionId)
             .maybeSingle();

@@ -9,7 +9,9 @@ type DashboardSubmission =
   | {
       id: string;
       title: string | null;
+      type?: string | null;
       artist_name?: string | null;
+      artist_name_kr?: string | null;
       artist?:
         | { id?: string | null; name?: string | null }
         | Array<{ id?: string | null; name?: string | null }>
@@ -32,6 +34,7 @@ type DashboardSubmission =
       id: string;
       title: string | null;
       artist_name?: string | null;
+      artist_name_kr?: string | null;
       artist?:
         | { id?: string | null; name?: string | null }
         | Array<{ id?: string | null; name?: string | null }>
@@ -195,7 +198,7 @@ async function loadDashboardStatusData(userId: string): Promise<DashboardStatusR
   const buildMvBase = (includeUserVisibility = true) => {
     let query = admin
       .from("submissions")
-      .select("id, title, artist_name, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, current_order_id, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
+      .select("id, title, artist_name, artist_name_kr, artist_id, artist:artists ( id, name ), status, created_at, updated_at, payment_status, current_order_id, result_status, result_notified_at, type, mv_desired_rating, certificate_b2_path, certificate_original_name, package_id, package:packages ( name, station_count )")
       .eq("user_id", userId)
       .in("type", ["MV_DISTRIBUTION", "MV_BROADCAST"])
       .not("status", "eq", "DRAFT");
@@ -276,7 +279,10 @@ async function loadDashboardStatusData(userId: string): Promise<DashboardStatusR
   const resolveArtistName = (submission: DashboardSubmission) => {
     const artist = submission.artist;
     const artistName = Array.isArray(artist) ? artist[0]?.name : artist?.name;
-    const trimmed = artistName?.trim() || submission.artist_name?.trim() || null;
+    // MV rows lead with the 아티스트명 공식 표기; older MV rows were linked to
+    // an artist named after the 한글/영문 reference name.
+    const official = submission.type?.startsWith("MV_") ? submission.artist_name_kr?.trim() : "";
+    const trimmed = official || artistName?.trim() || submission.artist_name?.trim() || null;
     return trimmed || null;
   };
 

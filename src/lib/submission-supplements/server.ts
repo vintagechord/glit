@@ -11,6 +11,7 @@ import { sendSubmissionUpdateEmail } from "@/lib/email";
 import { resolveSubmissionNotificationRecipient } from "@/lib/admin/notification-recipient";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 export class SupplementError extends Error {
   constructor(message: string, public status = 409) { super(message); }
@@ -292,7 +293,7 @@ async function notifySupplement(context: Context, requestId: string) {
   const claim = await mutate(context, "notify_claim", { requestId });
   const previous = (claim.outcome ?? {}) as Partial<NotificationOutcome>;
   if (claim.alreadyAccepted) return { notification: { ...previous, alreadyAccepted: true } };
-  const { data: submission, error } = await context.db.from("submissions").select("title,artist_name,applicant_email,guest_email,applicant_phone,guest_phone").eq("id", context.submission.id).single();
+  const { data: submission, error } = await context.db.from("submissions").select("type,title,artist_name,artist_name_kr,applicant_email,guest_email,applicant_phone,guest_phone").eq("id", context.submission.id).single();
   if (error || !submission) throw new SupplementError("안내 수신 정보를 확인할 수 없습니다.", 503);
   const { recipient: email, phone } = await resolveSubmissionNotificationRecipient(context.db, {
     ...submission, user_id: context.submission.user_id,
@@ -309,7 +310,7 @@ async function notifySupplement(context: Context, requestId: string) {
   const classify = (result: { ok: boolean; skipped?: boolean }) => result.ok ? "API_ACCEPTED" as const : result.skipped ? "SKIPPED" as const : "FAILED" as const;
   const [emailResult, kakaoResult] = await Promise.all([
     previous.email === "API_ACCEPTED" ? Promise.resolve({ ok: true, messageId: previous.emailMessageId }) : email ? sendSubmissionUpdateEmail({
-      email, title: submission.title || "제목 미입력", artist: submission.artist_name,
+      email, title: submission.title || "제목 미입력", artist: officialArtistName(submission),
       kind: context.submission.type.startsWith("MV") ? "MV" : "ALBUM", headline, summary, link,
       subject: "[onside] 보완 자료 안내", idempotencyKey: `${key}-email-${createHash("sha256").update(email.toLowerCase()).digest("hex").slice(0, 16)}`,
     }).catch(() => ({ ok: false })) : Promise.resolve({ ok: false, skipped: true }),

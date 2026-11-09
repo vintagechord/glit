@@ -8,7 +8,7 @@ import { createAttachmentResponseFromUrl } from "@/lib/download-response";
 
 export async function loadDeskResults(db: SupabaseClient, submissionId: string) {
   const [s, r, t] = await Promise.all([
-    db.from("submissions").select("id,type,title,artist_name,status,package_id,mv_selected_station_codes,mv_desired_rating,mv_rating,result_status,result_memo,result_notified_at,updated_at,certificate_b2_path,certificate_original_name,certificate_uploaded_at,certificate_size,certificate_mime").eq("id", submissionId).maybeSingle(),
+    db.from("submissions").select("id,type,title,artist_name,artist_name_kr,status,package_id,mv_selected_station_codes,mv_desired_rating,mv_rating,result_status,result_memo,result_notified_at,updated_at,certificate_b2_path,certificate_original_name,certificate_uploaded_at,certificate_size,certificate_mime").eq("id", submissionId).maybeSingle(),
     db.from("station_reviews").select("*,station:stations(id,code,name)").eq("submission_id", submissionId),
     db.from("album_tracks").select("id,track_no,track_title,track_title_kr,track_title_en,broadcast_selected").eq("submission_id", submissionId).order("track_no"),
   ]);

@@ -4,6 +4,7 @@ import { sendAdminSubmissionReceiptEmail, sendPaymentCompletedEmail, sendSubmiss
 import type { EmailSendResult } from "@/lib/email-transport";
 import { isEmailRecipient } from "@/lib/email-config";
 import { formatCurrency } from "@/lib/format";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
 
@@ -69,7 +70,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
   try {
     const db = createAdminClient();
     const { data: submission, error } = await db.from("submissions")
-      .select("id,user_id,guest_token,guest_email,guest_phone,applicant_email,applicant_phone,title,artist_name,type,amount_krw,payment_status,current_order_id")
+      .select("id,user_id,guest_token,guest_email,guest_phone,applicant_email,applicant_phone,title,artist_name,artist_name_kr,type,amount_krw,payment_status,current_order_id")
       .eq("id", input.submissionId).maybeSingle();
     if (error || !submission) return { ...outcome, warning: "결제는 저장되었지만 접수 알림에 필요한 정보를 확인하지 못했습니다." };
     if (submission.payment_status !== "PAID") return { ...outcome, recorded: true };
@@ -106,7 +107,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
     // invalid/missing customer address cannot suppress the operations notice.
     const adminPromise = sendAdminSubmissionReceiptEmail({
       submissionId: submission.id, title: submission.title ?? "제목 미입력",
-      artist: submission.artist_name, submissionType: submission.type ?? "ALBUM",
+      artist: officialArtistName(submission), submissionType: submission.type ?? "ALBUM",
       amountKrw: submission.amount_krw,
       link: buildUrl(`/admin/submissions/detail?id=${encodeURIComponent(submission.id)}`, baseUrl),
       idempotencyKey: `admin-submission-received:${submission.id}`,
@@ -138,7 +139,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
         });
       }
       return sendSubmissionUpdateEmail({
-        email: recipient, title: submission.title ?? "제목 미입력", artist: submission.artist_name,
+        email: recipient, title: submission.title ?? "제목 미입력", artist: officialArtistName(submission),
         kind, headline: "결제가 완료되었습니다.",
         summary: "결제 완료로 처리되었습니다. 심의는 접수예정 단계에서 자료 확인 후 방송사·기관 접수를 진행합니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.",
         link, subject: "[onside] 결제 완료 및 심의 접수 안내",

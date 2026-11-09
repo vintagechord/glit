@@ -1665,6 +1665,9 @@ export async function saveMvSubmissionAction(
   const isAdminReviewer = isAdminReviewEmail(user?.email);
   const titleValue = parsed.data.title?.trim() ?? "";
   const artistNameValue = parsed.data.artistName?.trim() ?? "";
+  // The 아티스트명 공식 표기 is the name customers and staff read; the
+  // 한글/영문 name in artist_name is reference only.
+  const officialArtistNameValue = parsed.data.artistNameOfficial?.trim() || artistNameValue;
   const guestNameValue = parsed.data.guestName?.trim() ?? "";
   const guestEmailValue = parsed.data.guestEmail?.trim() ?? "";
   const guestPhoneValue = parsed.data.guestPhone?.trim() ?? "";
@@ -1920,7 +1923,7 @@ export async function saveMvSubmissionAction(
     requestedStatus: parsed.data.status,
     shouldRequestPayment,
   });
-  const artistId = await ensureArtistByName(artistNameValue);
+  const artistId = await ensureArtistByName(officialArtistNameValue);
 
   const submissionPayload = {
     id: parsed.data.submissionId,
@@ -2163,7 +2166,7 @@ export async function saveMvSubmissionAction(
       guestToken: parsed.data.guestToken ?? undefined,
       recipient: guestEmailValue || applicantEmailValue,
       title: titleValue || "제목 미입력",
-      artist: artistNameValue || null,
+      artist: officialArtistNameValue || null,
       kind: "MV",
     });
   }
@@ -2210,7 +2213,7 @@ export async function saveMvSubmissionAction(
             sendOrderBankTransferEmail({
               email: recipientEmail,
               orderId: parsed.data.submissionId,
-              items: [{ title: titleValue || "제목 미입력", artist: artistNameValue || null, kind: "MV", amountKrw }],
+              items: [{ title: titleValue || "제목 미입력", artist: officialArtistNameValue || null, kind: "MV", amountKrw }],
               totalAmountKrw: amountKrw,
               link,
               siteLink,

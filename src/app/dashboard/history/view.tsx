@@ -20,6 +20,7 @@ type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   artist_id: string | null;
   artist?:
     | { id?: string | null; name?: string | null; thumbnail_url?: string | null }
@@ -41,16 +42,16 @@ type ShellConfig = {
 };
 
 const PRIMARY_SELECT =
-  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
+  "id, title, artist_name, artist_name_kr, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
 
 const FALLBACK_SELECT =
-  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
+  "id, title, artist_name, artist_name_kr, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick, user_deleted_at";
 
 const PRIMARY_LEGACY_SELECT =
-  "id, title, artist_name, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick";
+  "id, title, artist_name, artist_name_kr, artist_id, artist:artists ( id, name, thumbnail_url ), status, payment_status, created_at, updated_at, type, is_oneclick";
 
 const FALLBACK_LEGACY_SELECT =
-  "id, title, artist_name, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick";
+  "id, title, artist_name, artist_name_kr, artist_id, status, payment_status, created_at, updated_at, type, is_oneclick";
 
 const isMissingUserDeletedAt = (error?: { code?: string; message?: string }) =>
   Boolean(
@@ -132,7 +133,10 @@ async function HistoryContent({ loginPath }: { loginPath: string }) {
 
     for (const item of filtered) {
       const artist = Array.isArray(item.artist) ? item.artist[0] : item.artist;
-      const name = artist?.name?.trim() || item.artist_name?.trim() || "";
+      // MV groups lead with the 아티스트명 공식 표기; older MV rows were linked
+      // to an artist named after the 한글/영문 reference name.
+      const official = item.type.startsWith("MV_") ? item.artist_name_kr?.trim() : "";
+      const name = official || artist?.name?.trim() || item.artist_name?.trim() || "";
       const displayArtistName = name || (item.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력");
       const key = artist?.id ?? item.artist_id ?? (name || item.id);
 

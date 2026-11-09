@@ -130,7 +130,11 @@ test("populated English MV results and expanded application translate controls w
   await page.getByRole("button",{name:"Open application form",exact:true}).click();
   await page.getByRole("button",{name:"Open application details",exact:true}).click();
   await page.getByRole("button",{name:"Open attachments",exact:true}).click();
-  await expect(page.locator("[data-no-translate]").filter({hasText:/^ \/ 닫기$/})).toHaveText(" / 닫기");
+  // MV rows lead with the 아티스트명 공식 표기 (artist_name_kr); the 한글/영문
+  // name follows as reference. Both stay untranslated even when they read
+  // like interface words.
+  await expect(page.locator("[data-no-translate]").filter({hasText:/^닫기$/}).first()).toBeVisible();
+  await expect(page.locator("[data-no-translate]").filter({hasText:/^ \/ 다음$/})).toHaveText(" / 다음");
   await expect(page.locator("[data-no-translate]").filter({hasText:/^영상 원문.mp4$/})).toBeVisible();
   const untranslatedText = () => page.locator("main").evaluate(root=>{
     const texts: string[]=[];

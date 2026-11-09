@@ -8,6 +8,7 @@ import { broadcastRatingLabels, broadcastRatingValues } from "@/lib/broadcast-ra
 import { RATING_LABELS, isRatingCode } from "@/lib/mv-assets";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import { hasPublishedSubmissionResult } from "@/lib/submission-certificate";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 export type ReviewSummaryEmailPreview = {
   subject: string; html: string; recipientMasked: string | null;
@@ -63,7 +64,7 @@ export function buildReviewSummaryContent(snapshot: Snapshot, link: string): Rev
     });
   }
   return {
-    title: submission.title ?? "제목 미입력", artist: submission.artist_name,
+    title: submission.title ?? "제목 미입력", artist: officialArtistName(submission),
     kind: type, updatedAt: submission.updated_at, link, rows, completedCount,
     attachmentCount: type === "MV_DISTRIBUTION" && (submission.mv_desired_rating || submission.mv_rating) !== "REJECT" ? 3 : 0,
   };

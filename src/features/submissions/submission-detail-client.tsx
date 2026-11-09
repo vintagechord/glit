@@ -50,6 +50,7 @@ import { addGuestSubmissionCartEntries, readGuestSubmissionOrderEntries, remembe
 import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submission-checkout";
 import { getPaidReviewProgress } from "@/lib/paid-review-progress";
 import { isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
+import { artistReferenceNames, officialArtistName } from "@/lib/submissions/artist-display";
 
 type Submission = {
   id: string;
@@ -1352,7 +1353,7 @@ export function SubmissionDetailClient({
         <div className="space-y-5">
           <div>
             <h1 className="text-xl font-black">{submission.title ? <span data-no-translate>{submission.title}</span> : "심의 결과"}</h1>
-            {submission.artist_name ? <p data-no-translate className="mt-1 text-sm text-muted-foreground">{submission.artist_name}</p> : null}
+            {officialArtistName(submission) ? <p data-no-translate className="mt-1 text-sm text-muted-foreground">{officialArtistName(submission)}</p> : null}
             <p className="mt-3 text-sm font-semibold">{currentStatusLabel}</p>
           </div>
           {renderStationReviewSection()}
@@ -1483,7 +1484,7 @@ export function SubmissionDetailClient({
               {submission.title ? <span data-no-translate>{submission.title}</span> : (submission.is_oneclick ? "발매된 음반 · URL 접수" : "제목 미입력")}
             </h1>
             <p className="mt-3 text-lg font-semibold text-foreground/82 sm:text-xl">
-              {submission.artist_name ? <span data-no-translate>{submission.artist_name}</span> : (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
+              {officialArtistName(submission) ? <span data-no-translate>{officialArtistName(submission)}</span> : (submission.is_oneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")}
             </p>
             {/* Once paid, phones go from the title straight to the station table;
                 the application form stays reachable from its own section below. */}
@@ -1663,10 +1664,12 @@ export function SubmissionDetailClient({
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">아티스트명</p>
+                  {/* The official credit leads; the 한글/영문 names follow as reference. */}
                   <p className="mt-1 font-semibold">
-                    <span data-no-translate>{submission.artist_name || "-"}</span>
-                    {submission.artist_name_kr ? <span data-no-translate>{` / ${submission.artist_name_kr}`}</span> : null}
-                    {submission.artist_name_en ? <span data-no-translate>{` / ${submission.artist_name_en}`}</span> : null}
+                    <span data-no-translate>{officialArtistName(submission) || "-"}</span>
+                    {artistReferenceNames(submission).map((name) => (
+                      <span key={name} data-no-translate>{` / ${name}`}</span>
+                    ))}
                   </p>
                 </div>
                 <div>

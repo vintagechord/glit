@@ -49,6 +49,7 @@ import {
 import { GuestCartRecoveryNotice } from "@/features/submissions/guest-cart-recovery-notice";
 import { CashReceiptFields, type CashReceiptDraft } from "./cash-receipt-fields";
 import { validateCashReceiptRequest } from "@/lib/cash-receipts";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 type CartItem = {
   id: string;
@@ -87,7 +88,7 @@ export const mapSubmissionCartItem = (
   paymentMethod: item.payment_method ?? null,
   currentOrderId: item.current_order_id ?? null,
   title: item.title,
-  artistName: item.artist_name,
+  artistName: officialArtistName(item),
   amountKrw: item.amount_krw,
   isOneclick: item.is_oneclick ?? null,
   albumPriceTier: item.album_price_tier ?? null,

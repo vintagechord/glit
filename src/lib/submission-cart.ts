@@ -7,6 +7,7 @@ export type SubmissionCartItem = {
   payment_status: string | null;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   amount_krw: number | null;
   payment_method?: string | null;
   current_order_id?: string | null;
@@ -30,9 +31,9 @@ const CART_PAYMENT_FILTER =
   "payment_status.is.null,payment_status.eq.UNPAID";
 
 const CART_SELECT =
-  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, artist_name_kr, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
 const CART_LEGACY_SELECT =
-  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, artist_name_kr, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
 
 const isMissingCartOptionalColumn = (error?: QueryError | null) =>
   Boolean(

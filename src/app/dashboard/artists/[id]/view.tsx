@@ -19,6 +19,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getServerSessionUser } from "@/lib/supabase/server-user";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 const typeLabels: Record<string, string> = {
   ALBUM: "음반",
@@ -40,6 +41,7 @@ type SubmissionRow = {
   id: string;
   title: string | null;
   artist_name?: string | null;
+  artist_name_kr?: string | null;
   status: string;
   type: string;
   payment_status?: string | null;
@@ -105,7 +107,7 @@ export async function DashboardArtistDetailPageView({
     let query = supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
+        "id, title, artist_name, artist_name_kr, status, type, payment_status, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )",
       )
       .eq("user_id", user.id)
       .eq("artist_id", artistId)
@@ -145,7 +147,7 @@ export async function DashboardArtistDetailPageView({
     const { data: legacyData, error: legacyError } = await supabase
       .from("submissions")
       .select(
-        "id, title, artist_name, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
+        "id, title, artist_name, artist_name_kr, status, type, payment_status, created_at, updated_at, package:packages ( name, station_count )",
       )
       .eq("user_id", user.id)
       .eq("artist_id", artistId)
@@ -162,7 +164,7 @@ export async function DashboardArtistDetailPageView({
 
   const list = (submissions ?? []) as SubmissionRow[];
   const displayArtistName =
-    list.find((item) => item.artist_name?.trim())?.artist_name?.trim() ||
+    list.map((item) => officialArtistName(item)).find(Boolean) ||
     artist.name ||
     "아티스트 미입력";
 

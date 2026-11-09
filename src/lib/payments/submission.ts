@@ -14,6 +14,7 @@ import {
 } from "@/lib/inicis/config";
 import { buildInicisMobileRequest, encodeInicisMobileMerchantData, type InicisMobileRequest } from "@/lib/inicis/mobile";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
+import { officialArtistName } from "@/lib/submissions/artist-display";
 
 export type InicisPaymentChannel = "pc" | "mobile";
 
@@ -34,6 +35,7 @@ type SubmissionRecord = {
   guest_token: string | null;
   title: string | null;
   artist_name: string | null;
+  artist_name_kr?: string | null;
   status: string | null;
   type: string | null;
   applicant_name: string | null;
@@ -79,9 +81,9 @@ type ApprovePaymentRpcRow = {
 };
 
 const submissionSelectWithResult =
-  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, artist_name_kr, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
 const submissionSelectFallback =
-  "id, user_id, guest_token, title, artist_name, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, mv_desired_rating, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, artist_name_kr, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, mv_desired_rating, package:packages ( name )";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -373,10 +375,10 @@ export const createSubmissionPaymentOrder = async (
   const productName =
     submissions.length > 1
       ? `${packageName ?? "음반 심의"} ${submissions.length}건`
-      : packageName ?? submission.title ?? submission.artist_name ?? "심의 접수";
+      : packageName ?? submission.title ?? officialArtistName(submission) ?? "심의 접수";
   const buyerName =
     submission.applicant_name ??
-    submission.artist_name ??
+    officialArtistName(submission) ??
     packageName ??
     "회원";
   const buyerEmail = submission.applicant_email ?? "";
