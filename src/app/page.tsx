@@ -42,21 +42,23 @@ export const metadata: Metadata = pageMetadata({
   enPath: "/en",
 });
 
-// 심의 신청 is the main action: solid yellow with the deepest shadow.
+// 심의 신청 is the main action: solid yellow with the deeper shadow.
 // 결과 조회 stays white with a black border, a step quieter beside it.
+// In the hero column only these action cards carry an offset shadow; the
+// banner and the service card above sit flat on the same thin line.
 const heroCtas = [
   {
     title: "심의 신청",
     href: "/dashboard/new",
     cardClass:
-      "bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#ffffff] dark:hover:shadow-[8px_8px_0_#ffffff]",
+      "bg-[#f2cf27] text-[#111111] shadow-[4px_4px_0_#111111] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[4px_4px_0_#ffffff] dark:hover:shadow-[5px_5px_0_#ffffff]",
     icon: MousePointerClick,
   },
   {
     title: "결과 조회",
     href: "/track",
     cardClass:
-      "bg-white text-[#111111] shadow-[3px_3px_0_#111111] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:shadow-[5px_5px_0_#f2cf27]",
+      "bg-white text-[#111111] shadow-[2px_2px_0_#111111] hover:shadow-[3px_3px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:shadow-[3px_3px_0_#f2cf27]",
     icon: FileText,
   },
 ];
@@ -127,10 +129,10 @@ export default function Home() {
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
-            <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-6">
+            <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-5">
               {/* The headline carries the two service names search engines
                   and AI assistants match on; the second line keeps the
-                  original promise. The banner draws it over a moving poster. */}
+                  original promise. The banner sets it above a quiet waveform. */}
               <HomeHeroBanner lines={["음반·뮤직비디오 심의,", "신청부터 결과 확인까지"]} />
               <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
@@ -140,7 +142,7 @@ export default function Home() {
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className={`group flex min-h-[68px] items-center justify-center gap-2.5 rounded-[10px] border-2 border-[#111111] px-3 transition hover:-translate-y-1 sm:min-h-[80px] sm:gap-3 ${cta.cardClass}`}
+                      className={`group flex min-h-[68px] items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-[#111111] px-3 transition hover:-translate-y-0.5 sm:min-h-[80px] sm:gap-3 ${cta.cardClass}`}
                     >
                       <Icon className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" strokeWidth={2.3} aria-hidden="true" />
                       <span className="break-keep text-base font-black leading-snug sm:text-lg">{cta.title}</span>

@@ -20,7 +20,7 @@ export function HomeHeroAdBanner() {
       <section
         data-no-translate
         aria-label={isEnglish ? "Your next steps with Onside" : "온사이드와 함께하는 심의 그 다음"}
-        className="w-full max-w-[540px] rounded-[10px] border-2 border-[#111111] bg-white p-3 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[4px_4px_0_#f2cf27]"
+        className="w-full max-w-[540px] rounded-[10px] border-[1.5px] border-[#111111] bg-white p-3 dark:border-[#f2cf27] dark:bg-[#171717]"
       >
         <div className="mb-2.5">
           <p className="text-xs font-black text-foreground sm:text-[13px]">
@@ -38,7 +38,7 @@ export function HomeHeroAdBanner() {
                 onClick={event => {
                   setActive({ service, trigger: event.currentTarget });
                 }}
-                className="group relative flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] px-1 py-2 text-center transition hover:-translate-y-0.5 hover:border-[#111111] hover:shadow-[3px_3px_0_#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]"
+                className="group relative flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] px-1 py-2 text-center transition hover:-translate-y-0.5 hover:border-[#111111] hover:shadow-[2px_2px_0_#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]"
               >
                 <span className={`flex size-7 items-center justify-center rounded-md ${service.color}`}>
                   <Icon className="size-4" aria-hidden="true" />
