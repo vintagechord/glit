@@ -112,7 +112,7 @@ export function BannerRotationToggle({
       onClick={onToggle}
       aria-label={label}
       title={label}
-      className={`inline-flex items-center justify-center border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[2px_2px_0_#111111] transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-1 dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27] ${className}`}
+      className={`inline-flex items-center justify-center border-2 border-[#111111] bg-[#ebe7de] text-[#111111] shadow-[2px_2px_0_#111111] transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-1 dark:border-[#f2cf27] dark:bg-[#2a2a2a] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:text-[#111111] ${className}`}
     >
       <Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.6} fill="currentColor" />
     </button>

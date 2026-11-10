@@ -89,7 +89,7 @@ export function HomeHeroAdBannerClient({
               type="button"
               onClick={() => goTo(index - 1)}
               aria-label="이전 광고"
-              className="absolute right-12 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#111111] bg-white text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-x-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:bg-[#101010] dark:text-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]"
+              className="absolute right-12 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#111111] bg-[#ebe7de] text-[#111111] shadow-[2px_2px_0_#111111] transition hover:-translate-x-0.5 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:bg-[#2a2a2a] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:text-[#111111]"
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={2.4} />
             </button>
@@ -97,7 +97,7 @@ export function HomeHeroAdBannerClient({
               type="button"
               onClick={() => goTo(index + 1)}
               aria-label="다음 광고"
-              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[2px_2px_0_#111111] transition hover:translate-x-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]"
+              className="absolute right-3 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#111111] bg-[#ebe7de] text-[#111111] shadow-[2px_2px_0_#111111] transition hover:translate-x-0.5 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:bg-[#2a2a2a] dark:text-white dark:shadow-[2px_2px_0_#f2cf27] dark:hover:bg-white dark:hover:text-[#111111]"
             >
               <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
             </button>
