@@ -527,6 +527,7 @@ export function HomeReviewPanel({
   showPartialTrackBreakdown = true,
   showDetailLink = true,
   panelMinHeightClassName = "lg:min-h-[520px]",
+  frameClassName = "border-2 shadow-[6px_6px_0_#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   compact = false,
   isLoading = false,
   initialTab,
@@ -545,6 +546,8 @@ export function HomeReviewPanel({
   showPartialTrackBreakdown?: boolean;
   showDetailLink?: boolean;
   panelMinHeightClassName?: string;
+  /** Border width and shadow of the outer frame; the home page sits it flat. */
+  frameClassName?: string;
   compact?: boolean;
   isLoading?: boolean;
   initialTab?: TabKey;
@@ -1127,7 +1130,7 @@ export function HomeReviewPanel({
   const modalMvReviewAssets = trackResultModal?.mvReviewAssets ?? null;
 
   return (
-    <div className={`min-w-0 w-full rounded-[10px] border-2 border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:shadow-[6px_6px_0_#f2cf27] ${panelMinHeightClassName}`}>
+    <div className={`min-w-0 w-full rounded-[10px] border-[#111111] bg-card ${shellPaddingClass} ${shellLayoutClass} ${frameClassName} dark:border-[#f2cf27] ${panelMinHeightClassName}`}>
       <div className="flex items-center justify-between text-xs font-black uppercase tracking-normal text-foreground/72 sm:text-sm dark:text-white/82">
         <span>
           {isLoading

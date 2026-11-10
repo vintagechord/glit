@@ -99,6 +99,8 @@ const panelProps = {
   showPartialTrackBreakdown: false,
   showDetailLink: false,
   panelMinHeightClassName: "h-full lg:min-h-0",
+  // Same rule as the banner beside it: a thin black line, no offset shadow.
+  frameClassName: "border-[1.5px]",
   compact: true,
 };
 

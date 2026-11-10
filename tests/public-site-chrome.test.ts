@@ -148,12 +148,13 @@ test("the home hero makes 심의 신청 the yellow main card and keeps 결과 �
   };
   const apply = card("심의 신청");
   const results = card("결과 조회");
-  assert.match(apply, /^bg-\[#f2cf27\] text-\[#111111\] shadow-\[6px_6px_0_#111111\]/);
-  assert.match(results, /^bg-white text-\[#111111\] shadow-\[3px_3px_0_#111111\]/);
+  // 2026-11-10 editorial pass: shadows are lighter, the 2:1 step between them stays.
+  assert.match(apply, /^bg-\[#f2cf27\] text-\[#111111\] shadow-\[4px_4px_0_#111111\]/);
+  assert.match(results, /^bg-white text-\[#111111\] shadow-\[2px_2px_0_#111111\]/);
   assert.doesNotMatch(results, /(?<!dark:)bg-\[#(?:f2cf27|1556a4)\]/);
   // Both cards share one size and border; only colour and shadow differ.
   // Owner 2026-11-10: the cards are short (68/80px), the banner above is the visual.
-  assert.match(home, /className=\{`group flex min-h-\[68px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-2 border-\[#111111\] px-3 transition hover:-translate-y-1 sm:min-h-\[80px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
+  assert.match(home, /className=\{`group flex min-h-\[68px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-\[1\.5px\] border-\[#111111\] px-3 transition hover:-translate-y-0\.5 sm:min-h-\[80px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
 });
 
 test("the home banner keeps a two-line text headline in both languages and lets visitors stop its motion", () => {
@@ -166,10 +167,20 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   const css = readSource("src/app/globals.css");
   // Lines never wrap; the size is derived from the banner width per language.
   assert.match(css, /\.onside-hero-title > span \{\s*display: block;\s*white-space: nowrap;/);
-  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 3rem\) \/ 10\.6\)\);/);
-  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 3rem\) \/ 15\.2\)\);/);
-  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-record,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-record,\s*\.onside-hero-track \{\s*animation: none;/);
+  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 10\.6\)\);/);
+  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 15\.2\)\);/);
+  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-wave svg,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-wave svg,\s*\.onside-hero-track \{\s*animation: none;/);
+  // 2026-11-10: the waveform is the only graphic; it sits in the flow under
+  // the headline (never behind it) and no fake play control comes back.
+  assert.match(banner, /<div className="onside-hero-wave" aria-hidden="true">/);
+  assert.doesNotMatch(banner, /onside-hero-(?:record|play)\b/);
+  assert.doesNotMatch(css, /\.onside-hero-(?:record|play)\b/);
+  assert.match(css, /\.onside-hero-wave \{[^}]*margin-top: auto;/);
+  // The status panel beside the banner follows the same frame rule on the
+  // home page only; the dashboard keeps its own default frame.
+  assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);
+  assert.match(readSource("src/features/home/home-review-panel.tsx"), /frameClassName = "border-2 shadow-\[6px_6px_0_#111111\] dark:shadow-\[6px_6px_0_#f2cf27\]",/);
   const toggle = readSource("src/components/site/hero-motion-toggle.tsx");
   assert.match(toggle, /setAttribute\("data-hero-motion", paused \? "paused" : "on"\)/);
   for (const label of ["배너 움직임 멈춤", "배너 움직임 재생", "Pause banner motion", "Play banner motion"]) assert.ok(toggle.includes(label));
