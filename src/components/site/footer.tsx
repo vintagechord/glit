@@ -259,7 +259,6 @@ export function SiteFooter() {
               <p>사업자등록번호: {APP_CONFIG.businessRegNo}</p>
               <p>통신판매업신고번호: {APP_CONFIG.businessMailOrderNo}</p>
               <p>개인정보 보호책임자: {APP_CONFIG.privacyOfficer}</p>
-              <p>호스팅 제공자: {APP_CONFIG.hostingProvider}</p>
             </div>
           </details>
         </div>

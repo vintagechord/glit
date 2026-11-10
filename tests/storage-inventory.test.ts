@@ -138,7 +138,8 @@ test("the inventory accounts for every stored byte and finds the leftovers the p
   const group = (key: string) => inventory.groups.find(entry => entry.key === key);
   assert.deepEqual(group("purgeable"), { key: "purgeable", count: 1, bytes: 2_225_000_000 });
   assert.deepEqual(group("held"), { key: "held", count: 1, bytes: 50_000_000 });
-  assert.deepEqual(group("certificate"), { key: "certificate", count: 1, bytes: 400_000 });
+  // Both certificates are kept, including the one whose submission was deleted.
+  assert.deepEqual(group("certificate"), { key: "certificate", count: 2, bytes: 800_000 });
   assert.deepEqual(group("mail_pending"), { key: "mail_pending", count: 1, bytes: 20_000 });
   assert.deepEqual(group("recent"), { key: "recent", count: 1, bytes: 10_000_000 });
   assert.deepEqual(group("other"), { key: "other", count: 2, bytes: 1_050_000 });
@@ -150,19 +151,16 @@ test("the inventory accounts for every stored byte and finds the leftovers the p
     return leftover && [leftover.reason, leftover.bytes, leftover.versions.map(version => version.versionId)];
   };
   assert.deepEqual(summary(keys.replaced), ["hidden_upload", 539_000_000, ["r-old", "r-hide"]]);
-  assert.deepEqual(summary(keys.goneCertificate), ["deleted_submission", 400_000, ["g1"]]);
   assert.deepEqual(summary(keys.goneMarker), ["deleted_submission", 0, ["gm"]]);
   assert.deepEqual(summary(keys.sentCopy), ["sent_mail_copy", 390_000, ["s3", "s2", "s1"]]);
   // Still needed by a mail that can be retried: only the superseded version goes.
   assert.deepEqual(summary(keys.pendingCopy), ["old_versions", 20_000, ["p1"]]);
   assert.deepEqual(summary(keys.purgedSupplement), ["unlinked_supplement", 30_000_000, ["ps"]]);
-  for (const kept of [keys.certificate, keys.guestVideo, keys.draftAudio, keys.recentOrphan, keys.reviewJob, keys.thumbnail]) {
+  for (const kept of [keys.certificate, keys.goneCertificate, keys.guestVideo, keys.draftAudio, keys.recentOrphan, keys.reviewJob, keys.thumbnail]) {
     assert.ok(!byKey.has(kept), kept);
   }
   assert.equal(byKey.get(keys.replaced)?.name, "_HEDA_HUG_MV_.mp4");
   assert.equal(byKey.get(keys.replaced)?.submissionTitle, "HUG");
-  assert.equal(byKey.get(keys.goneCertificate)?.name, "cert.pdf");
-  assert.equal(byKey.get(keys.goneCertificate)?.submissionTitle, null);
   assert.equal(byKey.get(keys.sentCopy)?.name, "결과 메일 첨부 사본 (PDF)");
   assert.ok(inventory.leftovers.every(leftover => /^[a-f0-9]{32}$/.test(leftover.id)));
 });
@@ -176,11 +174,11 @@ test("leftovers are deleted by exact version after a fresh check, and a file nee
   // Between listing and deleting, the sent copy is queued again by a resend.
   db.email_outbox.push({ id: "m3", status: "pending", attachment_refs: [{ objectKey: keys.sentCopy }] });
   const removed: string[] = [];
-  const results = await deleteStorageLeftovers(fakeDb(db), [id(keys.replaced), id(keys.sentCopy), id(keys.pendingCopy), id(keys.goneCertificate), "f".repeat(32)], {
+  const results = await deleteStorageLeftovers(fakeDb(db), [id(keys.replaced), id(keys.sentCopy), id(keys.pendingCopy), id(keys.goneMarker), "f".repeat(32)], {
     now: NOW,
     listEntries: async () => ({ entries: bucket(), truncated: false }),
     deleteVersion: async (key, versionId) => {
-      if (versionId === "g1") throw new Error("storage down");
+      if (versionId === "gm") throw new Error("storage down");
       removed.push(`${key}#${versionId}`);
     },
   });
@@ -191,8 +189,8 @@ test("leftovers are deleted by exact version after a fresh check, and a file nee
   assert.equal(outcome[id(keys.sentCopy)].ok, false);
   assert.match(outcome[id(keys.sentCopy)].error ?? "", /다시 필요한 파일/);
   assert.deepEqual(outcome[id(keys.pendingCopy)], { id: id(keys.pendingCopy), ok: true, deletedVersions: 1, failedVersions: 0, freedBytes: 20_000 });
-  assert.equal(outcome[id(keys.goneCertificate)].ok, false);
-  assert.equal(outcome[id(keys.goneCertificate)].failedVersions, 1);
+  assert.equal(outcome[id(keys.goneMarker)].ok, false);
+  assert.equal(outcome[id(keys.goneMarker)].failedVersions, 1);
   assert.equal(outcome["f".repeat(32)].ok, false);
 });
 
@@ -210,6 +208,16 @@ test("uploads still in flight or known only by file path are never leftovers", a
   assert.ok(!leftoverKeys.has(keys.recentOrphan), "a pending upload grant keeps its key");
   assert.ok(!leftoverKeys.has(legacy), "a row known by file path keeps its key");
   assert.ok(leftoverKeys.has(keys.replaced), "a finished grant is not a reference");
+});
+
+test("certificates are never offered, whatever happened to their submission", async () => {
+  const { loadStorageInventory } = await load();
+  const replacedCertificate = `submissions/${GONE}/certificate/b4e51331-a943-4b47-85e0-8420b62d5c26_494d990f5311ea53_old.pdf`;
+  const entries = [...bucket(),
+    { key: replacedCertificate, versionId: "x2", size: 9, lastModified: OLD, latest: false, marker: false },
+    { key: replacedCertificate, versionId: "x1", size: 0, lastModified: OLD, latest: true, marker: true }];
+  const inventory = await loadStorageInventory(fakeDb(tables()), { now: NOW, listEntries: async () => ({ entries, truncated: false }) });
+  assert.ok(!inventory.leftovers.some(leftover => leftover.key.includes("/certificate/")));
 });
 
 test("a record pointing at a hidden key leaves everything in place", async () => {

@@ -32,6 +32,8 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 type AdminChatClientProps = {
   initialConversations: SupportChatConversation[];
   initialHasMore?: boolean;
+  /** Opened from a chat notice mail; ignored when not in the first page. */
+  initialSelectedId?: string | null;
 };
 
 type ConversationListPayload = {
@@ -134,6 +136,7 @@ const isDocumentVisible = () =>
 export function AdminChatClient({
   initialConversations,
   initialHasMore = false,
+  initialSelectedId = null,
 }: AdminChatClientProps) {
   const supabase = React.useMemo(() => createClient(), []);
   const [conversations, setConversations] = React.useState(
@@ -144,7 +147,9 @@ export function AdminChatClient({
   const [hasMore, setHasMore] = React.useState(initialHasMore);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(
-    initialConversations[0]?.id ?? null,
+    (initialSelectedId && initialConversations.some((conversation) => conversation.id === initialSelectedId)
+      ? initialSelectedId
+      : initialConversations[0]?.id) ?? null,
   );
   const [messages, setMessages] = React.useState<SupportChatMessage[]>([]);
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});

@@ -70,8 +70,10 @@ async function requireAdminPage() {
   }
 }
 
-export default async function AdminChatPage() {
+export default async function AdminChatPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
   await requireAdminPage();
+  // The chat notice mail links straight to its conversation.
+  const { conversation: requestedId } = await searchParams;
 
   const { rows, hasMore, error } = await loadAdminChatConversationRows<ConversationRow>(
     createAdminClient(),
@@ -96,7 +98,7 @@ export default async function AdminChatPage() {
         </div>
       ) : null}
 
-      <AdminChatClient initialConversations={conversations} initialHasMore={hasMore} />
+      <AdminChatClient initialConversations={conversations} initialHasMore={hasMore} initialSelectedId={typeof requestedId === "string" ? requestedId : null} />
     </div>
   );
 }
