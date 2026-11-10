@@ -303,11 +303,17 @@ test("all versions and hide markers of exactly one key are deleted across pages"
   assert.deepEqual(lists.map(input => [input.Prefix, input.KeyMarker, input.VersionIdMarker]), [[key, undefined, undefined], [key, key, "m1"]]);
 });
 
-test("the desk's received scope adds paid submissions still in review, uploads only, and never unpaid ones", async () => {
+test("the desk's received scope adds submitted applications still in review, paid or awaiting the deposit, uploads only, and never unpaid ones", async () => {
   const api = await load();
   const fixture = purgeFixture();
   fixture.submissions.push(finishedAlbum(C.replace(/c/g, "e"), { status: "SUBMITTED", payment_status: "UNPAID" }));
   fixture.submission_files.push({ id: "e1", submission_id: C.replace(/c/g, "e"), kind: "AUDIO", storage_provider: "b2", object_key: upload(C.replace(/c/g, "e"), "draft.wav"), size: 10, purged_at: null });
+  // A bank-transfer order waiting for the deposit, and a draft that somehow carries the same payment state.
+  const F = "ffffffff-ffff-4fff-8fff-ffffffffffff", G = "99999999-9999-4999-8999-999999999999";
+  fixture.submissions.push(finishedAlbum(F, { type: "MV_DISTRIBUTION", status: "WAITING_PAYMENT", payment_status: "PAYMENT_PENDING" }));
+  fixture.submissions.push(finishedAlbum(G, { status: "DRAFT", payment_status: "PAYMENT_PENDING" }));
+  fixture.submission_files.push({ id: "f1", submission_id: F, kind: "VIDEO", storage_provider: "b2", object_key: upload(F, "mv.mov"), size: 2000, purged_at: null });
+  fixture.submission_files.push({ id: "g1", submission_id: G, kind: "AUDIO", storage_provider: "b2", object_key: upload(G, "draft.wav"), size: 10, purged_at: null });
   fixture.submission_supplement_requests.push({ id: "req-b", submission_id: B, status: "SUBMITTED" });
   fixture.submission_supplement_files.push({ id: "sb", request_id: "req-b", object_key: `submissions/supplements/${B}/req-b/rev/u/fix.wav`, size_bytes: 30, purged_at: null });
   const { db } = fakeDb(fixture);
@@ -316,7 +322,9 @@ test("the desk's received scope adds paid submissions still in review, uploads o
   const received = await api.loadPurgeCandidates(db, undefined, "received");
   // Finished and refunded first, oldest first; submissions still in review after them.
   // C's only file sits under another submission's folder, so it is never offered.
-  assert.deepEqual(received.map(c => [c.submissionId, c.stage]), [[D, "refunded"], [A, "finished"], [B, "in_review"]]);
+  assert.deepEqual(received.map(c => [c.submissionId, c.stage]), [[D, "refunded"], [A, "finished"], [B, "in_review"], [F, "in_review"]]);
+  assert.deepEqual(received.map(c => (c as { paymentPending?: boolean }).paymentPending), [false, false, false, true]);
+  assert.ok(!received.some(c => c.submissionId === G), "a draft is never offered");
   // In review: the customer's uploads only — the open supplement's file stays until the review ends.
   assert.deepEqual(received.find(c => c.submissionId === B)?.files.map(file => [file.id, file.source]), [["b1", "upload"]]);
   assert.ok(!received.some(c => c.submissionId === C.replace(/c/g, "e")));

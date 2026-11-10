@@ -396,7 +396,7 @@ const storageChosen = () => storageVisible().filter(item => storageSelectable(it
 function storageStageCell(item) {
   if (item.stage === 'in_review') {
     const local = item.local || {};
-    return `<span class="badge amber">심의 진행 중</span><small>${local.complete ? '이 Mac에 원본 있음' : e(local.reason || '이 Mac에 원본이 없습니다.')}</small>${local.complete || local.noCase ? '' : `<button class="button secondary small" data-action="storage-download" data-case-id="${e(item.submissionId)}">원본 받기</button>`}`;
+    return `<span class="badge amber">${item.paymentPending ? '입금 확인 전' : '심의 진행 중'}</span><small>${local.complete ? '이 Mac에 원본 있음' : e(local.reason || '이 Mac에 원본이 없습니다.')}</small>${local.complete || local.noCase ? '' : `<button class="button secondary small" data-action="storage-download" data-case-id="${e(item.submissionId)}">원본 받기</button>`}`;
   }
   return `${item.refunded ? '<span class="badge red">환불</span>' : '<span class="badge">심의 완료</span>'}<small>${e(formatDate(item.finishedAt))}</small>`;
 }
@@ -405,16 +405,49 @@ function storageResultsMarkup() {
   const failures = results.filter(item => !item.ok);
   return `<div class="notice ${failures.length ? 'error' : 'good'}" role="status"><strong>${results.length}건 처리 · 파일 ${total(results, 'deletedFiles')}개 삭제 · ${e(fileSize(total(results, 'freedBytes')) || '0 B')} 확보${failures.length ? ` · ${failures.length}건 확인 필요` : ''}</strong>${failures.length ? `<ul>${failures.map(item => `<li>${e(ui.storageTitles?.[item.submissionId] || shortId(item.submissionId))}: ${e(item.error || '삭제하지 못했습니다.')}</li>`).join('')}</ul>` : ''}</div>`;
 }
+const LEFTOVER_BATCH = 25;
+const LEFTOVER_REASON = { hidden_upload: '교체·삭제된 업로드의 숨은 사본', unlinked_upload: '신청에 연결되지 않은 업로드', unlinked_supplement: '연결되지 않은 보완 제출 파일', deleted_submission: '삭제된 신청의 남은 파일', sent_mail_copy: '발송이 끝난 결과 메일 첨부 사본', old_versions: '현재 파일의 이전 버전' };
+const INVENTORY_LABEL = {
+  purgeable: ['정리 목록의 고객 파일', '아래 고객 파일 목록에서 삭제합니다.'],
+  held: ['아직 정리할 수 없는 고객 파일', '작성 중·결제 전 신청이나 심의 중인 보완 파일입니다.'],
+  leftover: ['남은 파일', '어떤 신청에도 필요하지 않습니다. 아래 남은 파일 목록에서 삭제합니다.'],
+  certificate: ['영등위 필증', '고객 결과 화면과 메일에 쓰여 유지합니다.'],
+  mail_pending: ['발송 전 결과 메일 첨부', '메일이 발송되면 남은 파일로 옮겨집니다.'],
+  recent: ['최근 24시간 안에 올라온 파일', '업로드 기록을 확인하는 중이라 다음 날 다시 분류합니다.'],
+  other: ['관리자 업로드·심의 문서 작업 파일', '이 화면에서 지우지 않습니다.'],
+};
+const inventory = () => ui.storage?.inventory || null;
+const leftovers = () => inventory()?.leftovers || [];
+const leftoverChosen = () => leftovers().filter(item => ui.leftoverSelected?.has(item.id));
+function inventoryMarkup() {
+  const inv = inventory();
+  if (!inv) return `<div class="notice">B2 전체 현황은 온사이드 서비스가 업데이트된 뒤 표시됩니다. 지금은 고객 파일 목록만 확인할 수 있습니다.</div>`;
+  const rows = inv.groups.filter(group => group.count).map(group => { const [label, note] = INVENTORY_LABEL[group.key] || [group.key, '']; return `<tr><td><strong>${e(label)}</strong><small>${e(note)}</small></td><td>${e(group.count)}개</td><td>${e(fileSize(group.bytes) || '0 B')}</td></tr>`; }).join('');
+  const held = inv.held.length ? `<div class="inventory-held"><h3>아직 정리할 수 없는 신청</h3><ul>${inv.held.map(item => `<li><strong>${e(value(item.title, shortId(item.submissionId)))}</strong> · ${e(item.reason)} · ${e(fileSize(item.bytes) || '0 B')}</li>`).join('')}</ul></div>` : '';
+  return `<section class="panel inventory-panel"><div class="panel-head"><div><h2>B2 전체 현황</h2><p class="muted tiny">Backblaze 콘솔과 같은 기준(이전 버전 포함)으로 모든 파일을 나눴습니다. ${e(formatDate(inv.checkedAt))} 확인</p></div><div class="inventory-total"><strong>${e(fileSize(inv.totalBytes) || '0 B')}</strong><span>파일·버전 ${e(inv.totalVersions)}개${inv.hiddenMarkers ? ` · 숨김 표시 ${e(inv.hiddenMarkers)}개` : ''}</span></div></div>${inv.truncated ? '<div class="notice error">파일이 많아 일부만 집계했습니다. 정리 후 다시 새로고침하세요.</div>' : ''}${rows ? `<div class="table-wrap"><table class="jobs-table inventory-table"><thead><tr><th>구분</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">B2에 저장된 파일이 없습니다.</div>'}${held}</section>`;
+}
+function leftoverResultsMarkup() {
+  const results = ui.leftoverResults; if (!results) return '';
+  const failures = results.filter(item => !item.ok);
+  return `<div class="notice ${failures.length ? 'error' : 'good'}" role="status"><strong>남은 파일 ${results.length}개 처리 · 버전 ${total(results, 'deletedVersions')}개 삭제 · ${e(fileSize(total(results, 'freedBytes')) || '0 B')} 확보${failures.length ? ` · ${failures.length}개 확인 필요` : ''}</strong>${failures.length ? `<ul>${failures.map(item => `<li>${e(ui.leftoverNames?.[item.id] || item.id.slice(0, 8))}: ${e(item.error || '삭제하지 못했습니다.')}</li>`).join('')}</ul>` : ''}</div>`;
+}
+function leftoverSelectionText() { const chosen = leftoverChosen(); return `선택 ${chosen.length}개 · ${fileSize(total(chosen, 'bytes')) || '0 B'}`; }
+function leftoverMarkup() {
+  const inv = inventory(); if (!inv) return '';
+  const list = leftovers(), chosen = leftoverChosen(), running = !!ui.leftoverProgress || !!ui.storageProgress;
+  const rows = list.map(item => `<tr><td><input type="checkbox" data-leftover-select="${e(item.id)}" aria-label="${e(item.name)} 선택"${ui.leftoverSelected?.has(item.id) ? ' checked' : ''}${running ? ' disabled' : ''}></td><td><strong>${e(item.name)}</strong><small>${e(item.submissionTitle ? `${item.submissionTitle} · ${shortId(item.submissionId)}` : item.submissionId ? `삭제된 신청 · ${shortId(item.submissionId)}` : '신청 없음')}</small></td><td>${e(LEFTOVER_REASON[item.reason] || item.reason)}${item.bytes ? '' : '<small>숨김 표시만 남아 용량은 없습니다.</small>'}</td><td>${e(item.versionCount)}개</td><td>${e(fileSize(item.bytes) || '0 B')}</td><td>${e(formatDate(item.lastModified))}</td></tr>`).join('');
+  return `${leftoverResultsMarkup()}${ui.leftoverError ? `<div class="notice error" role="alert">${e(ui.leftoverError)}</div>` : ''}<section class="panel leftover-panel"><div class="panel-head"><div><h2>남은 파일</h2><p class="muted tiny">교체되거나 삭제된 업로드의 숨은 사본, 삭제된 신청의 파일, 발송이 끝난 메일 첨부 사본, 이전 버전입니다. 지우기 직전에 서비스가 B2를 다시 확인해 그사이 다시 필요해진 파일은 지우지 않습니다.</p></div><span class="muted tiny">${e(list.length)}개 · ${e(fileSize(total(list, 'bytes')) || '0 B')}</span></div>${list.length ? `<div class="table-wrap"><table class="jobs-table storage-table leftover-table"><thead><tr><th><input type="checkbox" data-leftover-all aria-label="남은 파일 전체 선택"${list.length && chosen.length === list.length ? ' checked' : ''}${running ? ' disabled' : ''}></th><th>파일</th><th>사유</th><th>버전</th><th>용량</th><th>마지막 변경</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">정리할 남은 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="leftover-selection">${e(leftoverSelectionText())}</span><button class="button danger" data-action="leftover-purge"${!chosen.length || running ? ' disabled' : ''}>${ui.leftoverProgress ? `삭제 중… ${ui.leftoverProgress.done}/${ui.leftoverProgress.total}개` : '선택한 남은 파일 영구 삭제'}</button></div></section>`;
+}
 function storageSelectionText() { const chosen = storageChosen(); return `선택 ${chosen.length}건 · 파일 ${total(chosen, 'fileCount')}개 · ${fileSize(total(chosen, 'totalBytes')) || '0 B'}`; }
 function storageBody() {
-  if (!ui.storage) return ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>정리 대상을 확인하고 있습니다</h1><p>결제가 끝난 신청과 이 Mac의 원본 보관 상태를 확인합니다.</p></div>`;
+  if (!ui.storage) return ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : `<div class="loading-state"><span class="spinner"></span><h1>정리 대상을 확인하고 있습니다</h1><p>B2의 모든 파일과 접수된 신청, 이 Mac의 원본 보관 상태를 대조합니다.</p></div>`;
   const visible = storageVisible(), chosen = storageChosen(), running = !!ui.storageProgress, age = ui.storageAge || '0';
   const selectable = visible.filter(storageSelectable);
   const rows = visible.map(item => `<tr><td><input type="checkbox" data-storage-select="${e(item.submissionId)}" aria-label="${e(value(item.title, '제목 미입력'))} 선택"${storageSelectable(item) && ui.storageSelected?.has(item.submissionId) ? ' checked' : ''}${running || !storageSelectable(item) ? ' disabled' : ''}></td><td><strong>${e(value(item.title, '제목 미입력'))}</strong><small>${e(value(item.artistName, '아티스트 미입력'))} · ${e(shortId(item.submissionId))}</small></td><td>${e(TYPE[item.type] || item.type || '—')}</td><td>${storageStageCell(item)}</td><td>${e(item.fileCount)}개</td><td>${e(fileSize(item.totalBytes) || '0 B')}</td></tr>`).join('');
-  return `${storageResultsMarkup()}${ui.storagePurgeError ? `<div class="notice error" role="alert">${e(ui.storagePurgeError)}</div>` : ''}${ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : ''}<section class="panel"><div class="panel-head"><div class="filters storage-filters" role="group" aria-label="정리 대상 구분">${STORAGE_AGES.map(([days, text]) => `<button class="filter${age === days ? ' active' : ''}" data-storage-age="${days}" aria-pressed="${age === days}"${running ? ' disabled' : ''}>${text}</button>`).join('')}</div><span class="muted tiny">대상 ${visible.length}건 · ${e(fileSize(total(visible, 'totalBytes')) || '0 B')}</span></div>${visible.length ? `<div class="table-wrap"><table class="jobs-table storage-table"><thead><tr><th><input type="checkbox" data-storage-all aria-label="목록 전체 선택"${selectable.length && chosen.length === selectable.length ? ' checked' : ''}${running || !selectable.length ? ' disabled' : ''}></th><th>신청</th><th>유형</th><th>상태</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">지금 삭제할 수 있는 고객 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="storage-selection">${e(storageSelectionText())}</span><button class="button danger" data-action="storage-purge"${!chosen.length || running ? ' disabled' : ''}>${running ? `삭제 중… ${ui.storageProgress.done}/${ui.storageProgress.total}건` : '선택한 고객 파일 영구 삭제'}</button></div></section>`;
+  return `${inventoryMarkup()}${storageResultsMarkup()}${ui.storagePurgeError ? `<div class="notice error" role="alert">${e(ui.storagePurgeError)}</div>` : ''}${ui.storageError ? `<div class="notice error">${e(ui.storageError)}</div>` : ''}<section class="panel"><div class="panel-head"><h2>고객 파일</h2></div><div class="panel-head storage-filter-row"><div class="filters storage-filters" role="group" aria-label="정리 대상 구분">${STORAGE_AGES.map(([days, text]) => `<button class="filter${age === days ? ' active' : ''}" data-storage-age="${days}" aria-pressed="${age === days}"${running ? ' disabled' : ''}>${text}</button>`).join('')}</div><span class="muted tiny">대상 ${visible.length}건 · ${e(fileSize(total(visible, 'totalBytes')) || '0 B')}</span></div>${visible.length ? `<div class="table-wrap"><table class="jobs-table storage-table customer-table"><thead><tr><th><input type="checkbox" data-storage-all aria-label="목록 전체 선택"${selectable.length && chosen.length === selectable.length ? ' checked' : ''}${running || !selectable.length ? ' disabled' : ''}></th><th>신청</th><th>유형</th><th>상태</th><th>파일</th><th>용량</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-list">지금 삭제할 수 있는 고객 파일이 없습니다.</div>'}<div class="legend storage-actions"><span id="storage-selection">${e(storageSelectionText())}</span><button class="button danger" data-action="storage-purge"${!chosen.length || running || ui.leftoverProgress ? ' disabled' : ''}>${running ? `삭제 중… ${ui.storageProgress.done}/${ui.storageProgress.total}건` : '선택한 고객 파일 영구 삭제'}</button></div></section>${leftoverMarkup()}`;
 }
 function storageScreen() {
-  screen.innerHTML = `${heading('저장공간 정리', '결제가 끝난 신청에서 고객이 올린 파일을 온사이드 저장소(B2)에서 영구 삭제해 용량을 확보합니다. 심의 진행 중인 신청은 이 Mac에 원본이 온전히 있을 때만 지울 수 있습니다.', `<button class="button secondary" data-action="storage-refresh"${ui.storageLoading || ui.storageProgress ? ' disabled' : ''}>${ui.storageLoading ? '불러오는 중…' : '목록 새로고침'}</button>`)}<div class="storage-notes"><div class="notice error"><strong>삭제되는 파일</strong><br>고객이 올린 음원·영상·가사·신청서·기타 파일과 보완 제출 파일. 파일의 모든 버전까지 지워 실제 용량이 줄어듭니다. 되돌릴 수 없습니다.</div><div class="notice good"><strong>유지되는 것</strong><br>영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 “서버 보관본 정리됨”으로 표시됩니다.</div></div><div class="notice"><strong>심의 진행 중인 신청</strong>은 고객이 올린 원본만 지우고 보완 제출 파일은 결과가 나올 때까지 남깁니다. 지우기 직전에 이 Mac의 “원본 파일” 폴더에 같은 크기의 원본이 모두 있는지 다시 확인하며, 없으면 “원본 받기” 후 지울 수 있습니다. 서버 사본을 지운 뒤에는 <strong>이 Mac의 원본이 유일한 사본</strong>이므로 심의가 끝날 때까지 지우거나 옮기지 마세요. 이 Mac의 자동 백업은 원본 파일을 포함하지 않습니다. Backblaze 콘솔에서 직접 지우지 말고 여기서 정리하세요.</div><div id="storage-body">${storageBody()}</div>`;
+  screen.innerHTML = `${heading('저장공간 정리', 'B2에 저장된 모든 파일을 신청 기록과 대조해, 고객이 올린 파일과 어디에도 필요 없는 남은 파일을 영구 삭제합니다. 심의 진행 중(입금 확인 전 포함)인 신청은 이 Mac에 원본이 온전히 있을 때만 지울 수 있습니다.', `<button class="button secondary" data-action="storage-refresh"${ui.storageLoading || ui.storageProgress || ui.leftoverProgress ? ' disabled' : ''}>${ui.storageLoading ? '불러오는 중…' : '목록 새로고침'}</button>`)}<div class="storage-notes"><div class="notice error"><strong>삭제되는 파일</strong><br>고객이 올린 음원·영상·가사·신청서·기타 파일과 보완 제출 파일, 그리고 어떤 신청에도 필요 없는 남은 파일(교체된 업로드의 숨은 사본, 삭제된 신청의 파일, 발송이 끝난 메일 첨부 사본). 파일의 모든 버전까지 지워 실제 용량이 줄어듭니다. 되돌릴 수 없습니다.</div><div class="notice good"><strong>유지되는 것</strong><br>영등위 필증, 연령등급 이미지, 표기 가이드, 결과 메일 기록, 신청·결제·심의 결과 내역과 파일 이름 목록. 고객 화면에는 “서버 보관본 정리됨”으로 표시됩니다.</div></div><div class="notice"><strong>심의 진행 중인 신청</strong>은 고객이 올린 원본만 지우고 보완 제출 파일은 결과가 나올 때까지 남깁니다. 지우기 직전에 이 Mac의 “원본 파일” 폴더에 같은 크기의 원본이 모두 있는지 다시 확인하며, 없으면 “원본 받기” 후 지울 수 있습니다. 서버 사본을 지운 뒤에는 <strong>이 Mac의 원본이 유일한 사본</strong>이므로 심의가 끝날 때까지 지우거나 옮기지 마세요. 이 Mac의 자동 백업은 원본 파일을 포함하지 않습니다. Backblaze 콘솔에서 직접 지우지 말고 여기서 정리하세요.</div><div id="storage-body">${storageBody()}</div>`;
   if (!ui.storage && !ui.storageLoading && !ui.storageError) void loadStorage();
 }
 function updateStorageSelection() {
@@ -430,6 +463,8 @@ async function loadStorage() {
     ui.storage = await api('/api/storage');
     const ids = new Set(storageItems().map(item => item.submissionId));
     ui.storageSelected = new Set([...(ui.storageSelected || [])].filter(id => ids.has(id)));
+    const leftoverIds = new Set(leftovers().map(item => item.id));
+    ui.leftoverSelected = new Set([...(ui.leftoverSelected || [])].filter(id => leftoverIds.has(id)));
   } catch (error) { ui.storage = null; ui.storageError = `정리 대상을 불러오지 못했습니다. ${error.status === 0 ? '데스크 서비스에 연결하지 못했습니다.' : error.message}`; }
   finally { ui.storageLoading = false; if (ui.nav === 'storage') storageScreen(); }
 }
@@ -461,6 +496,39 @@ async function purgeStorage() {
     await loadStorage();
   }
 }
+function updateLeftoverSelection() {
+  const chosen = leftoverChosen(), list = leftovers(), running = !!ui.leftoverProgress || !!ui.storageProgress;
+  const summary = document.getElementById('leftover-selection'); if (summary) summary.textContent = leftoverSelectionText();
+  const button = document.querySelector('[data-action="leftover-purge"]'); if (button && !running) button.disabled = !chosen.length;
+  const all = document.querySelector('[data-leftover-all]'); if (all) all.checked = list.length > 0 && chosen.length === list.length;
+}
+async function purgeLeftovers() {
+  const chosen = leftoverChosen(); if (!chosen.length || ui.leftoverProgress || ui.storageProgress) return;
+  const dialog = document.getElementById('confirm-dialog'); if (dialog.open) return;
+  document.getElementById('confirm-title').textContent = '남은 파일을 영구 삭제할까요?';
+  document.getElementById('confirm-message').textContent = `선택한 남은 파일 ${chosen.length}개(${fileSize(total(chosen, 'bytes')) || '0 B'})를 B2에서 모든 버전까지 영구 삭제합니다. 어떤 신청·필증·발송 전 메일도 쓰지 않는 파일이며, 지우기 직전에 서비스가 다시 확인합니다. 되돌릴 수 없습니다.`;
+  dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = `${chosen.length}개 영구 삭제`; dialog.returnValue = ''; dialog.showModal();
+  dialog.querySelector('[value=cancel]').focus();
+  const confirmed = await new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+  dialog.querySelector('[value=cancel]').textContent = '계속 편집'; dialog.querySelector('[value=confirm]').textContent = '변경 버리기';
+  if (!confirmed) return;
+  const ids = chosen.map(item => item.id), collected = [];
+  ui.leftoverNames = Object.fromEntries(chosen.map(item => [item.id, item.name]));
+  ui.leftoverResults = null; ui.leftoverError = ''; ui.leftoverProgress = { done: 0, total: ids.length }; if (ui.nav === 'storage') storageScreen();
+  try {
+    for (let index = 0; index < ids.length; index += LEFTOVER_BATCH) {
+      const batch = ids.slice(index, index + LEFTOVER_BATCH);
+      const result = await api('/api/storage/leftovers', { method: 'POST', body: { ids: batch } });
+      collected.push(...result.results);
+      ui.leftoverProgress = { done: Math.min(index + batch.length, ids.length), total: ids.length }; if (ui.nav === 'storage') storageScreen();
+    }
+  } catch (error) { ui.leftoverError = `${error.message} 처리된 파일은 아래 결과에 반영되며, 남은 파일은 목록에서 다시 시도할 수 있습니다.`; }
+  finally {
+    ui.leftoverResults = collected; ui.leftoverProgress = null; ui.leftoverSelected = new Set();
+    toast(ui.leftoverError ? '일부 삭제를 완료하지 못했습니다. 결과를 확인해 주세요.' : `남은 파일 ${collected.filter(item => item.ok).length}개를 삭제해 ${fileSize(total(collected, 'freedBytes')) || '0 B'}를 확보했습니다.`, !!ui.leftoverError || collected.some(item => !item.ok));
+    await loadStorage();
+  }
+}
 function render() {
   if (ui.nav === 'manual' && ui.detail && !isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
   if (ui.nav === 'cases' && isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
@@ -475,6 +543,7 @@ function render() {
 }
 function headerRender() {
   const c = ui.data.connection || {}, badge = document.getElementById('connection-badge'); badge.className = `connection-badge ${c.connected ? 'online' : 'offline'}`; badge.innerHTML = `<i></i>${e(ui.nav === 'manual' ? '이 Mac에 저장' : c.connected ? '온사이드 연결됨' : c.configured ? '연결 확인 필요' : '연결 설정 필요')}`;
+  const version = document.getElementById('desk-version'); if (version && ui.data.version) version.textContent = `심의 데스크 · v${ui.data.version}`;
   document.getElementById('nav-count').textContent = serviceCases().length; document.getElementById('manual-count').textContent = manualCases().length; document.getElementById('job-count').textContent = jobs().filter(activeJob).length;
   const monitorState = ui.data.monitor, monitorCount = document.getElementById('monitor-count'); if (monitorCount) { monitorCount.hidden = !monitorState?.issues; monitorCount.textContent = monitorState?.issues || 0; monitorCount.classList.toggle('alert', monitorState?.overall === 'error'); }
   globalAlert(ui.nav === 'manual' ? '' : ui.data.syncError ? `신청 동기화 확인: ${typeof ui.data.syncError === 'string' ? ui.data.syncError : ui.data.syncError.message || '서비스 연결을 확인해 주세요.'}` : !c.configured ? '서비스 연결 정보가 설정되지 않았습니다. 데스크 설치 안내의 연결 설정을 확인해 주세요.' : '');
@@ -771,8 +840,9 @@ async function action(name, button) {
     else if (name === 'open-online') await api(apiPath('/open-online'), { method: 'POST', body: {} });
     else if (name === 'sync-online') { if (ui.dirty) { toast('수정 중인 내용을 먼저 저장해 주세요.', true); return; } const synced = await api(apiPath('/sync-online'), { method: 'POST', body: {} }); toast(synced.changed ? '온라인 접수에 신청서 정보를 반영했습니다.' : '온라인 접수의 신청서 정보가 이미 같습니다.'); await loadDetail(ui.selected, false); }
     else if (name === 'reload-intake-packages') await loadIntakePackages(true);
-    else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; await loadStorage(); }
+    else if (name === 'storage-refresh') { ui.storageResults = null; ui.storagePurgeError = ''; ui.leftoverResults = null; ui.leftoverError = ''; await loadStorage(); }
     else if (name === 'storage-purge') await purgeStorage();
+    else if (name === 'leftover-purge') await purgeLeftovers();
     else if (name === 'storage-download') { const id = button?.dataset.caseId; if (!id) return; await api(`/api/cases/${encodeURIComponent(id)}/download`, { method: 'POST', body: {} }); toast('원본 다운로드를 시작했습니다. 작업 현황에서 끝난 것을 확인한 뒤 목록을 새로고침하세요.'); }
     else if (name === 'backup') { const backup = await api('/api/backup', { method: 'POST', body: {} }); toast(backup.message || '관리 내역과 생성 문서를 백업했습니다.'); await refresh(); }
     else if (name === 'copy-info') { await navigator.clipboard.writeText(copyText(effective())); toast('입력용 정보를 복사했습니다.'); }
@@ -803,6 +873,8 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', async event => {
   const el = event.target;
+  if (el.dataset.leftoverSelect) { ui.leftoverSelected ||= new Set(); if (el.checked) ui.leftoverSelected.add(el.dataset.leftoverSelect); else ui.leftoverSelected.delete(el.dataset.leftoverSelect); updateLeftoverSelection(); return; }
+  if (el.hasAttribute('data-leftover-all')) { ui.leftoverSelected = el.checked ? new Set(leftovers().map(item => item.id)) : new Set(); document.querySelectorAll('[data-leftover-select]').forEach(box => { box.checked = el.checked; }); updateLeftoverSelection(); return; }
   if (el.dataset.storageSelect) { ui.storageSelected ||= new Set(); if (el.checked) ui.storageSelected.add(el.dataset.storageSelect); else ui.storageSelected.delete(el.dataset.storageSelect); updateStorageSelection(); return; }
   if (el.hasAttribute('data-storage-all')) { const selectable = storageVisible().filter(storageSelectable); ui.storageSelected = el.checked ? new Set(selectable.map(item => item.submissionId)) : new Set(); const ids = new Set(selectable.map(item => item.submissionId)); document.querySelectorAll('[data-storage-select]').forEach(box => { if (ids.has(box.dataset.storageSelect)) box.checked = el.checked; }); updateStorageSelection(); return; }
   if (el.closest('#bulk-station-form')) { ui.dirty = true; ui.resultDirtyForm = 'bulk-station-form'; clearEmailPreview(true); updateBulkControls(el); if (!ui.bulkSelected.length) ui.dirty = false; updateResultControls(); return; }

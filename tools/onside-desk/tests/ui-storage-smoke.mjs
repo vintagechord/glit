@@ -21,11 +21,25 @@ let items = [
   // Still in review and not downloaded to this Mac: shown, but cannot be selected.
   { submissionId: '33333333-3333-4333-8333-333333333333', title: '진행 중 뮤직비디오', artistName: '진행 가수', type: 'MV_BROADCAST', refunded: false, stage: 'in_review', finishedAt: null, fileCount: 1, totalBytes: 539 * 1024 ** 2, files: [{ id: 'file-x', source: 'upload', sizeBytes: 539 * 1024 ** 2 }] },
 ];
-const purged = [];
+const purged = [], cleared = [];
+let leftovers = [
+  { id: 'a'.repeat(32), reason: 'hidden_upload', name: '_HEDA_HUG_MV_.mp4', submissionId: '44444444-4444-4444-8444-444444444444', submissionTitle: 'HUG', bytes: 539 * 1024 ** 2, versionCount: 2, lastModified: new Date(Date.now() - 6 * day).toISOString() },
+  { id: 'b'.repeat(32), reason: 'deleted_submission', name: 'GET_SOMETHING_.mp4', submissionId: '55555555-5555-4555-8555-555555555555', submissionTitle: null, bytes: 0, versionCount: 1, lastModified: new Date(Date.now() - 7 * day).toISOString() },
+];
+const inventory = () => ({ checkedAt: new Date().toISOString(), truncated: false, totalBytes: 4 * 1024 ** 3, totalVersions: 20, hiddenMarkers: 2, keys: 15,
+  groups: [{ key: 'purgeable', count: 3, bytes: 3 * 1024 ** 3 }, { key: 'held', count: 1, bytes: 5 * 1024 ** 2 }, { key: 'leftover', count: leftovers.length, bytes: leftovers.reduce((sum, item) => sum + item.bytes, 0) }, { key: 'certificate', count: 1, bytes: 400_000 }, { key: 'mail_pending', count: 0, bytes: 0 }, { key: 'recent', count: 0, bytes: 0 }, { key: 'other', count: 0, bytes: 0 }],
+  held: [{ submissionId: '66666666-6666-4666-8666-666666666666', title: '작성 중 앨범', reason: '작성 중인 신청', count: 1, bytes: 5 * 1024 ** 2 }],
+  leftovers });
 const remote = {
   configured: () => true,
   health: async () => ({ protocol: 2, capabilities: { storagePurge: true } }),
-  listStorage: async () => ({ items }),
+  listStorage: async ({ inventory: wanted } = {}) => ({ items, inventory: wanted ? inventory() : null }),
+  purgeLeftovers: async ids => {
+    cleared.push(...ids);
+    const results = ids.map(id => ({ id, ok: true, deletedVersions: leftovers.find(item => item.id === id).versionCount, failedVersions: 0, freedBytes: leftovers.find(item => item.id === id).bytes }));
+    leftovers = leftovers.filter(item => !ids.includes(item.id));
+    return { ok: true, results };
+  },
   purgeStorage: async ids => {
     purged.push(...ids);
     const results = ids.map(submissionId => {
@@ -46,7 +60,7 @@ try {
   await page.goto(`http://127.0.0.1:${desk.server.address().port}`);
   await page.getByRole('button', { name: /저장공간 정리/ }).click();
   await page.getByRole('heading', { name: '저장공간 정리', exact: true }).waitFor();
-  const rows = page.locator('.storage-table tbody tr');
+  const rows = page.locator('.customer-table tbody tr');
   await rows.nth(2).waitFor();
   assert.equal(await rows.count(), 3);
   assert.equal(await page.locator('#screen img').count(), 0);
@@ -79,6 +93,26 @@ try {
   assert.deepEqual(purged, ['11111111-1111-4111-8111-111111111111']);
   assert.equal(await rows.count(), 2);
   await page.screenshot({ path: path.join(screenshots, 'storage-after.png'), fullPage: true });
+
+  // The whole bucket is accounted for, including what no record needs any more.
+  await page.getByRole('heading', { name: 'B2 전체 현황' }).waitFor();
+  assert.match(await page.locator('.inventory-total').innerText(), /4\.0 GB/);
+  await page.getByText('작성 중 앨범', { exact: false }).waitFor();
+  const leftoverRows = page.locator('.leftover-table tbody tr');
+  assert.equal(await leftoverRows.count(), 2);
+  await page.getByText('교체·삭제된 업로드의 숨은 사본').waitFor();
+  await page.getByText('숨김 표시만 남아 용량은 없습니다.').waitFor();
+  const clearButton = page.getByRole('button', { name: '선택한 남은 파일 영구 삭제' });
+  assert.equal(await clearButton.isDisabled(), true);
+  await page.getByRole('checkbox', { name: '남은 파일 전체 선택' }).check();
+  assert.match(await page.locator('#leftover-selection').innerText(), /선택 2개 · 539\.0 MB/);
+  await page.screenshot({ path: path.join(screenshots, 'storage-leftovers.png'), fullPage: true });
+  await clearButton.click();
+  assert.match(await page.locator('#confirm-message').innerText(), /남은 파일 2개\(539\.0 MB\)/);
+  await page.getByRole('button', { name: '2개 영구 삭제', exact: true }).click();
+  await page.getByText(/남은 파일 2개 처리 · 버전 3개 삭제 · 539\.0 MB 확보/).waitFor();
+  assert.deepEqual(cleared, ['a'.repeat(32), 'b'.repeat(32)]);
+  await page.getByText('정리할 남은 파일이 없습니다.').waitFor();
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, screenshots }));
 } finally { await browser.close(); await desk.close(); await fs.rm(root, { recursive: true, force: true }).catch(() => {}); }

@@ -17,6 +17,7 @@ import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './inte
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
+export const DESK_VERSION = '2.12.0';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
@@ -88,7 +89,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: '2.11.0' };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: DESK_VERSION };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -228,12 +229,26 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     }
     return missing ? { complete: false, missing, reason: `이 Mac에 원본 ${missing}개가 없습니다. 원본 받기 후 삭제할 수 있습니다.` } : { complete: true, missing: 0 };
   }
-  /** 저장공간 정리 목록: finished, refunded and paid submissions still in review, with this Mac's copy state for the last. */
+  /**
+   * 저장공간 정리 목록: finished, refunded and received submissions still in
+   * review (paid or waiting for the deposit), with this Mac's copy state for
+   * the last, plus the service's inventory of every stored version in B2 —
+   * so the page accounts for the same bytes the Backblaze console shows.
+   */
   async function listStorage() {
-    const listed = await remote.listStorage({ scope: 'received' });
+    const listed = await remote.listStorage({ scope: 'received', inventory: true });
     const items = [];
     for (const item of listed.items) items.push({ ...item, local: item.stage === 'in_review' ? await localCopyStatus(item.submissionId, item.files) : { complete: true, missing: 0, notRequired: true } });
-    return { items };
+    return { items, inventory: listed.inventory || null };
+  }
+  /** 남은 파일 정리: one service batch; the service lists and re-checks the bucket before deleting any version. */
+  async function purgeLeftovers(input) {
+    if (purgingStorage) throw Object.assign(new Error('저장공간을 정리하고 있습니다. 끝난 뒤 다시 시도하세요.'), { status: 409, code: 'STORAGE_BUSY' });
+    const ids = Array.isArray(input?.ids) ? input.ids.map(String) : [];
+    if (!ids.length) throw Object.assign(new Error('정리할 남은 파일을 선택하세요.'), { status: 400, code: 'NO_LEFTOVERS' });
+    purgingStorage = true;
+    try { return await remote.purgeLeftovers(ids, { requestId: input?.requestId }); }
+    finally { purgingStorage = false; }
   }
   /** 저장공간 정리: one service batch at a time; the service re-checks every submission. */
   async function purgeStorage(input) {
@@ -568,7 +583,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (host !== localHost && host !== `localhost:${server.address()?.port}`) return sendJSON(res, 403, { error: '로컬 앱 주소로 접속하세요.' });
       if (req.headers['sec-fetch-site'] === 'cross-site' || (req.headers.origin && ![`http://${localHost}`, `http://localhost:${server.address()?.port}`].includes(req.headers.origin))) return sendJSON(res, 403, { error: '다른 사이트의 요청은 허용하지 않습니다.' });
       const url = new URL(req.url, `http://${host}`);
-      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: '2.11.1' });
+      if (url.pathname === '/health' && req.method === 'GET') return sendJSON(res, 200, { app: 'onside-review-desk', version: DESK_VERSION });
       if (!url.pathname.startsWith('/api/')) {
         const files = { '/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css' };
         const file = files[url.pathname];
@@ -602,6 +617,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await listStorage());
       if (url.pathname === '/api/intake/packages' && req.method === 'GET') return sendJSON(res, 200, await remote.listIntakePackages());
       if (url.pathname === '/api/storage/purge' && req.method === 'POST') return sendJSON(res, 200, await purgeStorage(await readJSON(req)));
+      if (url.pathname === '/api/storage/leftovers' && req.method === 'POST') return sendJSON(res, 200, await purgeLeftovers(await readJSON(req)));
       if (url.pathname === '/api/sync' && req.method === 'POST') return sendJSON(res, 200, await sync());
       if (url.pathname === '/api/settings' && req.method === 'POST') { store.data.settings = validateSettings(await readJSON(req), store.data.settings); await store.save(); return sendJSON(res, 200, { settings: store.data.settings }); }
       if (url.pathname === '/api/backup' && req.method === 'POST') return sendJSON(res, 200, await backup());

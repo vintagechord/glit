@@ -51,6 +51,7 @@ function fakes(overrides = {}) {
       { key: 'submissions/u/s/form.hwp', size: 1e5, lastModified: '2026-10-30T00:00:00Z' },
     ], truncated: false }; },
     listUnfinished: async () => overrides.unfinished || [],
+    ...(overrides.hidden ? { listHidden: async prefix => { assert.equal(prefix, 'submissions/'); return overrides.hidden; } } : {}),
   });
   return { calls, fetch, dns, tlsInfo, s3, lists: () => lists };
 }
@@ -205,6 +206,16 @@ test('B2 listing is cached and forced refreshes are rate-limited; stale multipar
   assert.equal(item(sectionOf(first, 'b2'), '미완료 업로드').status, 'warning');
   assert.equal(fileCategory('x/clip.MOV'), '영상');
   assert.equal(worst(['ok', 'unknown', 'warning']), 'warning');
+});
+
+test('hidden and previous B2 versions count toward the billed total and point to the cleanup page', async () => {
+  const objects = [{ key: 'submissions/guest/t/s/mv.mov', size: 2.2e9, lastModified: '2026-11-09T00:00:00Z' }];
+  const b2 = sectionOf(await monitorWith(fakes({ objects, hidden: { count: 1, bytes: 539e6, markers: 2, truncated: false } })).snapshot(true), 'b2');
+  assert.equal(b2.usage[0].used, 2.2e9 + 539e6, 'the usage bar matches the Backblaze console, not just current files');
+  const row = item(b2, '이전 버전·숨은 사본');
+  assert.equal(row.status, 'warning'); assert.match(row.value, /1개 · .*숨김 표시 2개/); assert.match(row.hint, /저장공간 정리 › 남은 파일/);
+  const small = sectionOf(await monitorWith(fakes({ objects, hidden: { count: 2, bytes: 3e5, markers: 0, truncated: false } })).snapshot(true), 'b2');
+  assert.equal(item(small, '이전 버전·숨은 사본').status, 'ok');
 });
 
 test('desk routes keep the Vercel token server-side, open only known links and notify once per problem', async t => {
