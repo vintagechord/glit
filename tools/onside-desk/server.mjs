@@ -17,7 +17,7 @@ import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './inte
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export const DESK_VERSION = '2.13.0';
+export const DESK_VERSION = '2.13.1';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
