@@ -168,26 +168,32 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   assert.match(banner, /<StationList hidden \/>/, "the looping copy is hidden from screen readers");
   const css = readSource("src/app/globals.css");
   // Lines never wrap; the size is derived per language from the width the
-  // turntable beside the headline leaves.
+  // record's corner leaves.
   assert.match(css, /\.onside-hero-title > span \{\s*display: block;\s*white-space: nowrap;/);
-  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-disc\)\) \/ 9\.6\)\);/);
-  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-disc\)\) \/ 11\.2\)\);/);
+  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-room\)\) \/ 9\.6\)\);/);
+  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-room\)\) \/ 11\.2\)\);/);
   assert.match(readSource("src/components/i18n/english-language-pack.tsx"), /"음반·뮤직비디오 심의,": "Album & MV Reviews,",\s*"이제 더 간편하게": "Now Made Simple",/);
-  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-platter,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-platter,\s*\.onside-hero-track \{\s*animation: none;/);
-  // 2026-11-11 (owner): keep the running station names and a realistic
-  // turntable. "Since 2017" is a pill badge above the headline, and the
-  // turntable turns in the space to the headline's right, in the same row
-  // but never over the text. No fake play control comes back.
-  assert.match(banner, /<p className="onside-hero-since">Since 2017<\/p>\s*<div className="onside-hero-headline">\s*<h1 className="onside-hero-title">[\s\S]*?<\/h1>\s*<HeroTurntable \/>\s*<\/div>/);
+  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-lp-vinyl,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-lp-vinyl,\s*\.onside-hero-track \{\s*animation: none;/);
+  // 2026-11-11 (owner): keep the running station names. "Since 2017" is a
+  // pill badge above the headline. A large record turns with its centre on
+  // the bottom-right corner of the area above the band, so about a quarter
+  // shows with a tonearm on it. It sits under the copy, the band covers its
+  // lower half, and no fake play control comes back.
+  assert.match(banner, /<HeroRecord \/>\s*<div className="onside-hero-copy">\s*<p className="onside-hero-since">Since 2017<\/p>\s*<div className="onside-hero-headline">\s*<h1 className="onside-hero-title">[\s\S]*?<\/h1>\s*<\/div>/);
   assert.match(css, /\.onside-hero-since \{[^}]*border-radius: 999px;/);
-  assert.match(banner, /<div className="onside-hero-turntable" aria-hidden="true">/);
-  assert.match(banner, /<span className="onside-hero-vinyl-name">ONSIDE<\/span>/);
-  assert.doesNotMatch(banner, /onside-hero-(?:play|wave|disc)\b/);
-  assert.doesNotMatch(css, /\.onside-hero-(?:play|wave|disc)\b/);
+  assert.match(banner, /<div className="onside-hero-lp" aria-hidden="true" data-no-translate>/);
+  assert.match(banner, /const LABEL_TEXT = "ONSIDE · ALBUM & MUSIC VIDEO REVIEW · ";/);
+  assert.match(css, /\.onside-hero-lp \{\s*position: absolute;\s*inset: 0 0 var\(--hero-band\) 0;[^}]*overflow: hidden;/);
+  assert.match(css, /\.onside-hero-lp-body \{\s*position: absolute;\s*right: -33cqi;\s*bottom: -33cqi;\s*width: 66cqi;/);
+  assert.match(css, /\.onside-hero-copy \{\s*position: relative;\s*z-index: 1;/);
+  assert.match(css, /\.onside-hero-band \{\s*position: relative;\s*z-index: 2;/);
+  assert.doesNotMatch(banner, /onside-hero-(?:play|wave|disc|turntable|platter)\b/);
+  assert.doesNotMatch(css, /\.onside-hero-(?:play|wave|disc|turntable|platter)\b/);
   assert.match(css, /\.onside-hero-since::before \{[^}]*background: #f2cf27;/);
-  // The light on the vinyl stays still while the platter turns under it.
-  assert.doesNotMatch(css, /\.onside-hero-vinyl-sheen \{[^}]*animation/);
+  // The light on the vinyl and the tonearm stay still while the vinyl turns.
+  assert.doesNotMatch(css, /\.onside-hero-lp-sheen \{[^}]*animation/);
+  assert.doesNotMatch(css, /\.onside-hero-tonearm \{[^}]*animation/);
   // The status panel beside the banner follows the same frame rule on the
   // home page only; the dashboard keeps its own default frame.
   assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);
