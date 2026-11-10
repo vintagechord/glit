@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
+import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { getEmailDeliveryMode } from "@/lib/email-delivery-mode";
 import {
   clearMultipartResumeState,
@@ -268,11 +269,30 @@ export function SubmissionSupplements({ submissionId, guestToken, admin = false 
         return <article key={request.id} className="space-y-3 border-t border-border pt-4">
           <h3 className="font-bold">{statusLabel(request.status)}</h3>
           <p className="whitespace-pre-wrap break-words text-sm"><span data-no-translate>{request.note}</span></p>
-          {admin && <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
-            const result = await api<{ notification: Notice["outcome"] & { alreadyAccepted?: boolean }; warning?: string }>({ action: "notify", requestId: request.id });
-            setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true, result.notification)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
-            await load();
-          })}>{t("보완 안내 보내기·실패 재시도", "Send Supplement Notice / Retry Failures")}</button>}
+          {admin && <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy} className={buttonClass} onClick={() => void run(async () => {
+              const result = await api<{ notification: Notice["outcome"] & { alreadyAccepted?: boolean }; warning?: string }>({ action: "notify", requestId: request.id });
+              setMessage(`${t("이메일", "Email")}: ${delivery(result.notification.email, true, result.notification)} · ${t("카카오", "Kakao")}: ${delivery(result.notification.kakao)}. ${t("실제 수신 여부는 수신함에서 확인해주세요.", "Confirm delivery in the recipient’s inbox.")}`);
+              await load();
+            })}>{t("보완 안내 보내기·실패 재시도", "Send Supplement Notice / Retry Failures")}</button>
+            <button type="button" disabled={busy} data-supplement-delete={request.id} className={`${buttonClass} border-2! border-[#111111]! bg-[#d9362c] text-white`} onClick={() => void (async () => {
+              const uploaded = request.revisions.reduce((count, revision) => count + revision.files.filter(file => !file.purged_at && file.status !== "ABORTED").length, 0);
+              const confirmed = await showCenteredConfirm(
+                uploaded
+                  ? t(`이 보완 요청을 삭제할까요? 고객 화면에서 사라지고, 고객이 올린 보완 파일 ${uploaded}개도 함께 삭제됩니다.`, `Delete this supplement request? It disappears for the customer, and the ${uploaded} file(s) they uploaded are deleted too.`)
+                  : t("이 보완 요청을 삭제할까요? 고객 화면에서도 사라집니다.", "Delete this supplement request? It also disappears for the customer."),
+                { title: t("보완 요청 삭제", "Delete Supplement Request") },
+              );
+              if (!confirmed) return;
+              await run(async () => {
+                const result = await api<{ filesLeft?: number }>({ action: "delete", requestId: request.id });
+                await load();
+                setMessage(result.filesLeft
+                  ? t(`보완 요청을 삭제했습니다. 파일 ${result.filesLeft}개는 지우지 못했으니 데스크의 남은 파일 정리에서 지워주세요.`, `Request deleted. ${result.filesLeft} file(s) could not be removed; clear them from the desk's leftover files.`)
+                  : t("보완 요청을 삭제했습니다.", "Supplement request deleted."));
+              });
+            })()}>{t("요청 삭제", "Delete Request")}</button>
+          </div>}
           {request.revisions.map(revision => <div key={revision.id} className="rounded-lg border border-border p-3 text-sm">
             <p className="font-bold">{t("버전", "Version")} {revision.revision_no} · {statusLabel(revision.status)}</p>
             {revision.note && <p className="mt-2 whitespace-pre-wrap break-words"><span data-no-translate>{revision.note}</span></p>}

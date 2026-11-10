@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { abortMultipartUpload, completeMultipartUpload, createMultipartUpload, getB2Config, headObject, listMultipartUploadParts, presignGetUrl, presignUploadPart, sanitizeFileName } from "@/lib/b2";
 import { abortClaimedMultipartGrant, abortFailedMultipartGrant, cleanupExpiredMultipartGrants, createMultipartGrant, getMultipartGrant, getMultipartOwnerKey, getMultipartPartSize, type MultipartUploadGrant } from "@/lib/multipart-upload-grants";
+import { deleteUnreferencedUploadObject } from "@/lib/upload-object-references";
 import { isMissingUploadObject, multipartCompletionManifest } from "@/lib/multipart-upload-completion";
 import { isSupplementFilenameAllowed, matchesSupplementSignature, SUPPLEMENT_PART_BYTES, supplementActionSchema, supplementMimeType } from "./model";
 import { sendSubmissionUpdateEmail } from "@/lib/email";
@@ -99,8 +100,59 @@ async function findFile(context: Context, fileId: string) {
   return { file, revision, request };
 }
 
+/**
+ * Removes a supplement request an administrator sent by mistake, with every
+ * version, file and notice record under it (they cascade), then the files the
+ * customer uploaded for it. Records go first: a file that cannot be removed
+ * now is left with no record, which the storage cleanup lists and removes.
+ */
+async function deleteSupplementRequest(context: Context, requestId: string) {
+  if (!context.isAdmin) throw new SupplementError("관리자 권한이 필요합니다.", 403);
+  const request = await findRequest(context, requestId);
+  const { data: revisions, error: revisionError } = await context.db.from("submission_supplement_revisions").select("id").eq("request_id", request.id);
+  if (revisionError) throw new SupplementError("보완 요청을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.", 503);
+  const revisionIds = (revisions ?? []).map((revision) => String(revision.id));
+  const files = revisionIds.length
+    ? await context.db.from("submission_supplement_files").select("id,grant_id,object_key,status,purged_at").in("revision_id", revisionIds)
+    : { data: [], error: null };
+  if (files.error) throw new SupplementError("보완 요청을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.", 503);
+  const { data: deleted, error } = await context.db.from("submission_supplement_requests").delete()
+    .eq("id", request.id).eq("submission_id", context.submission.id).select("id").maybeSingle();
+  if (error) throw new SupplementError("보완 요청을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.", 503);
+  if (!deleted) throw new SupplementError("이미 삭제된 보완 요청입니다.", 404);
+  await context.db.from("submission_events").insert({
+    submission_id: context.submission.id, actor_user_id: context.userId, event_type: "SUPPLEMENT_DELETED",
+    message: "관리자가 보완 요청을 삭제했습니다.",
+  }).then(() => undefined, () => undefined);
+
+  const { prefix } = getB2Config();
+  let filesLeft = 0;
+  for (const file of (files.data ?? []) as Array<{ grant_id: string; object_key: string; status: string; purged_at: string | null }>) {
+    if (file.purged_at || file.status === "ABORTED") continue;
+    try {
+      if (file.status === "PENDING") {
+        // An unfinished upload: stop it so no parts or assembled file remain.
+        const grant = await getMultipartGrant(file.grant_id);
+        if (grant && ["ACTIVE", "COMPLETING"].includes(grant.status)) {
+          const now = new Date().toISOString();
+          const { data: claimed } = await context.db.from("multipart_upload_grants")
+            .update({ status: "ABORTING", abort_attempts: (grant.abort_attempts ?? 0) + 1, last_abort_attempt_at: now, updated_at: now })
+            .eq("id", grant.id).eq("status", grant.status).select("*").maybeSingle();
+          if (claimed && !(await abortClaimedMultipartGrant(claimed as MultipartUploadGrant))) filesLeft += 1;
+        }
+      } else if (await deleteUnreferencedUploadObject(context.db, file.object_key, { prefix, submissionId: context.submission.id }) === "referenced") {
+        filesLeft += 1;
+      }
+    } catch {
+      filesLeft += 1;
+    }
+  }
+  return { deleted: true, filesLeft };
+}
+
 export async function performSupplementAction(context: Context, input: z.infer<typeof supplementActionSchema>) {
   if (input.action === "notify") return notifySupplement(context, input.requestId);
+  if (input.action === "delete") return deleteSupplementRequest(context, input.requestId);
   if (input.action === "request" || input.action === "review") {
     if (!context.isAdmin) throw new SupplementError("관리자 권한이 필요합니다.", 403);
     const saved = await mutate(context, input.action === "request" ? "request" : input.decision === "ACCEPTED" ? "accept" : "reject", {

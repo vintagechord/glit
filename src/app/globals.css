@@ -509,6 +509,242 @@ html[lang="en"] {
   }
 }
 
+/* Home hero banner. A blue poster: the headline on top, a spinning record
+   (album) and a play tile (music video) rising from the bottom, and the
+   broadcasters Onside submits to running along a broadcast-style band.
+   Sizes follow the banner's own width (cqi), so the headline is always two
+   lines in Korean and English and the record never reaches the text. */
+.onside-hero-frame {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  width: 100%;
+  max-width: 540px;
+}
+
+.onside-hero-banner {
+  --hero-band: 2.75rem;
+  --hero-pad: 1.5rem;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  min-height: calc(48cqi + 4.75rem);
+  overflow: hidden;
+  border: 2px solid #111111;
+  border-radius: 10px;
+  background: #1556a4;
+  color: #ffffff;
+  box-shadow: 6px 6px 0 #111111;
+}
+
+@container (max-width: 420px) {
+  .onside-hero-banner {
+    --hero-band: 2.5rem;
+    --hero-pad: 1.25rem;
+  }
+}
+
+.onside-hero-copy {
+  position: relative;
+  z-index: 2;
+  padding: calc(var(--hero-pad) - 0.125rem) var(--hero-pad) 0;
+}
+
+/* Each line stays whole; the size is what lets the longer line fit. */
+.onside-hero-title {
+  font-family: var(--font-onside-display);
+  font-size: min(2.875rem, calc((100cqi - 3rem) / 10.6));
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+}
+
+.onside-hero-title > span {
+  display: block;
+  white-space: nowrap;
+}
+
+html[lang="en"] .onside-hero-title {
+  font-size: min(2.5rem, calc((100cqi - 3rem) / 15.2));
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.onside-hero-record {
+  position: absolute;
+  z-index: 1;
+  right: 6cqi;
+  bottom: calc(var(--hero-band) - 19.5cqi);
+  width: 46cqi;
+  aspect-ratio: 1;
+  border: 2px solid #111111;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 31%, rgba(17, 17, 17, 0.2) 31% 32%, transparent 32%),
+    repeating-radial-gradient(circle, transparent 0 4px, rgba(17, 17, 17, 0.13) 4px 5px),
+    #f2cf27;
+  animation: onside-hero-spin 9s linear infinite;
+}
+
+/* The split label is what shows the record turning. */
+.onside-hero-record::before {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border: 2px solid #111111;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #d9362c 0 50%, #111111 50% 100%);
+}
+
+.onside-hero-record::after {
+  content: "";
+  position: absolute;
+  inset: 48.5%;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.onside-hero-play {
+  position: absolute;
+  z-index: 1;
+  left: 37cqi;
+  bottom: calc(var(--hero-band) + 3cqi);
+  display: grid;
+  width: 13cqi;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 2px solid #111111;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 3px 3px 0 #111111;
+  transform: rotate(-8deg);
+}
+
+.onside-hero-play::before {
+  content: "";
+  width: 42%;
+  aspect-ratio: 1;
+  margin-left: 12%;
+  background: #d9362c;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.onside-hero-since {
+  margin-top: 0.875rem;
+}
+
+.onside-hero-band {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  height: var(--hero-band);
+  margin-top: auto;
+  overflow: hidden;
+  border-top: 2px solid #111111;
+  background: #111111;
+  color: #f7f5ef;
+}
+
+.onside-hero-track {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: max-content;
+  animation: onside-hero-ticker 42s linear infinite;
+}
+
+.onside-hero-track ul {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1.125rem;
+  padding-right: 1.125rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.onside-hero-track li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.onside-hero-mark {
+  flex: none;
+  width: 0.5625rem;
+  height: 0.5625rem;
+  background: #f2cf27;
+}
+
+.onside-hero-mark[data-shape="circle"] {
+  border-radius: 50%;
+}
+
+.onside-hero-mark[data-shape="square"] {
+  background: #d9362c;
+}
+
+.onside-hero-mark[data-shape="triangle"] {
+  background: #ffffff;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.onside-hero-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  width: var(--hero-band);
+  place-items: center;
+  border-left: 2px solid #111111;
+  background: #ebe7de;
+  color: #111111;
+  transition: background-color 150ms;
+}
+
+.onside-hero-toggle:hover {
+  background: #ffffff;
+}
+
+.onside-hero-toggle:focus-visible {
+  outline: 3px solid #f2cf27;
+  outline-offset: -5px;
+}
+
+[data-hero-motion="paused"] .onside-hero-record,
+[data-hero-motion="paused"] .onside-hero-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onside-hero-record,
+  .onside-hero-track {
+    animation: none;
+  }
+
+  .onside-hero-toggle {
+    display: none;
+  }
+}
+
+@keyframes onside-hero-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes onside-hero-ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 /* Dev build indicator: replace default N badge text with G while keeping behavior */
 button[aria-label="Next.js build indicator"] {
   position: relative;

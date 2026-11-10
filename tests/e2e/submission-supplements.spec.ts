@@ -32,6 +32,7 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
   let completionLost = false;
   let initLost = false;
   let denied = Boolean(options.initiallyDenied);
+  let deleted = false;
   let holdUpload = Boolean(options.delayUpload);
   const waitingUploads: Route[] = [];
   const file = (id?: string) => request.revisions.flatMap(revision => revision.files).find(row => row.id === id)!;
@@ -60,7 +61,7 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
         await route.fulfill({ status: 403, json: { error: "Wrong guest ownership proof" } }); return;
       }
       if (denied) { await route.fulfill({ status: 403, json: { error: "fixture forbidden" } }); return; }
-      if (http.method() === "GET") { await route.fulfill({ json: { requests: [request] } }); return; }
+      if (http.method() === "GET") { await route.fulfill({ json: { requests: deleted ? [] : [request] } }); return; }
       const body = http.postDataJSON() as Call;
       calls.push(body);
       if (body.action === "init") {
@@ -102,6 +103,11 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
         request.status = body.decision === "ACCEPTED" ? "ACCEPTED" : "OPEN";
         if (body.decision === "REJECTED") request.revisions.push({ id: `revision-${request.revisions.length + 1}`, revision_no: request.revisions.length + 1, status: "DRAFT", note: "", review_note: "", files: [] });
         await route.fulfill({ json: { ok: true } }); return;
+      }
+      if (body.action === "delete" && admin) {
+        if (body.requestId !== requestId || deleted) { await route.fulfill({ status: 404, json: { error: "Wrong request" } }); return; }
+        deleted = true;
+        await route.fulfill({ json: { ok: true, deleted: true, filesLeft: 0 } }); return;
       }
       if (body.action === "notify" && admin) {
         if (body.requestId !== requestId) { await route.fulfill({ status: 404, json: { error: "Wrong request" } }); return; }
@@ -235,4 +241,24 @@ test("only staff can request a supplement notice and provider acceptance stays d
   expect(state.calls.filter(call => call.action === "notify")).toEqual([{ action: "notify", requestId }]);
   expect(state.request.status).toBe("OPEN");
   expect(state.calls.some(call => ["submit", "review", "complete"].includes(call.action))).toBe(false);
+});
+
+test("staff can delete a supplement request sent by mistake after confirming; customers cannot", async ({ page, context }) => {
+  const state = await fixture(context);
+  await open(page);
+  await expect(page.getByRole("button", { name: "요청 삭제", exact: true })).toHaveCount(0);
+  await open(page, true);
+  const remove = page.getByRole("button", { name: "요청 삭제", exact: true });
+  await expect(remove).toBeVisible();
+  // Dismissing the confirmation sends nothing.
+  page.once("dialog", dialog => { expect(dialog.message()).toContain("이 보완 요청을 삭제할까요?"); void dialog.dismiss(); });
+  await remove.click();
+  await expect(page.getByText(state.request.note)).toBeVisible();
+  expect(state.calls.some(call => call.action === "delete")).toBe(false);
+  page.once("dialog", dialog => { void dialog.accept(); });
+  await remove.click();
+  await expect(page.getByRole("status")).toHaveText("보완 요청을 삭제했습니다.");
+  await expect(page.getByText("등록된 보완 요청이 없습니다.")).toBeVisible();
+  await expect(page.getByText(state.request.note)).toHaveCount(0);
+  expect(state.calls.filter(call => call.action === "delete")).toEqual([{ action: "delete", requestId }]);
 });
