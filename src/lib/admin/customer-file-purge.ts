@@ -15,6 +15,8 @@ export const CUSTOMER_FILE_KINDS = ["AUDIO", "VIDEO", "LYRICS", "ETC"] as const;
 const FINAL_STATION_STATUSES = new Set(["APPROVED", "REJECTED"]);
 const OPEN_SUPPLEMENT_STATUSES = new Set(["OPEN", "SUBMITTED"]);
 const FINISHED_SUBMISSION_STATUSES = new Set(["RESULT_READY", "COMPLETED"]);
+/** Submitted and paid, or submitted with the bank deposit still being confirmed. */
+const RECEIVED_PAYMENT_STATUSES = new Set(["PAID", "PAYMENT_PENDING"]);
 const PAGE_SIZE = 1000;
 const ID_CHUNK = 100;
 const DELETE_CONCURRENCY = 4;
@@ -53,10 +55,11 @@ type UploadRow = {
 export type PurgeFile = { source: "upload" | "supplement"; id: string; objectKey: string; sizeBytes: number };
 /**
  * "finished": results decided or refunded (web admin and the desk).
- * "received": also paid submissions still in review — only for the review
- * desk, which deletes them after checking it holds verified local copies of
- * exactly these uploads. Supplement files are not downloaded by the desk, so
- * they stay until the review is finished.
+ * "received": also submitted applications still in review, paid or waiting
+ * for a bank deposit — only for the review desk, which deletes them after
+ * checking it holds verified local copies of exactly these uploads.
+ * Supplement files are not downloaded by the desk, so they stay until the
+ * review is finished.
  */
 export type PurgeScope = "finished" | "received";
 export type PurgeStage = "finished" | "refunded" | "in_review";
@@ -66,6 +69,8 @@ export type PurgeCandidate = {
   artistName: string | null;
   type: string | null;
   refunded: boolean;
+  /** In review while the bank deposit is still unconfirmed (received scope only). */
+  paymentPending: boolean;
   stage: PurgeStage;
   finishedAt: string | null;
   files: PurgeFile[];
@@ -167,7 +172,7 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[], s
   const { prefix } = getB2Config();
   const submissions = await selectPages<PurgeSubmissionRow>((from, to) => {
     let query = scope === "received"
-      ? db.from("submissions").select(submissionColumns).in("payment_status", ["PAID", "REFUNDED"])
+      ? db.from("submissions").select(submissionColumns).in("payment_status", ["PAID", "PAYMENT_PENDING", "REFUNDED"])
       : db.from("submissions").select(submissionColumns).or(
         "payment_status.eq.REFUNDED,and(payment_status.eq.PAID,or(status.in.(RESULT_READY,COMPLETED),result_status.not.is.null,result_notified_at.not.is.null))",
       );
@@ -196,7 +201,8 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[], s
         ownRequests,
       );
       const refunded = submission.payment_status === "REFUNDED";
-      const inReview = !finishedAt && scope === "received" && submission.payment_status === "PAID" && submission.status !== "DRAFT";
+      const inReview = !finishedAt && scope === "received" && RECEIVED_PAYMENT_STATUSES.has(submission.payment_status ?? "") &&
+        Boolean(submission.status) && submission.status !== "DRAFT";
       if (!finishedAt && !inReview) continue;
       const files = selectPurgeFiles(
         submission.id,
@@ -211,6 +217,7 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[], s
         artistName: submission.artist_name,
         type: submission.type,
         refunded,
+        paymentPending: inReview && submission.payment_status === "PAYMENT_PENDING",
         stage: inReview ? "in_review" : refunded ? "refunded" : "finished",
         finishedAt,
         files,
@@ -288,7 +295,7 @@ export async function purgeCustomerFiles(
     const candidate = candidates.get(submissionId);
     if (!candidate) {
       results.push({ ...empty, ok: false, error: scope === "received"
-        ? "결제가 완료된 접수가 아니거나 삭제할 고객 파일이 없습니다."
+        ? "접수된 신청이 아니거나 삭제할 고객 파일이 없습니다."
         : "심의가 끝나지 않았거나(환불 건 제외) 삭제할 고객 파일이 없습니다." });
       continue;
     }
@@ -332,7 +339,7 @@ export async function purgeCustomerFiles(
           actor_user_id: actorUserId,
           event_type: "CUSTOMER_FILES_PURGED",
           message: candidate.stage === "in_review"
-            ? `심의 진행 중 심의 데스크의 원본 보관을 확인하고 서버의 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`
+            ? `${candidate.paymentPending ? "입금 확인 전" : "심의 진행 중"} 심의 데스크의 원본 보관을 확인하고 서버의 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`
             : `${candidate.refunded ? "환불 후" : "심의 완료 후"} 고객 업로드 파일 ${deleted.length}개(${formatBytes(freedBytes)})를 삭제했습니다.`,
         });
       }

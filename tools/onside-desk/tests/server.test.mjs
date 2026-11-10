@@ -140,6 +140,27 @@ test('storage purge stays behind the local token, runs one batch at a time and r
   assert.match(s.desk.store.data.cases[id].history[0].message, /고객 업로드 파일 2개\(2MB\)/);
 });
 
+test('leftover cleanup asks for the inventory, stays behind the local token and shares the storage lock', async t => {
+  let release; const cleared = [];
+  const leftover = 'd'.repeat(32);
+  const remote = { configured: () => true,
+    listStorage: async ({ scope, inventory } = {}) => { assert.equal(scope, 'received'); assert.equal(inventory, true); return { items: [], inventory: { totalBytes: 5, leftovers: [{ id: leftover, reason: 'hidden_upload', name: 'old.mp4', bytes: 5 }] } }; },
+    purgeLeftovers: async (ids, options) => { cleared.push({ ids, options }); await new Promise(resolve => { release = resolve; }); return { ok: true, results: ids.map(item => ({ id: item, ok: true, deletedVersions: 1, failedVersions: 0, freedBytes: 5 })) }; } };
+  const s = await setup(t, { remote }); await s.desk.sync();
+  assert.equal((await (await s.api('/api/storage')).json()).inventory.leftovers[0].id, leftover);
+  assert.equal((await fetch(s.url + '/api/storage/leftovers', { method: 'POST', body: JSON.stringify({ ids: [leftover] }) })).status, 403);
+  assert.equal((await s.api('/api/storage/leftovers', { method: 'POST', body: JSON.stringify({ ids: [] }) })).status, 400);
+  const first = s.api('/api/storage/leftovers', { method: 'POST', body: JSON.stringify({ ids: [leftover] }) });
+  while (!release) await new Promise(resolve => setTimeout(resolve, 5));
+  // The customer-file purge waits for the leftover cleanup, and the other way round.
+  const busy = await s.api('/api/storage/purge', { method: 'POST', body: JSON.stringify({ submissionIds: [id] }) });
+  assert.equal(busy.status, 409); assert.equal((await busy.json()).code, 'STORAGE_BUSY');
+  release();
+  const response = await (await first).json();
+  assert.equal(response.results[0].deletedVersions, 1);
+  assert.deepEqual(cleared.map(entry => entry.ids), [[leftover]]);
+});
+
 test('a submission still in review is deleted from the service only after its originals are verified on this Mac', async t => {
   const purgeCalls = [];
   const remote = { configured: () => true,

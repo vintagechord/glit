@@ -6,6 +6,9 @@ const ASSET_KINDS = new Set(['ratingImage', 'usageGuide', 'certificate']);
 const JSON_LIMIT = 3 * 1024 * 1024;
 // Must match PURGE_BATCH_LIMIT in src/lib/admin/customer-file-purge-limits.ts.
 export const STORAGE_PURGE_BATCH = 10;
+export const STORAGE_LEFTOVER_BATCH = 25;
+const LEFTOVER_REASONS = new Set(['hidden_upload', 'unlinked_upload', 'unlinked_supplement', 'deleted_submission', 'sent_mail_copy', 'old_versions']);
+const INVENTORY_GROUPS = ['purgeable', 'held', 'leftover', 'certificate', 'mail_pending', 'recent', 'other'];
 // The web app runs on Vercel Functions (4.5MB request bodies); certificates stay at 4MB.
 const CERTIFICATE_LIMIT = 4 * 1024 * 1024;
 const ASSET_LIMIT = 25 * 1024 * 1024;
@@ -178,19 +181,49 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
   }
   /** 저장공간 정리: finished or refunded submissions whose customer uploads can be purged. */
   /** "received" also lists paid submissions still in review (uploads only); the desk deletes those only after checking its local copies. */
-  async function listStorage({ scope = 'finished', signal } = {}) {
-    const data = await jsonBody(await request('storage', { query: scope === 'received' ? { scope } : undefined, signal, timeout: 60_000 }));
+  /** inventory: also every stored version in the bucket, split into what is kept, what the purge list covers and the leftovers. */
+  async function listStorage({ scope = 'finished', inventory = false, signal } = {}) {
+    const query = { ...(scope === 'received' ? { scope } : {}), ...(inventory ? { inventory: '1' } : {}) };
+    const data = await jsonBody(await request('storage', { query: Object.keys(query).length ? query : undefined, signal, timeout: 90_000 }), 4 * 1024 * 1024);
     if (!data || !Array.isArray(data.items)) throw new RemoteReviewError('저장공간 정리 대상을 불러오지 못했습니다. 서비스 배포 상태를 확인해 주세요.', 502, 'INVALID_STORAGE_LIST');
     const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    const text = value => typeof value === 'string' ? value : null;
     const items = data.items.filter(item => item && UUID.test(String(item.submissionId))).map(item => ({
-      submissionId: String(item.submissionId), title: typeof item.title === 'string' ? item.title : null, artistName: typeof item.artistName === 'string' ? item.artistName : null,
-      type: typeof item.type === 'string' ? item.type : null, refunded: item.refunded === true,
+      submissionId: String(item.submissionId), title: text(item.title), artistName: text(item.artistName),
+      type: text(item.type), refunded: item.refunded === true, paymentPending: item.paymentPending === true,
       stage: ['finished', 'refunded', 'in_review'].includes(item.stage) ? item.stage : item.refunded === true ? 'refunded' : 'finished',
-      finishedAt: typeof item.finishedAt === 'string' ? item.finishedAt : null,
+      finishedAt: text(item.finishedAt),
       fileCount: count(item.fileCount), totalBytes: count(item.totalBytes),
       files: Array.isArray(item.files) ? item.files.filter(file => file && typeof file.id === 'string' && file.id).map(file => ({ id: file.id, source: file.source === 'supplement' ? 'supplement' : 'upload', sizeBytes: count(file.sizeBytes) })) : [],
     }));
-    return { items };
+    const raw = data.inventory;
+    if (!inventory || !raw || typeof raw !== 'object') return { items, inventory: null };
+    const groups = new Map((Array.isArray(raw.groups) ? raw.groups : []).filter(group => group && INVENTORY_GROUPS.includes(group.key)).map(group => [group.key, { key: group.key, count: count(group.count), bytes: count(group.bytes) }]));
+    return {
+      items,
+      inventory: {
+        checkedAt: text(raw.checkedAt), truncated: raw.truncated === true,
+        totalBytes: count(raw.totalBytes), totalVersions: count(raw.totalVersions), hiddenMarkers: count(raw.hiddenMarkers), keys: count(raw.keys),
+        groups: INVENTORY_GROUPS.map(key => groups.get(key) || { key, count: 0, bytes: 0 }),
+        held: (Array.isArray(raw.held) ? raw.held : []).filter(entry => entry && UUID.test(String(entry.submissionId))).map(entry => ({
+          submissionId: String(entry.submissionId), title: text(entry.title), reason: text(entry.reason) || '정리 조건을 아직 충족하지 않음', count: count(entry.count), bytes: count(entry.bytes),
+        })),
+        leftovers: (Array.isArray(raw.leftovers) ? raw.leftovers : []).filter(entry => entry && /^[a-f0-9]{32}$/.test(String(entry.id)) && LEFTOVER_REASONS.has(entry.reason)).map(entry => ({
+          id: String(entry.id), reason: entry.reason, name: text(entry.name) || '이름 없는 파일',
+          submissionId: UUID.test(String(entry.submissionId)) ? String(entry.submissionId) : null, submissionTitle: text(entry.submissionTitle),
+          bytes: count(entry.bytes), versionCount: count(entry.versionCount), lastModified: text(entry.lastModified),
+        })),
+      },
+    };
+  }
+  /** Permanently deletes leftover versions by the ids the inventory listed; the service lists and re-checks the bucket first. */
+  async function purgeLeftovers(ids, { requestId: requestedId, signal } = {}) {
+    if (!Array.isArray(ids) || !ids.length || ids.length > STORAGE_LEFTOVER_BATCH || new Set(ids).size !== ids.length || ids.some(id => !/^[a-f0-9]{32}$/.test(String(id)))) throw new RemoteReviewError(`정리할 남은 파일을 1~${STORAGE_LEFTOVER_BATCH}개씩 선택해 주세요.`, 400, 'INVALID_LEFTOVER_BATCH');
+    const nonce = requestId(requestedId);
+    const body = Buffer.from(JSON.stringify({ operation: 'leftovers', ids: ids.map(String), requestId: nonce }));
+    const data = await jsonBody(await request('storage', { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 300_000 }));
+    if (!data || !Array.isArray(data.results)) throw new RemoteReviewError('삭제 결과를 확인하지 못했습니다. 목록을 새로고침해 처리 여부를 확인해 주세요.', 502, 'INVALID_LEFTOVER_RESULT');
+    return data;
   }
   /** Permanently deletes customer uploads (all B2 versions) for one batch; the service re-checks eligibility. */
   async function purgeStorage(submissionIds, { requestId: requestedId, scope = 'finished', localCopiesVerified = false, signal } = {}) {
@@ -235,5 +268,5 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     if (!data || data.ok !== true) throw new RemoteReviewError('신청서 정보 반영 결과를 확인하지 못했습니다. 접수 상세에서 반영 여부를 확인해 주세요.', 502, 'INVALID_ALBUM_INFO_RESULT');
     return { changed: data.changed === true, albumInfo: data.albumInfo && typeof data.albumInfo === 'object' ? data.albumInfo : {} };
   }
-  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, listIntakePackages, registerGuestAlbum, saveAlbumInfo };
+  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, purgeLeftovers, listIntakePackages, registerGuestAlbum, saveAlbumInfo };
 }

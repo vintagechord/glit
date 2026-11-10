@@ -195,17 +195,32 @@ function storageFixture() {
     async loadCandidates(_db, _ids, scope) {
       calls.push({ name: "candidates", input: scope });
       if (state.b2Missing) throw Object.assign(new Error("B2 env missing"), { name: "B2ConfigError" });
-      return [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, stage: "finished" as const, finishedAt: revision,
+      return [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, paymentPending: false, stage: "finished" as const, finishedAt: revision,
         files: [{ source: "upload" as const, id: "file", objectKey: "submissions/private-user/video.mp4", sizeBytes: 438_000_000 }], totalBytes: 438_000_000 }];
     },
     async purge(_db, ids, actorId, _remove, scope) {
       calls.push({ name: "purge", input: scope === "received" ? { ids, actorId, scope } : { ids, actorId } });
       return ids.map((submissionId) => ({ submissionId, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }));
     },
+    async loadInventory(_db, options) {
+      calls.push({ name: "inventory", input: options?.candidates?.map((candidate) => candidate.submissionId) });
+      return {
+        checkedAt: revision, truncated: false, totalBytes: 999_000_000, totalVersions: 3, hiddenMarkers: 1, keys: 2,
+        groups: [{ key: "purgeable" as const, count: 1, bytes: 438_000_000 }, { key: "leftover" as const, count: 2, bytes: 561_000_000 }],
+        held: [],
+        leftovers: [{ id: leftoverId, reason: "hidden_upload" as const, name: "old-mv.mp4", submissionId: sid, submissionTitle: "검증 영상", bytes: 561_000_000, versionCount: 2, lastModified: revision,
+          key: "submissions/private-user/title/old-mv.mp4", versions: [{ versionId: "secret-version", size: 561_000_000 }] }],
+      };
+    },
+    async deleteLeftovers(_db, ids) {
+      calls.push({ name: "leftovers", input: ids });
+      return ids.map((id) => ({ id, ok: true, deletedVersions: 2, failedVersions: 0, freedBytes: 561_000_000 }));
+    },
   });
   return { handlers, state, calls };
 }
 const storagePath = "/api/internal/review-desk/storage";
+const leftoverId = "0123456789abcdef0123456789abcdef";
 
 test("desk storage list is signed, admin-only and never returns object keys", async () => {
   const f = storageFixture();
@@ -218,7 +233,7 @@ test("desk storage list is signed, admin-only and never returns object keys", as
   assert.equal(response.status, 200);
   const text = await response.text();
   assert.doesNotMatch(text, /objectKey|submissions\/private-user/);
-  assert.deepEqual(JSON.parse(text), { ok: true, batchLimit: 10, scope: "finished", items: [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, stage: "finished", finishedAt: revision, fileCount: 1, totalBytes: 438_000_000,
+  assert.deepEqual(JSON.parse(text), { ok: true, batchLimit: 10, scope: "finished", items: [{ submissionId: sid, title: "검증 영상", artistName: "검증 가수", type: "MV_DISTRIBUTION", refunded: false, paymentPending: false, stage: "finished", finishedAt: revision, fileCount: 1, totalBytes: 438_000_000,
     files: [{ id: "file", source: "upload", sizeBytes: 438_000_000 }] }] });
   // The desk asks for submissions still in review too; the scope is part of the signed path.
   const received = await f.handlers.GET(signedRequest("GET", undefined, { path: `${storagePath}?scope=received` }));
@@ -244,6 +259,40 @@ test("desk storage purge records the desk administrator and accepts at most one 
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).results, [{ submissionId: sid, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 438_000_000 }]);
   assert.deepEqual(f.calls.find(call => call.name === "purge")?.input, { ids: [sid], actorId: actor });
+});
+
+test("the desk inventory accounts for every stored byte and lists leftovers without keys or version ids", async () => {
+  const f = storageFixture();
+  const plain = await (await f.handlers.GET(signedRequest("GET", undefined, { path: `${storagePath}?scope=received` }))).json();
+  assert.equal(plain.inventory, undefined, "the inventory is only listed when asked for");
+  assert.ok(!f.calls.some(call => call.name === "inventory"));
+  const response = await f.handlers.GET(signedRequest("GET", undefined, { path: `${storagePath}?scope=received&inventory=1` }));
+  assert.equal(response.status, 200);
+  const text = await response.text();
+  assert.doesNotMatch(text, /private-user|secret-version|"key":"submissions|"versions"/);
+  const body = JSON.parse(text);
+  // The purge list is passed in so its files are counted as purgeable, not as held.
+  assert.deepEqual(f.calls.find(call => call.name === "inventory")?.input, [sid]);
+  assert.equal(body.leftoverBatchLimit, 25);
+  assert.deepEqual(body.inventory.leftovers, [{ id: leftoverId, reason: "hidden_upload", name: "old-mv.mp4", submissionId: sid, submissionTitle: "검증 영상", bytes: 561_000_000, versionCount: 2, lastModified: revision }]);
+  assert.equal(body.inventory.totalBytes, 999_000_000);
+});
+
+test("leftover deletion is signed, takes listed ids only and at most one batch", async () => {
+  const f = storageFixture();
+  const body = { operation: "leftovers", ids: [leftoverId], requestId };
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, ids: ["submissions/private-user/title/old-mv.mp4"] }, { path: storagePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, ids: Array.from({ length: 26 }, (_, index) => index.toString(16).padStart(32, "0")) }, { path: storagePath }))).status, 400);
+  assert.equal((await f.handlers.POST(signedRequest("POST", { ...body, requestId: stationId }, { path: storagePath }))).status, 400);
+  f.state.admin = false;
+  assert.equal((await f.handlers.POST(signedRequest("POST", body, { path: storagePath }))).status, 403);
+  f.state.admin = true;
+  assert.ok(!f.calls.some(call => call.name === "leftovers"));
+  const response = await f.handlers.POST(signedRequest("POST", body, { path: storagePath }));
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).results, [{ id: leftoverId, ok: true, deletedVersions: 2, failedVersions: 0, freedBytes: 561_000_000 }]);
+  assert.deepEqual(f.calls.find(call => call.name === "leftovers")?.input, [leftoverId]);
+  assert.ok(!f.calls.some(call => call.name === "purge"), "a leftover request never reaches the customer-file purge");
 });
 
 const packageId = "55555555-5555-4555-8555-555555555555";

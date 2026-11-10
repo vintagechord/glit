@@ -146,8 +146,42 @@ test('storage list is a signed read that keeps only listed fields', async () => 
   });
   const result = await client.listStorage();
   assert.equal(calls.length, 1);
-  assert.deepEqual(result.items, [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, stage: 'finished', finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634, files: [] }]);
+  assert.deepEqual(result.items, [{ submissionId: id, title: '검증 영상', artistName: '검증 가수', type: 'MV_DISTRIBUTION', refunded: false, paymentPending: false, stage: 'finished', finishedAt: '2026-11-02T04:43:00Z', fileCount: 1, totalBytes: 438763634, files: [] }]);
+  assert.equal(result.inventory, null);
   await assert.rejects(mockClient(() => json({ ok: true })).client.listStorage(), error => error.code === 'INVALID_STORAGE_LIST');
+});
+
+test('storage inventory is asked for in the signed path and keeps only listed leftover fields', async () => {
+  const leftover = 'a'.repeat(32);
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init);
+    assert.deepEqual(Object.fromEntries(new URL(url).searchParams), { scope: 'received', inventory: '1' });
+    return json({ ok: true, items: [{ submissionId: id, title: '머쉬베놈', type: 'MV_DISTRIBUTION', stage: 'in_review', paymentPending: true, fileCount: 1, totalBytes: 2225000000, files: [{ id: 'file', source: 'upload', sizeBytes: 2225000000 }] }],
+      inventory: { checkedAt: '2026-11-10T09:00:00Z', truncated: false, totalBytes: 2765000000, totalVersions: 9, hiddenMarkers: 2, keys: 7,
+        groups: [{ key: 'purgeable', count: 1, bytes: 2225000000 }, { key: 'leftover', count: 4, bytes: 540000000 }, { key: 'made-up', count: 1, bytes: 1 }],
+        held: [{ submissionId: id, title: '데모', reason: '작성 중인 신청', count: 1, bytes: 5 }, { submissionId: 'bad' }],
+        leftovers: [{ id: leftover, reason: 'hidden_upload', name: '_HEDA_HUG_MV_.mp4', submissionId: id, submissionTitle: 'HUG', bytes: 539000000, versionCount: 2, lastModified: '2026-11-03T17:46:01Z', key: 'submissions/private/old.mp4', versions: [{ versionId: 'v' }] },
+          { id: 'not-hex', reason: 'hidden_upload' }, { id: 'b'.repeat(32), reason: 'invented' }] } });
+  });
+  const result = await client.listStorage({ scope: 'received', inventory: true });
+  assert.equal(calls.length, 1);
+  assert.equal(result.items[0].paymentPending, true);
+  assert.deepEqual(result.inventory.groups.map(group => group.key), ['purgeable', 'held', 'leftover', 'certificate', 'mail_pending', 'recent', 'other']);
+  assert.deepEqual(result.inventory.groups[2], { key: 'leftover', count: 4, bytes: 540000000 });
+  assert.equal(result.inventory.held.length, 1);
+  assert.deepEqual(result.inventory.leftovers, [{ id: leftover, reason: 'hidden_upload', name: '_HEDA_HUG_MV_.mp4', submissionId: id, submissionTitle: 'HUG', bytes: 539000000, versionCount: 2, lastModified: '2026-11-03T17:46:01Z' }]);
+});
+
+test('leftover deletion signs one batch of listed ids', async () => {
+  const leftover = 'c'.repeat(32);
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(init.method, 'POST');
+    assert.deepEqual(JSON.parse(init.body.toString()), { operation: 'leftovers', ids: [leftover], requestId: init.headers['x-onside-desk-request'] });
+    return json({ ok: true, results: [{ id: leftover, ok: true, deletedVersions: 2, failedVersions: 0, freedBytes: 539000000 }] });
+  });
+  assert.equal((await client.purgeLeftovers([leftover], { requestId: nonce })).results[0].deletedVersions, 2);
+  for (const ids of [[], Array.from({ length: 26 }, (_, index) => index.toString(16).padStart(32, '0')), [leftover, leftover], ['submissions/private/old.mp4'], 'x']) await assert.rejects(client.purgeLeftovers(ids), error => error.httpStatus === 400);
+  assert.equal(calls.length, 1);
 });
 
 test('storage purge signs one batch with the same request ID in header and JSON', async () => {

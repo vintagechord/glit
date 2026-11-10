@@ -9,6 +9,7 @@ import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/server-upload-limit";
 import type { getReviewSummaryEmailPreviewById, sendReviewSummaryNotificationById, SubmissionNotificationOutcome } from "./submission-notifications";
 import type { loadPurgeCandidates, purgeCustomerFiles } from "./customer-file-purge";
 import { PURGE_BATCH_LIMIT } from "./customer-file-purge-limits";
+import { LEFTOVER_BATCH_LIMIT, type deleteStorageLeftovers, type loadStorageInventory } from "./storage-inventory";
 import { buildGuestAlbumIntakeRecord, guestAlbumIntakeFailure, guestAlbumIntakeSchema, type listGuestAlbumIntakePackages } from "./guest-album-intake";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
 import { albumInfoSchema, type saveManagedAlbumInfo } from "./album-info-save";
@@ -184,9 +185,15 @@ const purgeBody = z.object({
   operation: z.literal("purge"), submissionIds: z.array(uuid).min(1).max(PURGE_BATCH_LIMIT), requestId: uuid,
   scope: purgeScope.default("finished"), localCopiesVerified: z.literal(true).optional(),
 }).refine((body) => body.scope !== "received" || body.localCopiesVerified === true, { message: "local copies must be verified" });
+// Leftovers are named by the opaque ids the inventory listed; keys stay here.
+const leftoverBody = z.object({
+  operation: z.literal("leftovers"), ids: z.array(z.string().regex(/^[a-f0-9]{32}$/)).min(1).max(LEFTOVER_BATCH_LIMIT), requestId: uuid,
+});
 type StorageDependencies = Pick<Dependencies, "secret" | "createDb"> & {
   loadCandidates: typeof loadPurgeCandidates;
   purge: typeof purgeCustomerFiles;
+  loadInventory?: typeof loadStorageInventory;
+  deleteLeftovers?: typeof deleteStorageLeftovers;
 };
 const storageFailure = (error: unknown) => error instanceof Error && error.name === "B2ConfigError"
   ? failure(500, "파일 저장소 설정을 확인할 수 없습니다.")
@@ -194,8 +201,9 @@ const storageFailure = (error: unknown) => error instanceof Error && error.name 
     ? failure(413, "입력 데이터가 허용 크기를 초과했습니다.")
     : failure(500, "삭제 대상을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
 
-/** The Mac desk's 저장공간 정리: the same candidates and purge as /admin/storage.
- * Object keys never leave the service; the desk only sees what it lists. */
+/** The Mac desk's 저장공간 정리: the same candidates and purge as /admin/storage,
+ * plus the bucket inventory and its leftovers. Object keys never leave the
+ * service; the desk only sees what it lists. */
 export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
   async function GET(request: Request) {
     try {
@@ -203,13 +211,33 @@ export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
       if (auth.error) return auth.error;
       const scope = purgeScope.safeParse(new URL(request.url).searchParams.get("scope") ?? "finished");
       if (!scope.success) return failure(400, "정리 범위를 확인해주세요.");
+      const candidates = await deps.loadCandidates(auth.db, undefined, scope.data);
       // File ids and sizes let the desk match its local copies; object keys stay in the service.
-      const items = (await deps.loadCandidates(auth.db, undefined, scope.data)).map((candidate) => ({
+      const items = candidates.map((candidate) => ({
         submissionId: candidate.submissionId, title: candidate.title, artistName: candidate.artistName, type: candidate.type,
-        refunded: candidate.refunded, stage: candidate.stage, finishedAt: candidate.finishedAt, fileCount: candidate.files.length, totalBytes: candidate.totalBytes,
+        refunded: candidate.refunded, paymentPending: candidate.paymentPending === true, stage: candidate.stage, finishedAt: candidate.finishedAt,
+        fileCount: candidate.files.length, totalBytes: candidate.totalBytes,
         files: candidate.files.map((file) => ({ id: file.id, source: file.source, sizeBytes: file.sizeBytes })),
       }));
-      return jsonResponse({ ok: true, items, batchLimit: PURGE_BATCH_LIMIT, scope: scope.data });
+      // ?inventory=1 also accounts for every byte in the bucket, so nothing
+      // stored there is invisible to the desk.
+      const wantsInventory = new URL(request.url).searchParams.get("inventory") === "1" && deps.loadInventory;
+      const inventory = wantsInventory ? await deps.loadInventory!(auth.db, { candidates }) : null;
+      return jsonResponse({
+        ok: true, items, batchLimit: PURGE_BATCH_LIMIT, scope: scope.data,
+        ...(inventory ? {
+          leftoverBatchLimit: LEFTOVER_BATCH_LIMIT,
+          inventory: {
+            checkedAt: inventory.checkedAt, truncated: inventory.truncated, totalBytes: inventory.totalBytes,
+            totalVersions: inventory.totalVersions, hiddenMarkers: inventory.hiddenMarkers, keys: inventory.keys,
+            groups: inventory.groups, held: inventory.held,
+            leftovers: inventory.leftovers.map((leftover) => ({
+              id: leftover.id, reason: leftover.reason, name: leftover.name, submissionId: leftover.submissionId,
+              submissionTitle: leftover.submissionTitle, bytes: leftover.bytes, versionCount: leftover.versionCount, lastModified: leftover.lastModified,
+            })),
+          },
+        } : {}),
+      });
     } catch (error) { return storageFailure(error); }
   }
   async function POST(request: Request) {
@@ -218,7 +246,14 @@ export function createReviewDeskStorageHandlers(deps: StorageDependencies) {
       const auth = await authenticateDeskAdmin(deps, request, bytes);
       if (auth.error) return auth.error;
       if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
-      const parsed = purgeBody.safeParse(await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null));
+      const body = await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null);
+      if (body?.operation === "leftovers") {
+        const leftovers = leftoverBody.safeParse(body);
+        if (!leftovers.success || !deps.deleteLeftovers) return failure(400, `정리할 남은 파일을 1~${LEFTOVER_BATCH_LIMIT}개씩 보내주세요.`);
+        if (leftovers.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
+        return jsonResponse({ ok: true, results: await deps.deleteLeftovers(auth.db, leftovers.data.ids) });
+      }
+      const parsed = purgeBody.safeParse(body);
       if (!parsed.success) return failure(400, `삭제할 신청을 1~${PURGE_BATCH_LIMIT}건씩 보내주세요. 심의 진행 중인 신청은 이 Mac의 원본 확인이 필요합니다.`);
       if (parsed.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
       return jsonResponse({ ok: true, results: await deps.purge(auth.db, parsed.data.submissionIds, auth.actorId, undefined, parsed.data.scope) });

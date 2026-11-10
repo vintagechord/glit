@@ -92,7 +92,7 @@ export function defaultTlsInfo(host, timeoutMs = 10_000) {
 }
 
 async function defaultS3(env) {
-  const { S3Client, ListObjectsV2Command, ListMultipartUploadsCommand } = await import('@aws-sdk/client-s3');
+  const { S3Client, ListObjectsV2Command, ListObjectVersionsCommand, ListMultipartUploadsCommand } = await import('@aws-sdk/client-s3');
   const client = new S3Client({ region: env.B2_REGION, endpoint: env.B2_S3_ENDPOINT, credentials: { accessKeyId: env.B2_KEY_ID, secretAccessKey: env.B2_APPLICATION_KEY } });
   return {
     async listObjects(prefix, maxPages = 20) {
@@ -103,6 +103,17 @@ async function defaultS3(env) {
         token = page.IsTruncated ? page.NextContinuationToken : undefined; pages++;
       } while (token && pages < maxPages);
       return { objects, truncated: Boolean(token) };
+    },
+    /** Versions that are not current and hide markers: Backblaze bills their bytes too. */
+    async listHidden(prefix, maxPages = 20) {
+      let count = 0, bytes = 0, markers = 0, keyMarker, versionIdMarker, pages = 0;
+      do {
+        const page = await client.send(new ListObjectVersionsCommand({ Bucket: env.B2_BUCKET, Prefix: prefix, KeyMarker: keyMarker, VersionIdMarker: versionIdMarker }), { abortSignal: AbortSignal.timeout(30_000) });
+        for (const item of page.Versions || []) if (!item.IsLatest) { count++; bytes += Number(item.Size) || 0; }
+        markers += (page.DeleteMarkers || []).length;
+        keyMarker = page.IsTruncated ? page.NextKeyMarker : undefined; versionIdMarker = page.IsTruncated ? page.NextVersionIdMarker : undefined; pages++;
+      } while (keyMarker && pages < maxPages);
+      return { count, bytes, markers, truncated: Boolean(keyMarker) };
     },
     async listUnfinished(prefix) {
       const page = await client.send(new ListMultipartUploadsCommand({ Bucket: env.B2_BUCKET, Prefix: prefix }), { abortSignal: AbortSignal.timeout(30_000) });
@@ -443,9 +454,17 @@ export function createSiteMonitor(options = {}) {
     try {
       const s3 = await s3Factory(env);
       const { objects, truncated } = await s3.listObjects(prefix);
-      const total = objects.reduce((sum, object) => sum + object.size, 0);
-      usageRows.push(usage('저장 용량 (무료 10GB)', total, config.limits.b2FreeBytes, 'bytes', '10GB를 넘으면 결제 수단 등록이 필요하고 TB당 월 약 6달러가 청구됩니다.'));
-      items.push({ label: '저장 파일', value: `${countLabel(objects.length)}개 · ${bytesLabel(total)}${truncated ? ' 이상(일부만 집계)' : ''}`, status: 'ok' });
+      const current = objects.reduce((sum, object) => sum + object.size, 0);
+      // Hidden and previous versions stay billed until they are deleted; count them like the Backblaze console does.
+      const hidden = s3.listHidden ? await s3.listHidden(prefix).catch(() => null) : null;
+      const total = current + (hidden?.bytes || 0);
+      usageRows.push(usage('저장 용량 (무료 10GB)', total, config.limits.b2FreeBytes, 'bytes', '10GB를 넘으면 결제 수단 등록이 필요하고 TB당 월 약 6달러가 청구됩니다. 이전 버전·숨은 사본도 포함합니다.'));
+      items.push({ label: '저장 파일', value: `${countLabel(objects.length)}개 · ${bytesLabel(current)}${truncated ? ' 이상(일부만 집계)' : ''}`, status: 'ok' });
+      if (hidden) {
+        details.hidden = hidden;
+        const large = hidden.bytes >= 100 * 1000 ** 2;
+        items.push({ label: '이전 버전·숨은 사본', value: `${countLabel(hidden.count)}개 · ${bytesLabel(hidden.bytes)}${hidden.markers ? ` (숨김 표시 ${countLabel(hidden.markers)}개)` : ''}`, status: large ? 'warning' : 'ok', ...(hidden.count || hidden.markers ? { hint: '교체·삭제된 파일의 사본입니다. 저장공간 정리 › 남은 파일에서 지우세요.' } : {}) });
+      }
       const categories = new Map();
       for (const object of objects) { const name = fileCategory(object.key); const entry = categories.get(name) || { count: 0, bytes: 0 }; entry.count++; entry.bytes += object.size; categories.set(name, entry); }
       details.categories = [...categories].map(([name, entry]) => ({ name, ...entry })).sort((a, b) => b.bytes - a.bytes);
