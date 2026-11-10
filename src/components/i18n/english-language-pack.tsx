@@ -1663,7 +1663,6 @@ const exactTranslations: Record<string, string> = {
   "사업자등록번호:": "Business Registration No.:",
   "통신판매업신고번호:": "Mail-order Business No.:",
   "개인정보 보호책임자:": "Privacy Officer:",
-  "호스팅 제공자:": "Hosting Provider:",
   "(주)빈티지하우스": "Vintage House Co., Ltd.",
   "(주)Vintage House": "Vintage House Co., Ltd.",
   "주식회사 빈티지하우스": "Vintage House Co., Ltd.",

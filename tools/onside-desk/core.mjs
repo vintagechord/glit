@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import yazl from 'yazl';
 
 export const STAGES = ['RECEIVED', 'CHECKING', 'PREPARING', 'READY', 'SUBMITTED', 'RESULT_RECEIVED', 'COMPLETED', 'ON_HOLD'];
-export const DEFAULT_SETTINGS = { managerName: '정준영', managerPhone: '010-9068-9035', managerEmail: 'vintagechord@daum.net', companyName: '빈티지코드', autoSync: true, autoGenerate: false };
+export const DEFAULT_SETTINGS = { managerName: '정준영', managerPhone: '010-9068-9035', managerEmail: 'vintagechord@daum.net', companyName: '빈티지코드', autoSync: true, autoGenerate: false, chatAlerts: true };
 export const now = () => new Date().toISOString();
 export const safeName = (value, fallback = '파일') => String(value || fallback).normalize('NFC').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, '_').replace(/^\.+/, '').trim().slice(0, 110) || fallback;
 export function childPath(root, ...parts) {
@@ -124,7 +124,7 @@ export function validateSettings(patch, settings) {
     if (typeof patch[key] !== 'string' || patch[key].length > 300) throw new Error('담당자 설정 값을 확인하세요.');
     result[key] = patch[key].trim();
   }
-  for (const key of ['autoSync', 'autoGenerate']) if (key in patch) {
+  for (const key of ['autoSync', 'autoGenerate', 'chatAlerts']) if (key in patch) {
     if (typeof patch[key] !== 'boolean') throw new Error('자동화 설정 값을 확인하세요.');
     result[key] = patch[key];
   }

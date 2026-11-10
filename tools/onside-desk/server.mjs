@@ -17,7 +17,7 @@ import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './inte
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export const DESK_VERSION = '2.12.0';
+export const DESK_VERSION = '2.13.0';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
@@ -50,9 +50,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   let monitorSettings = { vercelToken: '', notify: true };
   try { monitorSettings = { ...monitorSettings, ...JSON.parse(await fs.readFile(monitorFile, 'utf8')) }; } catch { /* first run */ }
   monitor ||= createSiteMonitor({ env: process.env, settings: () => monitorSettings });
-  notify ||= message => {
-    const text = message.replace(/[\\"]/g, ' ').slice(0, 180);
-    const child = spawn('/usr/bin/osascript', ['-e', `display notification "${text}" with title "온사이드 사이트 관리"`], { stdio: 'ignore' }); child.on('error', () => {});
+  notify ||= (message, { title = '온사이드 사이트 관리', sound = '' } = {}) => {
+    const clean = value => String(value).replace(/[\\"\r\n]/g, ' ');
+    const text = clean(message).slice(0, 180);
+    const soundPart = /^[A-Za-z]+$/.test(sound) ? ` sound name "${sound}"` : '';
+    const child = spawn('/usr/bin/osascript', ['-e', `display notification "${text}" with title "${clean(title).slice(0, 60)}"${soundPart}`], { stdio: 'ignore' }); child.on('error', () => {});
   };
   const monitorState = { snapshot: null, running: null, notified: '' };
   async function runMonitor(force = false) {
@@ -68,6 +70,53 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     return monitorState.running;
   }
   const monitorSettingsView = () => ({ vercelConfigured: Boolean(monitorSettings.vercelToken), notify: monitorSettings.notify !== false });
+  /**
+   * 채팅 문의 알림: every 20 seconds the desk reads conversations with unread
+   * customer messages and sends a Mac notification (with sound) for each new
+   * message, so an inquiry is seen even when /admin/chat is not open. A
+   * conversation is announced again only when a newer message arrives.
+   */
+  const CHAT_LEAVE_TEXT = '사용자가 상담을 나갔습니다.';
+  const chatState = { items: [], checkedAt: null, error: null, announced: new Map(), running: null };
+  const chatAlertsOn = () => store.data.settings.chatAlerts !== false;
+  function chatNotificationText(fresh) {
+    const line = item => `${item.name}: ${item.preview || '새 메시지'}`;
+    return fresh.length === 1 ? line(fresh[0]) : `새 채팅 문의 ${fresh.length}건 · ${line(fresh[0])}`;
+  }
+  async function checkChats() {
+    if (chatState.running) return chatState.running;
+    if (typeof source.fetchUnreadChats !== 'function') return chatState;
+    chatState.running = (async () => {
+      try {
+        const rows = await source.fetchUnreadChats();
+        const items = rows.filter(row => row && typeof row.id === 'string').map(row => ({
+          id: row.id, name: String(row.guest_name || '').trim() || (row.user_id ? '회원' : '방문자'), member: Boolean(row.user_id),
+          preview: String(row.last_message_preview || '').slice(0, 120), lastMessageAt: row.last_message_at || null,
+          unread: Number(row.unread_admin_count) || 0, left: Boolean(row.visitor_left_at),
+        }));
+        // A customer leaving adds a system line, not a question; it stays in the count only.
+        const fresh = items.filter(item => chatState.announced.get(item.id) !== item.lastMessageAt && item.preview !== CHAT_LEAVE_TEXT);
+        chatState.announced = new Map(items.map(item => [item.id, item.lastMessageAt]));
+        chatState.items = items; chatState.checkedAt = now(); chatState.error = null;
+        if (fresh.length && chatAlertsOn()) { try { notify(chatNotificationText(fresh), { title: '온사이드 채팅 문의', sound: 'Glass' }); } catch { /* notification is best effort */ } }
+      } catch (error) {
+        chatState.error = safeError(error); chatState.checkedAt = now();
+      }
+      return chatState;
+    })().finally(() => { chatState.running = null; });
+    return chatState.running;
+  }
+  const chatView = () => ({ unread: chatState.items.length, items: chatState.items.slice(0, 5), checkedAt: chatState.checkedAt, error: chatState.error, alerts: chatAlertsOn(), available: typeof source.fetchUnreadChats === 'function' });
+  /** The service's /admin/chat, at one conversation when given; opens in the default browser. */
+  function chatPageUrl(conversationId) {
+    const origin = String(process.env.ONSIDE_DESK_SERVICE_URL || '').trim();
+    let base;
+    try { base = new URL(origin); } catch { return null; }
+    if (base.protocol !== 'https:' && !['127.0.0.1', 'localhost'].includes(base.hostname)) return null;
+    const url = new URL('/admin/chat', base.origin);
+    if (conversationId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversationId)) url.searchParams.set('conversation', conversationId);
+    return url.href;
+  }
   const store = await new Store(dataRoot).init();
   const outputRoot = path.join(dataRoot, '신청별 자료');
   const mergeRoot = path.join(dataRoot, '통합신청서 합치기');
@@ -89,7 +138,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: DESK_VERSION };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: DESK_VERSION, chat: chatView() };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -617,6 +666,12 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (url.pathname === '/api/storage' && req.method === 'GET') return sendJSON(res, 200, await listStorage());
       if (url.pathname === '/api/intake/packages' && req.method === 'GET') return sendJSON(res, 200, await remote.listIntakePackages());
       if (url.pathname === '/api/storage/purge' && req.method === 'POST') return sendJSON(res, 200, await purgeStorage(await readJSON(req)));
+      if (url.pathname === '/api/chat' && req.method === 'GET') { await checkChats(); return sendJSON(res, 200, chatView()); }
+      if (url.pathname === '/api/chat/open' && req.method === 'POST') {
+        const link = chatPageUrl(String((await readJSON(req)).conversationId || ''));
+        if (!link) return sendJSON(res, 400, { error: '온사이드 서비스 주소가 설정되지 않아 채팅 관리를 열 수 없습니다.' });
+        openUrl(link); return sendJSON(res, 200, { opened: true });
+      }
       if (url.pathname === '/api/storage/leftovers' && req.method === 'POST') return sendJSON(res, 200, await purgeLeftovers(await readJSON(req)));
       if (url.pathname === '/api/sync' && req.method === 'POST') return sendJSON(res, 200, await sync());
       if (url.pathname === '/api/settings' && req.method === 'POST') { store.data.settings = validateSettings(await readJSON(req), store.data.settings); await store.save(); return sendJSON(res, 200, { settings: store.data.settings }); }
@@ -756,15 +811,20 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   server.requestTimeout = 30 * 60 * 1000;
   server.headersTimeout = 20000;
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
-  let timer, monitorTimer;
+  let timer, monitorTimer, chatTimer;
   if (timers) {
+    // Customer chat: checked every 20 seconds while the desk runs, window open or not.
+    if (source.sourceStatus().configured) {
+      chatTimer = setInterval(() => { void checkChats().catch(() => {}); }, 20_000); chatTimer.unref();
+      setTimeout(() => { void checkChats().catch(() => {}); }, 5_000).unref();
+    }
     // Background checks keep notifications working while the window is closed.
     monitorTimer = setInterval(() => { void runMonitor(false).catch(() => {}); }, 10 * 60 * 1000); monitorTimer.unref();
     setTimeout(() => { void runMonitor(false).catch(() => {}); }, 10_000).unref();
     timer = setInterval(() => { if (store.data.settings.autoSync) void sync().catch(() => {}); }, 5 * 60 * 1000); timer.unref();
     if (store.data.settings.autoSync && source.sourceStatus().configured) void sync().catch(() => {});
   }
-  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, async idle() { await queue; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); shutdown.abort(); await queue.catch(() => {}); await store.save(); await new Promise(resolve => server.close(resolve)); } };
+  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, checkChats, async idle() { await queue; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); clearInterval(chatTimer); shutdown.abort(); await queue.catch(() => {}); await store.save(); await new Promise(resolve => server.close(resolve)); } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

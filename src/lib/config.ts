@@ -48,8 +48,6 @@ export const APP_CONFIG = {
   businessMailOrderNo:
     process.env.NEXT_PUBLIC_BUSINESS_MAIL_ORDER_NO ?? "2023-경기김포-1524",
   privacyOfficer: process.env.NEXT_PUBLIC_PRIVACY_OFFICER ?? "정준영",
-  hostingProvider:
-    process.env.NEXT_PUBLIC_HOSTING_PROVIDER ?? "Vercel Inc.",
   preReviewPriceKrw: Number(process.env.NEXT_PUBLIC_PRE_REVIEW_PRICE ?? "0"),
   uploadMaxMb: Number(
     process.env.NEXT_PUBLIC_UPLOAD_MAX_MB ??

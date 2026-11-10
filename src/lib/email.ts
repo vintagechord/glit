@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 
 type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
 
-/** Review receipt notices have one explicitly designated operations mailbox. */
+/** Operations notices (review receipts, chat inquiries) go to one designated mailbox. */
 export const REVIEW_ADMIN_EMAIL = "iamonside@daum.net";
 
 type AdminSubmissionReceiptPayload = EmailDeliveryOptions & {
@@ -181,6 +181,59 @@ export async function sendAdminSubmissionReceiptEmail(
     subject: `[onside 관리자] ${kind} 심의 접수 알림`,
     html, operation: "admin submission receipt", submissionId: payload.submissionId,
     idempotencyKey: payload.idempotencyKey ?? `admin-submission-received:${payload.submissionId}`,
+    expiresAt: payload.expiresAt,
+  });
+}
+
+type AdminSupportChatNoticePayload = EmailDeliveryOptions & {
+  conversationId: string;
+  customerName: string;
+  member: boolean;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  /** Unread visitor messages, oldest first. */
+  messages: Array<{ body: string; createdAt: string | null }>;
+  unreadCount: number;
+  left: boolean;
+  link: string;
+};
+
+/** A customer's chat message has waited unread; one notice per unanswered stretch. */
+export async function sendAdminSupportChatNoticeEmail(
+  payload: AdminSupportChatNoticePayload,
+): Promise<EmailSendResult> {
+  const link = normalizeAbsoluteUrl(payload.link);
+  if (!link || !payload.messages.length) return { ok: false, reason: "configuration" };
+  const name = payload.customerName.trim() || "방문자";
+  const details = [
+    ["고객", `${name} (${payload.member ? "회원" : "비회원"})`],
+    ...(payload.contactEmail?.trim() ? [["이메일", payload.contactEmail.trim()]] : []),
+    ...(payload.contactPhone?.trim() ? [["연락처", payload.contactPhone.trim()]] : []),
+    ["읽지 않은 메시지", `${payload.unreadCount}개`],
+    ...(payload.left ? [["상태", "고객이 상담을 나갔습니다"]] : []),
+  ];
+  const messages = payload.messages.map(({ body, createdAt }) => {
+    const text = body.length > 600 ? `${body.slice(0, 600)}…` : body;
+    return `<div style="margin:0 0 10px;padding:12px 14px;border:2px solid #111;border-radius:12px;background:#fff;">
+      ${createdAt ? `<p style="margin:0 0 6px;font-size:12px;color:#475569;">${escapeHtml(formatDateTime(createdAt))}</p>` : ""}
+      <p style="margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">${escapeHtml(text)}</p></div>`;
+  }).join("");
+  const html = `<div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:Arial,sans-serif;color:#0f172a;">
+    <div style="max-width:580px;margin:0 auto;border:1px solid #d5dbe5;border-radius:20px;overflow:hidden;background:#fff;">
+      <div style="padding:24px;background:#0f172a;color:#f8fafc;"><p style="margin:0;font-size:12px;color:#cbd5e1;">ONSIDE · 관리자 채팅 알림</p>
+        <h2 style="margin:10px 0 0;font-size:24px;">새 채팅 문의가 있습니다.</h2></div>
+      <div style="padding:24px;"><p style="margin:0 0 18px;line-height:1.7;">고객 메시지가 1분 넘게 읽히지 않았습니다. 채팅 관리에서 답변해주세요.</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">${details.map(([label, value]) => `<tr><th style="padding:10px;text-align:left;border-bottom:1px solid #e2e8f0;color:#475569;font-size:13px;white-space:nowrap;">${escapeHtml(label)}</th><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-size:14px;word-break:break-word;">${escapeHtml(value)}</td></tr>`).join("")}</table>
+        ${messages}
+        <a href="${escapeHtml(link)}" style="display:inline-block;margin-top:12px;padding:12px 18px;border-radius:999px;background:#0071e3;color:#fff;text-decoration:none;font-weight:700;">채팅 관리에서 답변하기</a>
+        <p style="margin-top:16px;font-size:12px;color:#64748b;line-height:1.6;">관리자 로그인이 필요합니다. 이 상담의 추가 메시지는 채팅 관리에서 읽거나 답변하기 전까지 다시 메일로 알리지 않습니다.</p>
+        <p style="font-size:12px;color:#334155;word-break:break-all;">${escapeHtml(link)}</p>
+      </div></div></div>`;
+  return sendTransactionalEmail({
+    to: REVIEW_ADMIN_EMAIL,
+    subject: `[onside 관리자] 새 채팅 문의 · ${name.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ").slice(0, 60)}`,
+    html, operation: "admin support chat notice",
+    idempotencyKey: payload.idempotencyKey ?? `admin-support-chat:${payload.conversationId}`,
     expiresAt: payload.expiresAt,
   });
 }

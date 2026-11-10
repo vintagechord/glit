@@ -226,6 +226,8 @@ export async function POST(request: NextRequest) {
       unread_visitor_count:
         ((conversation as ConversationRow).unread_visitor_count ?? 0) + 1,
       unread_admin_count: 0,
+      // Answering counts as reading: the next unanswered stretch may be mailed again.
+      admin_read_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.conversationId)
     .select(conversationSelect)
@@ -266,6 +268,7 @@ export async function PATCH(request: NextRequest) {
   }
   if (parsed.data.markRead) {
     updatePayload.unread_admin_count = 0;
+    updatePayload.admin_read_at = new Date().toISOString();
   }
 
   const { data, error } = await admin

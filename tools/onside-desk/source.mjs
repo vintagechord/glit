@@ -9,7 +9,7 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
-const TABLES = new Set(['submissions', 'album_tracks', 'submission_files', 'station_reviews', 'stations', 'submission_events', 'profiles', 'packages']);
+const TABLES = new Set(['submissions', 'album_tracks', 'submission_files', 'station_reviews', 'stations', 'submission_events', 'profiles', 'packages', 'support_chat_conversations']);
 const PAGE_SIZE = 500;
 const MAXIMUM_ASSET_BYTES = 50 * 1024 ** 3;
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -277,7 +277,17 @@ export function createSource({ env = process.env, fetchImpl = globalThis.fetch, 
     } finally { body?.destroy?.(); await unlink(temporary).catch(() => {}); }
   }
 
-  return { sourceStatus: () => sourceStatus(env), fetchSubmissions, fetchSubmission, downloadAsset };
+  /** Conversations with customer messages an administrator has not read yet (read-only). */
+  async function fetchUnreadChats() {
+    const { data, error } = await getClient().from('support_chat_conversations')
+      .select('id,user_id,guest_name,status,last_message_preview,last_message_at,unread_admin_count,visitor_left_at')
+      .gt('unread_admin_count', 0).order('last_message_at', { ascending: false }).limit(50);
+    if (error) throw sourceError('채팅 문의 조회', error);
+    if (!Array.isArray(data)) throw new Error('채팅 문의 조회 결과를 확인할 수 없습니다.');
+    return sanitizeRecord(data);
+  }
+
+  return { sourceStatus: () => sourceStatus(env), fetchSubmissions, fetchSubmission, downloadAsset, fetchUnreadChats };
 }
 
 const defaultSource = createSource();

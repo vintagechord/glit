@@ -20,6 +20,7 @@ async function setup(t, options = {}) {
     sourceStatus: () => ({ configured: true, downloadsConfigured: true }),
     fetchSubmissions: async () => { if (offline) throw Error('연결 실패'); return [{ ...submission }]; },
     fetchSubmission: async () => { if (offline) throw Error('연결 실패'); return { submission: { ...submission }, tracks: [{ id: trackId, track_no: 1, track_title: '첫 곡', lyrics: '원문' }], files: [], assets: assets.map(asset => ({ ...asset })), stations: [], stationReviews: [] }; },
+    ...(options.chats ? { fetchUnreadChats: async () => options.chats() } : {}),
     downloadAsset: async (asset, destination) => { downloadCount++; if (options.downloadFail) throw Error('다운로드 실패'); await fs.writeFile(destination, 'wave'); return { bytes: 4, sha256: createHash('sha256').update('wave').digest('hex') }; },
   };
   let generated = 0;
@@ -28,7 +29,7 @@ async function setup(t, options = {}) {
     await fs.writeFile(path.join(outputDir, '가사', '01.docx'), 'test-doc');
     return { artifacts: [{ name: '가사/01.docx', type: 'docx', bytes: 8 }], warnings: [] };
   };
-  const desk = await createDesk({ dataRoot, port: 0, source, remote: options.remote, generator, openFolder: () => {}, timers: false });
+  const desk = await createDesk({ dataRoot, port: 0, source, remote: options.remote, generator, openFolder: () => {}, ...(options.notify ? { notify: options.notify } : {}), ...(options.openUrl ? { openUrl: options.openUrl } : {}), timers: false });
   const url = `http://127.0.0.1:${desk.server.address().port}`;
   const api = (route, init = {}) => fetch(url + route, { ...init, headers: { 'X-Desk-Token': desk.token, 'Content-Type': 'application/json', ...init.headers } });
   t.after(async () => { await desk.close(); await fs.rm(dataRoot, { recursive: true, force: true }); });
@@ -138,6 +139,37 @@ test('storage purge stays behind the local token, runs one batch at a time and r
   release();
   assert.equal((await first).status, 200); assert.equal(purges, 1);
   assert.match(s.desk.store.data.cases[id].history[0].message, /고객 업로드 파일 2개\(2MB\)/);
+});
+
+test('customer chats raise one Mac notification per new message and open the admin chat', async t => {
+  const chatId = '77777777-7777-4777-8777-777777777777';
+  let rows = [{ id: chatId, user_id: null, guest_name: '홍길동', last_message_preview: '심의 기간이 궁금합니다', last_message_at: '2026-11-10T01:00:00Z', unread_admin_count: 1, visitor_left_at: null, access_token: 'never-shown' }];
+  const notes = [], opened = [];
+  const previous = process.env.ONSIDE_DESK_SERVICE_URL; process.env.ONSIDE_DESK_SERVICE_URL = 'https://iamonside.com';
+  t.after(() => { if (previous === undefined) delete process.env.ONSIDE_DESK_SERVICE_URL; else process.env.ONSIDE_DESK_SERVICE_URL = previous; });
+  const s = await setup(t, { chats: () => rows, notify: (message, options) => notes.push({ message, options }), openUrl: link => opened.push(link) });
+  await s.desk.checkChats();
+  assert.deepEqual(notes, [{ message: '홍길동: 심의 기간이 궁금합니다', options: { title: '온사이드 채팅 문의', sound: 'Glass' } }]);
+  // The same unread message is announced once.
+  await s.desk.checkChats(); assert.equal(notes.length, 1);
+  const state = await (await s.api('/api/state')).json();
+  assert.equal(state.chat.unread, 1); assert.equal(state.chat.items[0].name, '홍길동');
+  assert.doesNotMatch(JSON.stringify(state.chat), /never-shown/);
+  // A newer message is announced again; a customer leaving is not.
+  rows = [{ ...rows[0], last_message_preview: '답변 부탁드려요', last_message_at: '2026-11-10T01:05:00Z', unread_admin_count: 2 }];
+  await s.desk.checkChats(); assert.equal(notes.at(-1).message, '홍길동: 답변 부탁드려요');
+  rows = [{ ...rows[0], last_message_preview: '사용자가 상담을 나갔습니다.', last_message_at: '2026-11-10T01:06:00Z', visitor_left_at: '2026-11-10T01:06:00Z', unread_admin_count: 3 }];
+  await s.desk.checkChats(); assert.equal(notes.length, 2);
+  // Read in the web admin: the list empties; switched off: counted, not announced.
+  rows = []; await s.desk.checkChats(); assert.equal((await (await s.api('/api/chat')).json()).unread, 0);
+  await s.api('/api/settings', { method: 'POST', body: JSON.stringify({ chatAlerts: false }) });
+  rows = [{ id: chatId, user_id: 'member', guest_name: null, last_message_preview: '또 문의', last_message_at: '2026-11-10T02:00:00Z', unread_admin_count: 1, visitor_left_at: null }];
+  await s.desk.checkChats(); assert.equal(notes.length, 2);
+  assert.equal((await (await s.api('/api/chat')).json()).items[0].name, '회원');
+  assert.equal((await fetch(s.url + '/api/chat/open', { method: 'POST', body: '{}' })).status, 403);
+  assert.equal((await s.api('/api/chat/open', { method: 'POST', body: JSON.stringify({ conversationId: chatId }) })).status, 200);
+  await s.api('/api/chat/open', { method: 'POST', body: JSON.stringify({ conversationId: '../evil' }) });
+  assert.deepEqual(opened, [`https://iamonside.com/admin/chat?conversation=${chatId}`, 'https://iamonside.com/admin/chat']);
 });
 
 test('leftover cleanup asks for the inventory, stays behind the local token and shares the storage lock', async t => {

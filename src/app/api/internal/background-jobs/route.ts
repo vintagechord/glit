@@ -15,7 +15,10 @@ export const maxDuration = 300;
  * overlapping calls, request after() work and optional CLI workers stay safe.
  * `dispatch_storage_cleanup` calls it with {"task":"storage-cleanup"} while
  * expired uploads, abandoned grants, unfinished purges or orphan artwork
- * wait; that run uses DB leases too.
+ * wait; that run uses DB leases too. `dispatch_support_chat_notices` calls it
+ * with {"task":"support-chat-notices"} while a customer's chat message has
+ * waited a minute unread; claims are stamped in the DB, so overlapping runs
+ * mail each conversation once.
  */
 export async function POST(request: Request) {
   const token = request.headers.get("authorization")?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
@@ -31,8 +34,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
   const body = await readBoundedJsonBody(request, 1024);
-  const task = body.ok && (body.value as { task?: unknown } | null)?.task === "storage-cleanup" ? "storage-cleanup" : "default";
+  const requested = body.ok ? (body.value as { task?: unknown } | null)?.task : undefined;
+  const task = requested === "storage-cleanup" || requested === "support-chat-notices" ? requested : "default";
   // Answer the short pg_net timeout first; Vercel keeps after() work alive.
+  if (task === "support-chat-notices") {
+    after(async () => {
+      const { runSupportChatNotices } = await import("@/lib/support-chat-notices");
+      const report = await runSupportChatNotices(createAdminClient()).catch(() => null);
+      if (!report) console.error("[support-chat-notice] scheduled run failed; the next dispatch retries");
+      else if (report.claimed) console.info("[support-chat-notice] scheduled run", report);
+    });
+    return NextResponse.json({ ok: true }, { status: 202, headers: { "cache-control": "no-store" } });
+  }
   if (task === "storage-cleanup") {
     after(async () => {
       const { runUploadStorageCleanup } = await import("@/lib/upload-storage-cleanup");

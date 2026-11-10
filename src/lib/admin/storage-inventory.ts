@@ -258,11 +258,11 @@ const newestTime = (entries: StoredEntry[]) =>
 /**
  * Accounts for every stored byte under the app prefix. Customer uploads a
  * record still needs are split into the purge list (candidates) and those
- * held back; certificates of existing submissions, copies an unsent mail will
+ * held back; certificates (always, every version), copies an unsent mail will
  * read, recent files and other namespaces are kept. Everything else is a
  * leftover: replaced or deleted uploads whose bytes Backblaze still keeps,
- * files of deleted submissions, copies of mails already sent, and older
- * versions of files that are still needed.
+ * uploads and mail copies of deleted submissions, copies of mails already
+ * sent, and older versions of uploads or mail copies that are still needed.
  */
 export async function loadStorageInventory(db: AdminClient, options: InventoryOptions = {}): Promise<StorageInventory> {
   const { prefix } = getB2Config();
@@ -308,14 +308,16 @@ export async function loadStorageInventory(db: AdminClient, options: InventoryOp
     };
 
     if (namespace === "other") { add("other", list); continue; }
+    // Certificates are kept apart and never cleaned up here, even when their
+    // submission was deleted (owner decision 2026-11-10).
+    if (namespace === "certificate") { add("certificate", list); continue; }
     const needed =
       namespace === "upload" ? refs.liveUploads.has(key) :
         namespace === "supplement" ? refs.liveSupplements.has(key) :
-          namespace === "mail_copy" ? refs.unsentMail.has(key) :
-            Boolean(submission);
+          refs.unsentMail.has(key);
 
     if (needed) {
-      const group: InventoryGroupKey = namespace === "certificate" ? "certificate" : namespace === "mail_copy" ? "mail_pending" : candidateKeys.has(key) ? "purgeable" : "held";
+      const group: InventoryGroupKey = namespace === "mail_copy" ? "mail_pending" : candidateKeys.has(key) ? "purgeable" : "held";
       // A record points at a hidden key: something is off, so nothing is touched.
       const current = hidden ? list : list.filter((entry) => entry.latest);
       add(group, current);
