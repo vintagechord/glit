@@ -153,3 +153,15 @@ test('with the Cloudflare link configured, originals come through the Worker wit
     assert.deepEqual(await readdir(directory), ['song.wav']);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('the module the installed desk imports exposes every source function the server uses, including unread chats', async () => {
+  const module = await import('./source.mjs');
+  for (const name of ['sourceStatus', 'fetchSubmissions', 'fetchSubmission', 'downloadAsset', 'fetchUnreadChats']) assert.equal(typeof module[name], 'function', name);
+  // Unread chats are read through the same read-only guard: GET on the conversations table only.
+  const seen = [];
+  const source = createSource({ env: { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-role-fixture' }, fetchImpl: async (url, init) => { seen.push({ url: String(url), method: init.method }); return new Response(JSON.stringify([{ id: 'c1', guest_name: '홍길동', access_token: 'secret', unread_admin_count: 1 }]), { headers: { 'content-type': 'application/json' } }); } });
+  const rows = await source.fetchUnreadChats();
+  assert.equal(rows[0].guest_name, '홍길동'); assert.equal(rows[0].access_token, undefined);
+  assert.match(seen[0].url, /\/rest\/v1\/support_chat_conversations\?.*unread_admin_count=gt\.0/);
+  assert.equal(seen[0].method, 'GET');
+});

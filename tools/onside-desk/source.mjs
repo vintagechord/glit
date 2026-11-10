@@ -294,3 +294,4 @@ const defaultSource = createSource();
 export const fetchSubmissions = options => defaultSource.fetchSubmissions(options);
 export const fetchSubmission = id => defaultSource.fetchSubmission(id);
 export const downloadAsset = (asset, destination, options) => defaultSource.downloadAsset(asset, destination, options);
+export const fetchUnreadChats = () => defaultSource.fetchUnreadChats();
