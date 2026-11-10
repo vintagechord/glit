@@ -10,6 +10,7 @@ const fileId = { fileId: id };
 export const supplementActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("request"), note: note.min(1) }),
   z.object({ action: z.literal("notify"), requestId: id }),
+  z.object({ action: z.literal("delete"), requestId: id }),
   z.object({ action: z.literal("init"), requestId: id, filename: z.string().min(1).max(255).refine((value) => !/[\u0000-\u001f\u007f/\\]/.test(value)), mimeType: z.string().min(1).max(255), sizeBytes: z.number().int().min(1).max(SUPPLEMENT_MAX_BYTES) }),
   z.object({ action: z.literal("presign"), ...fileId, partNumbers: z.array(z.number().int().min(1).max(10000)).min(1).max(100).refine((parts) => new Set(parts).size === parts.length) }),
   z.object({ action: z.literal("complete"), ...fileId, parts: z.array(z.object({ partNumber: z.number().int().min(1).max(10000), etag: z.string().min(8).max(128).regex(/^[A-Za-z0-9+/_=-]+$/) })).min(1).max(10000).refine((parts) => new Set(parts.map((part) => part.partNumber)).size === parts.length) }),

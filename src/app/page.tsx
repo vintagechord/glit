@@ -10,6 +10,7 @@ import {
 
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { HomeHeroAdBanner } from "@/components/site/home-hero-ad-banner";
+import { HomeHeroBanner } from "@/components/site/home-hero-banner";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
@@ -127,39 +128,22 @@ export default function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
             <div className="flex h-full flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-6">
-              {/* The kicker is a block so the gap applies; as an inline span its
-                  padded box overlapped the headline. The kicker and headline read
-                  as one unit, so their gap stays smaller than the gap below. */}
-              <div className="space-y-4 sm:space-y-5">
-                <p className="bauhaus-kicker" style={{ textTransform: "none" }}>
-                  Since 2017
-                </p>
-                {/* The headline carries the two service names search engines
-                    and AI assistants match on; the second line keeps the
-                    original promise. */}
-                <h1 className="font-display break-keep text-3xl font-black leading-tight text-foreground sm:text-5xl">
-                  음반·뮤직비디오 심의,
-                  <span className="sm:hidden"> </span>
-                  <br className="hidden sm:block" />
-                  신청부터 결과 확인까지
-                </h1>
-              </div>
+              {/* The headline carries the two service names search engines
+                  and AI assistants match on; the second line keeps the
+                  original promise. The banner draws it over a moving poster. */}
+              <HomeHeroBanner lines={["음반·뮤직비디오 심의,", "신청부터 결과 확인까지"]} />
               <HomeHeroAdBanner />
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px] lg:flex-1">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
                   const Icon = cta.icon;
                   return (
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className={`group flex min-h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] transition hover:-translate-y-1 sm:min-h-[188px] ${cta.cardClass}`}
+                      className={`group flex min-h-[68px] items-center justify-center gap-2.5 rounded-[10px] border-2 border-[#111111] px-3 transition hover:-translate-y-1 sm:min-h-[80px] sm:gap-3 ${cta.cardClass}`}
                     >
-                      <div className="flex flex-1 items-center justify-center">
-                        <Icon className="h-12 w-12 sm:h-14 sm:w-14" strokeWidth={2.2} />
-                      </div>
-                      <div className="px-5 py-3 text-center">
-                        <p className="break-keep text-[15px] font-black leading-snug sm:text-base">{cta.title}</p>
-                      </div>
+                      <Icon className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" strokeWidth={2.3} aria-hidden="true" />
+                      <span className="break-keep text-base font-black leading-snug sm:text-lg">{cta.title}</span>
                     </ReliableLink>
                   );
                 })}

@@ -808,6 +808,7 @@ const exactTranslations: Record<string, string> = {
   "신청부터 결과 확인까지": "From Submission to Results",
   "방송국별 안내": "Broadcaster Guides",
   "주제별 안내": "Guides by topic",
+  "심의 접수처": "Where we submit",
   "TV·라디오 방송국 심의 · 음원(디지털 싱글) 포함": "TV and radio broadcaster reviews · digital singles included",
   "방송국 패키지 · 뮤직비디오 항목별 비용": "Broadcaster packages · music video prices by item",
   "적격·부적격·등급분류·필증 뜻": "What approved, rejected, rating and certificate mean",

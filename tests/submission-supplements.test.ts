@@ -34,7 +34,7 @@ test("supplement API authorization and B2 reconciliation preserve original locks
             export const db={auth:{admin:{getUserById:async()=>({data:{user:{email:state.memberEmail}},error:state.memberError?{message:'lookup failed'}:null})}},from(table){const filters=[];const chain={select(){return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},is(k,v){filters.push(r=>r[k]===v);return chain},async maybeSingle(){return {data:(state.rows[table]||[]).find(r=>filters.every(f=>f(r)))||null,error:null}},async single(){return chain.maybeSingle()}};return chain},async rpc(name,args){calls.push({name,args});return {data:args.p_action==='notify_claim'?state.notice:args.p_action==='request'?{requestId:'request-a'}:{ok:true},error:(state.failMutation&&args.p_action!=='notify_claim')||(state.failFinish&&args.p_action==='notify_finish')?{message:'write failed'}:null}}};`,
           "@/lib/supabase/server": `${shared} export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:state.user}})},rpc:async()=>({data:state.isAdmin})}}`,
           "@/lib/supabase/admin": `${shared} export function createAdminClient(){return db}`,
-          "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}}); export const headObject=async()=>({ContentLength:state.headSize}); export const presignGetUrl=async key=>{calls.push({name:'download',key});return 'https://signed.fixture.invalid'}; export const presignUploadPart=async()=>{calls.push({name:'presign'});return 'https://part.fixture.invalid'}; export const completeMultipartUpload=async()=>{calls.push({name:'complete'})}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s; export const listMultipartUploadParts=async()=>null;`,
+          "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}}); export const headObject=async()=>({ContentLength:state.headSize}); export const presignGetUrl=async key=>{calls.push({name:'download',key});return 'https://signed.fixture.invalid'}; export const presignUploadPart=async()=>{calls.push({name:'presign'});return 'https://part.fixture.invalid'}; export const completeMultipartUpload=async()=>{calls.push({name:'complete'})}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s; export const listMultipartUploadParts=async()=>null; export const deleteObjectAllVersions=async()=>0;`,
           "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=({submissionUserId,guestToken})=>submissionUserId?'user:'+submissionUserId:'guest:'+guestToken; export const getMultipartGrant=async()=>state.grant; export const getMultipartPartSize=()=>16; export const abortClaimedMultipartGrant=async()=>{calls.push({name:'abort'});return true}; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>state.grant; export const abortFailedMultipartGrant=async()=>{calls.push({name:'retire'});return true};`,
           "@/lib/email": `${shared} export const sendSubmissionUpdateEmail=async input=>{calls.push({name:'email',args:input});return state.emailResult};`,
           "@/lib/kakao": `${shared} export const sendKakaoOfficialNotification=async input=>{calls.push({name:'kakao',args:input});return state.kakaoResult};`,
@@ -152,7 +152,7 @@ test("a claimed supplement upload whose B2 completion failed is completed again 
           "@/lib/b2": `${shared} export const getB2Config=()=>({prefix:'configured/',bucket:'fixture',client:{send:async()=>({ContentLength:state.bytes.length,Body:{transformToByteArray:async()=>state.bytes}})}});
             export const headObject=async()=>{calls.push({name:'head'});if(!state.object)throw Object.assign(new Error('missing'),{name:'NotFound'});return {ContentLength:16}};
             export const completeMultipartUpload=async input=>{calls.push({name:'complete',parts:input.parts});const failure=state.completeFailure;state.completeFailure=null;if(failure)throw Object.assign(new Error(failure),{name:failure});state.object=true};
-            export const listMultipartUploadParts=async()=>{calls.push({name:'list-parts'});return state.listed};
+            export const listMultipartUploadParts=async()=>{calls.push({name:'list-parts'});return state.listed}; export const deleteObjectAllVersions=async()=>0;
             export const presignGetUrl=async()=> 'https://signed.fixture.invalid'; export const presignUploadPart=async()=> 'https://part.fixture.invalid'; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=> 'fixture-upload'; export const sanitizeFileName=s=>s;`,
           "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=({submissionUserId})=>'user:'+submissionUserId; export const getMultipartGrant=async()=>({...state.grant}); export const getMultipartPartSize=()=>8; export const abortClaimedMultipartGrant=async()=>true; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>state.grant; export const abortFailedMultipartGrant=async()=>{calls.push({name:'retire'});state.grant.status='ABORTED';state.object=false;return true};`,
           "@/lib/email": `export const sendSubmissionUpdateEmail=async()=>({ok:true});`,
@@ -260,4 +260,86 @@ test("supplement upload retries only transient failures, with backoff", async ()
   await assert.rejects(retryTransient(async () => { attempts++; throw new TypeError("offline"); }, cancelled.signal, 5, 1));
   assert.equal(attempts, 1, "a cancelled upload stops retrying");
   assert.equal(supplementResumeKey("s", "r", { name: "a.wav", size: 3, lastModified: 7 }), "supplement-multipart:s:r:a.wav:3:7");
+});
+
+test("an administrator can delete a supplement request sent by mistake, with its files", async () => {
+  assert.equal(supplementActionSchema.safeParse({ action: "delete", requestId: "11111111-1111-4111-8111-111111111111" }).success, true);
+  assert.equal(supplementActionSchema.safeParse({ action: "delete" }).success, false);
+  const result = await build({ stdin: { contents: "export * from './src/lib/submission-supplements/server'; export {state,calls} from 'delete-fixture';", resolveDir: process.cwd(), loader: "ts" }, bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
+    plugins: [{ name: "delete-fixture", setup(plugin) {
+      plugin.onResolve({ filter: /^(delete-fixture|@\/lib\/(?:supabase\/(?:server|admin)|b2|multipart-upload-grants|upload-object-references|email|kakao))$/ }, (args) => ({ path: args.path, namespace: "fixture" }));
+      plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
+        const shared = "import {state,calls,db} from 'delete-fixture';";
+        const files: Record<string, string> = {
+          // A small in-memory table store: select/eq/in filters, delete with the
+          // request → revision → file cascade, insert and conditional update.
+          "delete-fixture": `export const calls=[]; export const state={user:{id:'admin-a'},isAdmin:true,rows:{},grants:{}};
+            const cascade=(table,removed)=>{if(table==='submission_supplement_requests'){const ids=removed.map(r=>r.id);const revs=state.rows.submission_supplement_revisions.filter(r=>ids.includes(r.request_id));state.rows.submission_supplement_revisions=state.rows.submission_supplement_revisions.filter(r=>!ids.includes(r.request_id));const revIds=revs.map(r=>r.id);state.rows.submission_supplement_files=state.rows.submission_supplement_files.filter(f=>!revIds.includes(f.revision_id));}};
+            export const db={from(table){const filters=[];let mode='select',values=null;const rows=()=>(state.rows[table]||=[]);const matching=()=>rows().filter(r=>filters.every(f=>f(r)));
+              const run=()=>{if(mode==='delete'){const removed=matching();state.rows[table]=rows().filter(r=>!removed.includes(r));cascade(table,removed);calls.push({name:'delete',table,ids:removed.map(r=>r.id)});return removed}if(mode==='update'){const hit=matching();hit.forEach(r=>Object.assign(r,values));calls.push({name:'update',table,values,ids:hit.map(r=>r.id)});return hit}return matching()};
+              const chain={select(){return chain},eq(k,v){filters.push(r=>r[k]===v);return chain},in(k,v){filters.push(r=>v.includes(r[k]));return chain},is(k,v){filters.push(r=>r[k]===v);return chain},delete(){mode='delete';return chain},update(v){mode='update';values=v;return chain},
+                insert(row){rows().push(row);calls.push({name:'insert',table,row});return Promise.resolve({error:null})},
+                async maybeSingle(){return {data:run()[0]||null,error:null}},async single(){return chain.maybeSingle()},then(resolve,reject){return Promise.resolve({data:run(),error:null}).then(resolve,reject)}};return chain}};`,
+          "@/lib/supabase/server": `${shared} export async function createServerSupabase(){return {auth:{getUser:async()=>({data:{user:state.user}})},rpc:async()=>({data:state.isAdmin})}}`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){return db}`,
+          "@/lib/b2": `export const getB2Config=()=>({prefix:'configured/'}); export const headObject=async()=>({}); export const presignGetUrl=async()=>''; export const presignUploadPart=async()=>''; export const completeMultipartUpload=async()=>{}; export const abortMultipartUpload=async()=>{}; export const createMultipartUpload=async()=>''; export const sanitizeFileName=s=>s; export const listMultipartUploadParts=async()=>null; export const deleteObjectAllVersions=async()=>0;`,
+          "@/lib/multipart-upload-grants": `${shared} export const getMultipartOwnerKey=()=>'owner'; export const getMultipartGrant=async id=>state.rows.multipart_upload_grants.find(g=>g.id===id)||null; export const getMultipartPartSize=()=>16; export const abortClaimedMultipartGrant=async grant=>{calls.push({name:'abort-grant',id:grant.id,status:grant.status});return true}; export const cleanupExpiredMultipartGrants=async()=>{}; export const createMultipartGrant=async()=>null; export const abortFailedMultipartGrant=async()=>true;`,
+          "@/lib/upload-object-references": `${shared} export const deleteUnreferencedUploadObject=async(_db,key,options)=>{calls.push({name:'delete-object',key,options});return 'deleted'};`,
+          "@/lib/email": "export const sendSubmissionUpdateEmail=async()=>({ok:true});",
+          "@/lib/kakao": "export const sendKakaoOfficialNotification=async()=>({ok:true});",
+        };
+        return { loader: "js", contents: files[path] };
+      });
+    } }],
+  });
+  type Call = { name: string; table?: string; ids?: string[]; row?: Record<string, unknown>; key?: string; options?: Record<string, unknown>; id?: string; status?: string; values?: Record<string, unknown> };
+  type Server = typeof import("../src/lib/submission-supplements/server");
+  const bundled = { exports: {} as { state: { user: { id: string } | null; isAdmin: boolean; rows: Record<string, Record<string, unknown>[]> }; calls: Call[]; getSupplementContext: Server["getSupplementContext"]; performSupplementAction: Server["performSupplementAction"] } };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), bundled, bundled.exports);
+  const api = bundled.exports, state = api.state;
+  state.rows = {
+    profiles: [],
+    submissions: [{ id: "submission-a", user_id: "member-a", guest_token: null, payment_status: "PAID", type: "ALBUM" }],
+    submission_supplement_requests: [{ id: "request-a", submission_id: "submission-a", status: "SUBMITTED" }, { id: "request-other", submission_id: "submission-b", status: "OPEN" }],
+    submission_supplement_revisions: [{ id: "revision-1", request_id: "request-a", status: "REJECTED" }, { id: "revision-2", request_id: "request-a", status: "SUBMITTED" }, { id: "revision-other", request_id: "request-other", status: "DRAFT" }],
+    submission_supplement_files: [
+      { id: "verified", revision_id: "revision-2", grant_id: "grant-verified", object_key: "configured/supplements/submission-a/request-a/revision-2/x/mix.wav", status: "VERIFIED", purged_at: null },
+      { id: "pending", revision_id: "revision-2", grant_id: "grant-pending", object_key: "configured/supplements/submission-a/request-a/revision-2/y/form.pdf", status: "PENDING", purged_at: null },
+      { id: "aborted", revision_id: "revision-1", grant_id: "grant-aborted", object_key: "configured/supplements/submission-a/request-a/revision-1/z/old.wav", status: "ABORTED", purged_at: null },
+      { id: "purged", revision_id: "revision-1", grant_id: "grant-purged", object_key: "configured/supplements/submission-a/request-a/revision-1/w/old.wav", status: "VERIFIED", purged_at: "2026-11-01T00:00:00Z" },
+      { id: "other-file", revision_id: "revision-other", grant_id: "grant-other", object_key: "configured/supplements/submission-b/request-other/revision-other/v/a.wav", status: "VERIFIED", purged_at: null },
+    ],
+    multipart_upload_grants: [{ id: "grant-pending", status: "ACTIVE", abort_attempts: 0 }],
+    submission_events: [],
+  };
+  const request = new Request("https://fixture.invalid/api");
+
+  // Members cannot delete, even their own submission's request.
+  state.user = { id: "member-a" }; state.isAdmin = false;
+  const member = await api.getSupplementContext("submission-a", request);
+  await assert.rejects(api.performSupplementAction(member, { action: "delete", requestId: "request-a" }), /관리자 권한/);
+  assert.equal(state.rows.submission_supplement_requests.length, 2);
+
+  state.user = { id: "admin-a" }; state.isAdmin = true;
+  const admin = await api.getSupplementContext("submission-a", request);
+  // A request of another submission is never reachable through this one.
+  await assert.rejects(api.performSupplementAction(admin, { action: "delete", requestId: "request-other" }), /찾을 수 없습니다/);
+
+  const deleted = await api.performSupplementAction(admin, { action: "delete", requestId: "request-a" });
+  assert.deepEqual(deleted, { deleted: true, filesLeft: 0 });
+  assert.deepEqual(state.rows.submission_supplement_requests.map((row) => row.id), ["request-other"]);
+  assert.deepEqual(state.rows.submission_supplement_revisions.map((row) => row.id), ["revision-other"]);
+  assert.deepEqual(state.rows.submission_supplement_files.map((row) => row.id), ["other-file"]);
+  assert.deepEqual(state.rows.submission_events.map((row) => [row.event_type, row.actor_user_id]), [["SUPPLEMENT_DELETED", "admin-a"]]);
+  // Only the verified file's object is removed, scoped to this submission;
+  // the unfinished upload is aborted; aborted and purged files are left alone.
+  const objectDeletes = api.calls.filter((call) => call.name === "delete-object");
+  assert.deepEqual(objectDeletes.map((call) => [call.key, call.options?.submissionId, call.options?.prefix]), [["configured/supplements/submission-a/request-a/revision-2/x/mix.wav", "submission-a", "configured/"]]);
+  assert.deepEqual(api.calls.filter((call) => call.name === "abort-grant").map((call) => [call.id, call.status]), [["grant-pending", "ABORTING"]]);
+  // Records go before files, so a failed file removal never leaves a record
+  // pointing at a missing file.
+  const order = api.calls.map((call) => call.name);
+  assert.ok(order.indexOf("delete") < order.indexOf("delete-object"));
+
+  await assert.rejects(api.performSupplementAction(admin, { action: "delete", requestId: "request-a" }), /찾을 수 없습니다/);
 });
