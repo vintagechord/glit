@@ -169,14 +169,18 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   assert.match(css, /\.onside-hero-title > span \{\s*display: block;\s*white-space: nowrap;/);
   assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 10\.6\)\);/);
   assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 15\.2\)\);/);
-  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-wave svg,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-wave svg,\s*\.onside-hero-track \{\s*animation: none;/);
-  // 2026-11-10: the waveform is the only graphic; it sits in the flow under
-  // the headline (never behind it) and no fake play control comes back.
-  assert.match(banner, /<div className="onside-hero-wave" aria-hidden="true">/);
-  assert.doesNotMatch(banner, /onside-hero-(?:record|play)\b/);
-  assert.doesNotMatch(css, /\.onside-hero-(?:record|play)\b/);
-  assert.match(css, /\.onside-hero-wave \{[^}]*margin-top: auto;/);
+  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-disc-turn,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-disc-turn,\s*\.onside-hero-track \{\s*animation: none;/);
+  // 2026-11-10 second pass: the waveform read as dated. The one graphic is a
+  // small record drawn in fine lines with the logo's yellow square as its
+  // label. It sits in its own row under the headline, never behind it, and no
+  // fake play control comes back. "Since 2017" lives in the band.
+  assert.match(banner, /<div className="onside-hero-stage">\s*<HeroDisc \/>\s*<\/div>/);
+  assert.match(banner, /<svg className="onside-hero-disc" viewBox="0 0 100 100" aria-hidden="true"/);
+  assert.match(banner, /<p className="onside-hero-since">Since 2017<\/p>\s*<HeroMotionToggle \/>/);
+  assert.doesNotMatch(banner, /onside-hero-(?:record|play|wave)\b/);
+  assert.doesNotMatch(css, /\.onside-hero-(?:record|play|wave)\b/);
+  assert.match(css, /\.onside-hero-disc-label \{\s*fill: #f2cf27;/);
   // The status panel beside the banner follows the same frame rule on the
   // home page only; the dashboard keeps its own default frame.
   assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);

@@ -1,45 +1,64 @@
 import { HeroMotionToggle } from "@/components/site/hero-motion-toggle";
 import { STATION_GUIDES } from "@/lib/station-guides";
 
-const SHAPES = ["circle", "square", "triangle"] as const;
-
-// One period of the waveform, in viewBox units. The SVG holds two periods
-// side by side, so sliding it by half loops without a seam.
-const WAVE_PERIOD = 480;
-const WAVE_HEIGHT = 64;
-const WAVE_STEP = 5;
+const point = (radius: number, angle: number) =>
+  `${(50 + radius * Math.cos(angle)).toFixed(2)} ${(50 + radius * Math.sin(angle)).toFixed(2)}`;
 
 /**
- * Bars of an audio waveform, mirrored around the centre line: a slow
- * envelope (phrases getting louder and quieter) times a fixed per-bar grain.
- * Every term repeats once per period, so both copies match at the seam.
+ * The disc's strobe ring: 90 fine ticks round the rim, every fifteenth one
+ * longer, the way a turntable platter is marked. The long ones show it turn.
  */
-function waveformPath() {
-  const bars = WAVE_PERIOD / WAVE_STEP;
-  const middle = WAVE_HEIGHT / 2;
-  const reach = middle - 2;
+function strobeTicks(long: boolean) {
   let path = "";
-  for (let index = 0; index < bars * 2; index += 1) {
-    const bar = index % bars;
-    const turn = (bar / bars) * Math.PI * 2;
-    const envelope =
-      0.5 + 0.27 * Math.sin(2 * turn + 0.6) + 0.15 * Math.sin(5 * turn + 1.9) + 0.06 * Math.sin(11 * turn);
-    const grain = 0.6 + 0.4 * Math.abs((Math.sin(bar * 12.9898) * 43758.5453) % 1);
-    const half = Math.min(reach, Math.max(1.5, envelope * grain * reach));
-    const x = index * WAVE_STEP + WAVE_STEP / 2;
-    path += `M${x} ${(middle - half).toFixed(1)}V${(middle + half).toFixed(1)}`;
+  for (let index = 0; index < 90; index += 1) {
+    if ((index % 15 === 0) !== long) continue;
+    const angle = (index / 90) * Math.PI * 2;
+    path += `M${point(49.6, angle)}L${point(long ? 45 : 47.4, angle)}`;
   }
   return path;
 }
 
-const WAVEFORM_PATH = waveformPath();
+// Three bands of grooves with a wider gap between them, like the tracks of
+// an album side.
+const GROOVE_BANDS: ReadonlyArray<readonly [number, number]> = [
+  [41.4, 35.6],
+  [34.4, 28.8],
+  [27.6, 22.4],
+];
+const GROOVE_RADII = GROOVE_BANDS.flatMap(([outer, inner]) => {
+  const radii: number[] = [];
+  for (let radius = outer; radius >= inner; radius -= 0.85) radii.push(Number(radius.toFixed(2)));
+  return radii;
+});
+
+const SHORT_TICKS = strobeTicks(false);
+const LONG_TICKS = strobeTicks(true);
+
+/** A record drawn like a calibration plate, with Onside's yellow square as its label. */
+function HeroDisc() {
+  return (
+    <svg className="onside-hero-disc" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <g className="onside-hero-disc-turn">
+        <path className="onside-hero-disc-tick" d={SHORT_TICKS} />
+        <path className="onside-hero-disc-tick" data-long d={LONG_TICKS} />
+        <circle className="onside-hero-disc-face" cx="50" cy="50" r="42.5" />
+        {GROOVE_RADII.map((radius) => (
+          <circle key={radius} className="onside-hero-disc-groove" cx="50" cy="50" r={radius} />
+        ))}
+        <circle className="onside-hero-disc-ring" cx="50" cy="50" r="14.5" />
+        <rect className="onside-hero-disc-label" x="44.5" y="44.5" width="11" height="11" rx="0.8" />
+        <circle className="onside-hero-disc-hole" cx="50" cy="50" r="1.3" />
+      </g>
+    </svg>
+  );
+}
 
 function StationList({ hidden = false }: { hidden?: boolean }) {
   return (
     <ul aria-label={hidden ? undefined : "심의 접수처"} aria-hidden={hidden || undefined}>
-      {STATION_GUIDES.map((station, index) => (
+      {STATION_GUIDES.map((station) => (
         <li key={station.slug}>
-          <span className="onside-hero-mark" data-shape={SHAPES[index % SHAPES.length]} aria-hidden="true" />
+          <span className="onside-hero-mark" aria-hidden="true" />
           {station.shortName}
         </li>
       ))}
@@ -49,25 +68,23 @@ function StationList({ hidden = false }: { hidden?: boolean }) {
 
 /**
  * The home page's opening banner. The headline stays real text (search
- * engines and the English pack read it) and leads; a quiet waveform drifts
- * beneath it and the broadcasters Onside submits to run along the band.
- * Everything is drawn in CSS and inline SVG, so nothing waits on an image.
+ * engines and the English pack read it) and stands alone at the top; a small
+ * record drawn in fine lines turns slowly below it, and the band underneath
+ * runs the broadcasters Onside submits to. All of it is CSS and inline SVG,
+ * so nothing waits on an image.
  */
 export function HomeHeroBanner({ lines }: { lines: readonly [string, string] }) {
   return (
     <div className="onside-hero-frame">
       <section className="onside-hero-banner" data-hero-banner data-hero-motion="on">
         <div className="onside-hero-copy">
-          <p className="onside-hero-since">Since 2017</p>
           <h1 className="onside-hero-title">
             <span>{lines[0]}</span>
             <span>{lines[1]}</span>
           </h1>
         </div>
-        <div className="onside-hero-wave" aria-hidden="true">
-          <svg viewBox={`0 0 ${WAVE_PERIOD * 2} ${WAVE_HEIGHT}`} preserveAspectRatio="none" focusable="false">
-            <path d={WAVEFORM_PATH} />
-          </svg>
+        <div className="onside-hero-stage">
+          <HeroDisc />
         </div>
         <div className="onside-hero-band">
           <div className="onside-hero-ticker">
@@ -76,6 +93,7 @@ export function HomeHeroBanner({ lines }: { lines: readonly [string, string] }) 
               <StationList hidden />
             </div>
           </div>
+          <p className="onside-hero-since">Since 2017</p>
           <HeroMotionToggle />
         </div>
       </section>
