@@ -509,13 +509,13 @@ html[lang="en"] {
   }
 }
 
-/* Home hero banner. An editorial cover: a small "Since 2017" line, the
-   two-line headline as the lead, a quiet audio waveform drifting beneath it,
-   and the broadcasters Onside submits to running along a band in a deeper
-   shade of the same blue. Sizes follow the banner's own width (cqi), so the
-   headline is always two lines in Korean and English and the waveform stays
-   in proportion on phones. Surfaces in the hero column sit flat on a thin
-   black line; only the action cards below carry an offset shadow. */
+/* Home hero banner. The headline stands alone at the top of a lit cobalt
+   field; below it a small record, drawn in fine lines like a calibration
+   plate with Onside's yellow square as its label, turns slowly; the band at
+   the foot runs the broadcasters Onside submits to, with "Since 2017" fixed
+   beside the pause button. Sizes follow the banner's own width (cqi), so the
+   headline is always two lines in Korean and English. Surfaces in the hero
+   column sit flat on a thin black line; only the action cards carry a shadow. */
 .onside-hero-frame {
   container-type: inline-size;
   display: flex;
@@ -528,8 +528,7 @@ html[lang="en"] {
 .onside-hero-banner {
   --hero-band: 2.25rem;
   --hero-pad: 1.75rem;
-  --hero-blue: #184a89;
-  --hero-band-blue: #113867;
+  --hero-ink: #143d75;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -538,7 +537,10 @@ html[lang="en"] {
   overflow: hidden;
   border: 1.5px solid #111111;
   border-radius: 10px;
-  background: var(--hero-blue);
+  /* Light falls from the top left and settles toward the band. */
+  background:
+    radial-gradient(120% 90% at 0% 0%, #2459a6 0%, rgba(36, 89, 166, 0) 60%),
+    linear-gradient(180deg, #1b4c8f 0%, var(--hero-ink) 100%);
   color: #ffffff;
 }
 
@@ -550,45 +552,16 @@ html[lang="en"] {
 }
 
 .onside-hero-copy {
-  padding: var(--hero-pad) var(--hero-pad) 1.5rem;
-}
-
-/* A quiet line above the headline: a short yellow rule and small caps. */
-.onside-hero-since {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.onside-hero-since::before {
-  content: "";
-  flex: none;
-  width: 1.25rem;
-  height: 2px;
-  background: #f2cf27;
-}
-
-@container (max-width: 420px) {
-  .onside-hero-since {
-    font-size: 0.625rem;
-    letter-spacing: 0.14em;
-  }
+  padding: calc(var(--hero-pad) + 0.25rem) var(--hero-pad) 0.5rem;
 }
 
 /* Each line stays whole; the size is what lets the longer line fit. */
 .onside-hero-title {
-  margin-top: 1rem;
   font-family: var(--font-onside-display);
   font-size: min(2.875rem, calc((100cqi - 2 * var(--hero-pad)) / 10.6));
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1.16;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.035em;
   word-break: keep-all;
 }
 
@@ -603,44 +576,79 @@ html[lang="en"] .onside-hero-title {
   letter-spacing: -0.02em;
 }
 
-/* Sits in the flow under the copy, never behind it; on a stretched desktop
-   banner the extra height becomes space above it. The edges fade out. */
-.onside-hero-wave {
+/* The disc sits in its own row under the headline, so it can never cover
+   the text; on a stretched desktop banner it grows with the row. */
+.onside-hero-stage {
   position: relative;
-  flex: none;
-  margin-top: auto;
-  margin-bottom: 0.875rem;
-  aspect-ratio: 480 / 64;
-  max-height: 4.5rem;
-  overflow: hidden;
+  flex: 1 0 auto;
+  min-height: 26cqi;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
 }
 
-.onside-hero-wave svg {
+.onside-hero-disc {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 200%;
-  height: 100%;
-  animation: onside-hero-drift 64s linear infinite;
+  right: var(--hero-pad);
+  bottom: 0.875rem;
+  width: auto;
+  height: calc(100% - 1.25rem);
+  max-height: 34cqi;
+  aspect-ratio: 1;
+  overflow: visible;
 }
 
-.onside-hero-wave path {
+.onside-hero-disc-turn {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: onside-hero-turn 24s linear infinite;
+}
+
+.onside-hero-disc-tick {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.32;
+  stroke-width: 0.4;
+}
+
+.onside-hero-disc-tick[data-long] {
+  stroke-opacity: 0.6;
+  stroke-width: 0.6;
+}
+
+.onside-hero-disc-face {
+  fill: rgba(6, 22, 48, 0.25);
+  stroke: #ffffff;
+  stroke-opacity: 0.3;
+  stroke-width: 0.4;
+}
+
+.onside-hero-disc-groove {
+  fill: none;
+  stroke: #ffffff;
+  stroke-opacity: 0.12;
+  stroke-width: 0.3;
+}
+
+.onside-hero-disc-ring {
   fill: none;
   stroke: #ffffff;
   stroke-opacity: 0.3;
-  stroke-width: 2;
-  stroke-linecap: round;
+  stroke-width: 0.4;
+}
+
+.onside-hero-disc-label {
+  fill: #f2cf27;
+}
+
+.onside-hero-disc-hole {
+  fill: var(--hero-ink);
 }
 
 .onside-hero-band {
   position: relative;
   display: flex;
   height: var(--hero-band);
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  background: var(--hero-band-blue);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(6, 22, 48, 0.42);
   color: rgba(255, 255, 255, 0.86);
 }
 
@@ -667,12 +675,11 @@ html[lang="en"] .onside-hero-title {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 1.5rem;
-  padding-right: 1.5rem;
+  gap: 1.25rem;
+  padding-right: 1.25rem;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
@@ -682,24 +689,24 @@ html[lang="en"] .onside-hero-title {
   gap: 0.5rem;
 }
 
+/* The logo's yellow square, small, before every name. */
 .onside-hero-mark {
   flex: none;
-  width: 0.375rem;
-  height: 0.375rem;
+  width: 0.25rem;
+  height: 0.25rem;
   background: #f2cf27;
 }
 
-.onside-hero-mark[data-shape="circle"] {
-  border-radius: 50%;
-}
-
-.onside-hero-mark[data-shape="square"] {
-  background: #d9362c;
-}
-
-.onside-hero-mark[data-shape="triangle"] {
-  background: #ffffff;
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+.onside-hero-since {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 0 0.875rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .onside-hero-toggle {
@@ -707,7 +714,7 @@ html[lang="en"] .onside-hero-title {
   flex: none;
   width: 2.75rem;
   place-items: center;
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
   transition: background-color 150ms, color 150ms;
@@ -723,13 +730,13 @@ html[lang="en"] .onside-hero-title {
   outline-offset: -4px;
 }
 
-[data-hero-motion="paused"] .onside-hero-wave svg,
+[data-hero-motion="paused"] .onside-hero-disc-turn,
 [data-hero-motion="paused"] .onside-hero-track {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .onside-hero-wave svg,
+  .onside-hero-disc-turn,
   .onside-hero-track {
     animation: none;
   }
@@ -739,9 +746,9 @@ html[lang="en"] .onside-hero-title {
   }
 }
 
-@keyframes onside-hero-drift {
+@keyframes onside-hero-turn {
   to {
-    transform: translateX(-50%);
+    transform: rotate(360deg);
   }
 }
 
