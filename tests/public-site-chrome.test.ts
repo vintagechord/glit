@@ -153,34 +153,41 @@ test("the home hero makes 심의 신청 the yellow main card and keeps 결과 �
   assert.match(results, /^bg-white text-\[#111111\] shadow-\[2px_2px_0_#111111\]/);
   assert.doesNotMatch(results, /(?<!dark:)bg-\[#(?:f2cf27|1556a4)\]/);
   // Both cards share one size and border; only colour and shadow differ.
-  // Owner 2026-11-10: the cards are short (68/80px), the banner above is the visual.
-  assert.match(home, /className=\{`group flex min-h-\[68px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-\[1\.5px\] border-\[#111111\] px-3 transition hover:-translate-y-0\.5 sm:min-h-\[80px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
+  // Owner 2026-11-11: when the turntable moved beside the headline the banner
+  // got shorter, and the cards took that height (68→106px, 80→146px).
+  assert.match(home, /className=\{`group flex min-h-\[106px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-\[1\.5px\] border-\[#111111\] px-3 transition hover:-translate-y-0\.5 sm:min-h-\[146px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
 });
 
 test("the home banner keeps a two-line text headline in both languages and lets visitors stop its motion", () => {
   const home = readSource("src/app/page.tsx");
-  assert.match(home, /<HomeHeroBanner lines=\{\["음반·뮤직비디오 심의,", "신청부터 결과 확인까지"\]\} \/>/);
+  // Owner 2026-11-11: the second line becomes "이제 더 간편하게".
+  assert.match(home, /<HomeHeroBanner lines=\{\["음반·뮤직비디오 심의,", "이제 더 간편하게"\]\} \/>/);
   const banner = readSource("src/components/site/home-hero-banner.tsx");
   assert.match(banner, /<h1 className="onside-hero-title">\s*<span>\{lines\[0\]\}<\/span>\s*<span>\{lines\[1\]\}<\/span>\s*<\/h1>/);
   assert.match(banner, /STATION_GUIDES\.map/, "the band lists the real review offices");
   assert.match(banner, /<StationList hidden \/>/, "the looping copy is hidden from screen readers");
   const css = readSource("src/app/globals.css");
-  // Lines never wrap; the size is derived from the banner width per language.
+  // Lines never wrap; the size is derived per language from the width the
+  // turntable beside the headline leaves.
   assert.match(css, /\.onside-hero-title > span \{\s*display: block;\s*white-space: nowrap;/);
-  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 10\.6\)\);/);
-  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\)\) \/ 15\.2\)\);/);
-  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-disc-turn,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-disc-turn,\s*\.onside-hero-track \{\s*animation: none;/);
-  // 2026-11-10 second pass: the waveform read as dated. The one graphic is a
-  // small record drawn in fine lines with the logo's yellow square as its
-  // label. It sits in its own row under the headline, never behind it, and no
-  // fake play control comes back. "Since 2017" lives in the band.
-  assert.match(banner, /<div className="onside-hero-stage">\s*<HeroDisc \/>\s*<\/div>/);
-  assert.match(banner, /<svg className="onside-hero-disc" viewBox="0 0 100 100" aria-hidden="true"/);
-  assert.match(banner, /<p className="onside-hero-since">Since 2017<\/p>\s*<HeroMotionToggle \/>/);
-  assert.doesNotMatch(banner, /onside-hero-(?:record|play|wave)\b/);
-  assert.doesNotMatch(css, /\.onside-hero-(?:record|play|wave)\b/);
-  assert.match(css, /\.onside-hero-disc-label \{\s*fill: #f2cf27;/);
+  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-disc\)\) \/ 9\.6\)\);/);
+  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-disc\)\) \/ 11\.2\)\);/);
+  assert.match(readSource("src/components/i18n/english-language-pack.tsx"), /"음반·뮤직비디오 심의,": "Album & MV Reviews,",\s*"이제 더 간편하게": "Now Made Simple",/);
+  assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-platter,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-platter,\s*\.onside-hero-track \{\s*animation: none;/);
+  // 2026-11-11 (owner): keep the running station names and a realistic
+  // turntable. "Since 2017" is a pill badge above the headline, and the
+  // turntable turns in the space to the headline's right, in the same row
+  // but never over the text. No fake play control comes back.
+  assert.match(banner, /<p className="onside-hero-since">Since 2017<\/p>\s*<div className="onside-hero-headline">\s*<h1 className="onside-hero-title">[\s\S]*?<\/h1>\s*<HeroTurntable \/>\s*<\/div>/);
+  assert.match(css, /\.onside-hero-since \{[^}]*border-radius: 999px;/);
+  assert.match(banner, /<div className="onside-hero-turntable" aria-hidden="true">/);
+  assert.match(banner, /<span className="onside-hero-vinyl-name">ONSIDE<\/span>/);
+  assert.doesNotMatch(banner, /onside-hero-(?:play|wave|disc)\b/);
+  assert.doesNotMatch(css, /\.onside-hero-(?:play|wave|disc)\b/);
+  assert.match(css, /\.onside-hero-since::before \{[^}]*background: #f2cf27;/);
+  // The light on the vinyl stays still while the platter turns under it.
+  assert.doesNotMatch(css, /\.onside-hero-vinyl-sheen \{[^}]*animation/);
   // The status panel beside the banner follows the same frame rule on the
   // home page only; the dashboard keeps its own default frame.
   assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);

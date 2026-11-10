@@ -46,6 +46,9 @@ export const metadata: Metadata = pageMetadata({
 // 결과 조회 stays white with a black border, a step quieter beside it.
 // In the hero column only these action cards carry an offset shadow; the
 // banner and the service card above sit flat on the same thin line.
+// 2026-11-11 (owner): the banner lost 38px on phones and 66px from 640px up
+// when the turntable moved beside the headline; the cards took that height
+// (68→106px, 80→146px).
 const heroCtas = [
   {
     title: "심의 신청",
@@ -131,9 +134,9 @@ export default function Home() {
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
             <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-5">
               {/* The headline carries the two service names search engines
-                  and AI assistants match on; the second line keeps the
-                  original promise. The banner sets it above a quiet waveform. */}
-              <HomeHeroBanner lines={["음반·뮤직비디오 심의,", "신청부터 결과 확인까지"]} />
+                  and AI assistants match on; the second line is the owner's
+                  promise (2026-11-11). A turntable turns beside it. */}
+              <HomeHeroBanner lines={["음반·뮤직비디오 심의,", "이제 더 간편하게"]} />
               <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
@@ -142,7 +145,7 @@ export default function Home() {
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className={`group flex min-h-[68px] items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-[#111111] px-3 transition hover:-translate-y-0.5 sm:min-h-[80px] sm:gap-3 ${cta.cardClass}`}
+                      className={`group flex min-h-[106px] items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-[#111111] px-3 transition hover:-translate-y-0.5 sm:min-h-[146px] sm:gap-3 ${cta.cardClass}`}
                     >
                       <Icon className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" strokeWidth={2.3} aria-hidden="true" />
                       <span className="break-keep text-base font-black leading-snug sm:text-lg">{cta.title}</span>

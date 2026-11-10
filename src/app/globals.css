@@ -509,13 +509,13 @@ html[lang="en"] {
   }
 }
 
-/* Home hero banner. The headline stands alone at the top of a lit cobalt
-   field; below it a small record, drawn in fine lines like a calibration
-   plate with Onside's yellow square as its label, turns slowly; the band at
-   the foot runs the broadcasters Onside submits to, with "Since 2017" fixed
-   beside the pause button. Sizes follow the banner's own width (cqi), so the
-   headline is always two lines in Korean and English. Surfaces in the hero
-   column sit flat on a thin black line; only the action cards carry a shadow. */
+/* Home hero banner. A "Since 2017" badge sits above the headline on a lit
+   cobalt field, a turntable drawn in CSS with real materials turns in the
+   space to the headline's right, and the band at the foot runs the
+   broadcasters Onside submits to. Sizes follow the banner's own width (cqi):
+   the headline takes what the turntable leaves, so it is always two lines in
+   Korean and English. Surfaces in the hero column sit flat on a thin black
+   line; only the action cards carry a shadow. */
 .onside-hero-frame {
   container-type: inline-size;
   display: flex;
@@ -528,6 +528,8 @@ html[lang="en"] {
 .onside-hero-banner {
   --hero-band: 2.25rem;
   --hero-pad: 1.75rem;
+  --hero-gap: 1rem;
+  --hero-disc: 18cqi;
   --hero-ink: #143d75;
   position: relative;
   isolation: isolate;
@@ -548,17 +550,73 @@ html[lang="en"] {
   .onside-hero-banner {
     --hero-band: 2.125rem;
     --hero-pad: 1.25rem;
+    --hero-gap: 0.75rem;
   }
 }
 
+/* If the banner is stretched to the column height, the extra space falls
+   evenly above and below the copy. */
 .onside-hero-copy {
-  padding: calc(var(--hero-pad) + 0.25rem) var(--hero-pad) 0.5rem;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--hero-pad) var(--hero-pad) calc(var(--hero-pad) + 0.125rem);
 }
 
-/* Each line stays whole; the size is what lets the longer line fit. */
+/* A small pill badge, set apart above the headline. */
+.onside-hero-since {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+  height: 1.75rem;
+  margin-bottom: 1rem;
+  padding: 0 0.8125rem 0 0.6875rem;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+.onside-hero-since::before {
+  content: "";
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 1.5px;
+  background: #f2cf27;
+}
+
+@container (max-width: 420px) {
+  .onside-hero-since {
+    height: 1.5rem;
+    margin-bottom: 0.75rem;
+    padding: 0 0.6875rem 0 0.5625rem;
+    font-size: 0.6875rem;
+  }
+}
+
+/* The headline and the turntable share one row; the turntable never covers
+   the text. */
+.onside-hero-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hero-gap);
+}
+
+/* Each line stays whole; the size is what lets the longer line fit in the
+   width the turntable leaves. */
 .onside-hero-title {
+  min-width: 0;
   font-family: var(--font-onside-display);
-  font-size: min(2.875rem, calc((100cqi - 2 * var(--hero-pad)) / 10.6));
+  font-size: min(2.875rem, calc((100cqi - 2 * var(--hero-pad) - var(--hero-gap) - var(--hero-disc)) / 9.6));
   font-weight: 800;
   line-height: 1.16;
   letter-spacing: -0.035em;
@@ -571,76 +629,115 @@ html[lang="en"] {
 }
 
 html[lang="en"] .onside-hero-title {
-  font-size: min(2.5rem, calc((100cqi - 2 * var(--hero-pad)) / 15.2));
+  font-size: min(2.5rem, calc((100cqi - 2 * var(--hero-pad) - var(--hero-gap) - var(--hero-disc)) / 11.2));
   line-height: 1.12;
   letter-spacing: -0.02em;
 }
 
-/* The disc sits in its own row under the headline, so it can never cover
-   the text; on a stretched desktop banner it grows with the row. */
-.onside-hero-stage {
+/* A turntable seen from above. Sizes inside follow the turntable's own
+   width (cqi), so the label print scales with it. */
+.onside-hero-turntable {
+  container-type: inline-size;
   position: relative;
-  flex: 1 0 auto;
-  min-height: 26cqi;
-  pointer-events: none;
-}
-
-.onside-hero-disc {
-  position: absolute;
-  right: var(--hero-pad);
-  bottom: 0.875rem;
-  width: auto;
-  height: calc(100% - 1.25rem);
-  max-height: 34cqi;
+  flex: none;
+  width: var(--hero-disc);
   aspect-ratio: 1;
-  overflow: visible;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: drop-shadow(0 0.625rem 0.875rem rgba(3, 12, 30, 0.5));
 }
 
-.onside-hero-disc-turn {
-  transform-box: view-box;
-  transform-origin: 50% 50%;
-  animation: onside-hero-turn 24s linear infinite;
+/* Brushed metal with a ring of strobe dots at the rim. */
+.onside-hero-platter {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, transparent 0 93.5%, rgba(255, 255, 255, 0.7) 94% 96%, transparent 96.5%),
+    radial-gradient(circle closest-side, transparent 0 91%, rgba(0, 0, 0, 0.35) 92% 93%, transparent 93.5%),
+    conic-gradient(from 20deg, #8d9197, #d7dade 12%, #7c8086 26%, #c4c7cc 41%, #73777d 55%, #d2d5d9 70%, #80848a 84%, #8d9197);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  animation: onside-hero-spin 6s linear infinite;
 }
 
-.onside-hero-disc-tick {
-  fill: none;
-  stroke: #ffffff;
-  stroke-opacity: 0.32;
-  stroke-width: 0.4;
+.onside-hero-platter::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(20, 22, 26, 0.85) 0 1.4deg, transparent 1.4deg 5deg);
+  -webkit-mask-image: radial-gradient(circle closest-side, transparent 0 96.6%, #000 97% 99.4%, transparent 99.8%);
+  mask-image: radial-gradient(circle closest-side, transparent 0 96.6%, #000 97% 99.4%, transparent 99.8%);
 }
 
-.onside-hero-disc-tick[data-long] {
-  stroke-opacity: 0.6;
-  stroke-width: 0.6;
+/* Black vinyl: fine grooves, three smooth gaps between tracks, a glossy
+   lead-in edge. */
+.onside-hero-vinyl {
+  position: absolute;
+  inset: 5.5%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, transparent 0 97%, rgba(255, 255, 255, 0.16) 97.6% 99%, transparent 99.6%),
+    radial-gradient(circle closest-side, transparent 0 52%, rgba(255, 255, 255, 0.075) 52.6% 54%, transparent 54.6% 67%, rgba(255, 255, 255, 0.075) 67.6% 69%, transparent 69.6% 82%, rgba(255, 255, 255, 0.07) 82.6% 84%, transparent 84.6%),
+    repeating-radial-gradient(circle closest-side, rgba(255, 255, 255, 0.05) 0 0.5px, transparent 0.5px 1.5px),
+    radial-gradient(circle closest-side, #1a1a1d 0 40%, #0e0e10 41% 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.45);
 }
 
-.onside-hero-disc-face {
-  fill: rgba(6, 22, 48, 0.25);
-  stroke: #ffffff;
-  stroke-opacity: 0.3;
-  stroke-width: 0.4;
+/* The paper label, printed with the Onside mark in its upper half, clear of
+   the spindle hole like a real label. */
+.onside-hero-vinyl-label {
+  position: absolute;
+  inset: 32%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1.2cqi;
+  padding-top: 6cqi;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, transparent 0 84%, rgba(17, 17, 17, 0.28) 85% 87%, transparent 88%),
+    radial-gradient(circle at 38% 32%, #f8dc56 0%, #f2cf27 55%, #e1bc17 100%);
+  box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.18);
+  color: #111111;
 }
 
-.onside-hero-disc-groove {
-  fill: none;
-  stroke: #ffffff;
-  stroke-opacity: 0.12;
-  stroke-width: 0.3;
+.onside-hero-vinyl-mark {
+  flex: none;
+  width: 3.4cqi;
+  height: 3.4cqi;
+  margin-top: 0.3cqi;
+  border: 0.8cqi solid #111111;
+  border-radius: 0.6cqi;
 }
 
-.onside-hero-disc-ring {
-  fill: none;
-  stroke: #ffffff;
-  stroke-opacity: 0.3;
-  stroke-width: 0.4;
+.onside-hero-vinyl-name {
+  font-size: 4cqi;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.04em;
 }
 
-.onside-hero-disc-label {
-  fill: #f2cf27;
+/* Light from the top left catches two opposite wedges of the grooves and
+   stays still while the record turns under it. */
+.onside-hero-vinyl-sheen {
+  position: absolute;
+  inset: 5.5%;
+  border-radius: 50%;
+  background:
+    conic-gradient(from 0deg, transparent 0deg 278deg, rgba(255, 255, 255, 0.2) 306deg, transparent 336deg),
+    conic-gradient(from 0deg, transparent 0deg 98deg, rgba(255, 255, 255, 0.12) 126deg, transparent 156deg 360deg),
+    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.08), transparent 55%);
+  -webkit-mask-image: radial-gradient(circle closest-side, transparent 0 51%, #000 52% 99%, transparent 99.6%);
+  mask-image: radial-gradient(circle closest-side, transparent 0 51%, #000 52% 99%, transparent 99.6%);
 }
 
-.onside-hero-disc-hole {
-  fill: var(--hero-ink);
+.onside-hero-spindle {
+  position: absolute;
+  inset: 47.6%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #fafafa 0%, #b9bcc0 45%, #5d6064 100%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .onside-hero-band {
@@ -697,18 +794,6 @@ html[lang="en"] .onside-hero-title {
   background: #f2cf27;
 }
 
-.onside-hero-since {
-  display: flex;
-  flex: none;
-  align-items: center;
-  padding: 0 0.875rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.62);
-}
-
 .onside-hero-toggle {
   display: grid;
   flex: none;
@@ -730,13 +815,13 @@ html[lang="en"] .onside-hero-title {
   outline-offset: -4px;
 }
 
-[data-hero-motion="paused"] .onside-hero-disc-turn,
+[data-hero-motion="paused"] .onside-hero-platter,
 [data-hero-motion="paused"] .onside-hero-track {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .onside-hero-disc-turn,
+  .onside-hero-platter,
   .onside-hero-track {
     animation: none;
   }
@@ -746,7 +831,7 @@ html[lang="en"] .onside-hero-title {
   }
 }
 
-@keyframes onside-hero-turn {
+@keyframes onside-hero-spin {
   to {
     transform: rotate(360deg);
   }

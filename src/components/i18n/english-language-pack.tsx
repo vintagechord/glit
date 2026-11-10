@@ -804,8 +804,9 @@ const exactTranslations: Record<string, string> = {
   "결과 조회": "Results",
   "심의 신청부터": "From Submission",
   "결과 확인까지": "to Result Check",
-  "음반·뮤직비디오 심의,": "Album & Music Video Reviews,",
-  "신청부터 결과 확인까지": "From Submission to Results",
+  // Home headline: short enough to stay two lines beside the turntable.
+  "음반·뮤직비디오 심의,": "Album & MV Reviews,",
+  "이제 더 간편하게": "Now Made Simple",
   "방송국별 안내": "Broadcaster Guides",
   "주제별 안내": "Guides by topic",
   "심의 접수처": "Where we submit",
