@@ -807,6 +807,10 @@ const exactTranslations: Record<string, string> = {
   "음반·뮤직비디오 심의,": "Album & Music Video Reviews,",
   "신청부터 결과 확인까지": "From Submission to Results",
   "방송국별 안내": "Broadcaster Guides",
+  "주제별 안내": "Guides by topic",
+  "TV·라디오 방송국 심의 · 음원(디지털 싱글) 포함": "TV and radio broadcaster reviews · digital singles included",
+  "방송국 패키지 · 뮤직비디오 항목별 비용": "Broadcaster packages · music video prices by item",
+  "적격·부적격·등급분류·필증 뜻": "What approved, rejected, rating and certificate mean",
   "심의 비용": "Review Pricing",
   "심의 용어집": "Review Glossary",
   "TEST - TEST 심의": "TEST - TEST Review",
@@ -2980,6 +2984,9 @@ const maxCachedPhraseTranslations = 256;
 // These complete UI messages can include user-authored titles or file names.
 // Return immediately after matching so generic replacements never rewrite data.
 const dynamicReviewTranslations: Array<[RegExp, string]> = [
+  // The station count follows STATION_GUIDES, so it is matched, not spelled out.
+  [/^접수처 (\d+)곳 · 영등위·방송국별 안내$/, "$1 review offices · Korea Media Rating Board and broadcaster guides"],
+  [/^영등위·KBS·MBC·SBS부터 국악방송까지 접수처 (\d+)곳$/, "$1 review offices, from the Korea Media Rating Board, KBS, MBC and SBS to Gugak FM"],
   [/^1곳$/, "1 broadcaster"],
   [/^([\d,]+)곳$/, "$1 broadcasters"],
   [/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*오전\s*(\d{1,2}):(\d{2})$/, "$1-$2-$3 $4:$5 AM"],
@@ -3050,44 +3057,257 @@ export function translateValue(value: string): string {
   return result;
 }
 
-function translateTextNode(node: Text) {
-  const current = node.nodeValue ?? "";
-  const next = translateValue(current);
-  if (next !== current) {
-    node.nodeValue = next;
+const EXCLUDED_SELECTOR =
+  "script, style, noscript, code, pre, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])";
+const EXCLUDED_TEXT_SELECTOR = `${EXCLUDED_SELECTOR}, textarea`;
+// An input's value is a property, not an attribute; it shares the attribute record.
+const INPUT_VALUE = ":value";
+
+type Snapshot = { original: string; translated: string };
+
+// Everything the pack rewrote, so switching back to Korean puts the original
+// text back in place instead of reloading the page. React keeps rendering into
+// these same nodes, so a node is restored only while it still shows the
+// translation.
+const textSnapshots = new Map<Text, Snapshot>();
+const attributeSnapshots = new Map<Element, Map<string, Snapshot>>();
+let titleSnapshot: Snapshot | null = null;
+
+function rememberAttribute(element: Element, name: string, original: string, translated: string) {
+  let entries = attributeSnapshots.get(element);
+  if (!entries) {
+    entries = new Map();
+    attributeSnapshots.set(element, entries);
+  }
+  entries.set(name, { original, translated });
+}
+
+function restoreOriginals() {
+  for (const [node, snapshot] of textSnapshots) {
+    if (node.nodeValue === snapshot.translated) node.nodeValue = snapshot.original;
+  }
+  for (const [element, entries] of attributeSnapshots) {
+    for (const [name, snapshot] of entries) {
+      if (name === INPUT_VALUE) {
+        const input = element as HTMLInputElement;
+        if (input.value === snapshot.translated) input.value = snapshot.original;
+      } else if (element.getAttribute(name) === snapshot.translated) {
+        element.setAttribute(name, snapshot.original);
+      }
+    }
+  }
+  if (titleSnapshot && document.title === titleSnapshot.translated) {
+    document.title = titleSnapshot.original;
+  }
+  textSnapshots.clear();
+  attributeSnapshots.clear();
+  titleSnapshot = null;
+}
+
+// Pages replaced by navigation would otherwise stay in the records.
+function forgetDetachedNodes() {
+  for (const node of textSnapshots.keys()) {
+    if (!node.isConnected) textSnapshots.delete(node);
+  }
+  for (const element of attributeSnapshots.keys()) {
+    if (!element.isConnected) attributeSnapshots.delete(element);
   }
 }
 
+// React compares the server HTML with its own first render while it
+// hydrates. A node rewritten before React's hydration of it is committed
+// fails that comparison, and React throws the region away and renders it
+// again in Korean (error #418). React marks each node with its fiber as it
+// compares it, but a sliced hydration can restart and compare again, so a
+// node counts only once its fiber is committed. On a loaded page the pack
+// translates committed nodes at once and retries the others every few frames
+// (less often after the cap, for slow streamed sections). Only when no React
+// marks can be found does it fall back to translating everything after the cap.
+const HYDRATION_CAP_MS = 2500;
+const HYDRATION_RETRY_MS = 40;
+const LATE_HYDRATION_RETRY_MS = 250;
+let hydrationSettled = false;
+let hydrationDeadline: number | null = null;
+
+type ReactKeys = { fiber: string; props: string };
+let reactKeys: ReactKeys | null = null;
+let reactKeysMissedAt = -Infinity;
+
+function fiberKeyOf(element: Element) {
+  return Object.keys(element).find((key) => key.startsWith("__reactFiber$"));
+}
+
+function findReactKeys(): ReactKeys | null {
+  if (reactKeys) return reactKeys;
+  // A failed lookup is reused for one frame so a walk does not repeat it per node.
+  const now = performance.now();
+  if (now - reactKeysMissedAt < 16) return null;
+  const candidates: Array<Element | null> = [document.body, document.documentElement];
+  const sample = document.body?.getElementsByTagName("*");
+  for (let index = 0; sample && index < Math.min(sample.length, 200); index++) {
+    candidates.push(sample[index]);
+  }
+  for (const element of candidates) {
+    const fiber = element ? fiberKeyOf(element) : undefined;
+    if (fiber) {
+      reactKeys = { fiber, props: `__reactProps$${fiber.slice("__reactFiber$".length)}` };
+      return reactKeys;
+    }
+  }
+  reactKeysMissedAt = now;
+  return null;
+}
+
+function isClaimed(node: Node, keys: ReactKeys) {
+  return (node as unknown as Record<string, unknown>)[keys.fiber] !== undefined;
+}
+
+type FiberLike = {
+  tag?: number;
+  flags?: number;
+  return?: FiberLike | null;
+  alternate?: FiberLike | null;
+};
+
+function fiberOf(node: Node, keys: ReactKeys) {
+  const fiber = (node as unknown as Record<string, unknown>)[keys.fiber];
+  return fiber && typeof fiber === "object" ? (fiber as FiberLike) : null;
+}
+
+// React's own mounted check (getNearestMountedFiber): a subtree React is still
+// placing or hydrating carries the Placement (2) or Hydrating (4096) flag until
+// its commit, and a committed fiber leads up to the HostRoot (tag 3).
+const PLACEMENT_OR_HYDRATING = 2 | 4096;
+const HOST_ROOT_TAG = 3;
+
+function isCommittedFiber(fiber: FiberLike) {
+  let nearestMounted: FiberLike | null | undefined = fiber;
+  let node = fiber;
+  for (let next: FiberLike | null | undefined = node; next && !next.alternate; ) {
+    node = next;
+    if ((node.flags ?? 0) & PLACEMENT_OR_HYDRATING) nearestMounted = node.return;
+    next = node.return;
+  }
+  while (node.return) node = node.return;
+  return node.tag === HOST_ROOT_TAG && nearestMounted === fiber;
+}
+
+function reactPropsOf(element: Element, keys: ReactKeys) {
+  const props = (element as unknown as Record<string, unknown>)[keys.props];
+  return props && typeof props === "object" ? (props as Record<string, unknown>) : null;
+}
+
+// React never compares raw HTML (dangerouslySetInnerHTML), so it is safe at once.
+function isInsideRawHtml(element: Element | null, keys: ReactKeys) {
+  let current = element;
+  while (current && !isClaimed(current, keys)) current = current.parentElement;
+  return Boolean(current && reactPropsOf(current, keys)?.dangerouslySetInnerHTML);
+}
+
+function hydrationCapReached() {
+  if (!hydrationSettled && hydrationDeadline !== null && Date.now() >= hydrationDeadline) {
+    hydrationSettled = true;
+  }
+  return hydrationSettled;
+}
+
+function isHydrated(node: Node) {
+  if (hydrationSettled) return true;
+  const keys = findReactKeys();
+  if (!keys) return hydrationCapReached();
+  const fiber = fiberOf(node, keys);
+  if (fiber) return isCommittedFiber(fiber);
+  const parent = node.parentElement;
+  if (!parent) return false;
+  const parentFiber = fiberOf(parent, keys);
+  if (node instanceof Text && parentFiber) {
+    if (!isCommittedFiber(parentFiber)) return false;
+    // A lone string child is written as textContent, without a fiber of its own.
+    const props = reactPropsOf(parent, keys);
+    const children = props?.children;
+    return (
+      typeof children === "string" ||
+      typeof children === "number" ||
+      typeof children === "bigint" ||
+      Boolean(props?.dangerouslySetInnerHTML)
+    );
+  }
+  return isInsideRawHtml(parent, keys);
+}
+
+function isLoadedDocument() {
+  try {
+    const [entry] = performance.getEntriesByType("navigation");
+    return !entry || new URL(entry.name).pathname === window.location.pathname;
+  } catch {
+    return true;
+  }
+}
+
+// Pages reached by client navigation are rendered in the browser, so only the
+// document the browser loaded has server HTML waiting for hydration.
+function beginHydrationWatch() {
+  if (hydrationSettled || hydrationDeadline !== null) return;
+  if (!isLoadedDocument()) {
+    hydrationSettled = true;
+    return;
+  }
+  hydrationDeadline = Date.now() + HYDRATION_CAP_MS;
+}
+
+const waitingForHydration = new Set<Node>();
+
+function translateTextNode(node: Text) {
+  const current = node.nodeValue ?? "";
+  const next = translateValue(current);
+  if (next === current) return;
+  if (!isHydrated(node)) {
+    waitingForHydration.add(node);
+    return;
+  }
+  textSnapshots.set(node, { original: current, translated: next });
+  node.nodeValue = next;
+}
+
 function translateElement(element: Element) {
+  const changes: Array<[name: string, original: string, translated: string]> = [];
   if (element instanceof HTMLInputElement) {
     const type = element.type.toLowerCase();
     if ((type === "submit" || type === "button") && !element.name) {
       const nextValue = translateValue(element.value);
-      if (nextValue !== element.value) {
-        element.value = nextValue;
-      }
+      if (nextValue !== element.value) changes.push([INPUT_VALUE, element.value, nextValue]);
     }
   }
 
   // Button values are form payloads, not visible labels. Translating them can
   // change the submitted action or status; only their text nodes are localized.
 
+  const preservedAttributes = element.getAttribute("data-no-translate-attributes")?.split(/[\s,]+/) ?? [];
   for (const attr of translatableAttributes) {
-    const preservedAttributes = element.getAttribute("data-no-translate-attributes")?.split(/[\s,]+/) ?? [];
     if (preservedAttributes.includes(attr)) continue;
     const value = element.getAttribute(attr);
-    if (value) {
-      const nextValue = translateValue(value);
-      if (nextValue !== value) {
-        element.setAttribute(attr, nextValue);
-      }
+    if (!value) continue;
+    const nextValue = translateValue(value);
+    if (nextValue !== value) changes.push([attr, value, nextValue]);
+  }
+  if (!changes.length) return;
+  if (!isHydrated(element)) {
+    waitingForHydration.add(element);
+    return;
+  }
+  for (const [name, original, translated] of changes) {
+    rememberAttribute(element, name, original, translated);
+    if (name === INPUT_VALUE) {
+      (element as HTMLInputElement).value = translated;
+    } else {
+      element.setAttribute(name, translated);
     }
   }
 }
 
 function walkAndTranslate(root: Node) {
   if (root instanceof Text) {
-    if (!root.parentElement?.closest("script, style, noscript, code, pre, textarea, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])")) {
+    if (!root.parentElement?.closest(EXCLUDED_TEXT_SELECTOR)) {
       translateTextNode(root);
     }
     return;
@@ -3095,7 +3315,7 @@ function walkAndTranslate(root: Node) {
   // TreeWalker starts with the root's children. Handle the changed/inserted
   // element itself as well, including its placeholder and accessible label.
   if (root instanceof Element) {
-    if (root.closest("script, style, noscript, code, pre, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])")) return;
+    if (root.closest(EXCLUDED_SELECTOR)) return;
     translateElement(root);
     if (root.closest("textarea")) return;
   }
@@ -3114,17 +3334,10 @@ function walkAndTranslate(root: Node) {
         // Translate labels and placeholders on a textarea element, but keep its
         // editable text node out of the translation walk so user input is never
         // rewritten.
-        if (
-          node instanceof HTMLTextAreaElement &&
-          !node.closest("script, style, noscript, code, pre, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])")
-        ) {
+        if (node instanceof HTMLTextAreaElement && !node.closest(EXCLUDED_SELECTOR)) {
           return NodeFilter.FILTER_ACCEPT;
         }
-        if (
-          parent.closest(
-            "script, style, noscript, code, pre, textarea, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])",
-          )
-        ) {
+        if (parent.closest(EXCLUDED_TEXT_SELECTOR)) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -3200,7 +3413,13 @@ function localizeLink(link: Element) {
   const href = link.getAttribute("href");
   if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
   const next = localizeUrl(href);
-  if (next !== href) link.setAttribute("href", next);
+  if (next === href) return;
+  if (!isHydrated(link)) {
+    waitingForHydration.add(link);
+    return;
+  }
+  rememberAttribute(link, "href", href, next);
+  link.setAttribute("href", next);
 }
 
 function localizeLinks(root: Node) {
@@ -3209,189 +3428,242 @@ function localizeLinks(root: Node) {
   root.querySelectorAll("a[href]").forEach(localizeLink);
 }
 
+function translateTree(root: Node) {
+  walkAndTranslate(root);
+  localizeLinks(root);
+}
+
 function translateDocumentMetadata() {
-  const nextTitle = translateValue(document.title);
-  if (nextTitle !== document.title) {
+  const current = document.title;
+  const nextTitle = translateValue(current);
+  if (nextTitle !== current) {
+    titleSnapshot = { original: current, translated: nextTitle };
     document.title = nextTitle;
   }
 }
 
-// Translation rewrites text nodes outside React, so the first pass over the
-// server HTML waits for streamed client islands to hydrate, or React reports
-// text mismatches. Pages reached by client navigation are rendered in the
-// browser and translate at once.
-const HYDRATION_SETTLE_MS = 2500;
-let serverHtmlHydrated = false;
+const observeOptions: MutationObserverInit = {
+  childList: true,
+  subtree: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ["placeholder", "aria-label", "title", "alt", "href"],
+};
 
-function isLoadedDocument() {
-  try {
-    const [entry] = performance.getEntriesByType("navigation");
-    return !entry || new URL(entry.name).pathname === window.location.pathname;
-  } catch {
-    return true;
+let active = false;
+let observer: MutationObserver | null = null;
+const pendingRoots = new Set<Node>();
+const pendingAttributes = new Set<Element>();
+let animationFrameId: number | null = null;
+let hydrationRetryId: number | null = null;
+let nativeAlert: typeof window.alert | null = null;
+let nativeConfirm: typeof window.confirm | null = null;
+
+function queueMutations(mutations: MutationRecord[]) {
+  for (const mutation of mutations) {
+    if (mutation.type === "characterData" && mutation.target instanceof Text) {
+      if (mutation.target.isConnected) pendingRoots.add(mutation.target);
+      continue;
+    }
+
+    mutation.addedNodes.forEach((node) => {
+      if ((node instanceof Element || node instanceof Text) && node.isConnected) {
+        pendingRoots.add(node);
+      }
+    });
+
+    if (mutation.type === "attributes" && mutation.target instanceof Element && mutation.target.isConnected) {
+      pendingAttributes.add(mutation.target);
+    }
   }
 }
 
-function firstTranslationDelay() {
-  return serverHtmlHydrated || !isLoadedDocument() ? 0 : HYDRATION_SETTLE_MS;
+function requestFlush() {
+  if (animationFrameId !== null || (!pendingRoots.size && !pendingAttributes.size)) return;
+  animationFrameId = window.requestAnimationFrame(flush);
+}
+
+// Disconnecting drops records not yet delivered, so take them first.
+function pauseObserver() {
+  if (!observer) return;
+  queueMutations(observer.takeRecords());
+  observer.disconnect();
+}
+
+function resumeObserver() {
+  if (active && observer) observer.observe(document.body, observeOptions);
+}
+
+function hasPendingAncestor(node: Node) {
+  let parent = node.parentNode;
+  while (parent) {
+    if (pendingRoots.has(parent)) return true;
+    parent = parent.parentNode;
+  }
+  return false;
+}
+
+function flush() {
+  animationFrameId = null;
+  if (!active) return;
+  pauseObserver();
+  const roots = Array.from(pendingRoots).filter(
+    (root) => root.isConnected && !hasPendingAncestor(root),
+  );
+  const attributes = Array.from(pendingAttributes).filter(
+    (element) => element.isConnected && !pendingRoots.has(element) && !hasPendingAncestor(element),
+  );
+  pendingRoots.clear();
+  pendingAttributes.clear();
+
+  translateDocumentMetadata();
+  roots.forEach(translateTree);
+  attributes.forEach((element) => {
+    if (!element.closest(EXCLUDED_SELECTOR)) {
+      translateElement(element);
+    }
+    localizeLink(element);
+  });
+  resumeObserver();
+  scheduleHydrationRetry();
+}
+
+function scheduleHydrationRetry() {
+  if (!active || hydrationRetryId !== null || !waitingForHydration.size) return;
+  const late = hydrationDeadline !== null && Date.now() >= hydrationDeadline;
+  hydrationRetryId = window.setTimeout(retryWaitingNodes, late ? LATE_HYDRATION_RETRY_MS : HYDRATION_RETRY_MS);
+}
+
+function retryWaitingNodes() {
+  hydrationRetryId = null;
+  if (!active) return;
+  const nodes = Array.from(waitingForHydration);
+  waitingForHydration.clear();
+  pauseObserver();
+  for (const node of nodes) {
+    if (!node.isConnected) continue;
+    if (node instanceof Text) {
+      translateTextNode(node);
+    } else if (node instanceof Element) {
+      translateElement(node);
+      localizeLink(node);
+    }
+  }
+  resumeObserver();
+  requestFlush();
+  scheduleHydrationRetry();
+}
+
+// One pass over the whole page. Queued mutations are covered by it.
+function translatePage() {
+  pauseObserver();
+  pendingRoots.clear();
+  pendingAttributes.clear();
+  if (animationFrameId !== null) {
+    window.cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  translateDocumentMetadata();
+  translateTree(document.body);
+  resumeObserver();
+  scheduleHydrationRetry();
+}
+
+function handleDocumentClick(event: MouseEvent) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+
+  const anchor = (event.target as Element | null)?.closest?.("a[href]");
+  if (!anchor) return;
+  if (anchor.matches("[data-no-localize]")) return;
+  const href = anchor.getAttribute("href");
+  if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+  const next = localizeUrl(href);
+  if (next === href) return;
+  event.preventDefault();
+  window.location.assign(next);
+}
+
+/**
+ * Shows the current page in English and keeps it translated as React renders.
+ * The header calls it on the language switch so the page turns English at
+ * once, before the /en route arrives; later calls repeat the page pass.
+ */
+export function startEnglish() {
+  if (typeof document === "undefined" || !document.body) return;
+  if (!active) {
+    active = true;
+    beginHydrationWatch();
+    document.documentElement.lang = "en";
+    observer = new MutationObserver((mutations) => {
+      queueMutations(mutations);
+      requestFlush();
+    });
+    document.addEventListener("click", handleDocumentClick, true);
+    nativeAlert = window.alert;
+    nativeConfirm = window.confirm;
+    const alertNative = nativeAlert;
+    const confirmNative = nativeConfirm;
+    window.alert = (message?: unknown) => {
+      alertNative.call(window, translateValue(String(message ?? "")));
+    };
+    window.confirm = (message?: string) =>
+      confirmNative.call(window, translateValue(String(message ?? "")));
+  } else {
+    forgetDetachedNodes();
+  }
+  translatePage();
+}
+
+/** Stops translating and puts the Korean the page was rendered with back. */
+export function stopEnglish() {
+  if (!active) return;
+  active = false;
+  observer?.disconnect();
+  observer = null;
+  if (animationFrameId !== null) {
+    window.cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  if (hydrationRetryId !== null) {
+    window.clearTimeout(hydrationRetryId);
+    hydrationRetryId = null;
+  }
+  pendingRoots.clear();
+  pendingAttributes.clear();
+  waitingForHydration.clear();
+  document.removeEventListener("click", handleDocumentClick, true);
+  if (nativeAlert) window.alert = nativeAlert;
+  if (nativeConfirm) window.confirm = nativeConfirm;
+  nativeAlert = null;
+  nativeConfirm = null;
+  restoreOriginals();
+  document.documentElement.lang = "ko";
 }
 
 export function EnglishLanguagePack() {
   const pathname = usePathname();
   const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
 
-  React.useEffect(() => {
-    if (!isEnglishRoute) return;
-
-    document.documentElement.lang = "en";
-
-    const apply = (root: Node = document.body) => {
-      walkAndTranslate(root);
-      localizeLinks(root);
-    };
-
-    const observeOptions: MutationObserverInit = {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["placeholder", "aria-label", "title", "alt", "href"],
-    };
-    const pendingRoots = new Set<Node>();
-    const pendingAttributes = new Set<Element>();
-    let animationFrameId: number | null = null;
-    let timeoutId: number | null = null;
-    let observer: MutationObserver | null = null;
-
-    const hasPendingAncestor = (node: Node) => {
-      let parent = node.parentNode;
-      while (parent) {
-        if (pendingRoots.has(parent)) return true;
-        parent = parent.parentNode;
-      }
-      return false;
-    };
-
-    const flush = () => {
-      animationFrameId = null;
-      const roots = Array.from(pendingRoots).filter(
-        (root) => root.isConnected && !hasPendingAncestor(root),
-      );
-      const attributes = Array.from(pendingAttributes).filter(
-        (element) => element.isConnected && !pendingRoots.has(element) && !hasPendingAncestor(element),
-      );
-
-      observer?.disconnect();
-      translateDocumentMetadata();
-      roots.forEach((root) => apply(root));
-      attributes.forEach((element) => {
-        if (!element.closest("script, style, noscript, code, pre, [data-no-translate], [translate='no'], [contenteditable]:not([contenteditable='false'])")) {
-          translateElement(element);
-        }
-        localizeLink(element);
-      });
-      pendingRoots.clear();
-      pendingAttributes.clear();
-      observer?.observe(document.body, observeOptions);
-    };
-
-    const schedule = (root: Node, attributesOnly = false) => {
-      if (!root.isConnected) return;
-      if (attributesOnly && root instanceof Element) {
-        pendingAttributes.add(root);
-      } else {
-        pendingRoots.add(root);
-      }
-      if (animationFrameId !== null) return;
-      animationFrameId = window.requestAnimationFrame(flush);
-    };
-
-    const startTranslation = () => {
-      timeoutId = null;
-      serverHtmlHydrated = true;
-      translateDocumentMetadata();
-      apply();
-      observer?.observe(document.body, observeOptions);
-    };
-
-    observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === "characterData" && mutation.target instanceof Text) {
-          schedule(mutation.target);
-          continue;
-        }
-
-        mutation.addedNodes.forEach((node) => {
-          if (node instanceof Element || node instanceof Text) {
-            schedule(node);
-          }
-        });
-
-        if (
-          mutation.type === "attributes" &&
-          mutation.target instanceof Element
-        ) {
-          schedule(mutation.target, true);
-        }
-      }
-    });
-
-    const delay = firstTranslationDelay();
-    if (delay) {
-      timeoutId = window.setTimeout(startTranslation, delay);
+  // Layout effects run before the browser paints, so a page reached by client
+  // navigation is never shown in Korean first.
+  React.useLayoutEffect(() => {
+    if (isEnglishRoute) {
+      startEnglish();
     } else {
-      startTranslation();
+      stopEnglish();
     }
-
-    const handleClick = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      ) {
-        return;
-      }
-
-      const anchor = (event.target as Element | null)?.closest?.("a[href]");
-      if (!anchor) return;
-      if (anchor.matches("[data-no-localize]")) return;
-      const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
-      const next = localizeUrl(href);
-      if (next === href) return;
-      event.preventDefault();
-      window.location.assign(next);
-    };
-
-    const originalAlert = window.alert;
-    const originalConfirm = window.confirm;
-    window.alert = (message?: unknown) => {
-      originalAlert.call(window, translateValue(String(message ?? "")));
-    };
-    window.confirm = (message?: string) =>
-      originalConfirm.call(window, translateValue(String(message ?? "")));
-
-    document.addEventListener("click", handleClick, true);
-
-    return () => {
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-      observer?.disconnect();
-      pendingRoots.clear();
-      pendingAttributes.clear();
-      document.removeEventListener("click", handleClick, true);
-      window.alert = originalAlert;
-      window.confirm = originalConfirm;
-      document.documentElement.lang = "ko";
-    };
   }, [isEnglishRoute, pathname]);
+
+  React.useLayoutEffect(() => stopEnglish, []);
 
   return null;
 }

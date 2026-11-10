@@ -30,7 +30,7 @@ test.beforeAll(async () => {
           builder.onLoad({ filter: /.*/, namespace: "fixture" }, args => ({
             loader: "tsx", resolveDir: process.cwd(),
             contents: args.path === "next/navigation"
-              ? `export const usePathname=()=>location.pathname;`
+              ? `export const usePathname=()=>location.pathname;export const useRouter=()=>({push(href){location.assign(href)},replace(href){location.replace(href)},prefetch(){},refresh(){}});`
               : args.path === "next/link"
                 ? `import React from 'react'; export default function Link({children,prefetch,replace,scroll,...props}){return <a {...props}>{children}</a>}`
                 : `export const createClient=()=>({auth:{getSession:async()=>({data:{session:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})}});`,

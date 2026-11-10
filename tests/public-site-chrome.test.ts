@@ -90,8 +90,15 @@ test("the strip banner can be paused and holds still for hover, focus and reduce
   ] as const) {
     const html = renderToStaticMarkup(createElement(BannerRotationToggle, { playing, english, onToggle: () => {}, className: "" }));
     assert.match(html, new RegExp(`<button type="button" aria-label="${label}"`));
-    assert.match(html, /border-\[#111111\] bg-\[#f2cf27\] text-\[#111111\]/);
+    // A calm paper grey that turns white on hover, so the control does not
+    // pull the eye away from the banner (same as the arrows).
+    assert.match(html, /border-\[#111111\] bg-\[#ebe7de\] text-\[#111111\]/);
+    assert.match(html, / hover:bg-white /);
+    assert.doesNotMatch(html, /(?<!dark:)bg-\[#f2cf27\]/);
   }
+  const arrows = readSource("src/components/site/strip-ad-banner-client.tsx");
+  assert.match(arrows, /border-\[#111111\] bg-\[#ebe7de\] text-\[#111111\][^"`]* hover:bg-white /);
+  assert.doesNotMatch(arrows, /function BannerNavButton[\s\S]*bg-\[#f2cf27\][\s\S]*function normalizeHref/);
 
   const banner = readSource("src/components/site/strip-ad-banner-client.tsx");
   assert.match(banner, /useBannerRotation\(safeBanners\.length, ROTATE_MS\)/);
@@ -130,4 +137,20 @@ test("pages that used to inherit the home title carry their own metadata", () =>
   for (const file of ["src/app/en/about/page.tsx", "src/app/en/faq/page.tsx", "src/app/en/forms/page.tsx", "src/app/en/support/page.tsx", "src/app/en/guide/page.tsx", "src/app/en/guide/[slug]/page.tsx", "src/app/en/forgot-password/page.tsx"]) {
     assert.match(readSource(file), /pageMetadata\(\{\s*locale: "en"/, file);
   }
+});
+
+test("the home hero makes 심의 신청 the yellow main card and keeps 결과 조회 white with a black border", () => {
+  const home = readSource("src/app/page.tsx");
+  const card = (title: string) => {
+    const match = new RegExp(`title: "${title}",[\\s\\S]*?cardClass:\\s*"([^"]+)"`).exec(home);
+    assert.ok(match, `${title} card`);
+    return match[1];
+  };
+  const apply = card("심의 신청");
+  const results = card("결과 조회");
+  assert.match(apply, /^bg-\[#f2cf27\] text-\[#111111\] shadow-\[6px_6px_0_#111111\]/);
+  assert.match(results, /^bg-white text-\[#111111\] shadow-\[3px_3px_0_#111111\]/);
+  assert.doesNotMatch(results, /(?<!dark:)bg-\[#(?:f2cf27|1556a4)\]/);
+  // Both cards share one size and border; only colour and shadow differ.
+  assert.match(home, /className=\{`group flex min-h-\[166px\] flex-col overflow-hidden rounded-\[10px\] border-2 border-\[#111111\] transition hover:-translate-y-1 sm:min-h-\[188px\] \$\{cta\.cardClass\}`\}/);
 });

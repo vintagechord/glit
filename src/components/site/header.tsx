@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LogIn,
   LogOut,
@@ -10,6 +10,11 @@ import {
   UserRound,
 } from "lucide-react";
 
+import {
+  isEnglishPathname,
+  loadedEnglishPack,
+  loadEnglishPack,
+} from "@/components/i18n/english-pack-loader";
 import { hasBrowserAuthCookie, loadBrowserSupabase } from "@/lib/supabase/browser-session";
 import {
   GUEST_SUBMISSION_CART_STORAGE_KEY,
@@ -103,6 +108,7 @@ const toKoreanPath = (pathname: string) => {
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [authState, setAuthState] = React.useState<AuthState>("unauthenticated");
   const [authUserId, setAuthUserId] = React.useState<string | null>(null);
@@ -111,7 +117,7 @@ export function SiteHeader() {
   const sessionSyncRef = React.useRef<(() => Promise<void>) | null>(null);
   const previousPathnameRef = React.useRef(pathname);
   const [locationSuffix, setLocationSuffix] = React.useState("");
-  const isEnglishRoute = pathname === "/en" || pathname.startsWith("/en/");
+  const isEnglishRoute = isEnglishPathname(pathname);
   const activeNavLinks = isEnglishRoute ? englishNavLinks : navLinks;
   const cartHref = isEnglishRoute ? "/en/mypage/cart" : "/mypage/cart";
   const languagePath = isEnglishRoute
@@ -123,6 +129,16 @@ export function SiteHeader() {
     setLocationSuffix(`${window.location.search}${window.location.hash}`);
   }, [pathname]);
 
+  // Hovering, focusing or touching the switch fetches the language pack and
+  // the other-language route, so the click itself has nothing left to load.
+  const warmLanguageSwitch = React.useCallback(() => {
+    if (!isEnglishRoute) loadEnglishPack().catch(() => {});
+    router.prefetch(languagePath);
+  }, [isEnglishRoute, languagePath, router]);
+
+  // The switch stays on the page. The language pack rewrites what is on
+  // screen at once (or puts the Korean it replaced back), and the other
+  // route loads behind it without a full reload.
   const handleLanguageClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (
@@ -136,11 +152,25 @@ export function SiteHeader() {
       }
 
       event.preventDefault();
-      window.location.assign(
+      const fromPathname = window.location.pathname;
+      if (isEnglishRoute) {
+        loadedEnglishPack()?.stopEnglish();
+      } else if (supportsEnglishRoute(pathname)) {
+        loadEnglishPack()
+          .then((pack) => {
+            const current = window.location.pathname;
+            if (current === fromPathname || isEnglishPathname(current)) {
+              pack.startEnglish();
+            }
+          })
+          .catch(() => {});
+      }
+      router.push(
         `${languagePath}${window.location.search}${window.location.hash}`,
+        { scroll: false },
       );
     },
-    [languagePath],
+    [isEnglishRoute, languagePath, pathname, router],
   );
 
   React.useEffect(() => {
@@ -418,6 +448,9 @@ export function SiteHeader() {
             href={languageHref}
             data-no-localize="true"
             onClick={handleLanguageClick}
+            onPointerEnter={warmLanguageSwitch}
+            onFocus={warmLanguageSwitch}
+            onTouchStart={warmLanguageSwitch}
             className={subtleButtonClass}
           >
             {isEnglishRoute ? "KR" : "EN"}

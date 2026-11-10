@@ -41,17 +41,21 @@ export const metadata: Metadata = pageMetadata({
   enPath: "/en",
 });
 
+// 심의 신청 is the main action: solid yellow with the deepest shadow.
+// 결과 조회 stays white with a black border, a step quieter beside it.
 const heroCtas = [
   {
     title: "심의 신청",
     href: "/dashboard/new",
-    visual: "bg-[#1556a4] text-white dark:bg-[#3f8ad8] dark:text-[#06111f]",
+    cardClass:
+      "bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#ffffff] dark:hover:shadow-[8px_8px_0_#ffffff]",
     icon: MousePointerClick,
   },
   {
     title: "결과 조회",
     href: "/track",
-    visual: "bg-[#f2cf27] text-[#111111] dark:bg-[#f2cf27] dark:text-[#111111]",
+    cardClass:
+      "bg-white text-[#111111] shadow-[3px_3px_0_#111111] hover:shadow-[5px_5px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:shadow-[5px_5px_0_#f2cf27]",
     icon: FileText,
   },
 ];
@@ -148,15 +152,13 @@ export default function Home() {
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className="group flex min-h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] bg-white shadow-[6px_6px_0_#111111] transition hover:-translate-y-1 hover:shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:bg-[#171717] dark:shadow-[6px_6px_0_#f2cf27] dark:hover:shadow-[8px_8px_0_#f2cf27] sm:min-h-[188px]"
+                      className={`group flex min-h-[166px] flex-col overflow-hidden rounded-[10px] border-2 border-[#111111] transition hover:-translate-y-1 sm:min-h-[188px] ${cta.cardClass}`}
                     >
-                      <div
-                        className={`flex flex-1 items-center justify-center ${cta.visual}`}
-                      >
+                      <div className="flex flex-1 items-center justify-center">
                         <Icon className="h-12 w-12 sm:h-14 sm:w-14" strokeWidth={2.2} />
                       </div>
                       <div className="px-5 py-3 text-center">
-                        <p className="break-keep text-[15px] font-black leading-snug text-foreground dark:text-white sm:text-base">{cta.title}</p>
+                        <p className="break-keep text-[15px] font-black leading-snug sm:text-base">{cta.title}</p>
                       </div>
                     </ReliableLink>
                   );

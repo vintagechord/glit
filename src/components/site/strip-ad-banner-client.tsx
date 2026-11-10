@@ -87,7 +87,7 @@ function BannerNavButton({
       type="button"
       onClick={onClick}
       aria-label={english ? (isPrevious ? "Previous banner" : "Next banner") : (isPrevious ? "이전 배너" : "다음 배너")}
-      className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border-2 border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[3px_3px_0_#111111] transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:shadow-[3px_3px_0_#f2cf27] sm:h-16 sm:w-9 sm:hover:w-11 ${
+      className={`group/control absolute top-1/2 z-20 inline-flex h-14 w-8 -translate-y-1/2 items-center justify-center border-2 border-[#111111] bg-[#ebe7de] text-[#111111] shadow-[3px_3px_0_#111111] transition-[width,background-color,border-color,box-shadow] duration-200 hover:w-10 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4]/65 dark:border-[#f2cf27] dark:bg-[#2a2a2a] dark:text-white dark:shadow-[3px_3px_0_#f2cf27] dark:hover:bg-white dark:hover:text-[#111111] sm:h-16 sm:w-9 sm:hover:w-11 ${
         isPrevious
           ? "left-0 rounded-r-full border-l-0 pl-0.5"
           : "right-0 rounded-l-full border-r-0 pr-0.5"
