@@ -177,6 +177,10 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   assert.doesNotMatch(banner, /onside-hero-(?:record|play)\b/);
   assert.doesNotMatch(css, /\.onside-hero-(?:record|play)\b/);
   assert.match(css, /\.onside-hero-wave \{[^}]*margin-top: auto;/);
+  // The status panel beside the banner follows the same frame rule on the
+  // home page only; the dashboard keeps its own default frame.
+  assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);
+  assert.match(readSource("src/features/home/home-review-panel.tsx"), /frameClassName = "border-2 shadow-\[6px_6px_0_#111111\] dark:shadow-\[6px_6px_0_#f2cf27\]",/);
   const toggle = readSource("src/components/site/hero-motion-toggle.tsx");
   assert.match(toggle, /setAttribute\("data-hero-motion", paused \? "paused" : "on"\)/);
   for (const label of ["배너 움직임 멈춤", "배너 움직임 재생", "Pause banner motion", "Play banner motion"]) assert.ok(toggle.includes(label));
