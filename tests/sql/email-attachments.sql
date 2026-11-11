@@ -33,6 +33,7 @@ begin
   assert leased.attachment_refs=refs and leased.lease_expires_at>=now()+interval '179 seconds';
   perform public.finish_email_outbox(row1.id,leased.lease_token,'accepted','smtp-attachment-fixture');
   select * into row2 from public.email_outbox where id=row1.id;
-  assert row2.status='accepted' and row2.html is null and row2.attachment_refs=refs;
+  -- The delivered result mail keeps its body for the administrator's original view.
+  assert row2.status='accepted' and row2.html is not null and row2.attachment_refs=refs;
   raise notice 'email attachment SQL assertions passed';
 end $$;

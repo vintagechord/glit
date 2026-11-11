@@ -1594,6 +1594,7 @@ export async function saveAlbumSubmissionAction(
               totalAmountKrw: amountKrw,
               link,
               siteLink,
+              submissionId: parsed.data.submissionId,
             }),
         });
       }
@@ -2217,6 +2218,7 @@ export async function saveMvSubmissionAction(
               totalAmountKrw: amountKrw,
               link,
               siteLink,
+              submissionId: parsed.data.submissionId,
             }),
         });
       }

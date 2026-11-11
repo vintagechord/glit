@@ -22,7 +22,8 @@ begin
   select count(*) into count_rows from public.finish_email_outbox(row1.id,gen_random_uuid(),'accepted','fixture-id');
   assert count_rows=0, 'wrong lease can acknowledge';
   select * into result from public.finish_email_outbox(row1.id,claimed.lease_token,'accepted','fixture-id');
-  assert result.status='accepted' and result.html is null and result.provider_message_id='fixture-id';
+  -- Customer mail keeps its body for the administrator's original view.
+  assert result.status='accepted' and result.html='sensitive-body' and result.provider_message_id='fixture-id', 'delivered body not kept';
   assert (select result_notified_at is not null from public.submissions where id=submission), 'result timestamp missing';
 
   select * into row1 from public.enqueue_email_outbox(repeat('8',64),'supabase-smtp','fixture@example.invalid','MV change','body',null,'submission update',now()+interval '1 hour',submission,true);
@@ -54,7 +55,22 @@ begin
   assert public.retry_email_outbox(row1.id,true)->>'status'='pending';
   update public.email_outbox set expires_at=now()-interval '1 second' where id=row1.id;
   perform public.maintain_email_outbox();
-  assert (select status='expired' and html is null from public.email_outbox where id=row1.id), 'expired body retained';
+  assert (select status='expired' and html='body' from public.email_outbox where id=row1.id), 'expired customer body dropped';
+  select count(*) into count_rows from public.claim_email_outbox(1,row1.id);
+  assert count_rows=0, 'kept expired body was claimed again';
+  denied := false;
+  begin perform public.retry_email_outbox(row1.id,true); exception when sqlstate '22023' then denied := true; end;
+  assert denied, 'kept expired body can be re-sent';
+
+  -- Sign-in links are never kept once delivered or expired.
+  select * into row1 from public.enqueue_email_outbox(repeat('7',64),'supabase-smtp','verify@example.invalid','verify','live-link',null,'signup verification',now()+interval '10 minutes');
+  select * into claimed from public.claim_email_outbox(1,row1.id);
+  select * into result from public.finish_email_outbox(row1.id,claimed.lease_token,'accepted','auth-fixture-id');
+  assert result.status='accepted' and result.html is null, 'delivered sign-in link kept';
+  select * into row1 from public.enqueue_email_outbox(repeat('6',64),'supabase-smtp','expire@example.invalid','verify','stale-link',null,'signup verification',now()+interval '10 minutes');
+  update public.email_outbox set expires_at=now()-interval '1 second' where id=row1.id;
+  perform public.maintain_email_outbox();
+  assert (select status='expired' and html is null from public.email_outbox where id=row1.id), 'expired sign-in link kept';
 
   select * into row1 from public.enqueue_email_outbox(repeat('c',64),'supabase-smtp','auth@example.invalid','auth','old-token',null,'password reset',now()+interval '10 minutes');
   select * into row2 from public.enqueue_email_outbox(repeat('d',64),'supabase-smtp','auth@example.invalid','auth','new-token',null,'password reset',now()+interval '10 minutes');
@@ -65,7 +81,7 @@ begin
   perform public.maintain_email_outbox();
   assert not exists(select 1 from public.email_outbox where id=row1.id), 'terminal metadata retained beyond retention';
   stats := public.email_outbox_stats();
-  assert (stats->>'accepted')::integer=2 and (stats->>'pending')::integer=1, 'stats incorrect';
+  assert (stats->>'accepted')::integer=3 and (stats->>'pending')::integer=1, 'stats incorrect';
 
   assert not has_table_privilege('anon','public.email_worker_config','SELECT'), 'worker secret public';
   assert not has_function_privilege('authenticated','public.consume_email_rate_limit(text,integer,integer,integer)','EXECUTE'), 'member can reset limits';

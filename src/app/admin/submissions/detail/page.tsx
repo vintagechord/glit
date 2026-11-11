@@ -29,6 +29,7 @@ import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns
 import { officialArtistName } from "@/lib/submissions/artist-display";
 import { loadSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
+import { CASH_RECEIPT_PURPOSE_LABELS, CASH_RECEIPT_STATUS_LABELS, formatCashReceiptIdentifier, type CashReceiptPurpose, type CashReceiptStatus } from "@/lib/cash-receipts";
 import { AdminSaveToast } from "@/components/admin/save-toast";
 import { ReviewEmailControl } from "@/components/admin/review-email-control";
 import { loadSubmissionCustomerEmails } from "@/lib/admin/submission-emails";
@@ -206,6 +207,21 @@ const paymentDocumentLabels: Record<string, string> = {
 const cashReceiptPurposeLabels: Record<string, string> = {
   PERSONAL_INCOME_DEDUCTION: "개인소득공제용",
   BUSINESS_EXPENSE_PROOF: "사업자지출증빙용",
+};
+
+/** The order's cash receipt request (submission_order_cash_receipts). */
+type AdminOrderCashReceipt = {
+  purpose: CashReceiptPurpose;
+  identifier: string;
+  status: CashReceiptStatus;
+  issue_method: string | null;
+  approval_number: string | null;
+  issued_at: string | null;
+  requested_at: string;
+  canceled_at: string | null;
+  cancel_reason: string | null;
+  failure_message: string | null;
+  updated_at: string;
 };
 
 const operationalStageOptions = [
@@ -621,18 +637,22 @@ export default async function AdminSubmissionDetailPage({
   const currentOrder = currentOrderRaw as {
     id: string; status: string; payment_method: string; depositor_name: string | null; deposit_due_at: string | null; amount_krw: number | null; refunded_at: string | null;
   } | null;
-  // The refund panel lists every application paid in the same order and
-  // warns when a cash receipt was issued for it.
-  const [orderItemsResult, cashReceiptResult] = currentOrderId && ["PAID", "REFUNDED"].includes(submission.payment_status ?? "")
+  // The applications ordered together share the order's mail and cash
+  // receipt. The refund panel lists them and warns about an issued receipt;
+  // the payment section shows the customer's receipt request in full.
+  const [orderItemsResult, cashReceiptResult] = currentOrderId
     ? await Promise.all([
       supabase.from("submission_order_items").select("title, submission_id").eq("order_id", currentOrderId),
-      supabase.from("submission_order_cash_receipts").select("status").eq("order_id", currentOrderId).maybeSingle(),
+      supabase.from("submission_order_cash_receipts")
+        .select("purpose, identifier, status, issue_method, approval_number, issued_at, requested_at, canceled_at, cancel_reason, failure_message, updated_at")
+        .eq("order_id", currentOrderId).maybeSingle(),
     ])
-    : [{ data: null }, { data: null }];
-  const orderTitles = ((orderItemsResult.data ?? []) as Array<{ title: string | null; submission_id: string | null }>)
-    .filter((item) => item.submission_id)
-    .map((item) => item.title?.trim() || "제목 미입력");
-  const cashReceiptIssued = (cashReceiptResult.data as { status?: string } | null)?.status === "ISSUED";
+    : [{ data: null, error: null }, { data: null, error: null }];
+  const orderItems = ((orderItemsResult.data ?? []) as Array<{ title: string | null; submission_id: string | null }>)
+    .filter((item): item is { title: string | null; submission_id: string } => Boolean(item.submission_id));
+  const orderTitles = orderItems.map((item) => item.title?.trim() || "제목 미입력");
+  const orderCashReceipt = (cashReceiptResult.error ? null : cashReceiptResult.data) as AdminOrderCashReceipt | null;
+  const cashReceiptIssued = orderCashReceipt?.status === "ISSUED";
   const depositDueDate = formatDepositDue(currentOrder?.deposit_due_at);
   const depositDueLabel = depositDueDate
     ? `${depositDueDate}${currentOrder?.status === "BANK_PENDING" && isDepositOverdue(currentOrder.deposit_due_at) ? " (기한 지남)" : ""}`
@@ -784,7 +804,7 @@ export default async function AdminSubmissionDetailPage({
     .maybeSingle();
   // The detail page lists only this submission's customer mail; the full
   // outbox lives under 메일 발송 내역 in the admin menu.
-  const customerEmails = await loadSubmissionCustomerEmails(supabase, submission.id);
+  const customerEmails = await loadSubmissionCustomerEmails(supabase, submission.id, orderItems.map((item) => item.submission_id));
   // Who receives result and progress mail, and which column the admin may
   // fill when nobody does. A failed lookup shows a notice instead of a form.
   const [recipientState, uploadRecord, customerViews, customerActivity] = await Promise.all([
@@ -1311,7 +1331,37 @@ export default async function AdminSubmissionDetailPage({
                     />
                   </div>
                 ) : null}
-                {submission.payment_method === "BANK" && (
+                {submission.payment_method === "BANK" && orderCashReceipt ? (
+                  <div className="space-y-3 rounded-2xl border-2 border-[#111111] bg-background p-4 md:col-span-2 dark:border-[#f2cf27]" aria-label="현금영수증 신청">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-black text-foreground">현금영수증 신청</p>
+                      <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${
+                        orderCashReceipt.status === "ISSUED" ? brandStatusTones.progress
+                          : orderCashReceipt.status === "CANCELED" ? brandStatusTones.neutral
+                            : orderCashReceipt.status === "FAILED" || orderCashReceipt.status === "UNCERTAIN" ? brandStatusTones.danger
+                              : brandStatusTones.warning
+                      }`}>
+                        {CASH_RECEIPT_STATUS_LABELS[orderCashReceipt.status] ?? orderCashReceipt.status}
+                      </span>
+                    </div>
+                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                      <div><dt className="text-xs text-muted-foreground">용도</dt><dd className="font-semibold">{CASH_RECEIPT_PURPOSE_LABELS[orderCashReceipt.purpose] ?? orderCashReceipt.purpose}</dd></div>
+                      <div><dt className="text-xs text-muted-foreground">발급 번호</dt><dd className="font-black tabular-nums" data-no-translate>{formatCashReceiptIdentifier(orderCashReceipt.identifier)}</dd></div>
+                      <div><dt className="text-xs text-muted-foreground">신청 일시</dt><dd className="font-semibold">{formatDateTime(orderCashReceipt.requested_at)}</dd></div>
+                      {orderCashReceipt.approval_number ? <div><dt className="text-xs text-muted-foreground">승인번호</dt><dd className="font-black tabular-nums">{orderCashReceipt.approval_number}</dd></div> : null}
+                      {orderCashReceipt.issued_at ? <div><dt className="text-xs text-muted-foreground">발급 일시</dt><dd className="font-semibold">{formatDateTime(orderCashReceipt.issued_at)} · {orderCashReceipt.issue_method === "INICIS" ? "이니시스" : "홈택스 입력"}</dd></div> : null}
+                      {orderCashReceipt.canceled_at ? <div><dt className="text-xs text-muted-foreground">취소</dt><dd className="font-semibold">{formatDateTime(orderCashReceipt.canceled_at)}{orderCashReceipt.cancel_reason ? ` · ${orderCashReceipt.cancel_reason}` : ""}</dd></div> : null}
+                    </dl>
+                    {orderCashReceipt.failure_message ? <p className="text-xs font-semibold leading-5">{orderCashReceipt.failure_message}</p> : null}
+                    <Link
+                      href={`/admin/cash-receipts?filter=all#order-${currentOrderId}`}
+                      prefetch={false}
+                      className="inline-flex min-h-9 items-center rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 text-xs font-black text-[#111111]"
+                    >
+                      현금영수증 발급 화면에서 처리
+                    </Link>
+                  </div>
+                ) : submission.payment_method === "BANK" && paymentDocument?.payment_document_type ? (
                   <>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -1323,7 +1373,7 @@ export default async function AdminSubmissionDetailPage({
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                       />
                     </div>
-                    {paymentDocument?.payment_document_type === "CASH_RECEIPT" && (
+                    {paymentDocument.payment_document_type === "CASH_RECEIPT" && (
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           현금 영수증 용도
@@ -1346,7 +1396,18 @@ export default async function AdminSubmissionDetailPage({
                       />
                     </div>
                   </>
-                )}
+                ) : submission.payment_method === "BANK" ? (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      현금영수증
+                    </label>
+                    <input
+                      value={cashReceiptResult.error ? "신청 정보를 불러오지 못했습니다" : currentOrderId ? "신청하지 않음" : "주문 전"}
+                      readOnly
+                      className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="mt-6 grid gap-4">
                 <div className="space-y-2">

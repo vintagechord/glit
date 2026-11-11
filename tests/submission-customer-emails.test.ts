@@ -59,3 +59,18 @@ test("the full outbox moved to the admin menu and the receipt mail now carries i
   assert.match(retry, /form\.get\("submissionId"\)/);
   assert.match(retry, /#customer-emails/);
 });
+
+test("order mail stored under another application of the same order is listed once", async () => {
+  const requests: URL[] = [];
+  const sibling = "11111111-2222-4333-8444-555555555555";
+  const result = await loadSubmissionCustomerEmails(client(requests), sid, [sid, sibling, sibling]);
+  assert.equal(result.error, false);
+  assert.equal(result.emails.length, 1, "the same outbox row read twice is listed once");
+  assert.equal(requests.length, 2);
+  const shared = requests.find((url) => url.searchParams.get("submission_id")?.startsWith("in."))!;
+  assert.equal(shared.searchParams.get("submission_id"), `in.(${sibling})`);
+  const operations = shared.searchParams.get("operation") ?? "";
+  assert.ok(operations.includes("bank payment request") && operations.includes("payment completed"));
+  for (const operation of ["review result", "submission update", "submission receipt"]) assert.ok(!operations.includes(operation), operation);
+  assert.doesNotMatch(shared.searchParams.get("select") ?? "", /html/);
+});

@@ -20,8 +20,8 @@ import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { orderGuestTokensSchema } from "@/lib/submission-orders-http";
-import { validateCashReceiptRequest, type CashReceiptRequestInput } from "@/lib/cash-receipts";
-import { saveCashReceiptRequest } from "@/lib/cash-receipts-server";
+import { CASH_RECEIPT_PURPOSE_LABELS, maskCashReceiptIdentifier, validateCashReceiptRequest, type CashReceiptRequestInput } from "@/lib/cash-receipts";
+import { loadCashReceiptRows, saveCashReceiptRequest } from "@/lib/cash-receipts-server";
 import {
   BANK_DEPOSITOR_NAME_MAX,
   isValidDepositorName,
@@ -362,35 +362,46 @@ export async function POST(req: NextRequest) {
     const orderId = submission.current_order_id as string;
     submissionsByOrder.set(orderId, [...(submissionsByOrder.get(orderId) ?? []), submission]);
   }
-  // Send after the stored order's response. Application contacts receive only
-  // their own details; account and guest recipients retain the order summary.
+  // Send after the stored order's response. The bank notice lists the whole
+  // order: account and guest mailboxes always get it, and so does an
+  // email-less social member's single notification address. Separate
+  // application contacts receive only their own application's notice.
   // Unsent rows stay in the durable outbox for the scheduled worker.
   await runAfterResponse(async () => {
+    // The request as stored, so the notice repeats what the customer asked for.
+    const receipts = await loadCashReceiptRows(admin, orderIds).catch(() => null);
     await Promise.all(Array.from(submissionsByOrder, async ([orderId, orderSubmissions]) => {
+      let recipients: string[];
       if (user && !user.email?.trim()) {
-        await Promise.all(orderSubmissions.map(async (submission) => {
-          const email = await resolveMemberNotificationEmail(admin, user, submission.applicant_email);
-          if (!email) return;
-          const result = await sendSubmissionUpdateEmail({
-            email,
-            title: submission.title ?? "제목 미입력",
-            artist: officialArtistName(submission),
-            kind: getKind(submission.type),
-            headline: "입금 요청이 접수되었습니다.",
-            summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
-            subject: "[onside] 무통장 입금 요청 접수 안내",
-            link: buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
-            idempotencyKey: `bank-request:${orderId}:${email}:${submission.id}`,
-            submissionId: submission.id,
-          });
-          if (!result.ok && !result.skipped) {
-            console.warn("[CartBank] bank email failed", { orderId, submissionId: submission.id, message: result.message });
-          }
-        }));
-        return;
+        const resolved = await Promise.all(orderSubmissions.map((submission) =>
+          resolveMemberNotificationEmail(admin, user, submission.applicant_email)));
+        recipients = collectEmails(...resolved);
+        if (recipients.length !== 1 || resolved.some((email) => !email)) {
+          await Promise.all(orderSubmissions.map(async (submission, index) => {
+            const email = resolved[index];
+            if (!email) return;
+            const result = await sendSubmissionUpdateEmail({
+              email,
+              title: submission.title ?? "제목 미입력",
+              artist: officialArtistName(submission),
+              kind: getKind(submission.type),
+              headline: "입금 요청이 접수되었습니다.",
+              summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
+              subject: "[onside] 무통장 입금 요청 접수 안내",
+              link: buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
+              idempotencyKey: `bank-request:${orderId}:${email}:${submission.id}`,
+              submissionId: submission.id,
+            });
+            if (!result.ok && !result.skipped) {
+              console.warn("[CartBank] bank email failed", { orderId, submissionId: submission.id, message: result.message });
+            }
+          }));
+          return;
+        }
+      } else {
+        recipients = collectEmails(...await Promise.all(orderSubmissions.map((submission) =>
+          submission.user_id ? resolveMemberNotificationEmail(admin, user, submission.applicant_email) : submission.guest_email || submission.applicant_email)));
       }
-      const recipients = collectEmails(...await Promise.all(orderSubmissions.map((submission) =>
-        submission.user_id ? resolveMemberNotificationEmail(admin, user, submission.applicant_email) : submission.guest_email || submission.applicant_email)));
       if (recipients.length === 0) return;
       const first = orderSubmissions[0];
       const link = buildUrl(
@@ -406,6 +417,10 @@ export async function POST(req: NextRequest) {
         amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
       }));
       const orderTotalKrw = items.reduce((sum, item) => sum + item.amountKrw, 0);
+      const receipt = receipts?.get(orderId);
+      const cashReceiptNotice = receipt && receipt.status !== "CANCELED"
+        ? { purposeLabel: CASH_RECEIPT_PURPOSE_LABELS[receipt.purpose], identifierMasked: maskCashReceiptIdentifier(receipt.identifier) }
+        : null;
       await Promise.all(recipients.map(async (email) => {
         const result = await sendOrderBankTransferEmail({
           email,
@@ -415,8 +430,10 @@ export async function POST(req: NextRequest) {
           totalAmountKrw: orderTotalKrw,
           depositorName,
           depositDueAt: depositDueAt.toISOString(),
+          cashReceipt: cashReceiptNotice,
           link,
           siteLink: buildUrl("/", baseUrl),
+          submissionId: first.id,
         });
         if (!result.ok && !result.skipped) {
           console.warn("[CartBank] bank email failed", { orderId, message: result.message });

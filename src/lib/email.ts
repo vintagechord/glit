@@ -69,8 +69,12 @@ type OrderBankTransferEmailPayload = EmailDeliveryOptions & {
   totalAmountKrw: number;
   depositorName?: string | null;
   depositDueAt?: string | null;
+  /** The customer's cash receipt request, already masked for mail. */
+  cashReceipt?: { purposeLabel: string; identifierMasked: string } | null;
   link?: string;
   siteLink?: string;
+  /** An application in the order; lists the notice in its admin mail history. */
+  submissionId?: string;
 };
 
 type PaymentCompletedEmailPayload = EmailDeliveryOptions & {
@@ -439,6 +443,11 @@ export async function sendOrderBankTransferEmail(
             ${renderOrderItems(payload.items)}
             <p style="margin:12px 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${formatKrw(payload.totalAmountKrw)}</p>
           </div>
+          ${payload.cashReceipt ? `<div style="margin-top:16px;border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">현금영수증 신청</p>
+            <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeHtml(payload.cashReceipt.purposeLabel)} · ${escapeHtml(payload.cashReceipt.identifierMasked)}</p>
+            <p style="margin:6px 0 0;font-size:12px;color:#64748b;">입금 확인 후 발급하며, 주문내역에서 받을 수 있습니다.</p>
+          </div>` : ""}
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
             <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">주문내역 보기</a>
             <a href="${escapeHtml(siteLink)}" style="display:inline-block;border-radius:999px;background:#0f172a;color:#f8fafc;text-decoration:none;font-size:13px;font-weight:700;padding:11px 18px;">온사이드 사이트</a>
@@ -450,7 +459,7 @@ export async function sendOrderBankTransferEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 무통장 입금 계좌 및 주문 내역 안내", html, operation: "bank payment request" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 무통장 입금 계좌 및 주문 내역 안내", html, operation: "bank payment request", submissionId: payload.submissionId });
 }
 
 /** Payment confirmation with the order summary; one message per order and recipient. */

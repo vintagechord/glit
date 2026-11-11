@@ -206,7 +206,7 @@ export function CustomerActivityRecord({
                 {emails.slice(0, 10).map((mail) => (
                   <li key={mail.id} className="grid gap-2 py-2 sm:grid-cols-[170px_1fr]">
                     <span>
-                      <span className="font-bold">{mailOperationLabel(mail.operation)}</span>
+                      <a href={`/admin/emails/${mail.id}`} target="_blank" rel="noopener" className="font-bold underline underline-offset-4">{mailOperationLabel(mail.operation)}</a>
                       <span className="block font-mono text-[11px] text-muted-foreground">{time(mail.acceptedAt ?? mail.createdAt)}</span>
                     </span>
                     <MailReadDetail mail={mail} compact />

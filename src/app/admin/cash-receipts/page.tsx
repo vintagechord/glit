@@ -26,8 +26,10 @@ export const dynamic = "force-dynamic";
 
 type Row = CashReceiptRow & { order: CashReceiptOrder | null };
 
+// 진행 중 (the default) lists every request that is not finished, so a new
+// request shows up before its deposit is confirmed.
 const filters = [
-  ["attention", "처리 필요"], ["waiting", "입금 대기"], ["ISSUED", "발급 완료"], ["CANCELED", "취소"], ["all", "전체"],
+  ["open", "진행 중"], ["attention", "처리 필요"], ["waiting", "입금 대기"], ["ISSUED", "발급 완료"], ["CANCELED", "취소"], ["all", "전체"],
 ] as const;
 const savedNotices: Record<string, string> = {
   issued: "이니시스로 현금영수증을 발급했습니다. 고객 주문내역에서 PDF를 받을 수 있습니다.",
@@ -56,28 +58,30 @@ export default async function AdminCashReceiptsPage({ searchParams }: {
 }) {
   await requireAdminPage();
   const params = await searchParams;
-  const filter = filters.some(([value]) => value === params.filter) ? params.filter! : "attention";
+  const filter = filters.some(([value]) => value === params.filter) ? params.filter! : "open";
   const autoIssue = isCashReceiptAutoIssueEnabled();
   const admin = createAdminClient();
   const receipts = () => admin.from("submission_order_cash_receipts").select(`*, order:submission_orders(${ORDER_EMBED})`)
     .order("requested_at", { ascending: false }).limit(200);
   let query = receipts();
-  if (filter === "attention" || filter === "waiting") query = query.in("status", OPEN_STATUSES);
+  if (filter === "open" || filter === "attention" || filter === "waiting") query = query.in("status", OPEN_STATUSES);
   else if (filter !== "all") query = query.eq("status", filter);
   // Receipts issued for orders whose money went back stay ISSUED until the
   // Hometax cancellation is recorded; list them however old they are.
   const [{ data, error }, refunded] = await Promise.all([
     query,
-    filter === "attention"
+    filter === "attention" || filter === "open"
       ? admin.from("submission_order_cash_receipts").select(`*, order:submission_orders!inner(${ORDER_EMBED})`)
         .eq("status", "ISSUED").neq("order.status", "PAID").order("requested_at", { ascending: false }).limit(200)
       : Promise.resolve({ data: [], error: null }),
   ]);
   const attentionOf = (row: Row) => cashReceiptAttention(row, row.order?.status);
-  const rows = (filter === "attention"
+  // Requests that need an action come first, then the ones waiting for the deposit.
+  const rank = (row: Row) => { const attention = attentionOf(row); return attention ? attentionOrder[attention] : 3; };
+  const rows = (filter === "attention" || filter === "open"
     ? [...((data ?? []) as unknown as Row[]), ...((refunded.data ?? []) as unknown as Row[])]
-      .filter((row) => attentionOf(row) !== null)
-      .sort((a, b) => attentionOrder[attentionOf(a)!] - attentionOrder[attentionOf(b)!] || b.requested_at.localeCompare(a.requested_at))
+      .filter((row) => filter === "open" || attentionOf(row) !== null)
+      .sort((a, b) => rank(a) - rank(b) || b.requested_at.localeCompare(a.requested_at))
     : ((data ?? []) as unknown as Row[]).filter((row) => filter !== "waiting" || row.order?.status === "BANK_PENDING"));
   const loadError = error ?? refunded.error;
 
@@ -88,7 +92,7 @@ export default async function AdminCashReceiptsPage({ searchParams }: {
           <p className="text-xs font-black tracking-[0.2em] text-muted-foreground">CASH RECEIPTS</p>
           <h1 className="mt-2 text-3xl font-black text-foreground">현금영수증 발급</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            무통장 입금 주문의 현금영수증 신청을 처리합니다. 입금을 확인(결제완료)한 주문만 발급할 수 있고, 발급되면 고객이 주문내역에서 PDF를 받습니다. 처리 필요에는 발급할 신청, 이니시스 결과를 확인할 건, 환불·취소된 주문에 발급돼 홈택스 취소가 필요한 건이 모입니다.
+            무통장 입금 주문의 현금영수증 신청을 처리합니다. 입금을 확인(결제완료)한 주문만 발급할 수 있고, 발급되면 고객이 주문내역에서 PDF를 받습니다. 진행 중에는 입금 대기 중인 신청까지 모두 보이고, 처리 필요에는 발급할 신청, 이니시스 결과를 확인할 건, 환불·취소된 주문에 발급돼 홈택스 취소가 필요한 건만 모입니다.
           </p>
         </div>
         <Link href="/admin" className={`${buttonClass} bg-background text-foreground`}>관리자 홈</Link>

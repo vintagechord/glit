@@ -45,35 +45,71 @@ export type SubmissionCustomerEmail = {
 
 export const SUBMISSION_CUSTOMER_EMAIL_LIMIT = 100;
 
-/** The customer mail of one submission, newest first. Read only after the
- * caller has authorized an administrator. */
-export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "from">, submissionId: string) {
-  const { data, error } = await db
-    .from("email_outbox")
-    .select("id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at, last_attempt_at, tracking, opened_at, last_opened_at, open_count, clicked_at, last_clicked_at, click_count")
-    .eq("submission_id", submissionId)
-    .in("operation", CUSTOMER_EMAIL_OPERATIONS)
-    .order("created_at", { ascending: false })
-    .limit(SUBMISSION_CUSTOMER_EMAIL_LIMIT);
-  if (error) return { emails: [] as SubmissionCustomerEmail[], error: true };
-  const emails = (data ?? []).map((row) => ({
-    id: String(row.id),
-    recipient: String(row.recipient_email ?? ""),
-    subject: String(row.subject ?? ""),
-    operation: String(row.operation ?? ""),
-    status: String(row.status ?? ""),
-    attempts: Number(row.attempt_count ?? 0),
-    createdAt: String(row.created_at),
-    acceptedAt: row.accepted_at ? String(row.accepted_at) : null,
-    nextAttemptAt: row.next_attempt_at ? String(row.next_attempt_at) : null,
-    lastAttemptAt: row.last_attempt_at ? String(row.last_attempt_at) : null,
-    tracking: row.tracking ? String(row.tracking) : null,
-    openedAt: row.opened_at ? String(row.opened_at) : null,
-    lastOpenedAt: row.last_opened_at ? String(row.last_opened_at) : null,
-    openCount: Number(row.open_count ?? 0),
-    clickedAt: row.clicked_at ? String(row.clicked_at) : null,
-    lastClickedAt: row.last_clicked_at ? String(row.last_clicked_at) : null,
-    clickCount: Number(row.click_count ?? 0),
-  }));
+/** Order-level customer mail. One message covers the whole order and is
+ * stored under one of its applications, so every application in the order
+ * lists it. */
+export const ORDER_EMAIL_OPERATIONS = ["bank payment request", "payment completed"];
+
+/** Every operation an administrator may see by name in the mail history. */
+export const EMAIL_OPERATION_LABELS: Record<string, string> = {
+  ...CUSTOMER_EMAIL_OPERATION_LABELS,
+  "admin submission receipt": "관리자 접수 알림",
+  welcome: "회원가입 완료 안내",
+  "signup verification": "회원가입 이메일 인증",
+  "password reset": "비밀번호 재설정",
+};
+
+/** Sign-in links: their bodies are removed once delivered or expired. */
+export const EMAIL_OPERATIONS_WITHOUT_KEPT_BODY: ReadonlySet<string> = new Set(["signup verification", "password reset"]);
+
+const CUSTOMER_EMAIL_COLUMNS = "id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at, last_attempt_at, tracking, opened_at, last_opened_at, open_count, clicked_at, last_clicked_at, click_count";
+
+/** The customer mail of one submission, newest first, including the order
+ * mail stored under another application of the same order
+ * (`orderSubmissionIds`). Read only after the caller has authorized an
+ * administrator. */
+export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "from">, submissionId: string, orderSubmissionIds: string[] = []) {
+  const siblings = [...new Set(orderSubmissionIds)].filter((id) => id !== submissionId).slice(0, 100);
+  const [own, shared] = await Promise.all([
+    db.from("email_outbox")
+      .select(CUSTOMER_EMAIL_COLUMNS)
+      .eq("submission_id", submissionId)
+      .in("operation", CUSTOMER_EMAIL_OPERATIONS)
+      .order("created_at", { ascending: false })
+      .limit(SUBMISSION_CUSTOMER_EMAIL_LIMIT),
+    siblings.length
+      ? db.from("email_outbox")
+        .select(CUSTOMER_EMAIL_COLUMNS)
+        .in("submission_id", siblings)
+        .in("operation", ORDER_EMAIL_OPERATIONS)
+        .order("created_at", { ascending: false })
+        .limit(SUBMISSION_CUSTOMER_EMAIL_LIMIT)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (own.error || shared.error) return { emails: [] as SubmissionCustomerEmail[], error: true };
+  const rows = new Map<string, Record<string, unknown>>();
+  for (const row of [...(own.data ?? []), ...(shared.data ?? [])] as Array<Record<string, unknown>>) rows.set(String(row.id), row);
+  const emails = [...rows.values()]
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, SUBMISSION_CUSTOMER_EMAIL_LIMIT)
+    .map((row) => ({
+      id: String(row.id),
+      recipient: String(row.recipient_email ?? ""),
+      subject: String(row.subject ?? ""),
+      operation: String(row.operation ?? ""),
+      status: String(row.status ?? ""),
+      attempts: Number(row.attempt_count ?? 0),
+      createdAt: String(row.created_at),
+      acceptedAt: row.accepted_at ? String(row.accepted_at) : null,
+      nextAttemptAt: row.next_attempt_at ? String(row.next_attempt_at) : null,
+      lastAttemptAt: row.last_attempt_at ? String(row.last_attempt_at) : null,
+      tracking: row.tracking ? String(row.tracking) : null,
+      openedAt: row.opened_at ? String(row.opened_at) : null,
+      lastOpenedAt: row.last_opened_at ? String(row.last_opened_at) : null,
+      openCount: Number(row.open_count ?? 0),
+      clickedAt: row.clicked_at ? String(row.clicked_at) : null,
+      lastClickedAt: row.last_clicked_at ? String(row.last_clicked_at) : null,
+      clickCount: Number(row.click_count ?? 0),
+    }));
   return { emails, error: false };
 }

@@ -120,7 +120,7 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
                     {EMAIL_STATUS_LABELS[mail.status] ?? mail.status}
                   </span>
                 </div>
-                <p className="mt-1 break-all text-xs text-foreground">{mail.subject}</p>
+                <a href={`/admin/emails/${mail.id}`} target="_blank" rel="noopener" className="mt-1 block break-all text-xs font-semibold text-foreground underline underline-offset-4">{mail.subject} · 원문 보기</a>
                 <p className="mt-1 break-all text-xs text-muted-foreground">
                   {mail.recipient} · 요청 {seoulTime(mail.createdAt)}{mail.acceptedAt ? ` · 접수 ${seoulTime(mail.acceptedAt)}` : ""} · 시도 {mail.attempts}회{mail.status === "retry" ? ` · 예정 ${seoulTime(mail.nextAttemptAt)}` : ""}
                 </p>

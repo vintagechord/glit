@@ -36,7 +36,7 @@ export default async function EmailAdminPage({ searchParams }: { searchParams: P
     <div className="my-5 rounded-lg border p-4 text-sm">
       <p>자동 재시도: {workerHealthy ? "사용 중" : "확인 필요"} · 최근 처리 완료: {time(worker.data?.last_finished_at ?? null)}</p>
       <p className="mt-2">대기 {Number(counts.pending ?? 0) + Number(counts.retry ?? 0)}건 · 확인 필요 {Number(counts.uncertain ?? 0)}건 · 실패 {Number(counts.failed ?? 0)}건</p>
-      <p className="mt-2">발송 이력은 최근 30일간 보관하며, 발송이 접수되거나 유효 기간이 끝난 메일 본문은 삭제합니다.</p>
+      <p className="mt-2">발송 이력과 메일 본문은 최근 30일간 보관합니다. 제목을 누르면 고객이 받은 원문을 볼 수 있습니다. 로그인·인증 링크가 담긴 메일은 발송 후 본문을 바로 삭제합니다.</p>
     </div>
     {failedRead && <p role="alert" className="my-4 text-red-600">발송 상태를 불러오지 못했습니다. 잠시 후 새로고침해주세요.</p>}
     {params.notice && <p role="status" className="my-4">{params.notice === "queued" ? "재발송 대기열에 등록했습니다. 자동 처리 후 결과를 확인해주세요." : "재발송을 등록하지 못했습니다. 현재 상태와 유효 기간을 확인해주세요."}</p>}
@@ -45,7 +45,7 @@ export default async function EmailAdminPage({ searchParams }: { searchParams: P
         <thead className="bg-muted"><tr><th className="p-3">요청 시각</th><th className="p-3">수신 주소 / 제목</th><th className="p-3">상태</th><th className="p-3">열람 확인</th><th className="p-3">재발송</th></tr></thead>
         <tbody>{rows.map(row => <tr key={row.id} className="border-t align-top">
           <td className="p-3 whitespace-nowrap">{time(row.created_at)}</td>
-          <td className="p-3 break-all"><div>{row.recipient_email}</div><div className="mt-1 font-semibold">{row.subject}</div></td>
+          <td className="p-3 break-all"><div>{row.recipient_email}</div><Link href={`/admin/emails/${row.id}`} prefetch={false} className="mt-1 block font-semibold underline underline-offset-4">{row.subject}</Link></td>
           <td className="p-3"><div>{labels[row.status] ?? row.status}</div><div className="mt-1 text-xs text-muted-foreground">시도 {row.attempt_count}회</div>{row.status === "retry" && <div className="mt-1 text-xs">예정 {time(row.next_attempt_at)}</div>}</td>
           <td className="p-3 whitespace-nowrap text-xs">{row.opened_at || row.clicked_at ? <span className="flex flex-col items-start gap-1">
             {row.opened_at ? <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-2 py-0.5 font-black text-white">열람 {time(row.opened_at)}{Number(row.open_count ?? 0) > 1 ? ` · ${row.open_count}회` : ""}</span> : null}
