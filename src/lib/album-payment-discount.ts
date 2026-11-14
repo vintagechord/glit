@@ -11,6 +11,31 @@ export const ALBUM_MULTI_DISCOUNT_NOTICE =
 export const getAdditionalAlbumPriceKrw = (basePriceKrw: number) =>
   Math.max(0, Math.round(Number(basePriceKrw) * 0.5));
 
+/**
+ * The list price of an album that was charged less because it was paid
+ * together with another album; null for full-price albums and music videos.
+ * Order items and ordered applications record the tier and the list price.
+ */
+export function discountedAlbumListPriceKrw(item: {
+  type?: string | null;
+  priceTier?: string | null;
+  basePriceKrw?: number | null;
+  amountKrw?: number | null;
+}): number | null {
+  if (item.type !== "ALBUM" || item.priceTier !== "ADDITIONAL") return null;
+  if (item.basePriceKrw == null || item.amountKrw == null) return null;
+  const basePriceKrw = Math.round(Number(item.basePriceKrw));
+  const amountKrw = Math.round(Number(item.amountKrw));
+  return Number.isFinite(basePriceKrw) && Number.isFinite(amountKrw) &&
+    amountKrw >= 0 && basePriceKrw > amountKrw
+    ? basePriceKrw
+    : null;
+}
+
+/** "50% 할인": how much below its list price an album was charged. */
+export const albumDiscountLabel = (listPriceKrw: number, amountKrw: number) =>
+  `${Math.round((1 - amountKrw / listPriceKrw) * 100)}% 할인`;
+
 export type AlbumOrderQuoteInput = {
   id: string;
   /** The package's list price saved on the application. */

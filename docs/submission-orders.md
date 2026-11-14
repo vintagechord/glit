@@ -50,3 +50,4 @@ Inicis 승인 요청 전에 단일 처리 권한을 확보한다. 중복 콜백�
 - 결제 시작 검증(`bind_album_payment_discount_eligibility`)과 결제 완료 트리거(`enforce_paid_album_discount_eligibility`)는 할인 앨범이 같은 주문·같은 소유자의 정상 가격 앨범과 함께일 때만 통과시킨다. 패키지가 달라도 되고, 예전처럼 "이미 결제한 앨범"으로 할인을 받을 수는 없다.
 - PayPal은 신청서 1건씩 결제하므로 할인이 없다. 관리자 직접 접수(데스크·`/admin/intake`)도 1건씩 정상 가격으로 등록한다.
 - 마이그레이션 `20261114120000_album_additional_half_price.sql`, 회귀 `tests/sql/album-additional-half-price.sql`(`scripts/submission-orders-sql-test.sh`에 포함).
+- 주문 항목(`submission_order_items`)은 주문 시점의 `album_price_tier`와 `album_base_price_krw`(정상가)를 함께 기록한다(`20261114150000_order_items_album_discount.sql`). 장바구니로 돌린 신청서는 정상 가격으로 돌아가도 지난 주문의 할인 기록은 남는다. 주문내역 항목과 무통장 입금 안내·결제 완료 메일은 할인된 앨범에 "50% 할인", 정상가 취소선, 주문 전체의 "음반 2번째부터 50% 할인 −금액" 줄을 표시한다. 이 마이그레이션 전에 만든 주문은 그 주문에 아직 연결된 신청서에서 값을 채웠고, 이미 장바구니로 돌린 주문은 라벨 없이 금액만 보인다. 회귀 `tests/sql/order-items-album-discount.sql`.

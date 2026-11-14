@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { clearDashboardStatusCache } from "@/lib/dashboard-status";
 import { sendOrderBankTransferEmail, sendSubmissionUpdateEmail } from "@/lib/email";
+import { discountedAlbumListPriceKrw } from "@/lib/album-payment-discount";
 import { officialArtistName } from "@/lib/submissions/artist-display";
 import { runAfterResponse } from "@/lib/next/after-response";
 import { readBoundedJsonBody } from "@/lib/request-body";
@@ -60,6 +61,9 @@ type CartBankSubmission = {
   current_order_id: string | null;
   applicant_email: string | null;
   guest_email: string | null;
+  /** Read after the order exists: the tier and list price it was charged at. */
+  album_price_tier?: string | null;
+  album_base_price_krw?: number | null;
 };
 
 const cartStatuses = new Set(["SUBMITTED", "WAITING_PAYMENT"]);
@@ -307,7 +311,7 @@ export async function POST(req: NextRequest) {
   // Reload before enqueueing so initial delivery and later repairs use the
   // same order-specific key, including after a cart is reopened and reordered.
   const { data: refreshedRows, error: refreshError } = await admin.from("submissions")
-    .select("id, user_id, guest_token, type, title, artist_name, artist_name_kr, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email")
+    .select("id, user_id, guest_token, type, title, artist_name, artist_name_kr, amount_krw, status, payment_status, payment_method, current_order_id, album_draft_group_id, applicant_email, guest_email, album_price_tier, album_base_price_krw")
     .in("id", submissionIds);
   if (refreshError || !refreshedRows || refreshedRows.length !== submissionIds.length) {
     return NextResponse.json({ error: "입금 요청은 저장되었지만 안내를 준비하지 못했습니다. 같은 주문으로 다시 요청해주세요." }, { status: 503 });
@@ -406,6 +410,10 @@ export async function POST(req: NextRequest) {
         artist: officialArtistName(submission),
         kind: getKind(submission.type),
         amountKrw: Math.round(Number(submission.amount_krw ?? 0)),
+        listAmountKrw: discountedAlbumListPriceKrw({
+          type: submission.type, priceTier: submission.album_price_tier,
+          basePriceKrw: submission.album_base_price_krw, amountKrw: submission.amount_krw,
+        }),
       }));
       const orderTotalKrw = items.reduce((sum, item) => sum + item.amountKrw, 0);
       await Promise.all(recipients.map(async (email) => {

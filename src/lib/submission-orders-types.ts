@@ -21,6 +21,9 @@ export type SubmissionOrderItem = {
   amountKrw: number | null;
   amount: number | null;
   isOneclick: boolean;
+  /** List price of an album charged half price because it was paid with
+   * other albums; null for everything charged its list price. */
+  listAmountKrw?: number | null;
 };
 
 export type SubmissionOrder = {

@@ -28,9 +28,20 @@ order_psql --single-transaction < "$order_sql_root/supabase/migrations/202610241
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261025132939_paid_submission_notification_events.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261026120000_admin_payment_resolution.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261031120000_open_fixes.sql"
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261109120000_order_items_official_artist.sql"
 # Albums ordered together: the suites below run against these definitions too.
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261114120000_album_additional_half_price.sql"
 order_psql < "$order_sql_root/tests/sql/album-additional-half-price.sql"
+# Order items keep the album tier and list price: the migration runs inside the
+# test's transaction (to check its backfill of earlier orders), then for real.
+order_items_discount_test="$order_sql_root/tests/sql/order-items-album-discount.sql"
+order_items_discount_migration="$order_sql_root/supabase/migrations/20261114150000_order_items_album_discount.sql"
+{
+  sed '/^-- @apply-migration$/,$d' "$order_items_discount_test"
+  cat "$order_items_discount_migration"
+  sed -n '/^-- @apply-migration$/,$p' "$order_items_discount_test"
+} | order_psql
+order_psql --single-transaction < "$order_items_discount_migration"
 # Receipt invariants must run inside the payment fixture transaction, before rollback.
 {
   sed '/^rollback;$/,$d' "$order_sql_root/tests/sql/submission-orders.sql"

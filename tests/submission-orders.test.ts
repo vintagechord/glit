@@ -68,6 +68,22 @@ function fixture(orders: Row[] = [order()], parents: Row[] = [parent()]) {
   return { db, state, calls };
 }
 
+test("order items show the list price of albums charged half price, and nothing for the rest", async () => {
+  const albums = [
+    { ...item(first), amount_krw: 100000, amount: 100000, album_price_tier: "FULL", album_base_price_krw: 100000 },
+    { ...item(second), amount_krw: 50000, amount: 50000, album_price_tier: "ADDITIONAL", album_base_price_krw: 100000 },
+    { ...item("20000000-0000-4000-8000-000000000003"), type: "MV_DISTRIBUTION", amount_krw: 30000, amount: 30000 },
+  ];
+  const f = fixture([order({ items: albums, amount_krw: 180000, amount: 180000 })], []);
+  const page = await listSubmissionOrders(f.db, actor);
+  assert.deepEqual(page.orders[0].items.map(entry => entry.listAmountKrw), [null, 100000, null]);
+  assert.equal(page.orders[0].items[1].amountKrw, 50000);
+  assert.match(String(f.calls.find(call => call.table === "submission_orders")?.args[0]), /guest_token_hash,album_price_tier,album_base_price_krw\)/);
+  // A PayPal order is not in won: no list price is compared.
+  const paypal = fixture([order({ items: [albums[1]], currency: "USD" })], []);
+  assert.equal((await listSubmissionOrders(paypal.db, actor)).orders[0].items[0].listAmountKrw, null);
+});
+
 test("member order reads are owner-scoped and never expose guest tokens or token hashes", async () => {
   const f = fixture([order(), order({ id: "other-order", user_id: "another-member" })]);
   const page = await listSubmissionOrders(f.db, actor);

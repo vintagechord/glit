@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   ADDITIONAL_ALBUM_DISCOUNT_PERCENT,
   type AlbumDiscountPaymentItem,
+  albumDiscountLabel,
+  discountedAlbumListPriceKrw,
   getAdditionalAlbumPriceKrw,
   quoteAlbumBundle,
   quoteAlbumOrder,
@@ -217,6 +219,32 @@ test("the database prices an order with the same rule", () => {
   // Order creation prices the albums before it totals them, and a return undoes it.
   assert.match(migration, /perform public\.apply_album_checkout_discount\(ids\);\s*select case when p_method='PAYPAL'/);
   assert.match(migration, /current_order_id=null,payment_status='UNPAID'[\s\S]*?then s\.album_base_price_krw else s\.amount_krw end/);
+});
+
+test("order history and mails mark only albums charged below their list price", () => {
+  const half = { type: "ALBUM", priceTier: "ADDITIONAL", basePriceKrw: 100_000, amountKrw: 50_000 };
+  assert.equal(discountedAlbumListPriceKrw(half), 100_000);
+  assert.equal(albumDiscountLabel(100_000, 50_000), "50% 할인");
+  assert.equal(albumDiscountLabel(70_000, 35_000), "50% 할인");
+  assert.equal(discountedAlbumListPriceKrw({ ...half, priceTier: "FULL", amountKrw: 100_000 }), null);
+  assert.equal(discountedAlbumListPriceKrw({ ...half, type: "MV_DISTRIBUTION" }), null);
+  // Orders placed before the item snapshot existed carry no tier or list price.
+  assert.equal(discountedAlbumListPriceKrw({ ...half, priceTier: null, basePriceKrw: null }), null);
+  assert.equal(discountedAlbumListPriceKrw({ ...half, basePriceKrw: 50_000 }), null);
+  assert.equal(discountedAlbumListPriceKrw({ ...half, amountKrw: null }), null);
+});
+
+test("order items keep the tier and list price each album was charged at", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20261114150000_order_items_album_discount.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /add column if not exists album_price_tier text,\s*add column if not exists album_base_price_krw integer;/);
+  assert.match(migration, /guest_token_hash,album_price_tier,album_base_price_krw\)/);
+  assert.match(migration, /case when s\.type::text='ALBUM' then s\.album_price_tier end,\s*case when s\.type::text='ALBUM' then s\.album_base_price_krw end/);
+  // Earlier orders are filled only from applications still attached to them, at the recorded amount.
+  assert.match(migration, /and s\.current_order_id = i\.order_id[\s\S]*and i\.amount_krw is not distinct from s\.amount_krw;/);
+  assert.doesNotMatch(migration, /set amount_krw|set amount\b/);
 });
 
 test("a saved application always carries the list price; only the order discounts it", () => {
