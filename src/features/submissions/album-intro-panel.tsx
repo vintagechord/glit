@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { ALBUM_MULTI_DISCOUNT_BADGE } from "@/lib/album-payment-discount";
+
 export function AlbumIntroPanel({
   preparationChecklist,
 }: {
@@ -22,6 +24,9 @@ export function AlbumIntroPanel({
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-black text-foreground">
               비회원 가능
+            </span>
+            <span className="rounded-full border-2 border-[#111111] bg-[#d9362c] px-3 py-1 text-xs font-black text-white dark:border-[#f2cf27]">
+              {ALBUM_MULTI_DISCOUNT_BADGE}
             </span>
           </div>
         </div>

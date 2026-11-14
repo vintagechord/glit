@@ -1,7 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 export const ALBUM_PRICE_CHANGED_MESSAGE =
-  "음반 심의는 정가로 접수됩니다. 신청서를 열어 금액을 확인하고 다시 저장해주세요.";
+  "음반 심의 금액이 변경되었습니다. 신청서를 열어 금액을 확인하고 다시 저장해주세요.";
 
 type AlbumPrice = {
   amount_krw: number | null;
@@ -10,7 +10,11 @@ type AlbumPrice = {
   package: { price_krw: number | null } | { price_krw: number | null }[] | null;
 };
 
-/** Check fresh checkout only. Issued orders retain their original snapshots. */
+/**
+ * Check fresh checkout only. A cart album always carries its package's list
+ * price; the order prices albums paid together (see album-payment-discount).
+ * Issued orders retain their original snapshots.
+ */
 export async function validateAlbumPaymentPricing(
   db: Pick<ReturnType<typeof createAdminClient>, "from">,
   submissionIds: string[],

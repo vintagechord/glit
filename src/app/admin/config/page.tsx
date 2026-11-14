@@ -115,7 +115,7 @@ export default async function AdminConfigPage({
         <section className="rounded-[24px] border border-border/60 bg-card/80 p-6">
           <h2 className="text-lg font-semibold text-foreground">음반 심의 가격</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            모든 앨범에 아래 패키지의 정상 가격이 적용됩니다. 여러 앨범을 함께 신청해도 앨범별 가격은 동일합니다.
+            앨범마다 아래 패키지 가격이 적용됩니다. 고객이 음반 2건 이상을 한 주문으로 결제하면 금액이 가장 큰 앨범 1건은 정상 가격, 나머지 앨범은 각 패키지 가격의 50%로 계산됩니다. 뮤직비디오 심의에는 적용되지 않습니다.
           </p>
         </section>
 

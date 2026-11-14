@@ -539,7 +539,7 @@ export const createPayPalOrderForSubmission = async ({
   if (mediaError) return { error: mediaError };
   const pricingError = await validateAlbumPaymentPricing(createAdminClient(), [submission.id]);
   if (pricingError) {
-    return { error: "Album review is charged at the standard price. Please reopen and save your application before paying." };
+    return { error: "The album review price has changed. Please reopen and save your application before paying." };
   }
   const stationError = await validateMvPaymentStations(createAdminClient(), [submission.id]);
   if (stationError) return { error: stationError };

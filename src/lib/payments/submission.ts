@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { validateReleasedAlbumPaymentFiles } from "@/lib/submission-payment-files";
 import { validateMvPaymentStations } from "@/lib/submission-payment-stations";
 import { validateAlbumPaymentPricing } from "@/lib/submission-payment-pricing";
+import { quoteAlbumOrder } from "@/lib/album-payment-discount";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildStdPayRequest } from "@/lib/inicis/stdpay";
 import {
@@ -44,6 +45,8 @@ type SubmissionRecord = {
   guest_email: string | null;
   guest_phone: string | null;
   amount_krw: number | null;
+  album_base_price_krw?: number | null;
+  created_at?: string | null;
   payment_method: string | null;
   payment_status: string | null;
   current_order_id?: string | null;
@@ -81,7 +84,7 @@ type ApprovePaymentRpcRow = {
 };
 
 const submissionSelectWithResult =
-  "id, user_id, guest_token, title, artist_name, artist_name_kr, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
+  "id, user_id, guest_token, title, artist_name, artist_name_kr, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, album_base_price_krw, created_at, payment_method, payment_status, current_order_id, album_draft_group_id, mv_desired_rating, certificate_b2_path, certificate_original_name, certificate_mime, certificate_size, certificate_uploaded_at, result_status, result_memo, result_notified_at, package:packages ( name )";
 const submissionSelectFallback =
   "id, user_id, guest_token, title, artist_name, artist_name_kr, status, type, applicant_name, applicant_email, applicant_phone, guest_email, guest_phone, amount_krw, payment_method, payment_status, current_order_id, mv_desired_rating, package:packages ( name )";
 
@@ -360,8 +363,23 @@ export const createSubmissionPaymentOrder = async (
   const stationError = await validateMvPaymentStations(admin, submissionIds);
   if (stationError) return { error: stationError };
 
+  // Albums paid together: the first at its list price, every further album at
+  // half of its own. The order RPC writes the same amounts and refuses a card
+  // amount that differs from them.
+  const albumQuote = quoteAlbumOrder(
+    submissions
+      .filter((item) => item.type === "ALBUM")
+      .map((item) => ({
+        id: item.id,
+        basePriceKrw: item.album_base_price_krw ?? item.amount_krw,
+        createdAt: item.created_at,
+      })),
+  );
+  const payableAmountKrw = (item: SubmissionRecord) =>
+    albumQuote.byId.get(item.id)?.amountKrw ??
+    Math.round(Number(item.amount_krw ?? 0));
   const amountKrw = submissions.reduce(
-    (sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)),
+    (sum, item) => sum + payableAmountKrw(item),
     0,
   );
   const orderTimestamp = Date.now().toString();
@@ -453,7 +471,7 @@ export const createSubmissionPaymentOrder = async (
     submissionIds: submissions.map((item) => item.id),
     submissionAmounts: submissions.map((item) => ({
       submissionId: item.id,
-      amountKrw: Math.round(Number(item.amount_krw ?? 0)),
+      amountKrw: payableAmountKrw(item),
     })),
   };
 
@@ -488,10 +506,13 @@ export const createSubmissionPaymentOrder = async (
     if (startError.message?.includes("ALBUM_PRICE_SNAPSHOT_INVALID")) {
       return { error: "앨범 신청서의 결제 금액이 변경되었습니다. 신청서를 다시 저장해주세요." };
     }
-    if (startError.message?.includes("ALBUM_DISCOUNT_NOT_ELIGIBLE")) {
+    if (
+      startError.message?.includes("ALBUM_DISCOUNT_NOT_ELIGIBLE") ||
+      startError.message?.includes("ALBUM_DISCOUNT_NOT_APPLIED")
+    ) {
       return {
         error:
-          "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다.",
+          "음반 할인 금액을 확인하지 못했습니다. 장바구니에서 다시 결제해주세요.",
       };
     }
     if (startError.message?.includes("ALBUM_GROUP_INCOMPLETE")) {

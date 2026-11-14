@@ -1834,8 +1834,19 @@ const exactTranslations: Record<string, string> = {
     "Yes. Gugak FM focuses on Korean traditional music and FEBC focuses on CCM, so genre fit and any additional cost are checked first.",
   "여러 앨범의 심의 비용은 어떻게 계산되나요?":
     "How is the review price calculated for multiple albums?",
-  "모든 앨범에 선택한 방송국 패키지의 정상 가격이 각각 적용됩니다. 여러 앨범을 함께 작성하고 결제할 수 있으며, 최종 확인 화면에서 앨범 수와 총액을 확인하세요.":
-    "Each album is charged the standard price of its broadcaster package. You can prepare and pay for multiple albums together; check the album count and total on the final confirmation screen.",
+  "앨범마다 선택한 방송국 패키지 금액이 적용되고, 음반 2건 이상을 함께 결제하면 2번째 앨범부터 50% 할인됩니다. 장바구니에서 함께 선택해 결제하면 적용되며, 뮤직비디오 심의에는 적용되지 않습니다.":
+    "Each album is charged its broadcaster package price, and when you pay for two or more albums together, every album from the second is 50% off. The discount applies when you select the albums together in your cart. Music video reviews are not discounted.",
+  "2번째 앨범부터 50% 할인": "50% off from the 2nd album",
+  "음반 2건 이상을 함께 결제하면 2번째 앨범부터 50% 할인됩니다.":
+    "Pay for two or more albums together and every album from the second is 50% off.",
+  "음반 2번째부터 50% 할인": "50% off from the 2nd album",
+  "50% 할인": "50% off",
+  "정상가": "List price",
+  "추가 앨범 작성 · 50% 할인": "Add another album · 50% off",
+  "음반 심의 금액이 변경되었습니다. 신청서를 열어 금액을 확인하고 다시 저장해주세요.":
+    "The album review price has changed. Open the application, check the amount and save it again.",
+  "음반 할인 금액을 확인하지 못했습니다. 장바구니에서 다시 결제해주세요.":
+    "We could not confirm the album discount. Please pay again from your cart.",
   "Review Result는 어떻게 확인하나요?": "How do I check review results?",
   "심의 결과는 어떻게 확인하나요?": "How do I check review results?",
   "접수 후 발급되는 조회 코드로 확인합니다. 로그인 접수는 마이페이지에 저장되며, 결과 파일 안내도 함께 표시됩니다.":

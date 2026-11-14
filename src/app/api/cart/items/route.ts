@@ -50,7 +50,7 @@ type CartDeleteSubmission = {
 };
 
 const cartItemSelect =
-  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, amount_krw, album_base_price_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, user_id, guest_token, package:packages ( name, station_count )";
 
 const cartGroupSelect =
   "id, type, user_id, guest_token, status, payment_status, current_order_id, user_deleted_at, album_price_tier, album_draft_group_id";

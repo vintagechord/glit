@@ -14,19 +14,29 @@ async function fixture():Promise<Fixture>{
 }
 const filters=(ops:Operation[])=>ops.filter(op=>op.method!=='select');
 
-test('header summary fetches only amount/id while preserving the full cart owner, lifecycle, visibility and limit filters',async()=>{
+test('header summary fetches only what the total needs while preserving the full cart owner, lifecycle, visibility and limit filters',async()=>{
   const api=await fixture();api.state.results.push({data:[{amount_krw:15000},{amount_krw:-1},{amount_krw:'invalid'}],error:null});
   assert.deepEqual(await api.getSubmissionCartCount('fixture-owner'),{count:3,totalAmountKrw:15000,error:null});
-  assert.deepEqual(api.queries[0].find(op=>op.method==='select')?.args,['id,amount_krw']);
+  assert.deepEqual(api.queries[0].find(op=>op.method==='select')?.args,['id,type,amount_krw,album_base_price_krw,created_at']);
   api.state.results.push({data:[],error:null});await api.getSubmissionCartItems('fixture-owner');
   assert.deepEqual(filters(api.queries[0]),filters(api.queries[1]));
   assert.ok(api.queries[1].find(op=>op.method==='select')?.args[0]?.toString().includes('package:packages'));
   assert.deepEqual(api.queries[0],[
-    {method:'from',args:['submissions']},{method:'select',args:['id,amount_krw']},
+    {method:'from',args:['submissions']},{method:'select',args:['id,type,amount_krw,album_base_price_krw,created_at']},
     {method:'eq',args:['user_id','fixture-owner']},{method:'is',args:['current_order_id',null]},
     {method:'in',args:['status',['SUBMITTED','WAITING_PAYMENT']]},{method:'or',args:['payment_status.is.null,payment_status.eq.UNPAID']},
     {method:'is',args:['user_deleted_at',null]},{method:'order',args:['updated_at',{ascending:false}]},{method:'limit',args:[200]},
   ]);
+});
+
+test('the header total is what the cart costs in one order: albums are half price from the second, music videos are not',async()=>{
+  const api=await fixture();api.state.results.push({data:[
+    {id:'a',type:'ALBUM',amount_krw:100000,album_base_price_krw:100000,created_at:'2026-11-14T09:00:00+09:00'},
+    {id:'b',type:'ALBUM',amount_krw:100000,album_base_price_krw:100000,created_at:'2026-11-14T10:00:00+09:00'},
+    {id:'c',type:'ALBUM',amount_krw:100000,album_base_price_krw:100000,created_at:'2026-11-14T11:00:00+09:00'},
+    {id:'d',type:'MV_DISTRIBUTION',amount_krw:30000,album_base_price_krw:null,created_at:'2026-11-14T12:00:00+09:00'},
+  ],error:null});
+  assert.deepEqual(await api.getSubmissionCartCount('fixture-owner'),{count:4,totalAmountKrw:230000,error:null});
 });
 
 test('summary keeps the legacy visibility-column fallback and does not retry an unrelated database failure',async()=>{

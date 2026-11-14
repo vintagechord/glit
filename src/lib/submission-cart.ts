@@ -1,3 +1,4 @@
+import { quoteSubmissionCart, type SubmissionCartAmountItem } from "@/lib/submission-cart-quote";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type SubmissionCartItem = {
@@ -9,6 +10,8 @@ export type SubmissionCartItem = {
   artist_name: string | null;
   artist_name_kr?: string | null;
   amount_krw: number | null;
+  /** The album's list price; albums paid together are discounted from the second on. */
+  album_base_price_krw?: number | null;
   payment_method?: string | null;
   current_order_id?: string | null;
   is_oneclick?: boolean | null;
@@ -31,7 +34,9 @@ const CART_PAYMENT_FILTER =
   "payment_status.is.null,payment_status.eq.UNPAID";
 
 const CART_SELECT =
-  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, artist_name_kr, amount_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
+  "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, artist_name_kr, amount_krw, album_base_price_krw, is_oneclick, album_price_tier, album_draft_group_id, created_at, updated_at, user_deleted_at, package:packages ( name, station_count )";
+const CART_SUMMARY_SELECT =
+  "id,type,amount_krw,album_base_price_krw,created_at";
 const CART_LEGACY_SELECT =
   "id, type, status, payment_status, payment_method, current_order_id, title, artist_name, artist_name_kr, amount_krw, is_oneclick, created_at, updated_at, package:packages ( name, station_count )";
 
@@ -42,6 +47,7 @@ const isMissingCartOptionalColumn = (error?: QueryError | null) =>
         [
           "user_deleted_at",
           "album_price_tier",
+          "album_base_price_krw",
           "album_draft_group_id",
         ].some((column) => error.message?.toLowerCase().includes(column))),
   );
@@ -108,18 +114,15 @@ export const getSubmissionCartItems = async (
 export const getSubmissionCartCount = async (userId: string) => {
   const supabase = await createServerSupabase();
   // The header needs only a badge and total. Do not load titles, artist data,
-  // package joins or complete cart records on every badge refresh.
-  let result = await buildCartQuery(supabase, userId, "id,amount_krw");
+  // package joins or complete cart records on every badge refresh. The total
+  // is what the whole cart costs in one order (albums are discounted from the
+  // second on), so it needs each row's type and list price.
+  let result = await buildCartQuery(supabase, userId, CART_SUMMARY_SELECT);
   if (result.error && isMissingCartOptionalColumn(result.error)) {
-    result = await buildCartQuery(supabase, userId, "id,amount_krw", false);
+    result = await buildCartQuery(supabase, userId, CART_SUMMARY_SELECT, false);
   }
   if (result.error) return { count: 0, totalAmountKrw: 0, error: result.error };
-  const items = (result.data ?? []) as unknown as Array<{ amount_krw: number | null }>;
+  const items = (result.data ?? []) as unknown as SubmissionCartAmountItem[];
 
-  const totalAmountKrw = items.reduce((sum, item) => {
-    const amount = Math.round(Number(item.amount_krw ?? 0));
-    return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
-  }, 0);
-
-  return { count: items.length, totalAmountKrw, error: null };
+  return { count: items.length, totalAmountKrw: quoteSubmissionCart(items).totalKrw, error: null };
 };

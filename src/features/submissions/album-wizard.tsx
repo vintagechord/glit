@@ -30,6 +30,11 @@ import {
 } from "@/lib/album-track-table";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
 import {
+  ALBUM_MULTI_DISCOUNT_BADGE,
+  ALBUM_MULTI_DISCOUNT_NOTICE,
+  quoteAlbumBundle,
+} from "@/lib/album-payment-discount";
+import {
   getAlbumLyricsReviewIssues,
   LYRICS_PROFANITY_BLOCK_MESSAGE,
   LYRICS_PROFANITY_MASKING_GUIDANCE,
@@ -659,7 +664,12 @@ export function AlbumWizard({
   const requiresBroadcastSelection = tracks.length >= 4;
   const basePriceKrw = getAlbumReviewPriceKrw(selectedPackage?.priceKrw ?? 0);
   const totalAlbumCount = albumDrafts.length + 1;
-  const totalPriceKrw = getAlbumReviewPriceKrw(basePriceKrw, totalAlbumCount);
+  // Albums paid together: the first at the package price, every further album
+  // at half of it. The cart and the order use the same quote.
+  const albumBundleQuote = quoteAlbumBundle(basePriceKrw, totalAlbumCount);
+  const listTotalPriceKrw = getAlbumReviewPriceKrw(basePriceKrw, totalAlbumCount);
+  const totalPriceKrw = albumBundleQuote.totalKrw;
+  const albumBundleDiscountKrw = albumBundleQuote.discountTotalKrw;
   const selectionLocked = albumDrafts.length > 0;
   const selectedPackageSummary = selectedPackage
     ? {
@@ -4480,8 +4490,11 @@ export function AlbumWizard({
 
           {releaseStatusSelected && (
             <>
-              <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-display text-2xl text-foreground">방송국 패키지 선택</h2>
+                <p className="rounded-[8px] border-2 border-[#111111] bg-[#d9362c] px-3 py-1.5 text-xs font-black text-white shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:shadow-[2px_2px_0_#f2cf27]">
+                  {ALBUM_MULTI_DISCOUNT_BADGE}
+                </p>
               </div>
               <div
                 data-preflight-field="package"
@@ -5505,7 +5518,7 @@ export function AlbumWizard({
                     disabled={isSaving || isAddingAlbum}
                     className="rounded-full border border-border/70 bg-foreground/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-foreground transition hover:border-[#f6d64a] hover:bg-foreground/10 hover:text-slate-900 dark:bg-transparent dark:hover:bg-white/10 dark:hover:text-white disabled:cursor-not-allowed"
                   >
-                    {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 작성"}
+                    {editingIndex !== null ? "선택 앨범 수정 저장" : "추가 앨범 작성 · 50% 할인"}
                   </button>
                 )}
                 <button
@@ -6064,6 +6077,24 @@ export function AlbumWizard({
                   {formatCurrency(basePriceKrw)}원 × {totalAlbumCount}
                 </span>
               </div>
+              {albumBundleDiscountKrw > 0 ? (
+                <>
+                  <div className="mt-3 flex items-center justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">정상가</span>
+                    <span className="font-semibold text-muted-foreground line-through">
+                      {formatCurrency(listTotalPriceKrw)}원
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-4 text-sm font-black text-[#d9362c] dark:text-[#ff6258]">
+                    <span>{ALBUM_MULTI_DISCOUNT_BADGE}</span>
+                    <span>-{formatCurrency(albumBundleDiscountKrw)}원</span>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-4 rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
+                  {ALBUM_MULTI_DISCOUNT_NOTICE}
+                </p>
+              )}
               <div className="mt-5 rounded-[18px] border-2 border-[#111111] bg-background px-4 py-4 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:flex sm:items-end sm:justify-between sm:gap-4">
                 <p className="text-xs font-black uppercase tracking-normal text-muted-foreground">
                   최종 결제 금액

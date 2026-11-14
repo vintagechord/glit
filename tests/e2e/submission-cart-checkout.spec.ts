@@ -5,6 +5,7 @@ import tailwind from "@tailwindcss/postcss";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { SubmissionCartItem } from "../../src/lib/submission-cart";
+import { quoteSubmissionCart } from "../../src/lib/submission-cart-quote";
 import type { SubmissionOrder, SubmissionOrderStatus } from "../../src/lib/submission-orders-types";
 import { GUEST_SUBMISSION_CART_STORAGE_KEY, GUEST_SUBMISSION_ORDERS_STORAGE_KEY } from "../../src/lib/guest-submission-cart";
 import { BANK_ORDER_REPAY_ENABLED } from "../../src/lib/bank-transfer-details";
@@ -34,9 +35,10 @@ const mixedItems = () => [
   item(6, { status: "DRAFT" }),
   item(7, { amount_krw: null }), item(8, { amount_krw: 0 }),
 ];
+// Two albums in one order: 35,000 in full and half of 25,000.
 const bankGroup = () => order(0, "BANK_PENDING", {
-  amountKrw: 60000, amount: 60000,
-  items: [...order(0, "BANK_PENDING").items, { ...order(1, "BANK_PENDING").items[0], amountKrw: 25000, amount: 25000 }],
+  amountKrw: 47500, amount: 47500,
+  items: [...order(0, "BANK_PENDING").items, { ...order(1, "BANK_PENDING").items[0], amountKrw: 12500, amount: 12500 }],
 });
 const row = (page: Page, id: string) => page.locator(`#cart-item-${id}`);
 const select = (page: Page, id: string) => row(page, id).locator("button[aria-pressed]");
@@ -107,13 +109,14 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
       if (harness.bankError) { await route.fulfill({ status: 409, json: { error: harness.bankError } }); return; }
       const chosen = harness.items.filter(entry => body.submissionIds?.includes(entry.id));
       harness.items = harness.items.filter(entry => !body.submissionIds?.includes(entry.id));
-      const total = chosen.reduce((sum, entry) => sum + (entry.amount_krw ?? 0), 0);
+      // The order prices albums as the server does: the first in full, the rest at half.
+      const quote = quoteSubmissionCart(chosen); const total = quote.totalKrw;
       const bank = order(harness.orders.some(entry => entry.id === orderIds[0]) ? 9 : 0, "BANK_PENDING", {
         amountKrw: total, amount: total,
-        items: chosen.map((entry, index) => ({ ...order(index, "BANK_PENDING").items[0], submissionId: entry.id, submissionRef: entry.id, title: entry.title || "제목 미입력", amountKrw: entry.amount_krw, amount: entry.amount_krw })),
+        items: chosen.map((entry, index) => ({ ...order(index, "BANK_PENDING").items[0], submissionId: entry.id, submissionRef: entry.id, type: entry.type, title: entry.title || "제목 미입력", amountKrw: quote.byId.get(entry.id)!.amountKrw, amount: quote.byId.get(entry.id)!.amountKrw })),
       });
       harness.orders = [bank, ...harness.orders];
-      await route.fulfill({ json: { count: chosen.length, totalAmountKrw: chosen.reduce((sum, entry) => sum + (entry.amount_krw ?? 0), 0) } }); return;
+      await route.fulfill({ json: { count: chosen.length, totalAmountKrw: total } }); return;
     }
     if (url.pathname === "/api/orders/return" && request.method() === "POST") {
       const body = request.postDataJSON() as Body; harness.writes.push({ path: url.pathname, body });
@@ -129,7 +132,7 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
       harness.writes.push({ path: url.pathname, body: request.postDataJSON() as Body });
       if (harness.cardMode === "reject") { await route.fulfill({ status: 409, json: { error: "주문 상태가 변경되었습니다. 새로고침 후 다시 시도해주세요." } }); return; }
       const chosen = harness.items.filter(entry => (request.postDataJSON() as Body).submissionIds?.includes(entry.id));
-      const total = chosen.reduce((sum, entry) => sum + (entry.amount_krw ?? 0), 0);
+      const total = quoteSubmissionCart(chosen).totalKrw;
       harness.items = harness.items.map(entry => chosen.some(chosen => chosen.id === entry.id) ? { ...entry, current_order_id: orderIds[0], payment_status: "PAYMENT_PENDING" } : entry);
       harness.orders = [order(0, "CARD_PENDING", { amountKrw: total, amount: total })];
       const closeUrl = `${url.origin}/api/inicis/close?oid=fixture-card&state=${orderIds[0]}`;
@@ -172,7 +175,7 @@ async function verifyMixedCart(page: Page) {
   for (const id of ids.slice(7, 9)) { await expect(select(page, id)).toBeDisabled(); await expect(select(page, id)).toHaveAttribute("aria-pressed", "false"); }
   await expect(page.getByRole("button", { name: "결제 다시 선택", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "주문내역 보기", exact: true })).toHaveAttribute("href", "/mypage/orders");
-  await expect(page.locator("aside")).toContainText("60,000원"); await expect(payment(page)).toBeEnabled();
+  await expect(page.locator("aside")).toContainText("47,500원"); await expect(payment(page)).toBeEnabled();
   await expect(page.getByRole("button", { name: "무통장 입금", exact: true })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "결제 단계" }).locator('[aria-current="step"]')).toHaveText("1. 장바구니");
   await page.getByRole("button", { name: "전체 해제", exact: true }).click(); await expect(payment(page)).toBeDisabled();
@@ -217,6 +220,50 @@ test.describe("isolated commerce account fixtures", () => {
       await expect(orderRow(page, orderIds[0])).toContainText("결제 완료");
       expectClean(harness);
     } finally { harness.holdOrders = false; harness.releaseOrders?.(); }
+  });
+  // 2026-11-14 (owner): albums paid together cost the first in full and every
+  // further album half of its own price; music videos are never discounted.
+  for (const identity of ["member-a", null]) test(`${identity ?? "guest"}: albums paid together are half price from the second, music videos are not`, async ({ page }, testInfo) => {
+    const width = identity ? 1440 : 390;
+    await page.setViewportSize({ width, height: 1100 });
+    const album = (index: number, hour: number) => item(index, { title: `할인 검증 앨범 ${index + 1}`, amount_krw: 100000, album_base_price_krw: 100000, created_at: `2026-11-14T0${hour}:00:00Z`, package: { name: "10곳 패키지" } });
+    const items = [album(0, 1), album(1, 2), album(2, 3), item(3, { type: "MV_DISTRIBUTION", title: "할인 검증 뮤직비디오", amount_krw: 30000, package: null })];
+    const harness = await mount(page, { items, identity });
+    const aside = page.locator("aside");
+    // 100,000 + 50,000 + 50,000 and the music video at 30,000.
+    await expect(aside).toContainText("정상가"); await expect(aside).toContainText("330,000원");
+    await expect(aside).toContainText("음반 2번째부터 50% 할인"); await expect(aside).toContainText("-100,000원");
+    await expect(aside).toContainText("230,000원");
+    await expect(row(page, ids[0])).toContainText("100,000원"); await expect(row(page, ids[0])).not.toContainText("50% 할인");
+    for (const id of ids.slice(1, 3)) { await expect(row(page, id)).toContainText("50% 할인"); await expect(row(page, id)).toContainText("50,000원"); }
+    await expect(row(page, ids[3])).toContainText("30,000원"); await expect(row(page, ids[3])).not.toContainText("50% 할인");
+    await page.screenshot({ path: testInfo.outputPath(`cart-discount-${width}.png`), fullPage: true, animations: "disabled" });
+    // Two albums: 150,000 with the music video on top.
+    await select(page, ids[2]).click();
+    await expect(aside).toContainText("-50,000원"); await expect(aside).toContainText("180,000원");
+    await expect(row(page, ids[2])).not.toContainText("50% 할인");
+    // The full-price album left out: the next one is charged in full.
+    await select(page, ids[0]).click();
+    await expect(aside).not.toContainText("정상가"); await expect(aside).toContainText("130,000원");
+    await expect(row(page, ids[1])).not.toContainText("50% 할인");
+    await expect(aside).toContainText("음반 2건 이상을 함께 결제하면 2번째 앨범부터 50% 할인됩니다.");
+    // Music videos alone are never discounted.
+    await select(page, ids[1]).click();
+    await expect(aside).toContainText("30,000원"); await expect(aside).not.toContainText("정상가");
+    await page.getByRole("button", { name: "전체 선택", exact: true }).click();
+    await expect(aside).toContainText("230,000원");
+    // The payment step and the bank order carry the same discounted amounts.
+    await payment(page).click();
+    await expect(page.getByRole("navigation", { name: "결제 단계" }).locator('[aria-current="step"]')).toHaveText("2. 결제하기");
+    await expect(aside).toContainText("-100,000원"); await expect(aside).toContainText("230,000원");
+    await page.screenshot({ path: testInfo.outputPath(`payment-discount-${width}.png`), fullPage: true, animations: "disabled" });
+    await page.getByRole("button", { name: "무통장 입금", exact: true }).click(); await fillBankDetails(page);
+    await page.getByRole("button", { name: "입금 신청", exact: true }).click();
+    await expect.poll(() => harness.writes.length).toBe(1);
+    expect(harness.writes[0].body.submissionIds).toEqual(ids.slice(0, 4));
+    expect(harness.orders[0].amountKrw).toBe(230000);
+    expect(harness.orders[0].items.map(entry => entry.amountKrw)).toEqual([100000, 50000, 50000, 30000]);
+    expectClean(harness);
   });
   test("guest cart pruning preserves credentials for previous orders", async ({ page }) => {
     const harness = await mount(page, { items: [item(0, { current_order_id: orderIds[0], payment_status: "PAYMENT_PENDING" })], invalidIds: [ids[0]] });
@@ -333,7 +380,7 @@ test.describe("isolated commerce account fixtures", () => {
     await expect.poll(() => navigation(page)).toEqual([checkoutHref(ids.slice(0, 2))]);
     for (const id of ids.slice(0, 2)) await expect(row(page, id)).toBeVisible();
     await expect(row(page, ids[2])).toHaveCount(0);
-    await expect(page.locator("aside")).toContainText("60,000원");
+    await expect(page.locator("aside")).toContainText("47,500원");
     expect(harness.writes.at(-1)).toEqual({ path: "/api/orders/return", body: { orderId: orderIds[0], guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])) } });
     if (!identity) { expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toHaveLength(3); expect(await stored(page, GUEST_SUBMISSION_ORDERS_STORAGE_KEY)).toHaveLength(3); }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width); expectClean(harness);
@@ -440,7 +487,7 @@ test.describe("live commerce routes with mocked data and writes", () => {
     const dialog = await confirmReturn(page); await dialog.getByRole("button", { name: "결제하기", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/mypage/cart\\?step=payment&items=${encodeURIComponent(ids.slice(0, 2).join(","))}$`));
     for (const id of ids.slice(0, 2)) await expect(select(page, id)).toBeDisabled();
-    await expect(page.locator("aside")).toContainText("60,000원"); expect(harness.writes.map(write => write.path)).toEqual(["/api/cart/bank", "/api/orders/return"]); expectClean(harness);
+    await expect(page.locator("aside")).toContainText("47,500원"); expect(harness.writes.map(write => write.path)).toEqual(["/api/cart/bank", "/api/orders/return"]); expectClean(harness);
   });
   test("mobile orders show bank, card, paid and failed history without overflow", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 900 });

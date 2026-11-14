@@ -1,6 +1,7 @@
 import { Clapperboard, Disc3, Tv } from "lucide-react";
 
 import { ReliableLink } from "@/components/site/reliable-link";
+import { ALBUM_MULTI_DISCOUNT_BADGE } from "@/lib/album-payment-discount";
 import { reviewServices } from "@/lib/onside-content";
 import { pageMetadata } from "@/lib/seo";
 
@@ -16,6 +17,7 @@ const submissionCards = [
     meta: "음원 · 라디오/TV",
     title: "음반 심의 접수",
     description: "발매 여부를 선택하면 알맞은 접수 방법으로 안내합니다.",
+    badge: ALBUM_MULTI_DISCOUNT_BADGE,
     href: "/dashboard/new/album",
     icon: Disc3,
     tone: "border-[#111111] bg-[#f2cf27] text-[#111111] shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
@@ -69,7 +71,12 @@ export default function NewSubmissionPage() {
                 <h2 className="mt-1.5 break-keep text-balance text-lg font-black leading-snug tracking-normal sm:mt-4 sm:text-[28px]">
                   {reviewServices[index].title}
                 </h2>
-                <p className="mt-1 text-xs font-semibold leading-5 sm:mb-6 sm:mt-3 sm:text-sm sm:leading-6">{reviewServices[index].purpose}</p>
+                <p className={`mt-1 text-xs font-semibold leading-5 sm:mt-3 sm:text-sm sm:leading-6 ${"badge" in card && card.badge ? "" : "sm:mb-6"}`}>{reviewServices[index].purpose}</p>
+                {"badge" in card && card.badge ? (
+                  <p className="mt-2 w-fit rounded-[6px] border-2 border-[#111111] bg-[#d9362c] px-2 py-1 text-[11px] font-black leading-none text-white sm:mb-6 sm:mt-3 sm:px-2.5 sm:py-1.5 sm:text-xs">
+                    {card.badge}
+                  </p>
+                ) : null}
               </div>
               <div className="inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap border-2 border-current bg-white px-3 py-2 text-xs font-black text-[#111111] sm:mt-auto sm:gap-2 sm:px-4 sm:text-sm">
                 신청하기
