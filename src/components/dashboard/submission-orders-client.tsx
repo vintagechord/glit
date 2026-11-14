@@ -7,6 +7,7 @@ import { ArrowUpRight, CreditCard, Landmark, RefreshCw, ShoppingCart } from "luc
 import * as React from "react";
 import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
 import { APP_CONFIG } from "@/lib/config";
+import { albumDiscountLabel } from "@/lib/album-payment-discount";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { brandStatusTones } from "@/lib/brand-status-tones";
@@ -57,6 +58,9 @@ const displayAmount = (amountKrw: number | null, amount: number | null, currency
   if (value === null || !Number.isFinite(value)) return "금액 확인 필요";
   return currency === "KRW" ? `${formatCurrency(value)}원` : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)} ${currency}`;
 };
+/** Albums paid together: every album after the first was charged half price. */
+const orderAlbumDiscountKrw = (order: SubmissionOrder) => order.items.reduce((sum, item) =>
+  sum + (item.listAmountKrw && item.amountKrw !== null ? item.listAmountKrw - item.amountKrw : 0), 0);
 /** Shown when the gateway may have charged the card but the approval is not
  * confirmed yet. Paying again could charge twice. */
 function PaymentCheckingNotice({ className, role = "status" }: { className?: string; role?: "status" | "alert" }) {
@@ -236,14 +240,19 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                     <p className="mt-1 text-xs [overflow-wrap:anywhere] leading-5 text-muted-foreground">{item.artistName ? <span data-no-translate>{item.artistName}</span> : (item.isOneclick ? "앨범 링크 확인 대기" : "아티스트 미입력")} · {item.packageName || "패키지 미지정"}</p>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
-                    <span className="min-w-0 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>
+                    {item.listAmountKrw && item.amountKrw !== null ? <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">
+                      <span className="rounded-[4px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-1.5 py-0.5 text-[11px] font-black leading-none text-white dark:text-[#06111f]">{albumDiscountLabel(item.listAmountKrw, item.amountKrw)}</span>
+                      <span className="text-muted-foreground line-through">{formatCurrency(item.listAmountKrw)}원</span>
+                      <span>{displayAmount(item.amountKrw, item.amount, order.currency)}</span>
+                    </span> : <span className="min-w-0 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>}
                     {detailHref && <Link href={detailHref} className={buttonClass}><ArrowUpRight size={14} aria-hidden />{order.status === "PAID" ? "심의 내역 보기" : "신청서 확인"}</Link>}
                   </div>
                 </li>;
               })}
             </ul>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p></div>
+              <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p>
+                {orderAlbumDiscountKrw(order) > 0 && <p className="mt-1 flex flex-wrap gap-x-2 text-xs font-black text-[var(--bauhaus-red)]"><span>음반 2번째부터 50% 할인</span><span className="tabular-nums">-{formatCurrency(orderAlbumDiscountKrw(order))}원</span></p>}</div>
               {order.canReturnToCart && (BANK_ORDER_REPAY_ENABLED || order.status !== "BANK_PENDING") && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : "결제하기"}</button>}
             </div>
             {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[var(--bauhaus-blue)] bg-background p-4">

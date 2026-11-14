@@ -146,6 +146,73 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
   }
 });
 
+test("bank instructions carry the list price of albums charged half price", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const mvId = "20000000-0000-4000-8000-000000000004";
+  const h = await fixture();
+  // The order RPC has priced the albums: these are the rows it leaves behind.
+  h.state.rows = [
+    { ...row(), type: "ALBUM", amount_krw: 100000, album_price_tier: "FULL", album_base_price_krw: 100000 },
+    { ...row(), id: otherId, type: "ALBUM", title: "Second title", amount_krw: 50000, album_price_tier: "ADDITIONAL", album_base_price_krw: 100000 },
+    { ...row(), id: mvId, type: "MV_DISTRIBUTION", title: "Video", amount_krw: 30000, album_price_tier: null, album_base_price_krw: null },
+  ];
+  assert.equal((await h.POST(bankRequest(false, [submissionId, otherId, mvId]))).status, 200);
+  const email = h.calls.find(call => call.method === "bank-email")?.input;
+  assert.equal(email?.totalAmountKrw, 180000);
+  assert.deepEqual((email?.items as Array<{ amountKrw: number; listAmountKrw: number | null }>).map(item => [item.amountKrw, item.listAmountKrw]),
+    [[100000, null], [50000, 100000], [30000, null]]);
+});
+
+test("the paid receipt marks half-price albums from the order item snapshot", async () => {
+  const orderId = "30000000-0000-4000-8000-000000000009";
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.rows = [{ ...row(), type: "ALBUM", current_order_id: orderId }];
+  h.state.orders = [{ id: orderId, payment_method: "CARD", amount_krw: 150000, amount: 150000, currency: "KRW", paid_at: null }];
+  h.state.orderItems = [
+    { order_id: orderId, submission_ref: submissionId, title: "Fixture title", artist_name: "Fixture artist", type: "ALBUM", amount_krw: 100000, album_price_tier: "FULL", album_base_price_krw: 100000 },
+    { order_id: orderId, submission_ref: otherId, title: "Second title", artist_name: "Fixture artist", type: "ALBUM", amount_krw: 50000, album_price_tier: "ADDITIONAL", album_base_price_krw: 100000 },
+  ];
+  assert.equal((await h.markPaymentSuccess("fixture-order", {})).ok, true);
+  const email = h.calls.find(call => call.method === "payment-email")?.input;
+  assert.equal(email?.amountLabel, "150,000원");
+  assert.deepEqual((email?.items as Array<{ listAmountKrw: number | null }>).map(item => item.listAmountKrw), [null, 100000]);
+});
+
+test("bank and paid mails label each half-price album and the order's album discount", async () => {
+  const built = await build({
+    stdin: { contents: "export {sendOrderBankTransferEmail,sendPaymentCompletedEmail} from './src/lib/email';export {messages} from 'template-fixture';", resolveDir: process.cwd(), loader: "ts" },
+    bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
+    plugins: [{ name: "template-infrastructure", setup(plugin) {
+      plugin.onResolve({ filter: /^(template-fixture|@\/lib\/email-transport)$/ }, args => ({ path: args.path, namespace: "fixture" }));
+      plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "js", contents: path === "template-fixture" ? "export const messages=[];" : "import {messages} from 'template-fixture';export const sendTransactionalEmail=async input=>{messages.push(input);return {ok:true}};" }));
+    } }],
+  });
+  const loaded = { exports: {} as {
+    sendOrderBankTransferEmail: (input: Row) => Promise<unknown>;
+    sendPaymentCompletedEmail: (input: Row) => Promise<unknown>;
+    messages: Array<{ html: string }>;
+  } };
+  new Function("require", "module", "exports", built.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
+  const items = [
+    { title: "First", artist: "Artist", kind: "ALBUM", amountKrw: 100000, listAmountKrw: null },
+    { title: "Second", artist: "Artist", kind: "ALBUM", amountKrw: 50000, listAmountKrw: 100000 },
+    { title: "Third", artist: "Artist", kind: "ALBUM", amountKrw: 50000, listAmountKrw: 100000 },
+    { title: "Video", artist: "Artist", kind: "MV", amountKrw: 30000 },
+  ];
+  await loaded.exports.sendOrderBankTransferEmail({ email: "owner@example.invalid", orderId: "order-1", items, totalAmountKrw: 230000 });
+  await loaded.exports.sendPaymentCompletedEmail({ email: "owner@example.invalid", orderId: "order-1", paymentMethod: "BANK", amountLabel: "230,000원", items, awaitingEmailMaterials: false, link: "https://app.example.invalid/x" });
+  for (const { html } of loaded.exports.messages) {
+    assert.equal(html.match(/>50% 할인</g)?.length, 2, "one label per half-price album");
+    assert.equal(html.match(/text-decoration:line-through;">100,000원</g)?.length, 2);
+    assert.match(html, /음반 2번째부터 50% 할인 -100,000원<\/p>/);
+    assert.match(html, /합계 230,000원/);
+  }
+  // Without a discounted album the mail is unchanged: no label, no discount line.
+  await loaded.exports.sendOrderBankTransferEmail({ email: "owner@example.invalid", orderId: "order-2", items: [items[0], items[3]], totalAmountKrw: 130000 });
+  assert.doesNotMatch(loaded.exports.messages[2].html, /할인|line-through/);
+});
+
 test("bank requests send social members' payment instructions to the saved profile contact", async () => {
   const h = await fixture(); h.state.rows = [row()];
   h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };

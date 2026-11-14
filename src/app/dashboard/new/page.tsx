@@ -59,8 +59,14 @@ export default function NewSubmissionPage() {
               key={card.href}
               href={card.href}
               // Phones: compact row with the button on the right; larger screens keep the tall card.
-              className={`group flex min-w-0 items-center gap-3 rounded-[10px] border-2 p-4 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] sm:flex-col sm:items-stretch sm:gap-0 sm:p-6 ${card.tone}`}
+              className={`group relative flex min-w-0 items-center gap-3 rounded-[10px] border-2 p-4 transition duration-200 hover:-translate-y-1 hover:shadow-[9px_9px_0_#111111] sm:flex-col sm:items-stretch sm:gap-0 sm:p-6 ${card.tone}`}
             >
+              {"badge" in card && card.badge ? (
+                // Pinned to the corner so the card keeps the height of its neighbours.
+                <span className="absolute -top-2.5 right-3 z-10 rounded-[6px] border-2 border-[#111111] bg-[#d9362c] px-2 py-1 text-[11px] font-black leading-none text-white shadow-[2px_2px_0_#111111] sm:right-5 sm:top-5 sm:px-2.5 sm:py-1.5 sm:text-xs">
+                  {card.badge}
+                </span>
+              ) : null}
               <div className="min-w-0 flex-1 sm:flex sm:flex-col">
                 <div className="flex items-center gap-2 sm:block">
                   <card.icon className="h-5 w-5 shrink-0 sm:h-7 sm:w-7" aria-hidden="true" />
@@ -71,12 +77,7 @@ export default function NewSubmissionPage() {
                 <h2 className="mt-1.5 break-keep text-balance text-lg font-black leading-snug tracking-normal sm:mt-4 sm:text-[28px]">
                   {reviewServices[index].title}
                 </h2>
-                <p className={`mt-1 text-xs font-semibold leading-5 sm:mt-3 sm:text-sm sm:leading-6 ${"badge" in card && card.badge ? "" : "sm:mb-6"}`}>{reviewServices[index].purpose}</p>
-                {"badge" in card && card.badge ? (
-                  <p className="mt-2 w-fit rounded-[6px] border-2 border-[#111111] bg-[#d9362c] px-2 py-1 text-[11px] font-black leading-none text-white sm:mb-6 sm:mt-3 sm:px-2.5 sm:py-1.5 sm:text-xs">
-                    {card.badge}
-                  </p>
-                ) : null}
+                <p className="mt-1 text-xs font-semibold leading-5 sm:mt-3 sm:mb-6 sm:text-sm sm:leading-6">{reviewServices[index].purpose}</p>
               </div>
               <div className="inline-flex w-fit shrink-0 items-center gap-1.5 whitespace-nowrap border-2 border-current bg-white px-3 py-2 text-xs font-black text-[#111111] sm:mt-auto sm:gap-2 sm:px-4 sm:text-sm">
                 신청하기

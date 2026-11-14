@@ -14,6 +14,7 @@ do $$ declare t text; begin
 end $$;
 alter table public.submissions
   add column artist_name text default 'Fixture artist',
+  add column artist_name_kr text,
   add column package_id uuid references public.packages,
   add column is_oneclick boolean not null default false,
   add column payment_provider text,

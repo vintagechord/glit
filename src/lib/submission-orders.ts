@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { discountedAlbumListPriceKrw } from "@/lib/album-payment-discount";
 import { loadCashReceiptRows, toCashReceiptSummary } from "@/lib/cash-receipts-server";
 import type { SubmissionOrder, SubmissionOrderStatus, SubmissionOrdersPage } from "@/lib/submission-orders-types";
 
@@ -11,6 +12,7 @@ type RawItem = {
   title: string | null; artist_name: string | null; package_name: string | null;
   amount_krw: number | null; amount: number | null; is_oneclick: boolean;
   guest_token_hash: string | null;
+  album_price_tier?: string | null; album_base_price_krw?: number | null;
 };
 type RawOrder = {
   id: string; user_id: string | null; payment_method: SubmissionOrder["paymentMethod"];
@@ -25,7 +27,7 @@ type Parent = {
   user_deleted_at: string | null; reviews: Array<{ status: string }>;
 };
 
-const orderSelect = "id,user_id,payment_method,status,amount_krw,amount,currency,source,note,created_at,updated_at,paid_at,returned_at,depositor_name,deposit_due_at,items:submission_order_items(id,submission_id,submission_ref,type,title,artist_name,package_name,amount_krw,amount,is_oneclick,guest_token_hash),payments:submission_payments!checkout_order_id(status,result_code)";
+const orderSelect = "id,user_id,payment_method,status,amount_krw,amount,currency,source,note,created_at,updated_at,paid_at,returned_at,depositor_name,deposit_due_at,items:submission_order_items(id,submission_id,submission_ref,type,title,artist_name,package_name,amount_krw,amount,is_oneclick,guest_token_hash,album_price_tier,album_base_price_krw),payments:submission_payments!checkout_order_id(status,result_code)";
 const pageSize = 30;
 const guestOrderLimit = 100;
 const returnableStatuses = new Set(["BANK_PENDING", "CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED"]);
@@ -103,6 +105,10 @@ function mapOrder(order: RawOrder, actor: OrderActor, parents: Map<string, Paren
       id: item.id, submissionId: item.submission_id, submissionRef: item.submission_ref,
       type: item.type ?? "REVIEW", title: item.title, artistName: item.artist_name, packageName: item.package_name,
       amountKrw: finiteAmount(item.amount_krw), amount: finiteAmount(item.amount), isOneclick: Boolean(item.is_oneclick),
+      listAmountKrw: order.currency === "KRW" ? discountedAlbumListPriceKrw({
+        type: item.type, priceTier: item.album_price_tier,
+        basePriceKrw: item.album_base_price_krw, amountKrw: item.amount_krw,
+      }) : null,
     })),
   };
 }

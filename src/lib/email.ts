@@ -1,5 +1,6 @@
 import { sendTransactionalEmail, type EmailSendResult } from "@/lib/email-transport";
 import { APP_CONFIG } from "@/lib/config";
+import { albumDiscountLabel } from "@/lib/album-payment-discount";
 import { BANK_ORDER_REPAY_ENABLED } from "@/lib/bank-transfer-details";
 import { MV_RATING_MARK_COLORS, type MvRatingMarkCode } from "@/lib/mv-rating-colors";
 import type { EmailAttachmentRef } from "@/lib/email-attachments";
@@ -60,6 +61,8 @@ export type OrderEmailItem = {
   artist?: string | null;
   kind: "ALBUM" | "MV";
   amountKrw?: number | null;
+  /** List price of an album charged half price because it was paid with other albums. */
+  listAmountKrw?: number | null;
 };
 
 type OrderBankTransferEmailPayload = EmailDeliveryOptions & {
@@ -366,10 +369,31 @@ const resolveSiteLink = (value?: string) =>
   normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
   "https://onside17.com/";
 
+const isKrwAmount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+const discountedListKrw = (item: OrderEmailItem) =>
+  isKrwAmount(item.listAmountKrw) && isKrwAmount(item.amountKrw) && item.listAmountKrw > item.amountKrw
+    ? item.listAmountKrw : null;
+/** Albums paid together: every album after the first was charged half price. */
+const orderDiscountKrw = (items: OrderEmailItem[]) => items.reduce((sum, item) => {
+  const listKrw = discountedListKrw(item);
+  return listKrw === null ? sum : sum + listKrw - (item.amountKrw as number);
+}, 0);
+const renderOrderDiscount = (items: OrderEmailItem[]) => {
+  const discountKrw = orderDiscountKrw(items);
+  return discountKrw > 0
+    ? `<p style="margin:12px 0 0;text-align:right;font-size:13px;font-weight:800;color:#d9362c;">음반 2번째부터 50% 할인 -${formatKrw(discountKrw)}</p>`
+    : "";
+};
+
 const renderOrderItems = (items: OrderEmailItem[]) => {
   const cell = "padding:10px 8px;border-bottom:1px solid #e2e8f0;font-size:13px;vertical-align:top;";
   const rows = items.map((item) => {
-    const amount = typeof item.amountKrw === "number" && Number.isFinite(item.amountKrw) ? formatKrw(item.amountKrw) : "-";
+    const listKrw = discountedListKrw(item);
+    const amount = isKrwAmount(item.amountKrw)
+      ? listKrw === null
+        ? formatKrw(item.amountKrw)
+        : `<span style="display:inline-block;border:2px solid #111111;border-radius:4px;background:#d9362c;color:#ffffff;padding:2px 6px;font-size:11px;font-weight:800;line-height:1.2;">${albumDiscountLabel(listKrw, item.amountKrw)}</span><br /><span style="font-size:12px;font-weight:600;color:#64748b;text-decoration:line-through;">${formatKrw(listKrw)}</span><br />${formatKrw(item.amountKrw)}`
+      : "-";
     return `<tr>
       <td style="${cell}color:#475569;white-space:nowrap;">${orderKindLabel(item.kind)} 심의</td>
       <td style="${cell}word-break:break-word;"><strong>${escapeHtml(item.title?.trim() || "제목 미입력")}</strong><br /><span style="color:#64748b;">${escapeHtml(item.artist?.trim() || "-")}</span></td>
@@ -437,7 +461,8 @@ export async function sendOrderBankTransferEmail(
             <p style="margin:0;font-size:12px;color:#475569;">주문 내역</p>
             <p style="margin:6px 0 12px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace;color:#0f172a;word-break:break-all;">주문번호 ${safeOrderId}</p>
             ${renderOrderItems(payload.items)}
-            <p style="margin:12px 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${formatKrw(payload.totalAmountKrw)}</p>
+            ${renderOrderDiscount(payload.items)}
+            <p style="margin:${orderDiscountKrw(payload.items) > 0 ? "4px" : "12px"} 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${formatKrw(payload.totalAmountKrw)}</p>
           </div>
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
             <a href="${escapeHtml(progressLink)}" style="display:inline-block;border-radius:999px;background:#0071e3;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;padding:11px 18px;">주문내역 보기</a>
@@ -481,7 +506,8 @@ export async function sendPaymentCompletedEmail(
           <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
             <p style="margin:0 0 12px;font-size:12px;color:#475569;">주문 내역</p>
             ${renderOrderItems(payload.items)}
-            <p style="margin:12px 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${escapeHtml(payload.amountLabel)}</p>
+            ${renderOrderDiscount(payload.items)}
+            <p style="margin:${orderDiscountKrw(payload.items) > 0 ? "4px" : "12px"} 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${escapeHtml(payload.amountLabel)}</p>
           </div>
           ${payload.submissionId ? `<p style="margin-top:16px;font-size:12px;color:#334155;">접수 번호: ${escapeHtml(payload.submissionId)}</p>` : ""}
           ${payload.guestToken ? `<p style="margin:6px 0 0;font-size:13px;word-break:break-all;">비회원 조회 코드: <strong>${escapeHtml(payload.guestToken)}</strong></p>` : ""}

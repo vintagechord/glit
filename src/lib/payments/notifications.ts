@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { discountedAlbumListPriceKrw } from "@/lib/album-payment-discount";
 import { resolveMemberNotificationEmail } from "@/lib/member-notification-email";
 import { sendAdminSubmissionReceiptEmail, sendPaymentCompletedEmail, sendSubmissionUpdateEmail, type OrderEmailItem } from "@/lib/email";
 import type { EmailSendResult } from "@/lib/email-transport";
@@ -24,7 +25,7 @@ async function loadOrderSummary(db: ReturnType<typeof createAdminClient>, orderI
     .select("id,payment_method,amount_krw,amount,currency,paid_at").eq("id", orderId).maybeSingle();
   if (error || !order) return null;
   const { data: items, error: itemsError } = await db.from("submission_order_items")
-    .select("submission_ref,title,artist_name,type,amount_krw").eq("order_id", orderId);
+    .select("submission_ref,title,artist_name,type,amount_krw,album_price_tier,album_base_price_krw").eq("order_id", orderId);
   if (itemsError || !items?.length) return null;
   const { data: flags } = await db.from("submissions").select("id,files_submitted_by_email")
     .in("id", items.map((item: { submission_ref: string }) => item.submission_ref));
@@ -37,8 +38,15 @@ async function loadOrderSummary(db: ReturnType<typeof createAdminClient>, orderI
       ? `${formatCurrency(Number.isFinite(amountKrw) ? amountKrw : 0)}원`
       : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(amount)} ${order.currency}`,
     paidAt: order.paid_at ?? null,
-    items: items.map((item: { title: string | null; artist_name: string | null; type: string | null; amount_krw: number | null }) => ({
+    items: items.map((item: {
+      title: string | null; artist_name: string | null; type: string | null; amount_krw: number | null;
+      album_price_tier?: string | null; album_base_price_krw?: number | null;
+    }) => ({
       title: item.title, artist: item.artist_name, kind: item.type?.startsWith("MV") ? "MV" : "ALBUM", amountKrw: item.amount_krw,
+      listAmountKrw: order.currency === "KRW" ? discountedAlbumListPriceKrw({
+        type: item.type, priceTier: item.album_price_tier,
+        basePriceKrw: item.album_base_price_krw, amountKrw: item.amount_krw,
+      }) : null,
     })),
     awaitingEmailMaterials: (flags ?? []).some((row: { files_submitted_by_email?: boolean | null }) => row.files_submitted_by_email === true),
   };

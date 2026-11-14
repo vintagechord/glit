@@ -38,7 +38,7 @@ const mixedItems = () => [
 // Two albums in one order: 35,000 in full and half of 25,000.
 const bankGroup = () => order(0, "BANK_PENDING", {
   amountKrw: 47500, amount: 47500,
-  items: [...order(0, "BANK_PENDING").items, { ...order(1, "BANK_PENDING").items[0], amountKrw: 12500, amount: 12500 }],
+  items: [...order(0, "BANK_PENDING").items, { ...order(1, "BANK_PENDING").items[0], amountKrw: 12500, amount: 12500, listAmountKrw: 25000 }],
 });
 const row = (page: Page, id: string) => page.locator(`#cart-item-${id}`);
 const select = (page: Page, id: string) => row(page, id).locator("button[aria-pressed]");
@@ -113,7 +113,7 @@ async function mount(page: Page, options: { items?: SubmissionCartItem[]; orders
       const quote = quoteSubmissionCart(chosen); const total = quote.totalKrw;
       const bank = order(harness.orders.some(entry => entry.id === orderIds[0]) ? 9 : 0, "BANK_PENDING", {
         amountKrw: total, amount: total,
-        items: chosen.map((entry, index) => ({ ...order(index, "BANK_PENDING").items[0], submissionId: entry.id, submissionRef: entry.id, type: entry.type, title: entry.title || "제목 미입력", amountKrw: quote.byId.get(entry.id)!.amountKrw, amount: quote.byId.get(entry.id)!.amountKrw })),
+        items: chosen.map((entry, index) => ({ ...order(index, "BANK_PENDING").items[0], submissionId: entry.id, submissionRef: entry.id, type: entry.type, title: entry.title || "제목 미입력", amountKrw: quote.byId.get(entry.id)!.amountKrw, amount: quote.byId.get(entry.id)!.amountKrw, listAmountKrw: quote.byId.get(entry.id)!.discounted ? quote.byId.get(entry.id)!.listKrw : null })),
       });
       harness.orders = [bank, ...harness.orders];
       await route.fulfill({ json: { count: chosen.length, totalAmountKrw: total } }); return;
@@ -263,6 +263,12 @@ test.describe("isolated commerce account fixtures", () => {
     expect(harness.writes[0].body.submissionIds).toEqual(ids.slice(0, 4));
     expect(harness.orders[0].amountKrw).toBe(230000);
     expect(harness.orders[0].items.map(entry => entry.amountKrw)).toEqual([100000, 50000, 50000, 30000]);
+    // The order list labels each half-price album and the order's album discount.
+    const placed = orderRow(page, harness.orders[0].id);
+    await expect(placed).toContainText("입금 대기");
+    await expect(placed.getByText("50% 할인", { exact: true })).toHaveCount(2);
+    await expect(placed).toContainText("음반 2번째부터 50% 할인"); await expect(placed).toContainText("-100,000원");
+    await page.screenshot({ path: testInfo.outputPath(`orders-discount-${width}.png`), fullPage: true, animations: "disabled" });
     expectClean(harness);
   });
   test("guest cart pruning preserves credentials for previous orders", async ({ page }) => {
