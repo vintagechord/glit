@@ -184,7 +184,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const totalAmountKrw = submissions.reduce((sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)), 0);
   const isExistingBankRequest = submissions.every(item =>
     item.payment_status === "PAYMENT_PENDING" && item.payment_method === "BANK" &&
     item.status === "WAITING_PAYMENT" && Boolean(item.current_order_id) &&
@@ -276,9 +275,9 @@ export async function POST(req: NextRequest) {
       const invalidAlbumPrice = updateError?.message?.includes(
         "ALBUM_PRICE_SNAPSHOT_INVALID",
       );
-      const invalidAlbumDiscount = updateError?.message?.includes(
-        "ALBUM_DISCOUNT_NOT_ELIGIBLE",
-      );
+      const invalidAlbumDiscount =
+        updateError?.message?.includes("ALBUM_DISCOUNT_NOT_ELIGIBLE") ||
+        updateError?.message?.includes("ALBUM_DISCOUNT_NOT_APPLIED");
       const incompleteAlbumGroup = updateError?.message?.includes(
         "ALBUM_GROUP_INCOMPLETE",
       );
@@ -292,7 +291,7 @@ export async function POST(req: NextRequest) {
           error: invalidAlbumPrice
             ? "앨범 신청서의 결제 금액이 변경되었습니다. 신청서를 다시 저장해주세요."
             : invalidAlbumDiscount
-              ? "추가 앨범 할인 결제에는 같은 패키지의 정가 앨범을 함께 선택하거나 먼저 결제해야 합니다."
+              ? "음반 할인 금액을 확인하지 못했습니다. 장바구니에서 다시 결제해주세요."
               : incompleteAlbumGroup
                 ? "함께 작성한 앨범은 묶음 전체를 선택해 결제해주세요."
               : conflict
@@ -320,6 +319,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "입금 대기 중인 같은 소유자의 주문만 다시 요청할 수 있습니다." }, { status: 409 });
   }
   submissions = refreshed;
+  // Read after the order exists: the order prices albums paid together (the
+  // first at its list price, every further album at half of its own).
+  const totalAmountKrw = submissions.reduce((sum, item) => sum + Math.round(Number(item.amount_krw ?? 0)), 0);
   const orderIds = Array.from(new Set(submissions.map(item => item.current_order_id as string)));
   const [orders, items] = await Promise.all([
     admin.from("submission_orders").select("id, user_id, payment_method, status").in("id", orderIds),

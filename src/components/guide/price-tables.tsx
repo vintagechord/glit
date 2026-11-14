@@ -1,3 +1,4 @@
+import { ALBUM_MULTI_DISCOUNT_NOTICE, quoteAlbumBundle } from "@/lib/album-payment-discount";
 import { FALLBACK_ALBUM_PACKAGES, MV_PRICE_ROWS, type AlbumPackage } from "@/lib/review-guides";
 
 const won = (value: number) => `${value.toLocaleString("ko-KR")}원`;
@@ -7,7 +8,10 @@ const sortStations = (stations: string[]) =>
 
 /** Album review packages with their stations, as the guides and the pricing page show them. */
 export function AlbumPriceTable({ packages }: { packages: AlbumPackage[] }) {
+  // The example uses a real package so the sums always match the table.
+  const example = packages[0];
   return (
+    <>
     <div className="overflow-x-auto rounded-[8px] border-2 border-[#111111] dark:border-[#f2cf27]">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">음반 심의 방송국 패키지 비용</caption>
@@ -25,6 +29,13 @@ export function AlbumPriceTable({ packages }: { packages: AlbumPackage[] }) {
         </tbody>
       </table>
     </div>
+    <p className="mt-3 break-keep rounded-[8px] border-2 border-[#111111] bg-[#f2cf27] px-3 py-2.5 text-sm font-black leading-6 text-[#111111]">
+      {ALBUM_MULTI_DISCOUNT_NOTICE}
+      {example ? (
+        <span className="font-semibold">{` 예: ${example.name} 앨범 2건 ${won(quoteAlbumBundle(example.priceKrw, 2).totalKrw)}, 3건 ${won(quoteAlbumBundle(example.priceKrw, 3).totalKrw)}`}</span>
+      ) : null}
+    </p>
+    </>
   );
 }
 

@@ -39,6 +39,8 @@ import {
 } from "@/lib/submission-cart-group";
 import { getInicisMobileBrowser, getInicisServerDevice, subscribeToInicisDevice, INICIS_MOBILE_REDIRECT_MESSAGE, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "@/lib/inicis/device";
 import type { SubmissionCartItem } from "@/lib/submission-cart";
+import { quoteSubmissionCart } from "@/lib/submission-cart-quote";
+import { ALBUM_MULTI_DISCOUNT_NOTICE } from "@/lib/album-payment-discount";
 import {
   BANK_DEPOSITOR_NAME_MAX,
   getBankDepositDateRange,
@@ -61,9 +63,11 @@ type CartItem = {
   title: string | null;
   artistName: string | null;
   amountKrw: number | null;
+  albumBasePriceKrw: number | null;
   isOneclick: boolean | null;
   albumPriceTier: string | null;
   albumDraftGroupId: string | null;
+  createdAt: string | null;
   updatedAt: string | null;
   packageName: string | null;
   guestToken: string | null;
@@ -90,9 +94,11 @@ export const mapSubmissionCartItem = (
   title: item.title,
   artistName: officialArtistName(item),
   amountKrw: item.amount_krw,
+  albumBasePriceKrw: item.album_base_price_krw ?? null,
   isOneclick: item.is_oneclick ?? null,
   albumPriceTier: item.album_price_tier ?? null,
   albumDraftGroupId: item.album_draft_group_id ?? null,
+  createdAt: item.created_at,
   updatedAt: item.updated_at,
   packageName: normalizePackageName(item),
   guestToken,
@@ -422,10 +428,23 @@ export function SubmissionCartCheckout({
     setSelectedIds((prev) => new Set([...prev].filter((id) => !orderedIds.has(id))));
     window.dispatchEvent(new Event(SUBMISSION_ORDERS_UPDATED_EVENT));
   }, []);
-  const selectedTotal = selectedItems.reduce(
-    (sum, item) => sum + getPayableAmount(item),
-    0,
+  // Albums paid together are discounted from the second on; the order is
+  // created with these same amounts.
+  const selectedQuote = React.useMemo(
+    () =>
+      quoteSubmissionCart(
+        selectedItems.map((item) => ({
+          id: item.id,
+          type: item.type,
+          amount_krw: item.amountKrw,
+          album_base_price_krw: item.albumBasePriceKrw,
+          created_at: item.createdAt,
+        })),
+      ),
+    [selectedItems],
   );
+  const selectedTotal = selectedQuote.totalKrw;
+  const cartHasAlbum = items.some((item) => item.type === "ALBUM");
   const isAllSelected =
     payableIds.length > 0 && payableIds.every((id) => selectedIds.has(id));
 
@@ -858,9 +877,12 @@ export function SubmissionCartCheckout({
 
         <div className="space-y-3">
           {(isPaymentStep ? selectedItems : items).map((item) => {
-            const amount = getPayableAmount(item);
             const selected = isPaymentStep || selectedIds.has(item.id);
-            const disabled = amount <= 0;
+            const quoteLine = selected ? selectedQuote.byId.get(item.id) : undefined;
+            const listAmount = getPayableAmount(item);
+            const amount = quoteLine?.amountKrw ?? listAmount;
+            const discounted = Boolean(quoteLine?.discounted);
+            const disabled = listAmount <= 0;
             const groupSize = items.filter(
               (candidate) =>
                 getSubmissionCartGroupKey(candidate) ===
@@ -925,7 +947,17 @@ export function SubmissionCartCheckout({
                   </span>
                 </button>
                 <span className="col-start-2 min-w-0 text-left text-base font-black tabular-nums text-foreground [overflow-wrap:anywhere] md:col-start-3 md:min-w-[112px] md:text-right">
-                  {amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
+                  {discounted && quoteLine ? (
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 md:flex-col md:items-end md:gap-1">
+                      <span className="rounded-[4px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-red)] px-1.5 py-0.5 text-[11px] font-black leading-none text-white dark:text-[#06111f]">
+                        50% 할인
+                      </span>
+                      <span className="text-xs font-bold text-muted-foreground line-through">
+                        {formatCurrency(quoteLine.listKrw)}원
+                      </span>
+                      <span>{formatCurrency(amount)}원</span>
+                    </span>
+                  ) : amount > 0 ? `${formatCurrency(amount)}원` : "금액 확인 필요"}
                 </span>
                 {!isPaymentStep ? <div className="col-span-2 col-start-1 grid min-w-0 grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center md:col-start-2 xl:col-span-1 xl:col-start-4 xl:justify-end">
                   <Link
@@ -1035,6 +1067,18 @@ export function SubmissionCartCheckout({
             <span>선택</span>
             <span>{selectedItems.length}건</span>
           </div>
+          {selectedQuote.discountTotalKrw > 0 ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span>정상가</span>
+                <span className="tabular-nums">{formatCurrency(selectedQuote.listTotalKrw)}원</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 font-black text-[var(--bauhaus-red)]">
+                <span>음반 2번째부터 50% 할인</span>
+                <span className="tabular-nums">-{formatCurrency(selectedQuote.discountTotalKrw)}원</span>
+              </div>
+            </>
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-border pt-3">
             <span>결제 금액</span>
             <span className="min-w-0 text-xl font-black tabular-nums [overflow-wrap:anywhere]">
@@ -1042,6 +1086,11 @@ export function SubmissionCartCheckout({
             </span>
           </div>
         </div>
+        {cartHasAlbum && selectedQuote.discountTotalKrw === 0 ? (
+          <p className="mt-3 rounded-[6px] border-2 border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] px-3 py-2 text-xs font-black leading-5 text-[#111111]">
+            {ALBUM_MULTI_DISCOUNT_NOTICE}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={isPaymentStep ? handleCheckout : continueToPayment}

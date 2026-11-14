@@ -571,7 +571,7 @@ export default async function AdminSubmissionDetailPage({
     ? getPackageStationCodes(packageInfo?.station_count, packageInfo?.name)
     : submission.type === "MV_BROADCAST" ? (submission.mv_selected_station_codes ?? []).filter(code => !["MV_BROADCAST", "MV_ONLINE"].includes(code)) : [];
   // These sections depend only on the authorized submission, not on one another.
-  const [member, paymentDocumentResult, stationResult, expectedStationResult, eventResult, fileResult] = await Promise.all([
+  const [member, paymentDocumentResult, stationResult, expectedStationResult, eventResult, fileResult, albumPriceResult] = await Promise.all([
     (async () => {
       if (!submission.user_id || submission.guest_name) return { profile: null, email: null, signIn: null };
       const { data: profile } = await supabase
@@ -605,7 +605,18 @@ export default async function AdminSubmissionDetailPage({
       .select("id, kind, file_path, original_name, mime, size, created_at, purged_at")
       .eq("submission_id", submissionId)
       .order("created_at", { ascending: false }),
+    // Albums ordered together: every album after the first is charged half.
+    supabase
+      .from("submissions")
+      .select("album_price_tier, album_base_price_krw")
+      .eq("id", submission.id)
+      .maybeSingle(),
   ]);
+  const albumPrice = albumPriceResult.data as { album_price_tier: string | null; album_base_price_krw: number | null } | null;
+  const albumDiscountNote =
+    submission.type === "ALBUM" && albumPrice?.album_price_tier === "ADDITIONAL" && albumPrice.album_base_price_krw
+      ? ` (2번째 앨범부터 50% 할인 · 정상가 ${albumPrice.album_base_price_krw.toLocaleString()}원)`
+      : "";
   const memberProfile = member.profile;
   const memberEmail = member.email;
   // Bank-transfer orders carry the depositor name and the promised deposit
@@ -1176,7 +1187,7 @@ export default async function AdminSubmissionDetailPage({
                 label="금액"
                 value={
                   submission.amount_krw
-                    ? `${submission.amount_krw.toLocaleString()}원`
+                    ? `${submission.amount_krw.toLocaleString()}원${albumDiscountNote}`
                     : "-"
                 }
               />

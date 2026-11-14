@@ -15,6 +15,7 @@ import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { JsonLd } from "@/components/seo/json-ld";
+import { ALBUM_MULTI_DISCOUNT_BADGE } from "@/lib/album-payment-discount";
 import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import {
@@ -75,6 +76,8 @@ const serviceCards = [
   {
     label: "TV · RADIO",
     title: "음반 심의",
+    // 2026-11-14 (owner): albums ordered together are half price from the second.
+    badge: ALBUM_MULTI_DISCOUNT_BADGE,
     href: "/dashboard/new/album",
     tone: "album",
     cardClass: "border-[#111111] bg-[#f2cf27] text-[#111111]",
@@ -210,6 +213,11 @@ export default function Home() {
                 <h3 className="mt-7 max-w-[13rem] break-keep text-3xl font-black leading-none tracking-normal sm:text-4xl">
                   {card.title}
                 </h3>
+                {"badge" in card && card.badge ? (
+                  <p className="mt-4 w-fit rounded-[6px] border-2 border-[#111111] bg-[#d9362c] px-2.5 py-1.5 text-xs font-black leading-none text-white shadow-[2px_2px_0_#111111] sm:text-sm">
+                    {card.badge}
+                  </p>
+                ) : null}
                 <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
                   신청 <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </div>

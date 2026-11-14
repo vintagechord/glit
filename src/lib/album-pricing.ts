@@ -7,7 +7,10 @@ export const normalizeAlbumDiscountPercent = (value: unknown) => {
   return Math.min(100, Math.max(0, Math.round(numeric)));
 };
 
-/** Current quotes use the package's original price for every album. */
+/**
+ * List price: the package's price for every album. Albums paid in one order
+ * are discounted from the second on by quoteAlbumOrder (album-payment-discount).
+ */
 export const getAlbumReviewPriceKrw = (
   packagePriceKrw: number,
   albumCount = 1,

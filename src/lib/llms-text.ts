@@ -32,7 +32,7 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
     "- 뮤직비디오 심의: 온라인 유통용(영상물등급위원회 등급분류: 전체관람가·12세·15세·청소년관람불가, Mnet 추가 가능)과 TV 송출용 방송국별 심의(KBS·MBC·SBS)로 나뉩니다. ETN은 심의 없이 방송용 입고(입고비 30,000원)로 접수합니다.",
     "- 발매 전 접수: 신청서, WAV 음원 또는 전체 음원 ZIP, 앨범 정보, 트랙별 크레딧, 전체 가사와 외국어 가사 번역. 발매 후 접수: 멜론 또는 지니 앨범 링크 + 심의용 음원 (추가금 없음).",
     "- 일정: 자료와 결제 확인 후 접수. 서울권 방송국은 보통 3영업일, 경기권은 7영업일 이내 접수 목표. 결과는 방송국 일정에 따라 최대 3주.",
-    "- 결제: 카드 결제 또는 무통장 입금. 현금영수증·세금계산서 발급. 비용은 부가세 포함, 음반 심의는 앨범 1건, 뮤직비디오 심의는 영상 1건 기준.",
+    "- 결제: 카드 결제 또는 무통장 입금. 현금영수증·세금계산서 발급. 비용은 부가세 포함, 음반 심의는 앨범 1건, 뮤직비디오 심의는 영상 1건 기준. 음반 2건 이상을 함께 결제하면 2번째 앨범부터 50% 할인(뮤직비디오 심의는 제외).",
     "- 결과 확인: 접수 후 발급되는 조회 코드 또는 마이페이지에서 방송국별 결과 확인, 결과 안내 메일 발송.",
     "",
     "## 운영 정보",
@@ -44,6 +44,7 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
     "",
   );
   for (const pkg of packages) push(`- ${pkg.name}: ${won(pkg.priceKrw)} — ${pkg.stations.join(", ")}`);
+  push("- 여러 앨범 할인: 음반 2건 이상을 함께 결제하면 2번째 앨범부터 50% 할인됩니다. 금액이 가장 큰 앨범 1건은 정상 가격, 나머지 앨범은 각 패키지 금액의 50%이며 뮤직비디오 심의에는 적용되지 않습니다.");
   push("", "## 뮤직비디오 심의 비용 (영상 1건)", "");
   for (const row of MV_PRICE_ROWS) push(`- ${row.label}: ${won(row.priceKrw)}`);
 
@@ -76,7 +77,7 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
     `> ${SITE_DESCRIPTION_EN}`,
     "",
     `- English pages: ${url("/en")} · guides ${url("/en/guide")} · FAQ ${url("/en/faq")}`,
-    `- Album review packages (per album, VAT included): ${packages.map((pkg) => `${pkg.stationCount} stations ${pkg.priceKrw.toLocaleString("en-US")} KRW`).join(", ")}.`,
+    `- Album review packages (per album, VAT included): ${packages.map((pkg) => `${pkg.stationCount} stations ${pkg.priceKrw.toLocaleString("en-US")} KRW`).join(", ")}. Two or more albums paid together: 50% off every album from the second (music video reviews excluded).`,
     "- Music video reviews: online distribution rating by the Korea Media Rating Board (optional Mnet), or per-broadcaster TV reviews for KBS, MBC and SBS. ETN takes broadcast delivery only (30,000 KRW), no review.",
     `- Contact: ${APP_CONFIG.supportEmail}`,
     "",

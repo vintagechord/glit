@@ -28,6 +28,9 @@ order_psql --single-transaction < "$order_sql_root/supabase/migrations/202610241
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261025132939_paid_submission_notification_events.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261026120000_admin_payment_resolution.sql"
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261031120000_open_fixes.sql"
+# Albums ordered together: the suites below run against these definitions too.
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261114120000_album_additional_half_price.sql"
+order_psql < "$order_sql_root/tests/sql/album-additional-half-price.sql"
 # Receipt invariants must run inside the payment fixture transaction, before rollback.
 {
   sed '/^rollback;$/,$d' "$order_sql_root/tests/sql/submission-orders.sql"

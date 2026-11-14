@@ -1160,8 +1160,9 @@ export async function saveAlbumSubmissionAction(
     // Both release states use the selected package price. The URL collection
     // service is included, and payment still uses a server-written snapshot.
     serverBasePriceKrw = getAlbumReviewPriceKrw(selectedPackage.price_krw);
-    // Ignore old client campaign percentages, additional-album tiers and
-    // submitted amounts. All editable drafts receive the current full price.
+    // Ignore client amounts and tiers. Every saved application carries the
+    // package's list price; albums paid together are discounted from the
+    // second on when the order is created (apply_album_checkout_discount).
     amountKrw = serverBasePriceKrw;
     albumPriceTier = "FULL";
   }
@@ -1330,8 +1331,8 @@ export async function saveAlbumSubmissionAction(
       serverBasePriceKrw > 0 ? serverBasePriceKrw : null,
     album_price_tier: albumPriceTier,
     album_discount_base_submission_id: null,
-    // Legacy database bundles require discounted ADDITIONAL siblings. Standard
-    // price albums are independent; the editor retains explicit batch IDs for
+    // Legacy database bundles require discounted ADDITIONAL siblings. Saved
+    // albums are independent; the editor retains explicit batch IDs for
     // autosave/recovery and checkout can still select all albums together.
     album_draft_group_id: null,
     guest_name: isGuest ? guestNameValue || null : null,

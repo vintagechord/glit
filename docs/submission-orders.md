@@ -41,3 +41,12 @@ Inicis 승인 요청 전에 단일 처리 권한을 확보한다. 중복 콜백�
 - **승인 확인 필요(`APPROVAL_UNCERTAIN`) 카드 주문**: `/admin/payments`의 해당 행에서 이니시스 관리자 화면 대조 결과를 기록한다. `resolve_uncertain_submission_payment(order_id, actor, 'APPROVED'|'FAILED', tid, memo)`는 승인이면 기존 `approve_submission_payment_order`로 결제 완료·접수예정 전환과 결제 완료 메일을, 미승인이면 `close_submission_payment_order_v96('FAILED')`로 주문을 실패로 돌려 고객이 주문내역에서 다시 결제할 수 있게 한다. PG 요청은 보내지 않는다.
 - **환불 기록**: 접수 상세의 결제 상태를 "환불"로 저장하면 `refund_submission_order(order_id, actor, memo)`가 주문 전체를 `REFUNDED`(`refunded_at`)로 바꾸고 연결된 신청서의 `payment_status`를 `REFUNDED`로 기록한 뒤 환불 안내 메일을 보낸다. 실제 PG 취소·계좌 환불은 외부에서 먼저 처리한다. 결제 완료(`PAID`) 주문만 환불로 기록할 수 있다.
 - 두 함수 모두 service_role 전용이며 `scripts/submission-orders-sql-test.sh`에 회귀가 있다.
+
+## 2026-11-14 음반 2건 이상 할인
+
+- 음반 심의를 한 주문으로 2건 이상 결제하면 금액이 가장 큰 앨범 1건은 패키지 정상 가격, 나머지 앨범은 각 패키지 가격의 50%를 받는다(같은 금액이면 먼저 작성한 신청서가 정상 가격). 10만 원 앨범 2건은 15만 원, 3건은 20만 원이다. 뮤직비디오 심의는 할인하지 않는다.
+- 장바구니에 있는 신청서는 항상 정상 가격(`album_price_tier = FULL`)이다. 할인은 주문을 만드는 순간 `create_submission_checkout_order` 안의 `apply_album_checkout_discount`가 잠금 아래에서 기록하고(`ADDITIONAL`, 금액 50%, `album_discount_base_submission_id` = 그 주문의 정상 가격 앨범), 주문 총액과 항목 스냅샷이 그 금액을 따른다. 주문을 장바구니로 돌리면 `return_submission_order_to_cart`가 정상 가격으로 되돌리므로, 다음 결제에서 선택한 조합대로 다시 계산된다.
+- 화면과 카드 결제창 금액은 `src/lib/album-payment-discount.ts`의 `quoteAlbumOrder`(장바구니는 `quoteSubmissionCart`)가 같은 규칙으로 계산한다. 카드 주문은 서버가 계산한 할인 총액과 DB가 기록한 금액이 다르면 `PAYMENT_AMOUNT_MISMATCH`로 거절된다.
+- 결제 시작 검증(`bind_album_payment_discount_eligibility`)과 결제 완료 트리거(`enforce_paid_album_discount_eligibility`)는 할인 앨범이 같은 주문·같은 소유자의 정상 가격 앨범과 함께일 때만 통과시킨다. 패키지가 달라도 되고, 예전처럼 "이미 결제한 앨범"으로 할인을 받을 수는 없다.
+- PayPal은 신청서 1건씩 결제하므로 할인이 없다. 관리자 직접 접수(데스크·`/admin/intake`)도 1건씩 정상 가격으로 등록한다.
+- 마이그레이션 `20261114120000_album_additional_half_price.sql`, 회귀 `tests/sql/album-additional-half-price.sql`(`scripts/submission-orders-sql-test.sh`에 포함).
