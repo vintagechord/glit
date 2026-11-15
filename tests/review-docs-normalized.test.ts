@@ -47,7 +47,8 @@ test("multi albums preserve all translated repeated lyrics, uncertain dates, no 
   const second = visible(out.files.find((f) => f.name.includes("/01_Mr. Sunshine"))!.buffer);
   assert.doesNotMatch(second, /Instrumental|\(타이틀\)/);
   assert.equal((second.match(/같은 마음으로 기다려/g) ?? []).length, 2);
-  assert.match(visible(out.files.find((f) => f.name.includes("TBS신청서"))!.buffer), /9월 중/);
+  // PBC's 「심의 음반 접수 목록」 carries the release date (비고).
+  assert.match(visible(out.files.find((f) => f.name.includes("PBC신청서"))!.buffer), /9월 중/);
 });
 
 test("MV single track returns only one minimal lyric DOCX and ZIP without album requirements", async () => {
@@ -112,7 +113,9 @@ test("four title tracks require explicit WBS selection, while double titles are 
   assert.match(wbs, /지정곡 4, 지정곡 2, 지정곡 1/);
   album.tracks = album.tracks.slice(0, 2); album.wbsTrackIds = [];
   const double = await generateReviewDocuments(data);
-  assert.match(visible(double.files.find((f) => f.name.includes("TBS신청서"))!.buffer), /지정곡 1, 지정곡 2/);
+  assert.match(visible(double.files.find((f) => f.name.includes("PBC신청서"))!.buffer), /지정곡 1, 지정곡 2/);
+  // TBS's 「음원심의신청서」 has two title slots.
+  assert.match(visible(double.files.find((f) => f.name.includes("TBS신청서"))!.buffer), /지정곡 1\s*지정곡 2/);
 });
 
 test("long lyric rows can split and lyrics-all titles keep their credits without forced pages", async () => {

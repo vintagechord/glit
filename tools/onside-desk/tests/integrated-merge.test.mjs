@@ -27,10 +27,10 @@ const rowsOf = (buffer) => {
   return [...xml.matchAll(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g)].map((m) => [...m[0].matchAll(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g)].map((c) => [...c[0].matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((t) => t[1]).join('')));
 };
 
-test('PBC (음원심의신청서) forms of several albums become one form with every album row in order', () => {
-  const files = [1, 2, 3].map((n) => ({ name: `PBC신청서_통합_${n}.docx`, body: render(deskTemplates, 'pbc-integrated.docx', n) }));
-  const merged = mergeIntegratedForms({ station: 'PBC', files });
-  assert.equal(merged.albums, 3); assert.equal(merged.filename, 'PBC신청서_통합_3건.docx'); assert.deepEqual(merged.warnings, []);
+test('TBS (음원심의신청서) forms of several albums become one form with every album row in order', () => {
+  const files = [1, 2, 3].map((n) => ({ name: `TBS신청서_통합_${n}.docx`, body: render(deskTemplates, 'tbs-integrated.docx', n) }));
+  const merged = mergeIntegratedForms({ station: 'TBS', files });
+  assert.equal(merged.albums, 3); assert.equal(merged.filename, 'TBS신청서_통합_3건.docx'); assert.deepEqual(merged.warnings, []);
   const rows = rowsOf(merged.buffer);
   assert.equal(rows.length, 2 + 3 * 2, 'two header rows, two rows per album');
   assert.deepEqual(rows.slice(2).filter((_, i) => i % 2 === 0).map((cells) => cells[1]), ['가수1', '가수2', '가수3']);
@@ -46,15 +46,39 @@ test('WBS rows are renumbered and the same album uploaded twice is listed once',
   assert.deepEqual(rows.slice(1).map((cells) => [cells[0], cells[2]]), [['1', '가수1'], ['2', '가수2'], ['3', '가수3']]);
 });
 
-test('TBS (심의 음반 접수 목록) from the desk and the web merge alike; a form of the other station is flagged', () => {
-  const desk = mergeIntegratedForms({ station: 'TBS', files: [1, 2].map((n) => ({ name: `TBS_${n}.docx`, body: render(deskTemplates, 'tbs-integrated.docx', n) })) });
+test('PBC (심의 음반 접수 목록) from the desk and the web merge alike; a form of the other station is flagged', () => {
+  const desk = mergeIntegratedForms({ station: 'PBC', files: [1, 2].map((n) => ({ name: `PBC_${n}.docx`, body: render(deskTemplates, 'pbc-integrated.docx', n) })) });
   assert.equal(desk.albums, 2); assert.deepEqual(desk.warnings, []);
   assert.deepEqual(rowsOf(desk.buffer).slice(1).map((cells) => cells[1]), ['가수1 / 타이틀1', '가수2 / 타이틀2']);
-  const web = mergeIntegratedForms({ station: 'TBS', files: [1, 2].map((n) => ({ name: `TBS_web_${n}.docx`, body: render(webTemplates, 'tbs-integrated.docx', n) })) });
+  assert.match(new PizZip(desk.buffer).file('word/document.xml').asText(), /<w:pgSz [^>]*w:orient="landscape"/);
+  const web = mergeIntegratedForms({ station: 'PBC', files: [1, 2].map((n) => ({ name: `PBC_web_${n}.docx`, body: render(webTemplates, 'pbc-integrated.docx', n) })) });
   assert.equal(web.albums, 2); assert.deepEqual(web.warnings, []);
-  // Desk 2.10 and earlier wrote 음원심의신청서 under the TBS name.
-  const older = mergeIntegratedForms({ station: 'TBS', files: [1, 2].map((n) => ({ name: `TBS_old_${n}.docx`, body: render(deskTemplates, 'pbc-integrated.docx', n) })) });
+  // Desk 2.11–2.13 wrote 음원심의신청서 under the PBC name.
+  const older = mergeIntegratedForms({ station: 'PBC', files: [1, 2].map((n) => ({ name: `PBC_old_${n}.docx`, body: render(deskTemplates, 'tbs-integrated.docx', n) })) });
   assert.match(older.warnings[0], /심의 음반 접수 목록/);
+});
+
+test('a portrait list from before 2.14 joins a landscape PBC list with the landscape column widths', () => {
+  const landscape = render(deskTemplates, 'pbc-integrated.docx', 1);
+  // The portrait list desk 2.11–2.13 wrote under the TBS name: other widths, 「가수명 / 타이틀명」 with spaces.
+  const portraitZip = new PizZip(render(deskTemplates, 'pbc-integrated.docx', 2));
+  const oldWidths = [900, 2800, 800, 1900, 1400, 1500];
+  let index = 0;
+  const portraitXml = portraitZip.file('word/document.xml').asText()
+    .replace(/<w:pgSz [^>]*\/>/, '<w:pgSz w:w="11906" w:h="16838"/>')
+    .replace(/<w:tblGrid>[\s\S]*?<\/w:tblGrid>/, `<w:tblGrid>${oldWidths.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`)
+    .replace(/<w:tcW w:w="\d+"/g, () => `<w:tcW w:w="${oldWidths[index++ % 6]}"`)
+    .replace('가수명/타이틀명', '가수명 / 타이틀명');
+  portraitZip.file('word/document.xml', portraitXml);
+  const merged = mergeIntegratedForms({ station: 'PBC', files: [{ name: 'new.docx', body: landscape }, { name: 'old.docx', body: portraitZip.generate({ type: 'nodebuffer' }) }] });
+  assert.equal(merged.albums, 2); assert.deepEqual(merged.warnings, []);
+  const xml = new PizZip(merged.buffer).file('word/document.xml').asText();
+  assert.match(xml, /w:orient="landscape"/);
+  const grid = [...xml.match(/<w:tblGrid>[\s\S]*?<\/w:tblGrid>/)[0].matchAll(/w:w="(\d+)"/g)].map((m) => m[1]);
+  for (const [row] of xml.matchAll(/<w:tr(?:\s[^>]*)?>[\s\S]*?<\/w:tr>/g)) {
+    assert.deepEqual([...row.matchAll(/<w:tcW w:w="(\d+)"/g)].map((m) => m[1]), grid);
+  }
+  assert.deepEqual(rowsOf(merged.buffer).slice(1).map((cells) => cells[1]), ['가수1 / 타이틀1', '가수2 / 타이틀2']);
 });
 
 test('the desk and the web use the same TBS and PBC forms', () => {
@@ -62,8 +86,11 @@ test('the desk and the web use the same TBS and PBC forms', () => {
     const xml = (dir) => new PizZip(fs.readFileSync(path.join(dir, name))).file('word/document.xml').asText();
     assert.equal(xml(deskTemplates), xml(webTemplates), name);
   }
-  assert.match(new PizZip(fs.readFileSync(path.join(deskTemplates, 'tbs-integrated.docx'))).file('word/document.xml').asText(), /심의 음반 접수 목록/);
-  assert.match(new PizZip(fs.readFileSync(path.join(deskTemplates, 'pbc-integrated.docx'))).file('word/document.xml').asText(), /음원심의신청서/);
+  // Owner 2026-11-15: TBS = 음원심의신청서 (portrait), PBC = 심의 음반 접수 목록 (landscape).
+  const tbs = new PizZip(fs.readFileSync(path.join(deskTemplates, 'tbs-integrated.docx'))).file('word/document.xml').asText();
+  const pbc = new PizZip(fs.readFileSync(path.join(deskTemplates, 'pbc-integrated.docx'))).file('word/document.xml').asText();
+  assert.match(tbs, /음원심의신청서/); assert.doesNotMatch(tbs, /orient="landscape"/);
+  assert.match(pbc, /심의 음반 접수 목록/); assert.match(pbc, /<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"\/>/);
 });
 
 test('mixed stations, single files and non-forms are refused', () => {

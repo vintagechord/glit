@@ -47,11 +47,13 @@ const REQUIRED_TEMPLATE_MARKERS: Record<string, string[]> = {
     "{track_title_with_title_mark}",
     "{lyrics_with_translation}",
   ],
+  // Owner 2026-11-15: TBS takes 「음원심의신청서」, PBC the landscape 「심의 음반 접수 목록」.
   "tbs-integrated.docx": [
     "{#albums}",
     "{/albums}",
-    "{company_actual}",
-    "{release_date_md}",
+    "{album_title}",
+    "{title_track_title_primary}",
+    "{title_track_title_secondary}",
   ],
   "wbs-integrated.docx": [
     "{#albums}",
@@ -62,9 +64,9 @@ const REQUIRED_TEMPLATE_MARKERS: Record<string, string[]> = {
   "pbc-integrated.docx": [
     "{#albums}",
     "{/albums}",
-    "{album_title}",
-    "{title_track_title_primary}",
-    "{title_track_title_secondary}",
+    "{company_actual}",
+    "{release_date_md}",
+    "{title_track_title}",
   ],
   "lyrics-mv.docx": ["{artist_display}", "{track_title}", "{lyrics_with_translation}"],
 };

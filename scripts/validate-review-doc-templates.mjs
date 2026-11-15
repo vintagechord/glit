@@ -25,7 +25,7 @@ const templates = new Map([
   ["lyrics-mv.docx", ["{artist_display}", "{track_title}", "{lyrics_with_translation}"]],
   [
     "tbs-integrated.docx",
-    ["{#albums}", "{/albums}", "{company_actual}", "{release_date_md}"],
+    ["{#albums}", "{/albums}", "{album_title}", "{title_track_title_primary}", "{title_track_title_secondary}"],
   ],
   [
     "wbs-integrated.docx",
@@ -33,7 +33,7 @@ const templates = new Map([
   ],
   [
     "pbc-integrated.docx",
-    ["{#albums}", "{/albums}", "{album_title}", "{title_track_title_primary}", "{title_track_title_secondary}"],
+    ["{#albums}", "{/albums}", "{company_actual}", "{release_date_md}"],
   ],
 ]);
 

@@ -15,19 +15,24 @@ export const MERGE_LIMITS = { files: 50, fileBytes: 2 * 1024 * 1024 };
 export const MERGE_STATIONS = ['TBS', 'WBS', 'PBC'];
 
 // The three table layouts. Files are matched by their table, not their name:
-// desk versions before 2.11 wrote the TBS and PBC forms the other way round.
+// the TBS and PBC forms were swapped twice (desk 2.11 and 2.14), so a file's
+// name does not say which form it holds.
 const LAYOUTS = {
   wbs: { label: 'WBS 원음방송 가요심의신청', headerRows: 1, rowsPerAlbum: 1, numbered: true, keyFrom: 2, detect: (h) => /순서/.test(h) && /심의신청곡/.test(h) },
   list: { label: '심의 음반 접수 목록 (가수명/타이틀명 · CD수량)', headerRows: 1, rowsPerAlbum: 1, numbered: false, keyFrom: 1, detect: (h) => /CD\s*수량/.test(h) || /가수명\s*\/\s*타이틀명/.test(h) },
   twoRow: { label: '음원심의신청서 (일자·가수·신청자/연락처·앨범명·타이틀)', headerRows: 2, rowsPerAlbum: 2, numbered: false, keyFrom: 1, detect: (h) => /앨범명\s*-\s*타이틀곡/.test(h) || (/신청자/.test(h) && /일자/.test(h) && /가수/.test(h)) },
 };
-// Which form each station takes (owner, 2026-11-06; desk and web templates agree).
-const STATION_LAYOUT = { WBS: 'wbs', TBS: 'list', PBC: 'twoRow' };
+// Which form each station takes (owner, 2026-11-15; desk and web templates agree).
+// PBC's list is landscape since 2.14; older portrait lists merge into its grid.
+const STATION_LAYOUT = { WBS: 'wbs', TBS: 'twoRow', PBC: 'list' };
 
 const textOf = (xml) => [...xml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 const cellsOf = (row) => [...row.matchAll(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g)].map((m) => m[0]);
 const normalize = (value) => value.normalize('NFC').replace(/\s+/g, ' ').trim();
+// Header labels are compared without spaces: 「가수명 / 타이틀명」 and 「가수명/타이틀명」 are one form.
+const headerKeyOf = (header) => normalize(textOf(header.join(''))).replace(/\s+/g, '');
+const gridOf = (table) => [...(table.match(/<w:tblGrid>([\s\S]*?)<\/w:tblGrid>/)?.[1] ?? '').matchAll(/<w:gridCol w:w="(\d+)"/g)].map((m) => Number(m[1]));
 
 function readForm(file) {
   if (!file?.name || !/\.docx$/i.test(file.name)) throw new IntegratedMergeError(`${file?.name || '파일'}: 통합신청서 DOCX 파일만 합칠 수 있습니다.`);
@@ -60,7 +65,7 @@ function readForm(file) {
     albums.push({ rows: group, key: cellTexts.slice(layout.keyFrom).join('|') });
   }
   return {
-    name: file.name, zip, xml, layoutKey, headerKey: normalize(textOf(header.join(''))), albums,
+    name: file.name, zip, xml, layoutKey, headerKey: headerKeyOf(header), grid: gridOf(table), albums,
     before: xml.slice(0, start + firstRow), header, after: xml.slice(start + lastRow.index + lastRow[0].length),
   };
 }
@@ -74,6 +79,21 @@ function setFirstCellText(row, text) {
       return `<w:t xml:space="preserve">${text}${close}`;
     });
     return placed ? replaced : replaced.replace(/<\/w:p>/, `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`);
+  });
+}
+
+// Rows copied from a file with other column widths (an older portrait list in
+// a landscape PBC list) take the first file's widths, so every row lines up.
+function fitRowToGrid(row, grid) {
+  const cells = cellsOf(row);
+  const spans = cells.map((cell) => Number(cell.match(/<w:gridSpan w:val="(\d+)"/)?.[1] ?? 1));
+  if (!grid.length || spans.reduce((sum, span) => sum + span, 0) !== grid.length) return row;
+  let column = 0;
+  return row.replace(/<w:tc(?:\s[^>]*)?>[\s\S]*?<\/w:tc>/g, (cell) => {
+    const span = Number(cell.match(/<w:gridSpan w:val="(\d+)"/)?.[1] ?? 1);
+    const width = grid.slice(column, column + span).reduce((sum, value) => sum + value, 0);
+    column += span;
+    return cell.replace(/<w:tcW w:w="\d+"/, `<w:tcW w:w="${width}"`);
   });
 }
 
@@ -104,7 +124,7 @@ export function mergeIntegratedForms({ station, files }) {
     for (const album of form.albums) {
       if (seen.has(album.key)) { duplicates.push(`${form.name} (${seen.get(album.key)}와 같은 앨범)`); continue; }
       seen.set(album.key, form.name);
-      rows.push(album.rows);
+      rows.push(form === base ? album.rows : album.rows.map((row) => fitRowToGrid(row, base.grid)));
     }
   }
   if (!rows.length) throw new IntegratedMergeError('합칠 앨범 행이 없습니다. 생성된 통합신청서를 선택했는지 확인하세요.');
