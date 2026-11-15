@@ -74,16 +74,23 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const Icon = service.icon;
+  // Owner 2026-11-16: one plain sentence saying what the service is, then
+  // the example, then a single note. Earlier copy read as too much text.
   const descriptions = {
     broadcast: isEnglish
-      ? "Onside recommends radio programs that match your music after its review is complete."
-      : "심의가 완료된 내 음악에 맞는 방송국의 프로그램을 온사이드가 제안합니다.",
+      ? "We find radio programs that fit your song and give you the links to their request boards."
+      : "내 음악에 맞는 라디오 프로그램과 신청 게시판 링크를 알려드립니다.",
     archive: isEnglish
-      ? "Your Onside reviews are saved to your account automatically. You can also record reviews handled elsewhere."
-      : "온사이드의 심의는 자동으로 계정에 저장되며, 외부 진행 심의도 계정에 기록할 수 있습니다",
+      ? "Keep every review and release in one place, including reviews you got elsewhere."
+      : "다른 곳에서 받은 심의와 발매 정보까지 한곳에 저장하고 관리합니다.",
     artmelon: isEnglish
-      ? "We connect you with Artmelon, a platform for selling CDs, vinyl and merch."
-      : "CD·LP·굿즈 판매 플랫폼 아트멜론과 연결합니다",
+      ? "Onside review members get an easier start on Artmelon, the store for CDs, LPs and merch."
+      : "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다.",
+  };
+  const notes = {
+    broadcast: isEnglish ? "For members with a completed Onside review." : "심의를 완료한 회원에게 제공됩니다.",
+    archive: isEnglish ? "Find it under My Music in your account." : "회원 계정의 내 음악 관리에서 이용합니다.",
+    artmelon: isEnglish ? "Store and selling terms are set in a consultation." : "입점·판매 조건은 상담으로 안내합니다.",
   };
 
   useEffect(() => {
@@ -162,20 +169,7 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
           {service.key === "archive" ? <ArchiveExample isEnglish={isEnglish} /> : null}
           {service.key === "artmelon" ? <ArtmelonExample isEnglish={isEnglish} /> : null}
         </div>
-        <p className="mt-4 break-keep text-xs leading-5 text-muted-foreground">
-          {service.key === "archive"
-            ? isEnglish
-              ? "Available to members with Onside review submissions. Your records stay in your account."
-              : "온사이드에서 심의를 진행한 회원의 계정에 실제 심의 내역이 보관됩니다."
-            : isEnglish
-              ? "Available to members after completing an Onside review."
-              : "온사이드에서 심의를 완료한 회원에게 제공되는 서비스입니다."}
-          {service.key === "artmelon" && (
-            <span className="mt-1 block">
-              {isEnglish ? "Store onboarding and selling terms are confirmed individually." : "입점 및 판매 조건은 개별 상담으로 안내합니다."}
-            </span>
-          )}
-        </p>
+        <p className="mt-4 break-keep text-xs leading-5 text-muted-foreground">{notes[service.key]}</p>
       </div>
     </dialog>
   );
@@ -193,16 +187,16 @@ function BroadcastExample({ isEnglish }: { isEnglish: boolean }) {
         <span className="ml-auto shrink-0 rounded border-2 border-[#111111] bg-[#1556a4] px-2 py-1 text-[10px] font-black text-white dark:border-[#f2cf27]">{isEnglish ? "Eligible" : "방송 적격"}</span>
       </div>
       <ol className="grid grid-cols-3 gap-1.5">
-        {(isEnglish ? ["Check results", "Write your story", "Find a station"] : ["결과 확인", "사연 준비", "방송국 신청"]).map((step, index) => (
+        {(isEnglish ? ["Program picks", "Request board links", "How to request"] : ["프로그램 추천", "게시판 링크", "신청 방법"]).map((step, index) => (
           <li key={step} className="rounded border border-[#111111]/15 bg-[#fffaf0] px-2 py-2 text-xs dark:border-white/20 dark:bg-white/5">
             <span className="mb-1 block text-[10px] font-black text-[#1556a4] dark:text-[#f2cf27]">0{index + 1}</span>{step}
           </li>
         ))}
       </ol>
       <div className="rounded-md border-l-4 border-[#1556a4] bg-[#fffaf0] p-3 dark:bg-white/5">
-        <p className="text-[10px] font-bold text-muted-foreground">{isEnglish ? "A request with your story" : "내 곡의 이야기를 담은 신청 사연"}</p>
+        <p className="text-[10px] font-bold text-muted-foreground">{isEnglish ? "Example pick" : "추천 예시"}</p>
         <p className="mt-1.5 break-keep text-xs leading-5">
-          {isEnglish ? "“I wrote this song for the quiet ride home. I hope it keeps your listeners company tonight.”" : "“늦은 퇴근길에 위로가 되길 바라며 만든 곡입니다. 오늘 밤 청취자들과 함께 듣고 싶어요.”"}
+          {isEnglish ? "A morning music show · listener board" : "아침 음악 프로그램 · 청취자 게시판"}
         </p>
       </div>
     </div>
@@ -211,10 +205,10 @@ function BroadcastExample({ isEnglish }: { isEnglish: boolean }) {
 
 function ArchiveExample({ isEnglish }: { isEnglish: boolean }) {
   const albums = isEnglish
-    ? [{ title: "Fragments of Dawn", type: "Single · 2026.10", status: "Completed", detail: "Results by station", complete: true },
-      { title: "Blue Afternoon", type: "EP · 2026.09", status: "In review", detail: "Review progress", complete: false }]
-    : [{ title: "새벽의 조각", type: "싱글 · 2026.10", status: "심의 완료", detail: "방송국별 결과 보관", complete: true },
-      { title: "파란 오후", type: "EP · 2026.09", status: "심의 중", detail: "진행 상황 확인", complete: false }];
+    ? [{ title: "Fragments of Dawn", type: "Single · 2026.10", status: "Onside review", detail: "Saved automatically", complete: true },
+      { title: "Blue Afternoon", type: "EP · 2026.09", status: "Reviewed elsewhere", detail: "Added by you", complete: false }]
+    : [{ title: "새벽의 조각", type: "싱글 · 2026.10", status: "온사이드 심의", detail: "자동 저장", complete: true },
+      { title: "파란 오후", type: "EP · 2026.09", status: "외부 심의", detail: "직접 등록", complete: false }];
   return (
     <div className="divide-y divide-[#111111]/10 dark:divide-white/10">
       {albums.map(album => (
@@ -232,7 +226,7 @@ function ArchiveExample({ isEnglish }: { isEnglish: boolean }) {
           </div>
         </div>
       ))}
-      <p className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground"><Archive className="size-3.5 shrink-0" aria-hidden="true" />{isEnglish ? "Your review history stays with your account" : "지난 심의도 내 계정에 차곡차곡"}</p>
+      <p className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground"><Archive className="size-3.5 shrink-0" aria-hidden="true" />{isEnglish ? "Every review and release, in one account" : "심의·발매 기록을 한 계정에"}</p>
     </div>
   );
 }
@@ -254,7 +248,7 @@ function ArtmelonExample({ isEnglish }: { isEnglish: boolean }) {
         ))}
       </div>
       <ol className="space-y-2.5">
-        {(isEnglish ? ["Confirm your completed review", "Share your products and quantities", "Get Artmelon onboarding guidance"] : ["온사이드 심의 완료 이력 확인", "판매할 상품과 수량 전달", "아트멜론 입점 상담 연결"]).map(step => (
+        {(isEnglish ? ["Review history check", "Products and quantities", "Onboarding consultation"] : ["심의 이력 확인", "판매 상품·수량 전달", "입점 상담 연결"]).map(step => (
           <li key={step} className="flex items-center gap-2 text-xs"><Check className="size-3.5 shrink-0 text-[#d9362c] dark:text-red-400" aria-hidden="true" />{step}</li>
         ))}
       </ol>

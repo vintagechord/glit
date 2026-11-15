@@ -13,8 +13,10 @@ test("the home hero keeps the primary heading without repeated supporting copy",
 
   // Owner 2026-11-07 (SEO): the headline names both services, then keeps the promise.
   // Owner 2026-11-11: the promise reads "이제 더 간편하게".
-  assert.match(homePage, /음반·뮤직비디오 심의,/);
-  assert.match(homePage, /이제 더 간편하게/);
+  // 2026-11-16: the headline is the brand banner's, in the built-in banner set.
+  const banners = readSource("src/lib/home-hero-banners.ts");
+  assert.match(banners, /음반·뮤직비디오 심의,/);
+  assert.match(banners, /이제 더 간편하게/);
   assert.doesNotMatch(homePage, /내 작품의 심의 기록을 한곳에서 관리하세요/);
   assert.doesNotMatch(homePage, /신청 · 결제 · 결과를 한곳에서/);
   assert.doesNotMatch(

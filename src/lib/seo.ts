@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 
 import { APP_CONFIG } from "@/lib/config";
+import { ONSIDE_FAMILY } from "@/lib/onside-why";
 import { getBaseUrl } from "@/lib/url";
 
 export const SITE_NAME = "온사이드";
 export const SITE_NAME_EN = "Onside";
 export const SITE_TAGLINE = "음반·음원·뮤직비디오 심의 온라인 접수";
 export const SITE_DESCRIPTION =
-  "음반 심의(앨범·음원 심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 TV·라디오 방송국의 음반 심의와 영상물등급위원회 등급분류·방송국별 뮤직비디오 심의까지, 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 한곳에서 안내합니다.";
+  "음반 심의 대행·뮤직비디오 심의 대행 온사이드. 음반 심의(앨범·음원 심의)와 뮤직비디오(뮤비) 심의를 온라인으로 한 번에 접수하세요. KBS·MBC·SBS 등 TV·라디오 방송국의 음반 심의와 영상물등급위원회 등급분류·방송국별 뮤직비디오 심의까지, 2017년부터 심의를 대행해 온 온사이드가 진행 상황과 결과를 한곳에서 안내합니다.";
 export const SITE_DESCRIPTION_EN =
   "Submit Korean broadcast music reviews online: album reviews for KBS, MBC, SBS and radio stations, and music video reviews and ratings. Onside has handled review submissions since 2017.";
 
@@ -17,6 +18,7 @@ export const SEO_KEYWORDS = [
   "방송국심의", "방송국 심의", "방송심의", "라디오심의", "라디오 심의", "가요심의", "음원심의", "음원 심의", "음원 방송 심의",
   "KBS 심의", "MBC 심의", "SBS 심의", "뮤직비디오 등급분류", "영상물등급위원회 뮤직비디오", "영등위 심의", "심의 대행",
   "음반심의 대행", "음원 심의 대행", "앨범 심의 대행", "뮤직비디오 심의 대행", "뮤비 심의 대행",
+  "음반심의대행", "음반 심의 대행", "뮤직비디오심의대행", "방송심의대행", "방송 심의 대행", "가요심의대행",
 ];
 
 /** Built from src/app/opengraph-image.tsx at deploy time. */
@@ -89,6 +91,19 @@ export function organizationJsonLd() {
     description: SITE_DESCRIPTION,
     slogan: SITE_TAGLINE,
     foundingDate: "2017",
+    // The operator and the music brands it runs, Onside among them.
+    parentOrganization: {
+      "@type": "Organization",
+      "@id": `${origin}/#operator`,
+      name: APP_CONFIG.businessName,
+      brand: ONSIDE_FAMILY.map((brand) => ({
+        "@type": "Brand",
+        name: brand.name,
+        alternateName: brand.nameEn,
+        description: brand.description,
+        ...(brand.key === "onside" ? { url: origin } : brand.url ? { url: brand.url } : {}),
+      })),
+    },
     email: APP_CONFIG.supportEmail,
     telephone: APP_CONFIG.supportPhone,
     taxID: APP_CONFIG.businessRegNo,

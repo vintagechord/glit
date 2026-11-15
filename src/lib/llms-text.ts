@@ -8,6 +8,7 @@
 import { APP_CONFIG } from "@/lib/config";
 import { faqItems } from "@/lib/onside-content";
 import { ONSIDE_TRUST_FACTS } from "@/lib/onside-trust";
+import { ONSIDE_FAMILY, ONSIDE_REASONS } from "@/lib/onside-why";
 import { REVIEW_GLOSSARY } from "@/lib/review-glossary";
 import { MV_PRICE_ROWS, REVIEW_GUIDES, type AlbumPackage } from "@/lib/review-guides";
 import { SITE_DESCRIPTION_EN } from "@/lib/seo";
@@ -40,6 +41,14 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
     ...ONSIDE_TRUST_FACTS.map((fact) => `- ${fact.label}: ${fact.value}`),
     `- 사업자등록번호 ${APP_CONFIG.businessRegNo} · 통신판매업신고 ${APP_CONFIG.businessMailOrderNo}`,
     "",
+    "## 왜 온사이드인가",
+    "",
+    ...ONSIDE_REASONS.map((reason) => `- ${reason.title.ko}: ${reason.body.ko}`),
+    "",
+    `## ${APP_CONFIG.businessName}가 운영하는 음악 브랜드`,
+    "",
+    ...ONSIDE_FAMILY.map((brand) => `- ${brand.name} (${brand.nameEn}): ${brand.description}${brand.url ? ` · ${brand.url}` : ""}`),
+    "",
     "## 음반 심의 비용 (방송국 패키지, 앨범 1건)",
     "",
   );
@@ -53,7 +62,7 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
   for (const guide of REVIEW_GUIDES) push(`- [${guide.h1}](${url(`/guide/${guide.slug}`)}): ${guide.description}`);
   push(`- [심의 비용 안내](${url("/guide/pricing")}): 음반 심의 패키지와 뮤직비디오 심의 항목별 비용, 결제와 증빙`);
   push(`- [심의 용어집](${url("/guide/glossary")}): 적격·부적격·보완 요청, 등급분류·필증 등 용어 설명`);
-  push(`- [자주 묻는 질문](${url("/faq")})`, `- [온사이드 소개](${url("/about")})`, `- [음반 심의 신청](${url("/dashboard/new/album")})`, `- [뮤직비디오 심의 신청](${url("/dashboard/new/mv")})`, `- [결과 조회](${url("/track")})`);
+  push(`- [자주 묻는 질문](${url("/faq")})`, `- [왜 온사이드인가 · 회사소개](${url("/about")}): 온사이드를 고르는 이유와 운영사 빈티지하우스의 음악 브랜드`, `- [음반 심의 신청](${url("/dashboard/new/album")})`, `- [뮤직비디오 심의 신청](${url("/dashboard/new/mv")})`, `- [결과 조회](${url("/track")})`);
 
   push("", "## 접수처별 안내 (영등위·방송국)", "", `- [접수처 목록](${url("/guide/stations")})`);
   for (const station of STATION_GUIDES) {

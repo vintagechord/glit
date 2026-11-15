@@ -26,7 +26,8 @@ const publicPages: Page[] = [
   ...STATION_GUIDES.map((station) => ({ path: `/guide/stations/${station.slug}`, priority: 0.8, changeFrequency: "monthly" as const })),
   { path: "/guide/glossary", priority: 0.7, changeFrequency: "monthly" },
   { path: "/faq", priority: 0.8, changeFrequency: "monthly", english: true },
-  { path: "/about", priority: 0.7, changeFrequency: "monthly", english: true },
+  // The case for Onside: a search landing page since 2026-11-16.
+  { path: "/about", priority: 0.9, changeFrequency: "monthly", english: true },
   { path: "/track", priority: 0.6, changeFrequency: "monthly", english: true },
   { path: "/support", priority: 0.6, changeFrequency: "monthly", english: true },
   { path: "/magazine", priority: 0.5, changeFrequency: "weekly", english: true },

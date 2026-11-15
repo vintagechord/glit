@@ -74,6 +74,7 @@ test("service-role admin pages authorize before loading privileged data", () => 
     ["../src/app/admin/artists/[id]/page.tsx", "createAdminClient()"],
     ["../src/app/admin/payments/page.tsx", "createAdminClient()"],
     ["../src/app/admin/submissions/detail/page.tsx", "createAdminClient()"],
+    ["../src/app/admin/hero-banners/page.tsx", "createAdminClient()"],
   ]);
   for (const [path, privilegedLoad] of pages) {
     const source = read(path);
@@ -108,4 +109,13 @@ test("financial and review tables reject owner writes at the RLS boundary", () =
   assert.match(migration, /payment_status/);
   assert.match(migration, /amount_krw/);
   assert.match(migration, /result_status/);
+});
+
+test("메인 배너 관리 actions authorize before they write", () => {
+  const source = read("../src/app/admin/hero-banners/actions.ts");
+  for (const action of ["saveHeroBannerAction", "deleteHeroBannerAction", "saveHeroIntervalAction"]) {
+    const body = source.slice(source.indexOf(`export async function ${action}`));
+    const authorization = body.indexOf("await requireAdminAction()");
+    assert.ok(authorization >= 0 && authorization < body.indexOf("createAdminClient()"), `${action} must authorize before creating a service-role client`);
+  }
 });

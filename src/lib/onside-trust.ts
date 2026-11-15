@@ -10,7 +10,7 @@
 import { APP_CONFIG } from "@/lib/config";
 
 /** Date the public guide content was last reviewed; shown on the guides and used as sitemap lastmod. */
-export const GUIDE_CONTENT_UPDATED = "2026-11-09";
+export const GUIDE_CONTENT_UPDATED = "2026-11-16";
 
 export const formatKoreanDate = (isoDate: string) => {
   const [year, month, day] = isoDate.split("-").map(Number);
