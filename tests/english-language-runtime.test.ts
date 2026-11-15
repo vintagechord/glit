@@ -49,6 +49,8 @@ test("English translation keeps exact labels, whitespace and changing counters w
   assert.equal(harness.translateValue("2026. 10. 25. 오전 9:00"), "2026-10-25 9:00 AM");
   assert.equal(harness.translateValue("2026. 10. 1. 오후 9:00"), "2026-10-1 9:00 PM");
   assert.equal(harness.translateValue("영상물등급위원회 · 적격"), "Korea Media Rating Board · Approved");
+  assert.equal(harness.translateValue("혹시 hanmail.net인가요?"), "Did you mean hanmail.net?");
+  assert.equal(harness.translateValue("바꾸기"), "Use it");
   assert.equal(harness.translateValue("앨범 가사 선택"), "Select 앨범 가사", "user-authored title is preserved inside a recognized UI label");
   assert.equal(harness.translateValue("모르는 문장에 앨범과 음원이 있습니다"), "모르는 문장에 앨범과 음원이 있습니다", "unknown sentences must not become mixed gibberish");
 });

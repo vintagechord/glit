@@ -1,5 +1,6 @@
 "use client";
 
+import { EmailTypoHint } from "@/components/forms/email-typo-hint";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { watchUploadProgress } from "@/lib/upload-watchdog";
 import * as React from "react";
@@ -383,8 +384,9 @@ export function KaraokeForm({
                   type="email"
                   value={guestEmail}
                   onChange={(event) => setGuestEmail(event.target.value)}
-                  className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                  className="peer w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
+                <EmailTypoHint email={guestEmail} onApply={setGuestEmail} />
               </div>
             </>
           )}

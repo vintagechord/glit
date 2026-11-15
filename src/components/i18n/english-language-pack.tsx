@@ -29,6 +29,7 @@ const exactTranslations: Record<string, string> = {
   "이메일은 확인했지만 비밀번호 설정을 완료하지 못했습니다. 비밀번호 찾기로 새 비밀번호를 설정해주세요.": "Your email was verified, but password setup could not be completed. Use password reset to choose a new password.",
   "이메일 확인과 비밀번호 설정이 완료되었습니다. 새 비밀번호로 로그인해주세요.": "Email verification and password setup are complete. Please log in with your new password.",
   "가입 확인을 완료하지 못했습니다. 비밀번호 찾기 또는 인증 메일 재요청을 이용해주세요.": "We could not complete signup verification. Use password reset or request another verification email.",
+  "바꾸기": "Use it",
   "심의 완료": "Review Completed",
   "결과 준비": "Results Ready",
   "결과 확인 가능": "Results Available",
@@ -3017,6 +3018,8 @@ const dynamicReviewTranslations: Array<[RegExp, string]> = [
   [/^방송국 (\d+)곳 중 (\d+)곳 결과 완료 · (\d+)%$/, "$2 of $1 broadcaster results complete · $3%"],
   [/^(\d+)건의 접수 현황도 함께 삭제됩니다\. 삭제할까요\?$/, "This also removes the status records for $1 applications. Continue?"],
   [/^(.+) 포함 앨범 (\d+)건 묶음 선택$/, "Select the group of $2 albums including $1"],
+  // The application email typo hint (EmailTypoHint); the domain is data.
+  [/^혹시 (.+)인가요\?$/, "Did you mean $1?"],
   [/^(.+)로 진행할까요\?$/, "Continue with $1?"],
   [/^(.+) 다운로드$/, "Download $1"],
   [/^(.+) 입고 옵션$/, "$1 delivery option"],

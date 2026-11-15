@@ -1,5 +1,6 @@
 "use client";
 
+import { EmailTypoHint } from "@/components/forms/email-typo-hint";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 
@@ -3620,7 +3621,15 @@ export function MvWizard({
                       clearInvalidField(emailField);
                     }}
                     required
-                    className={requiredFieldClass(emailField)}
+                    className={`peer ${requiredFieldClass(emailField)}`}
+                  />
+                  <EmailTypoHint
+                    email={isGuest ? guestEmail : applicantEmail}
+                    onApply={(fixed) => {
+                      if (isGuest) setGuestEmail(fixed);
+                      else setApplicantEmail(fixed);
+                      clearInvalidField(emailField);
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
