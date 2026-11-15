@@ -18,8 +18,10 @@ test("the brand family is the owner's list: Onside is 빈티지하우스's revie
   assert.equal(by["워터멜론"].url, "https://www.iamwatermelon.com");
   assert.equal(by["아트멜론"].url, "https://artmelon.co.kr/");
   assert.equal(by["마하픽스"].url, "https://machfix.co.kr");
-  // No address was given for the studio: it is named, not linked.
-  assert.equal(by["빈티지하우스"].url, null);
+  // Owner 2026-11-16: the studio's site is vhouse.co.kr.
+  assert.equal(by["빈티지하우스"].url, "https://vhouse.co.kr");
+  // Every brand but Onside itself links to its own site.
+  assert.deepEqual(ONSIDE_FAMILY.filter((brand) => !brand.url).map((brand) => brand.key), ["onside"]);
 });
 
 test("the reasons state what Onside does, without rankings or promises about results", () => {
