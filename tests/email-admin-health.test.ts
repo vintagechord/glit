@@ -5,15 +5,15 @@ import { build } from "esbuild";
 
 async function fixture() {
   const bundle = await build({
-    stdin: { contents: "export {retryEmailAction} from './src/app/admin/emails/actions';export {default as EmailAdminPage} from './src/app/admin/emails/page';export {checkEmailOutboxHealth} from './src/lib/email-health';export {state,calls} from 'mail-admin-fixture';", resolveDir: process.cwd(), loader: "ts" },
+    stdin: { contents: "export {retryEmailAction,acknowledgeEmailAction} from './src/app/admin/emails/actions';export {default as EmailAdminPage} from './src/app/admin/emails/page';export {checkEmailOutboxHealth} from './src/lib/email-health';export {state,calls} from 'mail-admin-fixture';", resolveDir: process.cwd(), loader: "ts" },
     bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
     plugins: [{ name: "mail-admin-fixture", setup(plugin) {
       plugin.onResolve({ filter: /^(mail-admin-fixture|@\/lib\/(?:supabase\/admin|admin\/(?:api-auth|page-auth)|email-delivery-mode)|next\/(?:cache|navigation|link))$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'mail-admin-fixture';";
         const modules: Record<string, string> = {
-          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,receipts:{oldestPendingAt:null},mail:null,submission:null,worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
-          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:name==='paid_submission_notification_stats'?state.receipts:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});const chain={select(fields){calls.push({name:'select',fields});return chain},eq(){return chain},in(){return chain},gt(){return chain},not(){return chain},update(patch){calls.push({name:'update',table,args:patch});return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:table==='email_outbox'?state.mail:table==='submissions'?state.submission:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve({data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
+          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,receipts:{oldestPendingAt:null},mail:null,submission:null,acknowledged:[{id:'11111111-1111-4111-8111-111111111111'}],updateError:false,worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:name==='paid_submission_notification_stats'?state.receipts:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});let updating=false;const chain={select(fields){calls.push({name:'select',fields});return chain},eq(column,value){calls.push({name:'eq',args:{column,value}});return chain},in(column,values){calls.push({name:'in',args:{column,values}});return chain},is(column,value){calls.push({name:'is',args:{column,value}});return chain},gt(){return chain},not(){return chain},update(patch){updating=true;calls.push({name:'update',table,args:patch});return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:table==='email_outbox'?state.mail:table==='submissions'?state.submission:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve(updating&&table==='email_outbox'?{data:state.acknowledged,error:state.updateError?{}:null}:{data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
           "@/lib/admin/api-auth": `${shared} export const requireAdminForApi=async()=>state.admin?{ok:true,user:{id:'fixture-admin'}}:{ok:false,error:'forbidden'};`,
           "@/lib/admin/page-auth": `${shared} export const requireAdminPage=async()=>{if(!state.admin)throw Error('forbidden');return {id:'fixture-admin'}};`,
           "@/lib/email-delivery-mode": `${shared} export const getEmailDeliveryMode=()=>state.mode;`,
@@ -27,9 +27,10 @@ async function fixture() {
   });
   const output = { exports: {} as {
     retryEmailAction: typeof import("../src/app/admin/emails/actions").retryEmailAction;
+    acknowledgeEmailAction: typeof import("../src/app/admin/emails/actions").acknowledgeEmailAction;
     EmailAdminPage: typeof import("../src/app/admin/emails/page").default;
     checkEmailOutboxHealth: typeof import("../src/lib/email-health").checkEmailOutboxHealth;
-    state: { mail: Record<string, unknown>|null; submission: Record<string, unknown>|null; receipts: {oldestPendingAt:string|null}; admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
+    state: { acknowledged: Array<{id:string}>; updateError: boolean; mail: Record<string, unknown>|null; submission: Record<string, unknown>|null; receipts: {oldestPendingAt:string|null}; admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
     calls: Array<{name:string;args?:Record<string,unknown>;fields?:string}>;
   } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
@@ -68,6 +69,38 @@ test("a retried customer mail is first pointed at the application's corrected ad
   const retry = api.calls.findIndex(call => call.name === 'retry_email_outbox');
   assert.ok(update >= 0 && update < retry, "the address changes before the mail is queued again");
   assert.equal(api.calls[update].args?.recipient_email, "artist@hanmail.net");
+});
+
+test("확인 완료 is admin-only and marks only a failed or uncertain mail that is not yet acknowledged", async () => {
+  const api = await fixture(); api.state.admin = false;
+  await assert.rejects(api.acknowledgeEmailAction(form()), /forbidden/);
+  assert.equal(api.calls.length, 0);
+  api.state.admin = true;
+  const invalid = form(); invalid.set("id", "invalid");
+  await assert.rejects(api.acknowledgeEmailAction(invalid), /redirect:.*notice=invalid/);
+  assert.equal(api.calls.length, 0);
+
+  await assert.rejects(api.acknowledgeEmailAction(form()), /redirect:\/admin\/emails\?notice=acknowledged/);
+  const update = api.calls.find(call => call.name === 'update');
+  assert.equal(update?.args?.acknowledged_by, "fixture-admin");
+  assert.ok(!Number.isNaN(Date.parse(String(update?.args?.acknowledged_at))));
+  assert.equal("status" in (update?.args ?? {}), false, "the bounce record stays as it was");
+  assert.deepEqual(api.calls.find(call => call.name === 'eq')?.args, { column: "id", value: "11111111-1111-4111-8111-111111111111" });
+  assert.deepEqual(api.calls.find(call => call.name === 'in')?.args, { column: "status", values: ["failed", "uncertain"] });
+  assert.deepEqual(api.calls.find(call => call.name === 'is')?.args, { column: "acknowledged_at", value: null });
+  assert.equal(api.calls.some(call => call.name === 'retry_email_outbox'), false);
+});
+
+test("확인 완료 that changes nothing or fails says so, and returns to the submission it came from", async () => {
+  const api = await fixture();
+  api.state.acknowledged = [];
+  await assert.rejects(api.acknowledgeEmailAction(form()), /redirect:\/admin\/emails\?notice=acknowledge_failed/);
+  api.state.acknowledged = [{ id: "11111111-1111-4111-8111-111111111111" }]; api.state.updateError = true;
+  await assert.rejects(api.acknowledgeEmailAction(form()), /notice=acknowledge_failed/);
+  api.state.updateError = false;
+  const fromSubmission = form(); fromSubmission.set("submissionId", "22222222-2222-4222-8222-222222222222");
+  await assert.rejects(api.acknowledgeEmailAction(fromSubmission), error => error instanceof Error
+    && /redirect:.*22222222-2222-4222-8222-222222222222/.test(error.message) && /saved=email_acknowledged/.test(error.message) && /#customer-emails$/.test(error.message));
 });
 
 test("mail retry database errors and rejected network calls become a safe failure notice", async () => {

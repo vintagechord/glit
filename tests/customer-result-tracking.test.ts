@@ -183,7 +183,7 @@ test("delivery notes the tracking it added before sending, and a failed note nev
 const mail = (overrides: Partial<SubmissionCustomerEmail> = {}): SubmissionCustomerEmail => ({
   id: "m1", recipient: "c@example.test", subject: "s", operation: "review result", status: "accepted", attempts: 1,
   createdAt: "2026-11-06T01:00:00Z", acceptedAt: "2026-11-06T01:00:05Z", nextAttemptAt: null, lastAttemptAt: "2026-11-06T01:00:01Z",
-  tracking: "open+click", openedAt: null, lastOpenedAt: null, openCount: 0, clickedAt: null, lastClickedAt: null, clickCount: 0,
+  tracking: "open+click", openedAt: null, lastOpenedAt: null, openCount: 0, clickedAt: null, lastClickedAt: null, clickCount: 0, acknowledgedAt: null,
   ...overrides,
 });
 

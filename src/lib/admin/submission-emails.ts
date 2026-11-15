@@ -41,6 +41,8 @@ export type SubmissionCustomerEmail = {
   clickedAt: string | null;
   lastClickedAt: string | null;
   clickCount: number;
+  /** 확인 완료: an administrator dealt with this failure; it leaves the warnings. */
+  acknowledgedAt: string | null;
 };
 
 export const SUBMISSION_CUSTOMER_EMAIL_LIMIT = 100;
@@ -50,7 +52,7 @@ export const SUBMISSION_CUSTOMER_EMAIL_LIMIT = 100;
 export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "from">, submissionId: string) {
   const { data, error } = await db
     .from("email_outbox")
-    .select("id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at, last_attempt_at, tracking, opened_at, last_opened_at, open_count, clicked_at, last_clicked_at, click_count")
+    .select("id, recipient_email, subject, operation, status, attempt_count, created_at, accepted_at, next_attempt_at, last_attempt_at, tracking, opened_at, last_opened_at, open_count, clicked_at, last_clicked_at, click_count, acknowledged_at")
     .eq("submission_id", submissionId)
     .in("operation", CUSTOMER_EMAIL_OPERATIONS)
     .order("created_at", { ascending: false })
@@ -74,6 +76,7 @@ export async function loadSubmissionCustomerEmails(db: Pick<SupabaseClient, "fro
     clickedAt: row.clicked_at ? String(row.clicked_at) : null,
     lastClickedAt: row.last_clicked_at ? String(row.last_clicked_at) : null,
     clickCount: Number(row.click_count ?? 0),
+    acknowledgedAt: row.acknowledged_at ? String(row.acknowledged_at) : null,
   }));
   return { emails, error: false };
 }
