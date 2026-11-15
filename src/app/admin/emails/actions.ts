@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAdminForApi } from "@/lib/admin/api-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
+import { pointRetryAtCurrentRecipient } from "@/lib/admin/notification-recipient-edit";
 
 export async function retryEmailAction(form: FormData) {
   const auth = await requireAdminForApi();
@@ -22,6 +23,9 @@ export async function retryEmailAction(form: FormData) {
   const db = createAdminClient();
   let failed = true;
   try {
+    // A customer mail goes to the application's current address, so a
+    // corrected typo does not bounce again.
+    await pointRetryAtCurrentRecipient(db, parsed.data, allowUncertain);
     const result = await db.rpc("retry_email_outbox", { p_id: parsed.data, p_allow_uncertain: allowUncertain });
     failed = Boolean(result.error);
   } catch {

@@ -1519,6 +1519,7 @@ export default async function AdminSubmissionDetailPage({
             customerEmails={customerEmails.emails}
             customerEmailsUnavailable={customerEmails.error}
             returnTo={adminSubmissionListHref}
+            currentRecipient={recipientState?.recipient ?? null}
           />
           {isMvDistribution ? (
             <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
