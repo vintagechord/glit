@@ -1,116 +1,21 @@
-import type { CSSProperties } from "react";
+import { AboutContent } from "@/components/about/about-content";
+import { ABOUT_DESCRIPTION, AboutJsonLd } from "@/components/about/about-json-ld";
+import { pageMetadata } from "@/lib/seo";
 
-import Image from "next/image";
-
-import { AboutRevealSection } from "@/components/about/about-reveal-section";
-import { GuideTrustFacts } from "@/components/guide/trust-facts";
-import { JsonLd } from "@/components/seo/json-ld";
-import { SiteLogo } from "@/components/site/site-logo";
-import { absoluteUrl, organizationJsonLd, pageMetadata } from "@/lib/seo";
-import { getBaseUrl } from "@/lib/url";
-
-const ABOUT_DESCRIPTION =
-  "온사이드는 2017년부터 음반 심의(앨범·음원 심의)와 뮤직비디오 심의 접수를 대행해 온 (주)빈티지하우스의 온라인 심의 서비스입니다. TV·라디오 방송국 15곳의 음반 심의와 영등위 등급분류·방송국별 뮤직비디오 심의를 온라인으로 접수하고 결과를 한곳에서 안내합니다.";
-
+// 2026-11-16 (owner): the page makes the case for Onside at a glance, and
+// carries the whole phrases people search with (음반 심의 대행 …).
 export const metadata = pageMetadata({
-  title: "회사소개 · 2017년부터 이어온 음반·뮤직비디오 심의 대행",
+  title: "왜 온사이드인가 · 음반 심의 대행·뮤직비디오 심의 대행",
   description: ABOUT_DESCRIPTION,
   path: "/about",
   enPath: "/en/about",
 });
 
-// The "who is this" facts search engines and AI assistants quote; each one is
-// already stated elsewhere on the site (guides, footer, terms).
-const serviceFacts = [
-  { label: "음반 심의", value: "앨범·음원(디지털 싱글) 심의 · KBS·MBC·SBS 등 TV·라디오 방송국 15곳" },
-  { label: "뮤직비디오 심의", value: "영등위 등급분류(온라인 유통용, Mnet 추가) · KBS·MBC·SBS 방송국별 심의 · ETN 입고" },
-];
-
 export default function AboutPage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <div
-        className="space-y-10"
-        style={
-          {
-            "--about-ink": "var(--foreground)",
-            "--about-surface": "var(--card)",
-            "--about-surface-strong": "var(--muted)",
-          } as CSSProperties
-        }
-      >
-        <section className="relative overflow-hidden rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[8px_8px_0_#111111] dark:border-[#f2cf27] dark:shadow-[8px_8px_0_#f2cf27] md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div aria-hidden="true" className="pointer-events-none absolute right-0 top-0 h-16 w-16 bg-[#f2cf27]" />
-          <div aria-hidden="true" className="pointer-events-none absolute right-16 top-16 h-8 w-24 bg-[#1556a4]" />
-          <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 h-5 w-full bg-[#111111] dark:bg-[#f2cf27]" />
-          <div className="relative z-10 grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
-            <div>
-              <p className="bauhaus-kicker">
-                Since 2017
-              </p>
-              <h1 className="font-display mt-4 text-2xl font-black leading-tight text-[var(--about-ink)] sm:text-3xl md:text-4xl">
-                온사이드(onside)
-              </h1>
-              <p className="mt-3 text-sm font-semibold leading-6 text-[var(--about-ink)]/70">
-                2017년부터 이어온 음반·뮤직비디오 심의.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-normal text-[var(--about-ink)]/70">
-                {[
-                  "음반 심의",
-                  "뮤비 심의",
-                  "실시간 업데이트",
-                ].map((chip) => (
-                  <span
-                    key={chip}
-                    className="rounded-[6px] border-2 border-[#111111] bg-white px-3 py-1"
-                  >
-                    {chip}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="relative">
-              <div className="relative overflow-hidden rounded-[8px] border-2 border-[#111111] bg-white">
-                <Image
-                  src="/media/hero/glit-hero-poster.jpg"
-                  alt="온사이드 심의 서비스 소개 이미지"
-                  width={960}
-                  height={520}
-                  className="h-[220px] w-full object-cover md:h-[260px]"
-                  priority={false}
-                />
-              </div>
-              <div className="mt-3 flex items-center gap-3">
-                <SiteLogo
-                  href={null}
-                  width={96}
-                  height={24}
-                  className="h-6 w-auto"
-                  showSrLabel={false}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <AboutRevealSection />
-
-        <GuideTrustFacts heading="온사이드 한눈에" leadFacts={serviceFacts} />
-      </div>
-      <JsonLd data={organizationJsonLd()} />
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "AboutPage",
-          "@id": `${absoluteUrl("/about")}#webpage`,
-          url: absoluteUrl("/about"),
-          name: "온사이드 회사소개",
-          description: ABOUT_DESCRIPTION,
-          inLanguage: "ko-KR",
-          isPartOf: { "@id": `${getBaseUrl()}/#website` },
-          mainEntity: { "@id": `${getBaseUrl()}/#organization` },
-        }}
-      />
-    </div>
+    <>
+      <AboutContent />
+      <AboutJsonLd />
+    </>
   );
 }

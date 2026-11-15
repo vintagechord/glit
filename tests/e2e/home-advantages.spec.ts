@@ -83,9 +83,17 @@ for (const width of [320, 390, 1280]) {
       const serviceNames = english
         ? ["Broadcast request instructions", "Review archive", "Artmelon store"]
         : ["방송 신청 방법 제공", "심의 기록 보관", "아트멜론 입점"];
+      // Owner 2026-11-16: one plain sentence each, saying what the service is.
       const serviceDescriptions = english
-        ? ["Onside recommends radio programs that match your music after its review is complete.", "Your Onside reviews are saved to your account automatically. You can also record reviews handled elsewhere.", "We connect you with Artmelon, a platform for selling CDs, vinyl and merch."]
-        : ["심의가 완료된 내 음악에 맞는 방송국의 프로그램을 온사이드가 제안합니다.", "온사이드의 심의는 자동으로 계정에 저장되며, 외부 진행 심의도 계정에 기록할 수 있습니다", "CD·LP·굿즈 판매 플랫폼 아트멜론과 연결합니다"];
+        ? ["We find radio programs that fit your song and give you the links to their request boards.", "Keep every review and release in one place, including reviews you got elsewhere.", "Onside review members get an easier start on Artmelon, the store for CDs, LPs and merch."]
+        : ["내 음악에 맞는 라디오 프로그램과 신청 게시판 링크를 알려드립니다.", "다른 곳에서 받은 심의와 발매 정보까지 한곳에 저장하고 관리합니다.", "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다."];
+      // What each example shows, and the single note under it.
+      const serviceExamples = english
+        ? [["Program picks", "Request board links", "How to request"], ["Onside review", "Reviewed elsewhere"], ["Review history check", "Onboarding consultation"]]
+        : [["프로그램 추천", "게시판 링크", "신청 방법"], ["온사이드 심의", "외부 심의"], ["심의 이력 확인", "입점 상담 연결"]];
+      const serviceNotes = english
+        ? ["For members with a completed Onside review.", "Find it under My Music in your account.", "Store and selling terms are set in a consultation."]
+        : ["심의를 완료한 회원에게 제공됩니다.", "회원 계정의 내 음악 관리에서 이용합니다.", "입점·판매 조건은 상담으로 안내합니다."];
       await expect(services).toHaveCount(3);
       for (const name of serviceNames) {
         await expect(benefits.getByRole("button", { name, exact: true })).toBeVisible();
@@ -123,6 +131,13 @@ for (const width of [320, 390, 1280]) {
         expect(await dialog.evaluate(element => element instanceof HTMLDialogElement && element.matches(":modal"))).toBe(true);
         await expect(dialog.getByText(english ? "Service preview" : "서비스 이용 예시", { exact: true })).toHaveCount(0);
         await expect(dialog.getByText(serviceDescriptions[index], { exact: true })).toBeVisible();
+        for (const phrase of serviceExamples[index]) await expect(dialog).toContainText(phrase);
+        await expect(dialog.getByText(serviceNotes[index], { exact: true })).toBeVisible();
+        // Short enough to take in at a glance: the description, the example, one note.
+        const sentences = await dialog.evaluate(element => (element.textContent ?? "").split(/[.!?。]\s*/).filter(part => part.trim().length > 12).length);
+        expect(sentences).toBeLessThanOrEqual(4);
+        // No story-writing sample: the service gives programs and links, not a script.
+        await expect(dialog).not.toContainText(english ? "I wrote this song" : "늦은 퇴근길");
         await expect(dialog.getByText(english ? "ILLUSTRATIVE EXAMPLE · FICTIONAL DATA" : "이해를 돕기 위한 가상의 예시입니다", { exact: true })).toBeVisible();
         await expect(dialog.getByRole("link")).toHaveCount(0);
         await expect(dialog.locator("form")).toHaveCount(0);

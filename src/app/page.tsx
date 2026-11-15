@@ -11,11 +11,13 @@ import {
 import { StripAdBanner } from "@/components/site/strip-ad-banner";
 import { HomeHeroAdBanner } from "@/components/site/home-hero-ad-banner";
 import { HomeHeroBanner } from "@/components/site/home-hero-banner";
+import { getHomeHero } from "@/lib/public-home-hero";
 import { ScrollRevealObserver } from "@/components/scroll-reveal-observer";
 import { ReliableLink } from "@/components/site/reliable-link";
 import { HomeSessionPanel } from "@/features/home/home-session-panel";
 import { JsonLd } from "@/components/seo/json-ld";
 import { ALBUM_MULTI_DISCOUNT_BADGE } from "@/lib/album-payment-discount";
+import { ONSIDE_WHY_PATH } from "@/lib/onside-why";
 import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";
 import { REVIEW_GUIDES } from "@/lib/review-guides";
 import {
@@ -36,7 +38,9 @@ export const metadata: Metadata = pageMetadata({
   // Naver ranks the home page for the review terms, so every one people
   // search with (음반·음원·앨범·뮤직비디오 심의, 대행) sits in the title or
   // the description.
-  title: `${SITE_NAME} | 음반 심의·음원 심의·뮤직비디오 심의 대행 · 온라인 접수`,
+  // 2026-11-16: "음반 심의 대행" and "뮤직비디오 심의 대행" each stay whole,
+  // the way people type them (음반심의대행).
+  title: `${SITE_NAME} | 음반 심의 대행 · 뮤직비디오 심의 대행 · 음원 심의 온라인 접수`,
   absoluteTitle: true,
   description: SITE_DESCRIPTION,
   path: "/",
@@ -123,7 +127,9 @@ function ServiceCardVisual({ tone }: { tone: string }) {
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  // The banners set under 메인 배너 관리; saving there revalidates this page.
+  const hero = await getHomeHero();
   return (
     <div className="relative overflow-x-hidden">
       <ScrollRevealObserver />
@@ -136,10 +142,11 @@ export default function Home() {
 
           <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-6 px-4 py-7 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,0.98fr)_minmax(430px,0.92fr)] lg:items-stretch lg:gap-9">
             <div className="flex h-full flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:gap-5">
-              {/* The headline carries the two service names search engines
-                  and AI assistants match on; the second line is the owner's
-                  promise (2026-11-11). A turntable turns beside it. */}
-              <HomeHeroBanner lines={["음반·뮤직비디오 심의,", "이제 더 간편하게"]} />
+              {/* A short carousel. The brand banner's headline carries the two
+                  service names search engines and AI assistants match on and
+                  is the page's h1 (음반·뮤직비디오 심의, 이제 더 간편하게: the
+                  owner's promise, 2026-11-11). */}
+              <HomeHeroBanner slides={hero.slides} intervalSeconds={hero.intervalSeconds} />
               <HomeHeroAdBanner />
               <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:max-w-[540px]">
                 {heroCtas.map((cta) => {
@@ -233,8 +240,8 @@ export default function Home() {
 
         <nav aria-label="심의 종류별 안내" className="mt-10 rounded-[10px] border-2 border-[#111111] bg-card p-5 shadow-[4px_4px_0_#111111] dark:border-[#f2cf27] dark:shadow-[4px_4px_0_#f2cf27] sm:p-6">
           <h2 className="text-lg font-black text-foreground">심의 종류별 안내</h2>
-          <p className="mt-2 break-keep text-sm leading-6 text-muted-foreground">준비물, 비용, 접수 일정과 결과 확인 방법을 심의 종류별로 정리했습니다.</p>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <p className="mt-2 break-keep text-sm leading-6 text-muted-foreground">음반 심의 대행과 뮤직비디오 심의 대행에 필요한 준비물, 비용, 접수 일정과 결과 확인 방법을 정리했습니다.</p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {REVIEW_GUIDES.map((guide) => (
               <li key={guide.slug}>
                 <ReliableLink href={`/guide/${guide.slug}`} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
@@ -249,6 +256,13 @@ export default function Home() {
                 </ReliableLink>
               </li>
             ))}
+            {/* 2026-11-16 (owner): few visitors reach the footer's 회사소개, so the
+                case for Onside is linked from here and from the main banner. */}
+            <li>
+              <ReliableLink href={ONSIDE_WHY_PATH} className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]/70">
+                왜 온사이드인가<ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </ReliableLink>
+            </li>
           </ul>
         </nav>
       </section>

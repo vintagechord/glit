@@ -64,7 +64,8 @@ const menuGroups: Array<{ title: string; items: Array<{ href: string; label: str
       { href: "/admin/karaoke", label: "노래방 등록 관리" },
       { href: "/admin/magazine", label: "매거진 발행 요청" },
       { href: "/admin/credits", label: "크레딧 서비스 관리" },
-      { href: "/admin/banners", label: "배너 관리" },
+      { href: "/admin/hero-banners", label: "메인 배너 관리", note: "메인 상단 슬라이드 배너" },
+      { href: "/admin/banners", label: "배너 관리", note: "광고·띠배너" },
     ],
   },
   {

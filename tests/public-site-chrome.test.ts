@@ -38,7 +38,7 @@ test("scroll-reveal sections stay visible without JavaScript or with reduced mot
       return { path, base, content: readFileSync(path, "utf8") };
     },
   });
-  for (const file of ["src/app/page.tsx", "src/components/about/about-reveal-section.tsx"]) {
+  for (const file of ["src/app/page.tsx"]) {
     const classes = readSource(file).match(/"([^"]*will-change-transform[^"]*)"/)?.[1].split(/\s+/);
     assert.ok(classes, file);
     const hiding = classes.filter((name) => /opacity-0|translate-y-/.test(name));
@@ -50,8 +50,8 @@ test("scroll-reveal sections stay visible without JavaScript or with reduced mot
     assert.match(css, /@media \(prefers-reduced-motion: no-preference\)/);
     assert.match(css, /html\[data-js\] &\[data-reveal-state=hidden\]/, "Tailwind must emit the gated selector");
   }
-  // The about cards use the shared observer, which reveals at once for reduced motion.
-  assert.match(readSource("src/components/about/about-reveal-section.tsx"), /<ScrollRevealObserver selector="\[data-reveal\]" \/>/);
+  // The shared observer reveals at once for reduced motion. (The about page
+  // lost its reveal cards on 2026-11-16; it shows everything at once.)
   assert.match(readSource("src/components/scroll-reveal-observer.tsx"), /prefers-reduced-motion: reduce/);
 });
 
@@ -160,18 +160,29 @@ test("the home hero makes 심의 신청 the yellow main card and keeps 결과 �
 
 test("the home banner keeps a two-line text headline in both languages and lets visitors stop its motion", () => {
   const home = readSource("src/app/page.tsx");
-  // Owner 2026-11-11: the second line becomes "이제 더 간편하게".
-  assert.match(home, /<HomeHeroBanner lines=\{\["음반·뮤직비디오 심의,", "이제 더 간편하게"\]\} \/>/);
+  // 2026-11-16 (owner): the banner is a carousel set under 메인 배너 관리; the
+  // brand banner, with the owner's 2026-11-11 headline, is its first slide and
+  // the page's h1.
+  assert.match(home, /<HomeHeroBanner slides=\{hero\.slides\} intervalSeconds=\{hero\.intervalSeconds\} \/>/);
+  const defaults = readSource("src/lib/home-hero-banners.ts");
+  assert.match(defaults, /design: "record",\s*ko: \{ badge: "Since 2017", headline: \["음반·뮤직비디오 심의,", "이제 더 간편하게"\], body: null \},\s*en: \{ badge: null, headline: \["Album & MV Reviews,", "Now Made Simple"\], body: null \},/);
   const banner = readSource("src/components/site/home-hero-banner.tsx");
-  assert.match(banner, /<h1 className="onside-hero-title">\s*<span>\{lines\[0\]\}<\/span>\s*<span>\{lines\[1\]\}<\/span>\s*<\/h1>/);
+  assert.match(banner, /<HeroTitle as=\{heading \? "h1" : "h2"\} ko=\{ko\.headline\} en=\{en\?\.headline \?\? null\} floor=\{TITLE_FLOOR\[design\]\} \/>/);
+  assert.match(defaults, /return \(slides\.find\(\(slide\) => slide\.design === "record"\) \?\? slides\[0\]\)\?\.id \?\? null;/, "the brand banner's headline is the h1");
+  const text = readSource("src/components/site/hero-text.tsx");
+  assert.match(text, /<span>\{lines\[0\]\}<\/span>\s*\{lines\[1\] \? <span>\{lines\[1\]\}<\/span> : null\}/);
   assert.match(banner, /STATION_GUIDES\.map/, "the band lists the real review offices");
   assert.match(banner, /<StationList hidden \/>/, "the looping copy is hidden from screen readers");
   const css = readSource("src/app/globals.css");
   // Lines never wrap; the size is derived per language from the width the
   // record's corner leaves.
   assert.match(css, /\.onside-hero-title > span \{\s*display: block;\s*white-space: nowrap;/);
-  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(2\.875rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-room\)\) \/ 9\.6\)\);/);
-  assert.match(css, /html\[lang="en"\] \.onside-hero-title \{\s*font-size: min\(2\.5rem, calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-room\)\) \/ 11\.2\)\);/);
+  // The divisor is the longer line's width in ems, set from the text: the
+  // brand headline keeps 9.6 (Korean) and 11.2 (English, capped at 2.5rem).
+  assert.match(css, /\.onside-hero-title \{[^}]*font-size: min\(var\(--hero-cap, 2\.875rem\), calc\(\(100cqi - 2 \* var\(--hero-pad\) - var\(--hero-gap\) - var\(--hero-room\)\) \/ var\(--hero-em, 9\.6\)\)\);/);
+  assert.match(banner, /record: \{ ko: 9\.6, en: 11\.2 \},/);
+  assert.match(text, /const em = Math\.max\(english \? floor\.en : floor\.ko, estimateHeadlineEm\(lines\)\);/);
+  assert.match(css, /\.onside-hero-slide--record \.onside-hero-title\[data-hero-lang="en"\] \{\s*--hero-cap: 2\.5rem;/);
   assert.match(readSource("src/components/i18n/english-language-pack.tsx"), /"음반·뮤직비디오 심의,": "Album & MV Reviews,",\s*"이제 더 간편하게": "Now Made Simple",/);
   assert.match(css, /\[data-hero-motion="paused"\] \.onside-hero-lp-vinyl,\s*\[data-hero-motion="paused"\] \.onside-hero-track \{\s*animation-play-state: paused;/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.onside-hero-lp-vinyl,\s*\.onside-hero-track \{\s*animation: none;/);
@@ -180,11 +191,13 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   // the bottom-right corner of the area above the band, so about a quarter
   // shows with a tonearm on it. It sits under the copy, the band covers its
   // lower half, and no fake play control comes back.
-  assert.match(banner, /<HeroRecord \/>\s*<div className="onside-hero-copy">\s*<p className="onside-hero-since">Since 2017<\/p>\s*<div className="onside-hero-headline">\s*<h1 className="onside-hero-title">[\s\S]*?<\/h1>\s*<\/div>/);
+  assert.match(banner, /\{design === "record" \? <HeroRecord \/> : null\}[\s\S]*?<div className="onside-hero-copy">\s*\{design === "record" && ko\.badge \? <HeroText className="onside-hero-since" ko=\{ko\.badge\} en=\{en\?\.badge \?\? null\} \/> : null\}\s*<div className="onside-hero-headline">\s*<HeroTitle /);
   assert.match(css, /\.onside-hero-since \{[^}]*border-radius: 999px;/);
   assert.match(banner, /<div className="onside-hero-lp" aria-hidden="true" data-no-translate>/);
   assert.match(banner, /const LABEL_TEXT = "ONSIDE · ALBUM & MUSIC VIDEO REVIEW · ";/);
-  assert.match(css, /\.onside-hero-lp \{\s*position: absolute;\s*inset: 0 0 var\(--hero-band\) 0;[^}]*overflow: hidden;/);
+  // The record is clipped to its own slide, which ends above the band.
+  assert.match(css, /\.onside-hero-lp \{\s*position: absolute;\s*inset: 0;[^}]*overflow: hidden;/);
+  assert.match(css, /\.onside-hero-slide \{[^}]*overflow: hidden;/);
   assert.match(css, /\.onside-hero-lp-body \{\s*position: absolute;\s*right: -33cqi;\s*bottom: -33cqi;\s*width: 66cqi;/);
   assert.match(css, /\.onside-hero-copy \{\s*position: relative;\s*z-index: 1;/);
   assert.match(css, /\.onside-hero-band \{\s*position: relative;\s*z-index: 2;/);
@@ -198,7 +211,9 @@ test("the home banner keeps a two-line text headline in both languages and lets 
   // home page only; the dashboard keeps its own default frame.
   assert.match(readSource("src/features/home/home-session-panel.tsx"), /frameClassName: "border-\[1\.5px\]",/);
   assert.match(readSource("src/features/home/home-review-panel.tsx"), /frameClassName = "border-2 shadow-\[6px_6px_0_#111111\] dark:shadow-\[6px_6px_0_#f2cf27\]",/);
-  const toggle = readSource("src/components/site/hero-motion-toggle.tsx");
+  const toggle = readSource("src/components/site/hero-carousel-controls.tsx");
   assert.match(toggle, /setAttribute\("data-hero-motion", paused \? "paused" : "on"\)/);
+  // Stopping the motion also stops the slides from advancing by themselves.
+  assert.match(toggle, /if \(count < 2 \|\| paused \|\| held\) return;\s*if \(window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches\) return;/);
   for (const label of ["배너 움직임 멈춤", "배너 움직임 재생", "Pause banner motion", "Play banner motion"]) assert.ok(toggle.includes(label));
 });
