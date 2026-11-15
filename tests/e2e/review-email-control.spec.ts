@@ -13,7 +13,7 @@ test.beforeAll(async () => {
     plugin.onResolve({ filter: /^(next\/navigation|@\/app\/admin\/emails\/actions)$/ }, args => ({ path: args.path, namespace: "fixture" }));
     plugin.onLoad({ filter: /.*/, namespace: "fixture" }, args => ({ loader: "js", contents: args.path === "next/navigation"
       ? "export const useRouter=()=>({refresh(){}});"
-      : "export const retryEmailAction=async form=>{(window.__retries||(window.__retries=[])).push(Object.fromEntries(form.entries()));};" }));
+      : "export const retryEmailAction=async form=>{(window.__retries||(window.__retries=[])).push(Object.fromEntries(form.entries()));};export const acknowledgeEmailAction=async()=>{};" }));
   } }] });
   html = `<!doctype html><html lang="ko"><body><div id="root"></div><script>${bundle.outputFiles[0].text.replace(/<\/script/gi, "<\\/script")}</script></body></html>`;
 });

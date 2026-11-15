@@ -98,6 +98,7 @@ import {
   saveAlbumSubmissionAction,
   type SubmissionActionState,
 } from "./actions";
+import { EmailTypoHint } from "@/components/forms/email-typo-hint";
 import { AiUsageSelector } from "./ai-usage-selector";
 import { AlbumTrackTableEditor } from "./album-track-table-editor";
 import { ApplicationFormModeTabs } from "./application-form-mode-tabs";
@@ -4736,8 +4737,9 @@ export function AlbumWizard({
                         value={applicantEmail}
                         onChange={(event) => setApplicantEmail(event.target.value)}
                         required
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="peer w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      <EmailTypoHint email={applicantEmail} onApply={setApplicantEmail} />
                       {renderBasicFieldError("applicantEmail")}
                     </div>
                     <div className="space-y-2">
@@ -5116,8 +5118,9 @@ export function AlbumWizard({
                         value={applicantEmail}
                         onChange={(event) => setApplicantEmail(event.target.value)}
                         required
-                        className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
+                        className="peer w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                       />
+                      <EmailTypoHint email={applicantEmail} onApply={setApplicantEmail} />
                       {renderBasicFieldError("applicantEmail")}
                     </div>
                     <div className="space-y-2">
@@ -5558,7 +5561,7 @@ export function AlbumWizard({
             <div className="mt-5" data-preflight-field="aiUsed"><AiUsageSelector value={aiUsed} onChange={setAiUsed} context="album" /></div>
             <details open className="mt-5"><summary className="cursor-pointer text-sm font-bold">접수자 정보</summary><div className="mt-3 grid gap-3 sm:grid-cols-3">
               <label className="text-sm">이름<input data-preflight-field="applicantName" autoComplete="name" value={applicantName} onChange={event => setApplicantName(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
-              <label className="text-sm">이메일<input data-preflight-field="applicantEmail" type="email" autoComplete="email" value={applicantEmail} onChange={event => setApplicantEmail(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
+              <label className="text-sm">이메일<input data-preflight-field="applicantEmail" type="email" autoComplete="email" value={applicantEmail} onChange={event => setApplicantEmail(event.target.value)} className="peer mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /><EmailTypoHint email={applicantEmail} onApply={setApplicantEmail} className="mt-1" /></label>
               <label className="text-sm">연락처<input data-preflight-field="applicantPhone" type="tel" autoComplete="tel" value={applicantPhone} onChange={event => setApplicantPhone(event.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-border bg-background px-3" /></label>
             </div></details>
           </section> : null}

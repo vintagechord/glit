@@ -295,6 +295,8 @@ export default async function AdminSubmissionDetailPage({
         return "안내 이메일 재발송을 요청했습니다.";
       case "notification_error":
         return "안내 이메일 재발송을 요청하지 못했습니다.";
+      case "email_acknowledged":
+        return "확인 완료로 처리했습니다. 사이트 관리 경고에서 빠집니다.";
       case "email_retry":
         return "메일 재발송을 대기열에 등록했습니다. 자동 처리 후 이메일 발송 내역에서 상태를 확인해주세요.";
       case "album_info":

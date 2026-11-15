@@ -35,7 +35,8 @@ try:
         "grant usage on schema public to anon,authenticated,service_role;"
         "create table public.submissions(id uuid primary key,result_notified_at timestamptz,updated_at timestamptz default now());"
         "grant select,update on public.submissions to service_role;")
-    for name in ["*_email_worker_and_rate_limits.sql", "*_durable_email_outbox.sql", "*_review_email_attachment_refs.sql"]:
+    for name in ["*_email_worker_and_rate_limits.sql", "*_durable_email_outbox.sql", "*_review_email_attachment_refs.sql",
+                 "*_email_outbox_acknowledgement.sql"]:
         path = sorted((root / "supabase/migrations").glob(name))[-1]
         sql(path.read_text())
         print("PASS", path.name)
@@ -43,6 +44,8 @@ try:
     print("PASS outbox state transitions, retention, result-version guard and permissions")
     sql((root / "tests/sql/email-attachments.sql").read_text())
     print("PASS immutable attachment queue, schema validation, longer lease and browser-role denial")
+    sql((root / "tests/sql/email-outbox-acknowledgement.sql").read_text())
+    print("PASS 확인 완료 leaves the warning counts, survives a refused retry and is cleared by 재발송")
     sql("select public.dispatch_email_outbox();")
     request = "select (public.consume_email_rate_limit(repeat('f',64),3,60000)->>'allowed')::boolean;"
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:

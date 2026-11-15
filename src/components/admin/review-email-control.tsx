@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { retryEmailAction } from "@/app/admin/emails/actions";
+import { acknowledgeEmailAction, retryEmailAction } from "@/app/admin/emails/actions";
+import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { CUSTOMER_EMAIL_OPERATION_LABELS, EMAIL_STATUS_LABELS, SUBMISSION_CUSTOMER_EMAIL_LIMIT, type SubmissionCustomerEmail } from "@/lib/admin/submission-emails";
 import { mailReadState } from "@/lib/admin/customer-activity";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
@@ -20,6 +21,8 @@ const seoulTime = (value: string | null) => value
   ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value))
   : "—";
 const retryableStatuses = new Set(["failed", "uncertain", "retry"]);
+/** Statuses that count as a warning until 확인 완료 or a retry. */
+const acknowledgeableStatuses = new Set(["failed", "uncertain"]);
 
 export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerEmail, customerEmails = [], customerEmailsUnavailable = false, returnTo = "", currentRecipient = null }: {
   submissionId: string; lastNotifiedAt?: string | null;
@@ -118,8 +121,13 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
               <li key={mail.id} className="py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold">{CUSTOMER_EMAIL_OPERATION_LABELS[mail.operation] ?? mail.operation}</span>
-                  <span className={`rounded-[6px] border-2 border-[#111111] px-2 py-0.5 text-[11px] font-black ${mail.status === "accepted" ? "bg-[#1f8a4c] text-white" : ["failed", "expired"].includes(mail.status) ? "bg-[#d9362c] text-white" : mail.status === "uncertain" ? "bg-[#f2cf27] text-[#111111]" : "bg-white text-[#111111]"}`}>
-                    {EMAIL_STATUS_LABELS[mail.status] ?? mail.status}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {mail.acknowledgedAt ? (
+                      <span className="rounded-[6px] border-2 border-[#111111] bg-[#1556a4] px-2 py-0.5 text-[11px] font-black text-white">확인 완료 {seoulTime(mail.acknowledgedAt)}</span>
+                    ) : null}
+                    <span className={`rounded-[6px] border-2 border-[#111111] px-2 py-0.5 text-[11px] font-black ${mail.status === "accepted" ? "bg-[#1f8a4c] text-white" : ["failed", "expired"].includes(mail.status) ? "bg-[#d9362c] text-white" : mail.status === "uncertain" ? "bg-[#f2cf27] text-[#111111]" : "bg-white text-[#111111]"}`}>
+                      {EMAIL_STATUS_LABELS[mail.status] ?? mail.status}
+                    </span>
                   </span>
                 </div>
                 <p className="mt-1 break-all text-xs text-foreground">{mail.subject}</p>
@@ -148,7 +156,8 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
                   </p>
                 ) : null}
                 {retryableStatuses.has(mail.status) ? (
-                  <form action={retryEmailAction} className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-start gap-2">
+                  <form action={retryEmailAction} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="id" value={mail.id} />
                     <input type="hidden" name="submissionId" value={submissionId} />
                     <input type="hidden" name="returnTo" value={returnTo} />
@@ -160,6 +169,20 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
                       <span className="break-all text-xs font-semibold">재발송은 현재 수신 이메일로 보냅니다: {currentRecipient}</span>
                     ) : null}
                   </form>
+                  {acknowledgeableStatuses.has(mail.status) && !mail.acknowledgedAt ? (
+                    <form action={acknowledgeEmailAction}>
+                      <input type="hidden" name="id" value={mail.id} />
+                      <input type="hidden" name="submissionId" value={submissionId} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <ConfirmSubmitButton
+                        message="이 메일을 확인 완료로 처리할까요? 사이트 관리 경고에서 빠집니다."
+                        className="rounded-[8px] border-2 border-[#111111] bg-[#1556a4] px-3 py-1 text-xs font-black text-white transition hover:bg-[#111111]"
+                      >
+                        확인 완료
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : null}
+                  </div>
                 ) : null}
               </li>
             ))}

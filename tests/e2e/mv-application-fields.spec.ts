@@ -178,6 +178,31 @@ for (const mode of ["online", "upload"] as const) {
   });
 }
 
+test("a mistyped email domain gets one line after the field is left, and 바꾸기 fixes it before saving", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const result = await mockMvServices(page);
+  await page.goto("/dashboard/new/mv");
+  await openApplication(page);
+  const email = page.locator('[data-mv-field="guestEmail"]');
+  const hint = page.getByText("혹시 hanmail.net인가요?");
+  await email.fill("artist@hanmail.met");
+  await expect(hint).toBeHidden();
+  await email.press("Tab");
+  await expect(hint).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await hint.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("mv-email-typo-hint.png") });
+  await page.getByRole("button", { name: "바꾸기", exact: true }).click();
+  await expect(email).toHaveValue("artist@hanmail.net");
+  await expect(hint).toHaveCount(0);
+  // Only a hint: an unknown company domain is accepted as typed.
+  await email.fill("artist@studio-company.co.kr");
+  await email.press("Tab");
+  await expect(page.getByRole("button", { name: "바꾸기", exact: true })).toHaveCount(0);
+  expect(result.errors).toEqual([]);
+  expect(result.unexpectedMutations).toEqual([]);
+});
+
 test("TV review does not display the online rating or KMRB-only credit notice", async ({ page }) => {
   const result = await mockMvServices(page);
   await page.goto("/dashboard/new/mv");
