@@ -32,7 +32,7 @@ export default async function EmailAdminPage({ searchParams }: { searchParams: P
   return <div className="mx-auto max-w-6xl px-6 py-12">
     <Link href="/admin" className="text-sm underline">관리자 홈</Link>
     <h1 className="mt-4 text-3xl font-black">메일 발송 내역</h1>
-    <p className="mt-3 text-sm text-muted-foreground">온사이드가 보낸 전체 메일입니다. 한 접수의 고객 메일만 보려면 접수 상세의 ‘이메일 발송 내역’을 여세요. 메일 서버 접수는 수신함 도착과 다릅니다. 실패한 메일은 자동 재시도하며, 접수 여부가 불확실하면 중복 발송 방지를 위해 확인을 기다립니다. 인증 링크가 만료된 메일은 이용자가 새로 요청해야 합니다. 열람 확인은 고객 안내 메일 속 이미지가 열릴 때 기록되므로, 이미지를 차단한 메일 앱에서는 열어도 기록되지 않을 수 있습니다(2026-11-05 20:02 이후 발송분부터). 링크 클릭은 메일 속 온사이드 링크를 누를 때 기록됩니다.</p>
+    <p className="mt-3 text-sm text-muted-foreground">온사이드가 보낸 전체 메일입니다. 한 접수의 고객 메일만 보려면 접수 상세의 ‘이메일 발송 내역’을 여세요. 메일 서버 접수는 수신함 도착과 다릅니다. 실패한 메일은 자동 재시도하며, 접수 여부가 불확실하면 중복 발송 방지를 위해 확인을 기다립니다. 고객 안내 메일을 재발송하면 그 접수의 현재 수신 이메일로 보냅니다. 인증 링크가 만료된 메일은 이용자가 새로 요청해야 합니다. 열람 확인은 고객 안내 메일 속 이미지가 열릴 때 기록되므로, 이미지를 차단한 메일 앱에서는 열어도 기록되지 않을 수 있습니다(2026-11-05 20:02 이후 발송분부터). 링크 클릭은 메일 속 온사이드 링크를 누를 때 기록됩니다.</p>
     <div className="my-5 rounded-lg border p-4 text-sm">
       <p>자동 재시도: {workerHealthy ? "사용 중" : "확인 필요"} · 최근 처리 완료: {time(worker.data?.last_finished_at ?? null)}</p>
       <p className="mt-2">대기 {Number(counts.pending ?? 0) + Number(counts.retry ?? 0)}건 · 확인 필요 {Number(counts.uncertain ?? 0)}건 · 실패 {Number(counts.failed ?? 0)}건</p>

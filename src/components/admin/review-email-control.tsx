@@ -21,8 +21,10 @@ const seoulTime = (value: string | null) => value
   : "—";
 const retryableStatuses = new Set(["failed", "uncertain", "retry"]);
 
-export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerEmail, customerEmails = [], customerEmailsUnavailable = false, returnTo = "" }: {
+export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerEmail, customerEmails = [], customerEmailsUnavailable = false, returnTo = "", currentRecipient = null }: {
   submissionId: string; lastNotifiedAt?: string | null;
+  /** Where a retry goes now (a corrected address, not the one that bounced). */
+  currentRecipient?: string | null;
   /** Newest accepted customer mail of any kind for this application. */
   lastCustomerEmail?: { operation: string; at: string } | null;
   /** Mail sent to this submission's customer only (never staff notices). */
@@ -154,6 +156,9 @@ export function ReviewEmailControl({ submissionId, lastNotifiedAt, lastCustomerE
                       <label className="flex max-w-md gap-2 text-xs"><input type="checkbox" name="allowUncertain" required />이미 메일이 도착했을 수 있으며, 재발송하면 중복 수신될 수 있음을 확인했습니다.</label>
                     ) : null}
                     <button type="submit" className="rounded-[8px] border-2 border-[#111111] bg-white px-3 py-1 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white">재발송 예약</button>
+                    {currentRecipient && mail.recipient.trim().toLowerCase() !== currentRecipient ? (
+                      <span className="break-all text-xs font-semibold">재발송은 현재 수신 이메일로 보냅니다: {currentRecipient}</span>
+                    ) : null}
                   </form>
                 ) : null}
               </li>

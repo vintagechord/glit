@@ -12,8 +12,8 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'mail-admin-fixture';";
         const modules: Record<string, string> = {
-          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,receipts:{oldestPendingAt:null},worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
-          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:name==='paid_submission_notification_stats'?state.receipts:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});const chain={select(fields){calls.push({name:'select',fields});return chain},eq(){return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve({data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
+          "mail-admin-fixture": `export const calls=[];export const state={admin:true,mode:'transactional',rpcError:false,rpcThrows:false,readError:false,receipts:{oldestPendingAt:null},mail:null,submission:null,worker:{enabled:true,last_error:false,last_finished_at:new Date().toISOString()},stats:{pending:0,retry:0,uncertain:0,failed:0,oldestPendingAt:null}};`,
+          "@/lib/supabase/admin": `${shared} export function createAdminClient(){calls.push({name:'client'});return {rpc:async(name,args)=>{calls.push({name,args});if(state.rpcThrows)throw Error('private provider token / body');return {data:name==='email_outbox_stats'?state.stats:name==='paid_submission_notification_stats'?state.receipts:{status:'pending'},error:state.rpcError?{message:'private SQL response'}:null}},from(table){calls.push({name:'table',table});const chain={select(fields){calls.push({name:'select',fields});return chain},eq(){return chain},in(){return chain},gt(){return chain},not(){return chain},update(patch){calls.push({name:'update',table,args:patch});return chain},order(){return chain},range(){return chain},async maybeSingle(){return {data:table==='email_outbox'?state.mail:table==='submissions'?state.submission:state.worker,error:state.readError?{}:null}},then(resolve){return Promise.resolve({data:table==='email_outbox'?[]:state.worker,error:state.readError?{}:null,count:0}).then(resolve)}};return chain}};}`,
           "@/lib/admin/api-auth": `${shared} export const requireAdminForApi=async()=>state.admin?{ok:true,user:{id:'fixture-admin'}}:{ok:false,error:'forbidden'};`,
           "@/lib/admin/page-auth": `${shared} export const requireAdminPage=async()=>{if(!state.admin)throw Error('forbidden');return {id:'fixture-admin'}};`,
           "@/lib/email-delivery-mode": `${shared} export const getEmailDeliveryMode=()=>state.mode;`,
@@ -29,7 +29,7 @@ async function fixture() {
     retryEmailAction: typeof import("../src/app/admin/emails/actions").retryEmailAction;
     EmailAdminPage: typeof import("../src/app/admin/emails/page").default;
     checkEmailOutboxHealth: typeof import("../src/lib/email-health").checkEmailOutboxHealth;
-    state: { receipts: {oldestPendingAt:string|null}; admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
+    state: { mail: Record<string, unknown>|null; submission: Record<string, unknown>|null; receipts: {oldestPendingAt:string|null}; admin: boolean; mode: string; rpcError: boolean; rpcThrows: boolean; readError: boolean; worker: {enabled:boolean;last_error:boolean;last_finished_at:string|null}; stats: {pending:number;retry:number;uncertain:number;failed:number;oldestPendingAt:string|null} };
     calls: Array<{name:string;args?:Record<string,unknown>;fields?:string}>;
   } };
   new Function("require", "module", "exports", bundle.outputFiles[0].text)(createRequire(import.meta.url), output, output.exports);
@@ -57,6 +57,17 @@ test("mail administration checks authorization before any privileged lookup or e
   api.calls.length = 0;
   await assert.rejects(api.retryEmailAction(form(true)), /redirect:.*notice=queued/);
   assert.equal(api.calls.find(call=>call.name==='retry_email_outbox')?.args?.p_allow_uncertain, true);
+});
+
+test("a retried customer mail is first pointed at the application's corrected address", async () => {
+  const api = await fixture();
+  api.state.mail = { id: "11111111-1111-4111-8111-111111111111", operation: "payment completed", submission_id: "22222222-2222-4222-8222-222222222222", recipient_email: "artist@hanmail.met" };
+  api.state.submission = { user_id: null, guest_email: "artist@hanmail.net", applicant_email: null };
+  await assert.rejects(api.retryEmailAction(form()), /redirect:.*notice=queued/);
+  const update = api.calls.findIndex(call => call.name === 'update');
+  const retry = api.calls.findIndex(call => call.name === 'retry_email_outbox');
+  assert.ok(update >= 0 && update < retry, "the address changes before the mail is queued again");
+  assert.equal(api.calls[update].args?.recipient_email, "artist@hanmail.net");
 });
 
 test("mail retry database errors and rejected network calls become a safe failure notice", async () => {

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { CUSTOMER_EMAIL_OPERATIONS } from "@/lib/admin/submission-emails";
+import { resolveSubmissionNotificationRecipient } from "@/lib/admin/notification-recipient";
 import { isEmailLessSocialMember } from "@/lib/member-notification-email";
 
 export type RecipientSource = "member_account" | "member_notification" | "application" | "guest" | "none";
@@ -141,4 +143,34 @@ export async function saveSubmissionNotificationEmail(
     message: "관리자가 결과 안내를 받을 이메일을 등록했습니다.",
   });
   return { ok: true, changed: true };
+}
+
+/**
+ * A mail keeps the address it was queued with. When a customer's typo
+ * (hanmail.met) bounced it and the address was then corrected on the
+ * application, 재발송 sent it to the typo again and the site monitor kept
+ * warning. Called just before a retry: a customer mail of an application is
+ * pointed at that application's current address. Until someone retries, the
+ * mail keeps the address it actually bounced from. Staff notices keep the
+ * staff address, and only a mail the retry will accept is changed.
+ */
+export async function pointRetryAtCurrentRecipient(db: SupabaseClient, emailId: string, allowUncertain: boolean) {
+  const { data: mail, error } = await db.from("email_outbox")
+    .select("operation, submission_id, recipient_email").eq("id", emailId).maybeSingle();
+  if (error) throw new Error("Email lookup unavailable");
+  if (!mail?.submission_id || !CUSTOMER_EMAIL_OPERATIONS.includes(String(mail.operation))) return;
+  const { data: submission, error: submissionError } = await db.from("submissions")
+    .select("user_id, guest_email, guest_phone, applicant_email, applicant_phone").eq("id", mail.submission_id).maybeSingle();
+  if (submissionError) throw new Error("Submission lookup unavailable");
+  if (!submission) return;
+  const { recipient } = await resolveSubmissionNotificationRecipient(db, submission);
+  if (!recipient || recipient === String(mail.recipient_email ?? "").trim().toLowerCase()) return;
+  const now = new Date().toISOString();
+  const { error: updateError } = await db.from("email_outbox")
+    .update({ recipient_email: recipient, updated_at: now })
+    .eq("id", emailId)
+    .in("status", allowUncertain ? ["failed", "retry", "uncertain"] : ["failed", "retry"])
+    .gt("expires_at", now)
+    .not("html", "is", null);
+  if (updateError) throw new Error("Email recipient update failed");
 }
