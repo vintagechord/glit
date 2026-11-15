@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  adminSubmissionStageBadge,
   adminSubmissionStageKeys,
   adminSubmissionStageOf,
   applyAdminSubmissionStageFilter,
+  partialNoticeStage,
   type AdminSubmissionStage,
+  type AdminSubmissionStageFilter,
 } from "./submission-stages";
 import { officialArtistName } from "@/lib/submissions/artist-display";
 import { resolveSubmissionNotificationRecipient } from "./notification-recipient";
@@ -16,6 +19,7 @@ export type DashboardSubmission = {
   artistName: string | null;
   type: string;
   stage: AdminSubmissionStage | null;
+  stageBadge: { label: string; tone: string } | null;
   customer: string;
   isGuest: boolean;
   amountKrw: number | null;
@@ -43,15 +47,18 @@ export type AdminDashboard = {
   mailIssues: number | null;
   /** Results announced in the last 30 days that the customer has not opened since. */
   unseenResults: number | null;
+  /** Albums sent on to "notified" while a station still has no result. */
+  partialNotices: number | null;
   failedSections: string[];
 };
 
 const submissionColumns =
-  "id, title, artist_name, artist_name_kr, type, status, payment_status, current_order_id, result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone";
+  "id, title, artist_name, artist_name_kr, type, status, payment_status, current_order_id, result_notified_at, partial_result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone";
 
 type SubmissionRow = {
   id: string; title: string | null; artist_name: string | null; artist_name_kr: string | null; type: string; status: string;
   payment_status: string | null; current_order_id: string | null; result_notified_at: string | null;
+  partial_result_notified_at: string | null;
   user_id: string | null; guest_name: string | null; applicant_name: string | null;
   amount_krw: number | null; updated_at: string | null; created_at: string; is_oneclick: boolean | null;
   guest_email: string | null; guest_phone: string | null; applicant_email: string | null; applicant_phone: string | null;
@@ -63,6 +70,7 @@ const toDashboardSubmission = (row: SubmissionRow): DashboardSubmission => ({
   artistName: officialArtistName(row),
   type: row.type,
   stage: adminSubmissionStageOf(row),
+  stageBadge: adminSubmissionStageBadge(row),
   customer: row.user_id ? (row.applicant_name ? `회원 · ${row.applicant_name}` : "회원") : `비회원 · ${row.guest_name || row.applicant_name || "이름 없음"}`,
   isGuest: !row.user_id,
   amountKrw: row.amount_krw,
@@ -94,12 +102,12 @@ async function countUnseenResults(db: SupabaseClient, now: Date): Promise<number
 /** Everything the admin home shows; each section fails on its own. */
 export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): Promise<AdminDashboard> {
   const failedSections: string[] = [];
-  const countQuery = (stage?: AdminSubmissionStage) => {
+  const countQuery = (stage?: AdminSubmissionStageFilter) => {
     const query = db.from("submissions").select("id", { count: "exact", head: true });
     return stage ? applyAdminSubmissionStageFilter(query, stage) : query.neq("status", "DRAFT");
   };
 
-  const [stageCounts, totalResult, recentResult, ordersResult, resultRows, mailResult, unseenResults] = await Promise.all([
+  const [stageCounts, totalResult, recentResult, ordersResult, resultRows, mailResult, unseenResults, partialResult] = await Promise.all([
     Promise.all(adminSubmissionStageKeys.map(async (stage) => {
       const { count, error } = await countQuery(stage);
       return [stage, error ? null : count ?? 0] as const;
@@ -114,10 +122,11 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
       .in("status", ["failed", "uncertain", "expired"])
       .gte("created_at", new Date(now.getTime() - MAIL_ISSUE_DAYS * 86_400_000).toISOString()),
     countUnseenResults(db, now).catch(() => null),
+    countQuery(partialNoticeStage.key),
   ]);
 
   const counts = Object.fromEntries(stageCounts) as Record<AdminSubmissionStage, number | null>;
-  if (stageCounts.some(([, count]) => count === null) || totalResult.error) failedSections.push("처리 현황");
+  if (stageCounts.some(([, count]) => count === null) || totalResult.error || partialResult.error) failedSections.push("처리 현황");
   if (recentResult.error) failedSections.push("최근 접수");
   if (ordersResult.error) failedSections.push("입금 확인 대기");
   if (resultRows.error) failedSections.push("결과 안내 대기");
@@ -161,6 +170,7 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
     resultNotices,
     mailIssues: mailResult.error ? null : mailResult.count ?? 0,
     unseenResults,
+    partialNotices: partialResult.error ? null : partialResult.count ?? 0,
     failedSections: [...new Set(failedSections)],
   };
 }

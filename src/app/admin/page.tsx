@@ -19,7 +19,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime } from "@/lib/format";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { loadAdminDashboard, type DashboardSubmission } from "@/lib/admin/dashboard-summary";
-import { adminSubmissionStageKeys, adminSubmissionStages, type AdminSubmissionStage } from "@/lib/admin/submission-stages";
+import { adminSubmissionStageKeys, adminSubmissionStages, partialNoticeStage, type AdminSubmissionStageFilter } from "@/lib/admin/submission-stages";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ const typeLabels: Record<string, string> = {
   MV_BROADCAST: "방송 뮤비",
 };
 
-const stageHref = (stage: AdminSubmissionStage) => `/admin/submissions?type=ALL&stage=${stage}`;
+const stageHref = (stage: AdminSubmissionStageFilter) => `/admin/submissions?type=ALL&stage=${stage}`;
 const detailHref = (id: string, hash = "") =>
   `${buildAdminSubmissionDetailPath({ submissionId: id, returnTo: "/admin/submissions?type=ALL" })}${hash}`;
 
@@ -76,12 +76,11 @@ const menuGroups: Array<{ title: string; items: Array<{ href: string; label: str
   },
 ];
 
-function StageChip({ stage }: { stage: AdminSubmissionStage | null }) {
-  if (!stage) return null;
-  const info = adminSubmissionStages[stage];
+function StageChip({ badge }: { badge: DashboardSubmission["stageBadge"] }) {
+  if (!badge) return null;
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${info.tone}`}>
-      {info.label}
+    <span className={`inline-flex shrink-0 items-center rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${badge.tone}`}>
+      {badge.label}
     </span>
   );
 }
@@ -306,6 +305,14 @@ export default async function AdminPage() {
               </Link>
             </li>
             <li>
+              <Link href={stageHref(partialNoticeStage.key)} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
+                <span>결과 통보 완료 후 일부 방송사 결과 대기</span>
+                <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${dashboard.partialNotices ? brandStatusTones.warning : brandStatusTones.neutral}`}>
+                  {dashboard.partialNotices === null ? "–" : dashboard.partialNotices}건
+                </span>
+              </Link>
+            </li>
+            <li>
               <Link href={stageHref("paid")} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
                 <span>결제 완료 후 방송사·영등위 접수 전</span>
                 <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${counts.paid ? brandStatusTones.progress : brandStatusTones.neutral}`}>
@@ -330,7 +337,7 @@ export default async function AdminPage() {
                   item={item}
                   extra={(
                     <>
-                      <StageChip stage={item.stage} />
+                      <StageChip badge={item.stageBadge} />
                       <span className="text-[11px] font-semibold text-muted-foreground">{formatDateTime(item.updatedAt)}</span>
                     </>
                   )}

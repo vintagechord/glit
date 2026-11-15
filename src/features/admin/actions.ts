@@ -35,6 +35,7 @@ import { requireAdminAction } from "@/lib/admin/action-auth";
 import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
 import { saveSubmissionNotificationEmail } from "@/lib/admin/notification-recipient-edit";
 import { saveWbsTrackSelection } from "@/lib/admin/wbs-track-selection";
+import { setPartialResultNotice } from "@/lib/admin/partial-result-notice";
 import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
@@ -2483,4 +2484,23 @@ export async function saveWbsTrackSelectionFormAction(formData: FormData): Promi
   revalidatePath(`/admin/submissions/${submissionId}`);
   revalidateUserDashboards(submissionId);
   redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: saved.changed ? "wbs_tracks" : "wbs_tracks_unchanged" })}#wbs-track-selection`);
+}
+
+/** Sends an album on to 결과 통보 완료 with a station still pending, or puts
+ * it back into review. Customer pages and mail are not affected. */
+export async function setPartialResultNoticeFormAction(formData: FormData): Promise<void> {
+  const actor = await requireAdminAction();
+  const submissionId = String(formData.get("submissionId") ?? "");
+  const mode = String(formData.get("mode") ?? "");
+  if (!albumInfoIdSchema.safeParse(submissionId).success) redirect("/admin/submissions?saved=error&savedError=" + encodeURIComponent("접수 ID를 확인해주세요."));
+  const saved = mode === "close" || mode === "reopen"
+    ? await setPartialResultNotice(createAdminClient(), { submissionId, closed: mode === "close", actorUserId: actor.id })
+    : { ok: false as const, error: "요청을 확인하지 못했습니다. 새로고침 후 다시 시도해주세요." };
+  if (!saved.ok) redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: "error", savedError: saved.error })}#partial-result-notice`);
+  for (const prefix of ["", "/en"]) {
+    revalidatePath(`${prefix}/admin`);
+    revalidatePath(`${prefix}/admin/submissions`);
+    revalidatePath(`${prefix}/admin/submissions/detail`);
+  }
+  redirect(`${buildSubmissionFormRedirect(formData, submissionId, { saved: mode === "close" ? "partial_notice" : "partial_notice_reopened" })}#partial-result-notice`);
 }

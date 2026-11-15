@@ -92,6 +92,7 @@ export const SUBMISSION_ADMIN_DETAIL_SELECT = [
   "result_status",
   "result_memo",
   "result_notified_at",
+  "partial_result_notified_at",
   "pre_review_requested",
   "karaoke_requested",
   "bank_depositor_name",

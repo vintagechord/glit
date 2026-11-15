@@ -25,11 +25,12 @@ import { officialArtistName } from "@/lib/submissions/artist-display";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 import {
+  adminSubmissionStageBadge,
   adminSubmissionStageKeys,
-  adminSubmissionStageOf,
   adminSubmissionStages,
   applyAdminSubmissionStageFilter,
-  isAdminSubmissionStage,
+  isAdminSubmissionStageFilter,
+  partialNoticeStage,
 } from "@/lib/admin/submission-stages";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
 import {
@@ -168,6 +169,7 @@ type SubmissionRow = {
   is_oneclick?: boolean | null;
   current_order_id?: string | null;
   result_notified_at?: string | null;
+  partial_result_notified_at?: string | null;
   package?:
     | Array<{ name?: string | null }>
     | { name?: string | null }
@@ -198,7 +200,7 @@ export default async function AdminSubmissionsPage({
     payment: toSingle(resolvedSearchParams.payment),
     type: activeType,
     origin: toSingle(resolvedSearchParams.origin),
-    stage: isAdminSubmissionStage(toSingle(resolvedSearchParams.stage))
+    stage: isAdminSubmissionStageFilter(toSingle(resolvedSearchParams.stage))
       ? toSingle(resolvedSearchParams.stage)
       : "",
     q: toSingle(resolvedSearchParams.q),
@@ -213,9 +215,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -240,7 +242,7 @@ export default async function AdminSubmissionsPage({
     if (filters.payment) {
       query = query.eq("payment_status", filters.payment);
     }
-    if (isAdminSubmissionStage(filters.stage)) {
+    if (isAdminSubmissionStageFilter(filters.stage)) {
       query = applyAdminSubmissionStageFilter(query, filters.stage);
     }
     if (activeType !== "ALL") {
@@ -335,9 +337,11 @@ export default async function AdminSubmissionsPage({
   };
 
   const isDraftView = filters.status === "DRAFT";
-  const activeStage = isAdminSubmissionStage(filters.stage)
-    ? adminSubmissionStages[filters.stage]
-    : null;
+  const activeStage = !isAdminSubmissionStageFilter(filters.stage)
+    ? null
+    : filters.stage === partialNoticeStage.key
+      ? partialNoticeStage
+      : adminSubmissionStages[filters.stage];
   const reviewDocSelectableIds =
     activeType === "ALBUM"
       ? submissions.map((submission) => submission.id)
@@ -494,11 +498,19 @@ export default async function AdminSubmissionsPage({
               className="h-11 w-full min-w-0 rounded-[8px] border-2 border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition focus:border-[#1556a4]"
             >
               <option value="">전체 단계</option>
-              {adminSubmissionStageKeys.map((key) => (
+              {adminSubmissionStageKeys.flatMap((key) => [
                 <option key={key} value={key}>
                   {adminSubmissionStages[key].label}
-                </option>
-              ))}
+                </option>,
+                // A narrower view of the stage above, so it sits right under it.
+                ...(key === "notified"
+                  ? [
+                      <option key={partialNoticeStage.key} value={partialNoticeStage.key}>
+                        {partialNoticeStage.label}
+                      </option>,
+                    ]
+                  : []),
+              ])}
             </select>
           </FieldLabel>
           <FieldLabel label="상태">
@@ -595,8 +607,7 @@ export default async function AdminSubmissionsPage({
             const statusLabel =
               labelMap.status[submission.status] ?? submission.status;
             const typeLabel = labelMap.type[submission.type] ?? submission.type;
-            const stage = adminSubmissionStageOf(submission);
-            const stageInfo = stage ? adminSubmissionStages[stage] : null;
+            const stageInfo = adminSubmissionStageBadge(submission);
             const isGlobalSubmission =
               submission.created_from === "global" ||
               submission.locale === "en" ||
