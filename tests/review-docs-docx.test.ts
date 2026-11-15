@@ -347,7 +347,7 @@ test("review docs normalize artist, company, dates, filenames, lyrics, and instr
   assert.doesNotMatch(inferredInstrumentalXml, /\(Inst\.\)|가사 없음 \/ Instrumental/);
 });
 
-test("integrated templates repeat the reference album rows and retain the PBC title slots", async () => {
+test("integrated templates repeat the reference album rows; TBS keeps the two title slots and PBC is a landscape list", async () => {
   const first = templateSourceFixture()[0];
   const second = {
     ...first,
@@ -379,12 +379,21 @@ test("integrated templates repeat the reference album rows and retain the PBC ti
     const xml = getDocXml(zip.file(archiveName)?.asNodeBuffer() ?? Buffer.alloc(0));
     const tables = getTableSummaries(xml);
     assert.equal(tables.length, 1, filename);
-    const isPbc = filename.startsWith("PBC");
-    assert.equal(tables[0].rowCount, isPbc ? 6 : 3, filename);
-    assert.deepEqual(tables[0].cellCounts, isPbc ? [4, 6, 6, 6, 6, 6] : [cellCount, cellCount, cellCount]);
+    // Owner 2026-11-15: TBS takes 「음원심의신청서」 (two rows per album), PBC the landscape 「심의 음반 접수 목록」.
+    const isTwoRow = filename.startsWith("TBS");
+    assert.equal(tables[0].rowCount, isTwoRow ? 6 : 3, filename);
+    assert.deepEqual(tables[0].cellCounts, isTwoRow ? [4, 6, 6, 6, 6, 6] : [cellCount, cellCount, cellCount]);
     assert.equal(tables[0].hasFixedLayout, true);
     assert.equal(tables[0].hasCantSplitRows, true);
-    if (isPbc) {
+    if (filename.startsWith("PBC")) {
+      assert.match(xml, /심의 음반 접수 목록/);
+      assert.match(xml, /pgSz[^>]*orient="landscape"/);
+      assert.match(xml, /검증 가수 \/ /);
+      assert.match(xml, /두 번째 가수 \/ 두 번째 타이틀곡/);
+    }
+    if (isTwoRow) {
+      assert.match(xml, /음원심의신청서/);
+      assert.doesNotMatch(xml, /orient="landscape"/);
       assert.doesNotMatch(xml, /회사명|검증 제작사|두 번째 제작사/);
       assert.match(xml, /gridSpan[^>]*val="3"/);
       assert.match(xml, /vMerge[^>]*val="restart"/);

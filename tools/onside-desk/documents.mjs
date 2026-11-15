@@ -114,9 +114,9 @@ const templateMarkers={
   'lyrics-all.docx':['{#tracks}','{/tracks}','{manager_name}','{lyrics_with_translation}'],
   'lyrics-track.docx':['{manager_name}','{track_title_with_title_mark}','{lyrics_with_translation}'],
   'lyrics-mv.docx':['{artist_display}','{track_title}','{lyrics_with_translation}'],
-  // Owner 2026-11-06: TBS takes 「심의 음반 접수 목록」, PBC 「음원심의신청서」 (same as the web templates).
-  'tbs-integrated.docx':['{#albums}','{/albums}','{company_actual}','{release_date_md}','{title_track_title}'],
-  'pbc-integrated.docx':['{#albums}','{/albums}','{album_title}','{title_track_title_primary}','{title_track_title_secondary}'],
+  // Owner 2026-11-15: TBS takes 「음원심의신청서」, PBC the landscape 「심의 음반 접수 목록」 (same as the web templates).
+  'tbs-integrated.docx':['{#albums}','{/albums}','{album_title}','{title_track_title_primary}','{title_track_title_secondary}'],
+  'pbc-integrated.docx':['{#albums}','{/albums}','{company_actual}','{release_date_md}','{title_track_title}'],
   'wbs-integrated.docx':['{#albums}','{/albums}','{company_actual}','{review_songs_text}'],
 };
 function sanitizeTemplateData(value) {
