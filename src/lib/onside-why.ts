@@ -23,7 +23,7 @@ export const ONSIDE_FAMILY: Array<{
   role: Bilingual;
   description: string;
   descriptionEn: string;
-  /** Official site; null where no address was given. */
+  /** Official site; null for Onside itself, which is this site. */
   url: string | null;
 }> = [
   {
@@ -40,7 +40,7 @@ export const ONSIDE_FAMILY: Array<{
   },
   {
     key: "vintagehouse", name: "빈티지하우스", nameEn: "Vintage House", role: { ko: "뮤직 스튜디오", en: "Music studio" },
-    description: "뮤직 스튜디오", descriptionEn: "A music studio", url: null,
+    description: "뮤직 스튜디오", descriptionEn: "A music studio", url: "https://vhouse.co.kr",
   },
   {
     key: "machfix", name: "마하픽스", nameEn: "Machfix", role: { ko: "수리 전문점", en: "Repair shop" },
