@@ -81,14 +81,38 @@ export const adminSubmissionStages: Record<AdminSubmissionStage, AdminSubmission
 export const isAdminSubmissionStage = (value: string): value is AdminSubmissionStage =>
   (adminSubmissionStageKeys as readonly string[]).includes(value);
 
+/**
+ * An album the operator sent on to "notified" while a station still has no
+ * result (a broadcaster that cannot announce results for now). It counts as
+ * notified, but the application stays IN_PROGRESS: customers keep seeing that
+ * station as pending, and once every station has a result the album waits
+ * for its result mail like any other. Only the badge and this filter tell
+ * the two apart, so the operator can find the albums to finish later.
+ */
+export const partialNoticeStage = {
+  key: "notified_partial",
+  label: "결과 통보 완료 · 일부 대기",
+  tone: brandStatusTones.warning,
+} as const;
+
+export type AdminSubmissionStageFilter = AdminSubmissionStage | typeof partialNoticeStage.key;
+
+export const isAdminSubmissionStageFilter = (value: string): value is AdminSubmissionStageFilter =>
+  isAdminSubmissionStage(value) || value === partialNoticeStage.key;
+
 export type AdminStageRow = {
   status?: string | null;
   payment_status?: string | null;
   current_order_id?: string | null;
   result_notified_at?: string | null;
+  partial_result_notified_at?: string | null;
 };
 
 const resultStatuses = new Set(["RESULT_READY", "COMPLETED"]);
+
+/** The mark only counts during a paid review in progress. */
+export const isPartialResultNotice = (row: AdminStageRow) =>
+  row.payment_status === "PAID" && row.status === "IN_PROGRESS" && Boolean(row.partial_result_notified_at);
 
 /** DRAFT rows are background autosaves and have no stage. */
 export function adminSubmissionStageOf(row: AdminStageRow): AdminSubmissionStage | null {
@@ -97,10 +121,21 @@ export function adminSubmissionStageOf(row: AdminStageRow): AdminSubmissionStage
   if (status === "DRAFT") return null;
   if (payment === "REFUNDED") return "refunded";
   if (resultStatuses.has(status)) return row.result_notified_at ? "notified" : "result_pending";
-  if (payment === "PAID") return status === "IN_PROGRESS" ? "in_review" : "paid";
+  if (payment === "PAID") {
+    if (status !== "IN_PROGRESS") return "paid";
+    return isPartialResultNotice(row) ? "notified" : "in_review";
+  }
   if (payment === "PAYMENT_PENDING" || status === "WAITING_PAYMENT") return "bank_pending";
   if (status === "PRE_REVIEW" && !row.current_order_id) return "drafting";
   return "unpaid";
+}
+
+/** What a row's stage badge shows; null for background drafts. */
+export function adminSubmissionStageBadge(row: AdminStageRow): { label: string; tone: string } | null {
+  const stage = adminSubmissionStageOf(row);
+  if (!stage) return null;
+  const { label, tone } = isPartialResultNotice(row) ? partialNoticeStage : adminSubmissionStages[stage];
+  return { label, tone };
 }
 
 /** The subset of the PostgREST filter builder the stage filters use. */
@@ -115,20 +150,26 @@ export type StageFilterable<T> = {
 const notRefunded = "payment_status.is.null,payment_status.neq.REFUNDED";
 const unpaid = "payment_status.is.null,payment_status.eq.UNPAID";
 
+const partialNotice = "payment_status.eq.PAID,status.eq.IN_PROGRESS,partial_result_notified_at.not.is.null";
+
 /** Narrows a submissions query to one stage; mirrors adminSubmissionStageOf. */
 export function applyAdminSubmissionStageFilter<T extends StageFilterable<T>>(
   query: T,
-  stage: AdminSubmissionStage,
+  stage: AdminSubmissionStageFilter,
 ): T {
   switch (stage) {
     case "refunded":
       return query.eq("payment_status", "REFUNDED").not("status", "in", "(DRAFT)");
     case "notified":
-      return query.in("status", ["RESULT_READY", "COMPLETED"]).not("result_notified_at", "is", null).or(notRefunded);
+      return query
+        .or(`and(status.in.(RESULT_READY,COMPLETED),result_notified_at.not.is.null),and(${partialNotice})`)
+        .or(notRefunded);
+    case "notified_partial":
+      return query.eq("payment_status", "PAID").eq("status", "IN_PROGRESS").not("partial_result_notified_at", "is", null);
     case "result_pending":
       return query.in("status", ["RESULT_READY", "COMPLETED"]).is("result_notified_at", null).or(notRefunded);
     case "in_review":
-      return query.eq("payment_status", "PAID").eq("status", "IN_PROGRESS");
+      return query.eq("payment_status", "PAID").eq("status", "IN_PROGRESS").is("partial_result_notified_at", null);
     case "paid":
       return query.eq("payment_status", "PAID").not("status", "in", "(DRAFT,IN_PROGRESS,RESULT_READY,COMPLETED)");
     case "bank_pending":

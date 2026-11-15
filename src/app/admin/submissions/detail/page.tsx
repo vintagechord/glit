@@ -41,10 +41,11 @@ import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
 import { StationReviewForm } from "@/components/admin/station-review-form";
 import { StationReviewBulkForm } from "@/components/admin/station-review-bulk-form";
-import { hydrateReleasedAlbumInfoFormAction, saveWbsTrackSelectionFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction, updateSubmissionNotificationEmailFormAction } from "@/features/admin/actions";
+import { hydrateReleasedAlbumInfoFormAction, saveWbsTrackSelectionFormAction, setPartialResultNoticeFormAction, updateStationReviewFormAction, updateSubmissionAlbumInfoFormAction, updateSubmissionNotificationEmailFormAction } from "@/features/admin/actions";
 import { WbsTrackSelectionForm } from "@/components/admin/wbs-track-selection-form";
+import { PartialResultNoticeForm } from "@/components/admin/partial-result-notice-form";
 import { describeSubmissionRecipient, recipientSourceLabels, type SubmissionRecipientState } from "@/lib/admin/notification-recipient-edit";
-import { adminSubmissionStageOf, adminSubmissionStages } from "@/lib/admin/submission-stages";
+import { adminSubmissionStageBadge, adminSubmissionStageOf, adminSubmissionStages, isPartialResultNotice } from "@/lib/admin/submission-stages";
 import { loadSubmissionUploadRecord } from "@/lib/admin/submission-upload-record";
 import { loadCustomerActivityEvents } from "@/lib/admin/customer-activity";
 import { loadCustomerViewRecords } from "@/lib/admin/customer-view-record";
@@ -146,6 +147,7 @@ type SubmissionRow = {
   result_status?: string | null;
   result_memo?: string | null;
   result_notified_at?: string | null;
+  partial_result_notified_at?: string | null;
   applicant_email?: string | null;
   applicant_name?: string | null;
   applicant_phone?: string | null;
@@ -315,6 +317,10 @@ export default async function AdminSubmissionDetailPage({
         return "원음방송 심의곡을 저장했습니다. 원음방송에는 선택한 곡만 표시됩니다.";
       case "wbs_tracks_unchanged":
         return "원음방송 심의곡이 이미 같게 지정되어 있습니다.";
+      case "partial_notice":
+        return "결과 통보 완료로 옮겼습니다. 남은 방송사 결과는 나중에 저장할 수 있습니다.";
+      case "partial_notice_reopened":
+        return "심의 진행 중으로 되돌렸습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -812,6 +818,7 @@ export default async function AdminSubmissionDetailPage({
   const customerView = customerViews.records.get(submission.id);
   const adminStage = adminSubmissionStageOf(submission);
   const adminStageInfo = adminStage ? adminSubmissionStages[adminStage] : null;
+  const adminStageBadge = adminSubmissionStageBadge(submission);
   const reviews = stationReviews ?? [];
   const isStationSubmittedStatus = (status?: string | null) => {
     const normalized = normalizeStationReviewStatus(status);
@@ -825,9 +832,18 @@ export default async function AdminSubmissionDetailPage({
   const stationSubmittedCount = reviews.filter((review) =>
     isStationSubmittedStatus(review.status),
   ).length;
-  const completedReviewCount = reviews.filter((review) => {
-    return getStationReviewDisplayStatus({ ...review, station: Array.isArray(review.station) ? review.station[0] : review.station }, { albumTracks }).isComplete;
-  }).length;
+  const isReviewComplete = (review: (typeof reviews)[number]) =>
+    getStationReviewDisplayStatus({ ...review, station: Array.isArray(review.station) ? review.station[0] : review.station }, { albumTracks }).isComplete;
+  const completedReviewCount = reviews.filter(isReviewComplete).length;
+  // An album can be sent on to 결과 통보 완료 while a station (one that cannot
+  // announce results for now) is still open; see partialNoticeStage.
+  const isPartialNotice = isPartialResultNotice(submission);
+  const canSendOnPartially =
+    submission.type === "ALBUM" && adminStage === "in_review" && completedReviewCount > 0;
+  const pendingStationNames = reviews.filter((review) => !isReviewComplete(review)).map((review) => {
+    const station = Array.isArray(review.station) ? review.station[0] : review.station;
+    return station?.name ?? station?.code ?? "방송사";
+  });
   const hasRequiredBasics = Boolean(submission.title && submission.artist_name);
   const hasPaymentComplete = submission.payment_status === "PAID";
   const hasResultPublished =
@@ -990,9 +1006,9 @@ export default async function AdminSubmissionDetailPage({
             <span className="rounded-full border border-border/60 bg-background px-3 py-1 uppercase tracking-[0.2em] text-muted-foreground">
               ID: {submission.id.slice(0, 8)}
             </span>
-            {adminStageInfo ? (
-              <span className={`rounded-[6px] border-2 px-2.5 py-1 font-black ${adminStageInfo.tone}`}>
-                {adminStageInfo.label}
+            {adminStageBadge ? (
+              <span className={`rounded-[6px] border-2 px-2.5 py-1 font-black ${adminStageBadge.tone}`}>
+                {adminStageBadge.label}
               </span>
             ) : null}
           </div>
@@ -1605,6 +1621,17 @@ export default async function AdminSubmissionDetailPage({
                 {completedReviewCount}/{reviews.length} 결과
               </span>
             </div>
+            {isPartialNotice || canSendOnPartially ? (
+              <div className="mt-4">
+                <PartialResultNoticeForm
+                  submissionId={submission.id}
+                  returnTo={adminSubmissionListHref}
+                  movedAt={isPartialNotice ? submission.partial_result_notified_at ?? null : null}
+                  pendingStations={pendingStationNames}
+                  action={setPartialResultNoticeFormAction}
+                />
+              </div>
+            ) : null}
             <div className="mt-4 space-y-4">
               {reviews.length > 0 ? <StationReviewBulkForm
                 key={`bulk-${submission.id}-${reviews.map(review => review.updated_at).join("-")}`}
