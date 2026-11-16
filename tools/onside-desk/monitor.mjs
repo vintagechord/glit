@@ -173,7 +173,12 @@ export function createSiteMonitor(options = {}) {
   const env = options.env || process.env;
   const config = { ...MONITOR_DEFAULTS, ...(options.config || {}) };
   const fetchImpl = options.fetch || globalThis.fetch;
-  const dns = options.dns || dnsPromises;
+  // A node:dns resolver keeps the DNS servers it found when it was made. The
+  // desk starts at login, often before Wi-Fi is up; the process-wide resolver
+  // then falls back to this Mac (127.0.0.1) and every lookup fails with
+  // ECONNREFUSED until the desk restarts. Each check makes a fresh resolver so
+  // it reads the Mac's current DNS servers.
+  const createResolver = options.createResolver || (options.dns ? () => options.dns : () => new dnsPromises.Resolver());
   const tlsInfo = options.tlsInfo || defaultTlsInfo;
   const s3Factory = options.s3 || defaultS3;
   const now = options.now || Date.now;
@@ -240,6 +245,7 @@ export function createSiteMonitor(options = {}) {
 
   async function checkDomain(force) {
     const items = [];
+    const dns = createResolver();
     // Vercel hands out A values from pools per plan, so several are valid at once.
     // A record is fine when it points only at Vercel and Vercel does not flag it.
     const vercel = vercelExpectations || { verified: {}, recommendedA: [], acceptedA: [], recommendedCname: '', acceptedCnames: [] };

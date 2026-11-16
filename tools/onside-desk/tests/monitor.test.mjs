@@ -106,6 +106,31 @@ test('outages, DNS drift and expiring certificates or domains are errors', async
   assert.match(notificationText(snapshot), /외 \d+건$/);
 });
 
+test('DNS checks recover once the network is up when the desk started before it', async () => {
+  // A resolver keeps the DNS servers it found when it was made. With none (the
+  // Mac had no network yet), it asks this Mac itself and gets ECONNREFUSED.
+  let systemServers = [];
+  const refused = (call, host) => Object.assign(new Error(`${call} ECONNREFUSED ${host}`), { code: 'ECONNREFUSED' });
+  const createResolver = () => {
+    const servers = [...systemServers];
+    const answer = (call, host, value) => async () => { if (!servers.length) throw refused(call, host); return value; };
+    return {
+      resolve4: answer('queryA', 'iamonside.com', ['216.150.1.1', '216.150.16.1']),
+      resolveCname: answer('queryCname', 'www.iamonside.com', ['6dbbb6e9e0c47844.vercel-dns-017.com.']),
+      resolveNs: answer('queryNs', 'iamonside.com', ['ns.gabia.co.kr']),
+    };
+  };
+  const f = fakes();
+  const monitor = createSiteMonitor({ env, fetch: f.fetch, createResolver, tlsInfo: f.tlsInfo, s3: f.s3, now: () => NOW, settings: () => ({}), backupStatusFile: '/nonexistent/last-status.json' });
+  const offline = sectionOf(await monitor.snapshot(true), 'domain');
+  assert.equal(item(offline, '대표 주소(A)').value, 'queryA ECONNREFUSED iamonside.com');
+  systemServers = ['1.214.68.2', '61.41.153.2'];
+  const online = sectionOf(await monitor.snapshot(true), 'domain');
+  assert.equal(online.status, 'ok');
+  assert.equal(item(online, '대표 주소(A)').value, '216.150.1.1, 216.150.16.1');
+  assert.equal(item(online, '네임서버').value, '가비아');
+});
+
 test('a Vercel token adds deployment and domain checks; a failed deploy is a warning', async () => {
   const f = fakes({ deployState: 'ERROR' });
   const snapshot = await monitorWith(f, { vercelToken: 'vercel-token-0123456789' }).snapshot(true);
