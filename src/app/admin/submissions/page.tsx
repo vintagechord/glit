@@ -156,6 +156,7 @@ type SubmissionRow = {
   artist_name_kr?: string | null;
   status: ReviewStatus;
   payment_status: PaymentStatus | null;
+  payment_method?: string | null;
   type: string;
   created_at: string;
   updated_at: string | null;
@@ -215,9 +216,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (

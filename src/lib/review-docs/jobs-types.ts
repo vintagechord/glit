@@ -21,7 +21,8 @@ export type ReviewJob = {
   snapshot_data: ReviewDocumentData | null; version: number; result_version: number | null;
   outputs: ReviewJobOutput[]; zip_output: ReviewJobOutput | null; template_version: string | null;
   counts: { albumCount: number; trackCount: number; docxCount: number } | null;
-  validation: { structureChecked: boolean; rendered: boolean } | null;
+  /** `report`: what the operator should check in the generated documents. */
+  validation: { structureChecked: boolean; rendered: boolean; report?: string[] } | null;
   error_code: string | null; error_message: string | null; attempts: number; retryable: boolean;
   extraction_attempts: number;
   lease_token: string | null; lease_until: string | null; available_at: string;

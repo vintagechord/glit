@@ -9,6 +9,7 @@ import { KaraokeFileButton } from "@/features/karaoke/karaoke-file-button";
 import { formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { MarkSectionSeen } from "@/components/admin/mark-section-seen";
 
 export const metadata = {
   title: "노래방 등록 관리",
@@ -124,6 +125,7 @@ export default async function AdminKaraokePage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
+      <MarkSectionSeen section="karaoke" renderedAt={new Date().toISOString()} />
       <h1 className="font-display text-3xl text-foreground">
         노래방 등록 관리
       </h1>

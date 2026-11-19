@@ -27,7 +27,7 @@ import {
   ReviewDocTemplateRenderError,
   type ReviewDocTemplateValue,
 } from "@/lib/admin/review-docs-docx";
-import { validateReviewData, type ReviewDocumentData } from "@/lib/review-docs/model";
+import { validateReviewData, type ReviewAlbum, type ReviewDocumentData, type ReviewTrack } from "@/lib/review-docs/model";
 import {
   renderTrackLyrics,
   ReviewLyricsTranslationError,
@@ -1338,7 +1338,40 @@ export type GeneratedReviewDocuments = {
   docxCount: number;
   templateVersion: string;
   validation: { structureChecked: true; rendered: false };
+  /** What the operator should check in the generated documents; empty when nothing was found. */
+  report: string[];
 };
+
+/** The report travels with the documents, so it is read wherever the ZIP is opened. */
+export const REVIEW_DOCS_REPORT_FILENAME = "자료생성_확인사항.txt";
+
+/** Tells the download button that the file comes with items to check. */
+export const REVIEW_DOCS_REPORT_COUNT_HEADER = "X-Review-Docs-Report-Count";
+export const reviewDocsReportHeaders = (report: string[]): Record<string, string> =>
+  report.length ? { [REVIEW_DOCS_REPORT_COUNT_HEADER]: String(report.length) } : {};
+
+const reviewDocsReportText = (lines: string[]) => [
+  "심의자료는 모두 생성되었습니다. 아래 항목은 제출 전에 확인해주세요.",
+  "",
+  ...lines.map((line, index) => `${index + 1}. ${line}`),
+  "",
+].join("\r\n");
+
+/** Report lines for lyrics the translation pass could not cover. */
+function translationReportLines(
+  labels: string[],
+  result: { translated: number[]; untranslated: number[]; failure: string | null },
+): string[] {
+  const lines: string[] = [];
+  labels.forEach((label, index) => {
+    if (result.untranslated[index] > 0) lines.push(`${label}: 외국어 가사 ${result.untranslated[index]}구간을 번역하지 못해 원문 그대로 출력했습니다. 한글 번역을 넣어주세요.`);
+  });
+  if (lines.length && result.failure) lines.push(`번역 실패 사유: ${result.failure}`);
+  labels.forEach((label, index) => {
+    if (result.translated[index] > 0) lines.push(`${label}: 외국어 가사 ${result.translated[index]}구간을 자동 번역해 "(번역 : …)"으로 넣었습니다. 번역 내용을 확인해주세요.`);
+  });
+  return lines;
+}
 
 type PreparedReviewAlbum = ReturnType<typeof buildSubmissionTemplateData>;
 
@@ -1348,6 +1381,7 @@ async function renderPreparedReviewDocuments(
   preparedAlbums: PreparedReviewAlbum[],
   templates: ReviewDocTemplates,
   mode: "album" | "mv" = "album",
+  report: string[] = [],
 ): Promise<GeneratedReviewDocuments> {
   const files: GeneratedReviewDocument[] = [];
   const addDocument = (buffer: Buffer, name: string) => files.push({ name, buffer });
@@ -1507,10 +1541,12 @@ async function renderPreparedReviewDocuments(
   }
   const zip = new ZipFile();
   for (const file of files) zip.addBuffer(file.buffer, file.name);
+  // The UTF-8 mark lets Windows Notepad read the Korean text.
+  if (report.length) zip.addBuffer(Buffer.from(`\uFEFF${reviewDocsReportText(report)}`, "utf8"), REVIEW_DOCS_REPORT_FILENAME);
   const zipBuffer = await zipToBuffer(zip);
   // Reload with CRC checking before anything can be saved as a completed result.
   const checkedZip = new PizZip(zipBuffer, { checkCRC32: true });
-  if (Object.values(checkedZip.files).filter((file) => !file.dir).length !== expectedCount) {
+  if (Object.values(checkedZip.files).filter((file) => !file.dir).length !== expectedCount + (report.length ? 1 : 0)) {
     throw new ReviewDocsRenderError("ZIP 무결성 검사에 실패했습니다.");
   }
   const hash = createHash("sha256");
@@ -1525,6 +1561,7 @@ async function renderPreparedReviewDocuments(
     docxCount: files.length,
     templateVersion: hash.digest("hex"),
     validation: { structureChecked: true, rendered: false },
+    report,
   };
 }
 
@@ -1537,6 +1574,9 @@ export async function buildReviewDocsZip(
     /** Receives the bundles after Melon/Genie completion, before rendering, so
      * callers can store what the documents were made from. */
     onHydrated?: (bundles: ReviewDocSubmissionBundle[]) => Promise<void> | void;
+    /** Receives what the operator should check (also written into the ZIP);
+     * not called when there is nothing to report. */
+    onReport?: (lines: string[]) => void;
   } = {},
 ) {
   if (bundles.length === 0) throw new ReviewDocsNotFoundError("선택된 접수가 없습니다.");
@@ -1550,12 +1590,20 @@ export async function buildReviewDocsZip(
   // Translate once per ZIP so every lyric-bearing form receives identical text.
   const tracks = hydratedBundles.flatMap((bundle) => bundle.tracks);
   const vocalTracks = tracks.filter((track, index) => !normalizeTrack(track, index).is_instrumental);
-  const lyrics = await translateLyricsForReviewDocuments(vocalTracks.map((track) => ({
+  // A translation service problem never stops the ZIP: passages it could not
+  // translate stay as written and are listed in the report.
+  const translation = await translateLyricsForReviewDocuments(vocalTracks.map((track) => ({
     lyrics: getText(track, "lyrics"),
     translatedLyrics: getText(track, "translated_lyrics"),
     lyricsWithTranslation: getText(track, "lyrics_with_translation"),
   })), { translate: options.translate });
-  const translatedTracks = new Map(vocalTracks.map((track, index) => [track, lyrics[index]]));
+  const translatedTracks = new Map(vocalTracks.map((track, index) => [track, translation.lyrics[index]]));
+  const report = translationReportLines(vocalTracks.map((track) => {
+    const bundle = hydratedBundles.find((item) => item.tracks.includes(track));
+    const normalized = normalizeTrack(track, bundle ? bundle.tracks.indexOf(track) : 0);
+    return `${getText(bundle?.submission ?? {}, "title") || "앨범"} · ${normalized.track_no}번 ${normalized.track_title}`;
+  }), { ...translation, translated: translation.translated.map(() => 0) });
+  if (report.length) options.onReport?.(report);
   const prepared = hydratedBundles.map((bundle, index) =>
     buildSubmissionTemplateData({
       ...bundle,
@@ -1565,7 +1613,7 @@ export async function buildReviewDocsZip(
       })),
     }, index, hydratedBundles.length, applicationDate, false),
   );
-  return (await renderPreparedReviewDocuments(prepared, templates)).zip;
+  return (await renderPreparedReviewDocuments(prepared, templates, "album", report)).zip;
 }
 
 // The review desk treats these as "no lyrics" rather than foreign words.
@@ -1575,7 +1623,7 @@ const NO_LYRICS_PLACEHOLDER =
 const isMvSubmissionType = (type: string) =>
   type === "MV_DISTRIBUTION" || type === "MV_BROADCAST";
 
-export type MvLyricsDocument = { filename: string; buffer: Buffer };
+export type MvLyricsDocument = { filename: string; buffer: Buffer; report: string[] };
 
 /**
  * One 영등위 lyric DOCX from the lyrics typed on a music-video application.
@@ -1600,12 +1648,14 @@ export async function buildMvLyricsDocument(
       "신청서에 입력된 가사가 없습니다. 첨부한 신청서 파일의 가사를 확인해주세요.",
     );
   }
-  const [lyricsWithTranslation] = NO_LYRICS_PLACEHOLDER.test(lyrics.trim())
-    ? ["가사 없음 / Instrumental"]
+  const translation = NO_LYRICS_PLACEHOLDER.test(lyrics.trim())
+    ? { lyrics: ["가사 없음 / Instrumental"], translated: [0], untranslated: [0], failure: null }
     : await translateLyricsForReviewDocuments(
       [{ lyrics, translatedLyrics: getText(submission, "korean_lyrics_translation") }],
       { translate: options.translate },
     );
+  const [lyricsWithTranslation] = translation.lyrics;
+  const report = translationReportLines([title || "가사"], { ...translation, translated: [0] });
   const templates = await loadReviewDocTemplates(options.templateDir, ["lyricsMv"]);
   let buffer: Buffer;
   try {
@@ -1623,59 +1673,116 @@ export async function buildMvLyricsDocument(
     throw error;
   }
   const filename = `가사_${sanitizeFilenamePart(artist, "가수 미입력")}_${sanitizeFilenamePart(title, "제목 미입력")}.docx`;
-  return { filename, buffer };
+  return { filename, buffer, report };
 }
 
-/** Renders a confirmed snapshot without network collection, translation or DB writes. */
+/** Translation is settled by what the generation pass actually did, and a
+ * source that could not be read is already listed by its own issue. */
+const REPORT_SKIPPED_ISSUE_CODES = new Set([
+  "TRANSLATION_MISSING", "TRANSLATION_REVIEW", "TRANSLATION_ALIGNMENT", "EXISTING_TRANSLATION_ALIGNMENT",
+  "TRANSLATION_UNAVAILABLE", "TRANSLATION_LIMIT",
+]);
+
+/** What the documents show for a problem the operator did not resolve. */
+const REPORT_OUTCOME_BY_ISSUE: Record<string, string> = {
+  APPLICATION_DATE_INVALID: "오늘 날짜로 출력했습니다.",
+  ARTIST_REQUIRED: "빈칸으로 출력했습니다.",
+  ALBUM_TITLE_REQUIRED: "빈칸으로 출력했습니다.",
+  TRACK_REQUIRED: "이 앨범은 문서를 만들지 않았습니다.",
+  TRACK_TITLE_REQUIRED: "'트랙 번호'로 출력했습니다.",
+  TITLE_UNCONFIRMED: "타이틀곡으로 출력했습니다.",
+  WBS_SELECTION_REQUIRED: "타이틀곡 앞의 3곡을 WBS 신청곡으로 출력했습니다.",
+  LYRICS_REQUIRED: "문서에는 '가사 입력 필요'로 출력했습니다.",
+};
+
+/**
+ * Renders a job snapshot. Problems in the data never stop the documents: a
+ * missing value is printed as a blank or a visible placeholder, foreign lyrics
+ * without a Korean translation are translated here ("원문 (번역 : 한글)", the
+ * original untouched), an instrumental prints "가사 없음 / Instrumental", and
+ * everything the operator should still check comes back in `report` (also
+ * written into the ZIP). Only an empty job (no song at all) cannot be rendered.
+ */
 export async function generateReviewDocuments(
   data: ReviewDocumentData,
-  options: { templateDir?: string } = {},
+  options: { templateDir?: string; translate?: TranslationProvider | false; timeoutMs?: number } = {},
 ): Promise<GeneratedReviewDocuments> {
-  const errors = validateReviewData(data).filter((issue) => issue.severity === "error");
-  if (errors.length) throw new ReviewDocsInputError(errors.map((issue) => issue.message).join(" "));
-  const applicationDate = toDateParts(data.applicationDate);
-  if (!applicationDate) throw new ReviewDocsInputError("작업 신청일자가 올바르지 않습니다.");
-  if (!data.albums.length) throw new ReviewDocsInputError("생성할 앨범 또는 곡이 없습니다.");
+  const albums = data.albums.filter((album) => album.tracks.length);
+  if (!albums.length) throw new ReviewDocsInputError("생성할 앨범 또는 곡이 없습니다. 곡을 1개 이상 추가해주세요.");
+  const applicationDate = toDateParts(data.applicationDate) ?? seoulTodayParts();
   const templates = await loadReviewDocTemplates(
     options.templateDir,
     data.mode === "mv" ? ["lyricsMv"] : ALBUM_TEMPLATE_KEYS,
   );
-  const prepared = data.albums.map((album, index) => {
-    if ((data.mode === "album" && (!album.artistName.trim() || !album.title.trim())) || !album.tracks.length) {
-      throw new ReviewDocsInputError("아티스트·앨범명·트랙을 확인해주세요.");
-    }
-    const tracks = album.tracks.map((track) => {
-      if (!track.title.trim()) throw new ReviewDocsInputError("곡명을 확인해주세요.");
-      if (track.lyricStatus === "extraction_failed" || track.lyricStatus === "not_provided") {
-        throw new ReviewDocsInputError(`${track.title}: 가사가 누락되었거나 추출되지 않았습니다.`);
-      }
-      if (track.lyricStatus === "instrumental" && !track.instrumentalConfirmed) {
-        throw new ReviewDocsInputError(`${track.title}: Inst./MR 여부를 확인해주세요.`);
-      }
-      if (track.isTitle && !track.titleConfirmed) {
-        throw new ReviewDocsInputError(`${track.title}: 타이틀 표시를 확인해주세요.`);
-      }
-      const lyrics = renderTrackLyrics(track);
-      if (!lyrics.trim()) throw new ReviewDocsInputError(`${track.title}: 가사를 확인해주세요.`);
-      return {
-        track_no: track.number,
-        track_title: track.title,
-        is_title: track.isTitle && track.titleConfirmed,
-        is_instrumental: track.lyricStatus === "instrumental" && track.instrumentalConfirmed,
-        lyricist: track.lyricist,
-        composer: track.composer,
-        arranger: track.arranger,
-        featuring: track.featuring,
-        performer: track.performers,
-        artist_display: track.artistName || album.artistName,
-        lyrics: track.lyrics,
-        lyrics_with_translation: lyrics,
-      };
-    });
-    const selectedWbs = album.wbsTrackIds.map((id) => album.tracks.find((track) => track.id === id)?.number);
-    if (selectedWbs.length > 3 || selectedWbs.some((number) => number === undefined) || new Set(selectedWbs).size !== selectedWbs.length) {
-      throw new ReviewDocsInputError(`${album.title}: WBS 신청곡은 해당 앨범에서 중복 없이 최대 3곡 선택해주세요.`);
-    }
+  const albumLabel = (album: ReviewAlbum) => album.title.trim() || album.artistName.trim() || "앨범";
+  const trackLabel = (album: ReviewAlbum, track: ReviewTrack) =>
+    `${data.mode === "album" ? `${albumLabel(album)} · ` : ""}${track.number}번 ${track.title.trim() || "곡명 없음"}`;
+
+  // What each track prints when it has no lyric text to show.
+  const hasLyrics = (track: ReviewTrack) => Boolean(track.lyrics.trim());
+  const isInstrumental = (track: ReviewTrack) =>
+    (track.lyricStatus === "instrumental" && (track.instrumentalConfirmed || !hasLyrics(track))) ||
+    (track.instrumentalConfirmed && !hasLyrics(track));
+  const placeholder = (track: ReviewTrack) =>
+    isInstrumental(track) ? "가사 없음 / Instrumental"
+      : hasLyrics(track) ? null
+        : track.lyricStatus === "none" ? "가사 없음" : "가사 입력 필요";
+
+  // One translation pass for every lyric that is printed as lyrics.
+  const lyricTracks = albums.flatMap((album) => album.tracks.filter((track) => placeholder(track) === null).map((track) => ({ album, track })));
+  const rendered = lyricTracks.map(({ track }) => renderTrackLyrics(track));
+  const translation = options.translate === false
+    ? { lyrics: rendered, translated: rendered.map(() => 0), untranslated: rendered.map(() => 0), failure: null }
+    : await translateLyricsForReviewDocuments(
+      lyricTracks.map(({ track }, index) => ({ lyrics: rendered[index], translatedLyrics: track.existingTranslation })),
+      { translate: options.translate, timeoutMs: options.timeoutMs },
+    );
+  const printedLyrics = new Map(lyricTracks.map(({ track }, index) => [track, translation.lyrics[index]]));
+
+  const report: string[] = [];
+  let issues: ReturnType<typeof validateReviewData> = [];
+  try { issues = validateReviewData(data); } catch { report.push("입력 형식 검사를 완료하지 못했습니다. 신청일과 입력 길이를 확인해주세요."); }
+  for (const issue of issues) {
+    // Routine notes (a production date taken from the release date, …) stay
+    // on the edit screen; the report lists what used to block generation.
+    if (issue.severity !== "error" || REPORT_SKIPPED_ISSUE_CODES.has(issue.code)) continue;
+    const album = data.albums.find((item) => item.id === issue.albumId);
+    const track = album?.tracks.find((item) => item.id === issue.trackId);
+    const where = album && track ? `${trackLabel(album, track)}: ` : album ? `${albumLabel(album)}: ` : "";
+    const outcome = issue.code === "INSTRUMENTAL_LYRIC_CONFLICT" && track
+      ? (isInstrumental(track) ? "가사는 출력하지 않고 '가사 없음 / Instrumental'로 출력했습니다. 가사가 있는 곡이면 Inst./MR 표시를 해제해 다시 생성해주세요." : "입력된 가사를 그대로 출력했습니다.")
+      : ["LYRIC_STATUS_UNCONFIRMED", "INSTRUMENTAL_UNCONFIRMED"].includes(issue.code) && track
+        ? `'${placeholder(track) ?? "입력된 가사"}'${placeholder(track) ? "(으)로" : "를 그대로"} 출력했습니다.`
+        : REPORT_OUTCOME_BY_ISSUE[issue.code] ?? "";
+    report.push(`${where}${issue.message}${outcome ? ` → ${outcome}` : ""}`);
+  }
+  // Translations made by the service, at analysis or just now, were not checked by a person.
+  const unchecked = lyricTracks.map(({ track }, index) => translation.translated[index] + track.translationSegments.filter((segment) =>
+    segment.origin === "provider" && !segment.confirmed && segment.translation.trim() &&
+    segment.end > segment.start && track.lyrics.slice(segment.start, segment.end) === segment.source).length);
+  report.push(...translationReportLines(
+    lyricTracks.map(({ album, track }) => trackLabel(album, track)),
+    { translated: unchecked, untranslated: translation.untranslated, failure: translation.failure },
+  ));
+
+  const prepared = albums.map((album, index) => {
+    const tracks = album.tracks.map((track) => ({
+      track_no: track.number,
+      track_title: track.title,
+      is_title: track.isTitle,
+      is_instrumental: isInstrumental(track),
+      lyricist: track.lyricist,
+      composer: track.composer,
+      arranger: track.arranger,
+      featuring: track.featuring,
+      performer: track.performers,
+      artist_display: track.artistName || album.artistName,
+      lyrics: track.lyrics,
+      lyrics_with_translation: placeholder(track) ?? printedLyrics.get(track) ?? track.lyrics,
+    }));
+    // An invalid or oversized WBS selection falls back to the title tracks.
+    const selectedWbs = [...new Set(album.wbsTrackIds.map((id) => album.tracks.find((track) => track.id === id)?.number))]
+      .filter((number): number is number => number !== undefined).slice(0, 3);
     return buildSubmissionTemplateData({
       submission: {
         title: album.title,
@@ -1691,9 +1798,9 @@ export async function generateReviewDocuments(
       tracks,
       files: [],
       events: [],
-    }, index, data.albums.length, applicationDate, data.mode === "album");
+    }, index, albums.length, applicationDate, false);
   });
-  return renderPreparedReviewDocuments(prepared, templates, data.mode);
+  return renderPreparedReviewDocuments(prepared, templates, data.mode, report);
 }
 
 export function buildReviewDocsZipFilename(bundles: ReviewDocSubmissionBundle[]) {

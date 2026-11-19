@@ -55,6 +55,44 @@ test("retained conversion outputs show administrator-deletion policy without an 
   await expect(page.locator("body")).not.toContainText("7일간");
 });
 
+test("unresolved items no longer block generation, and the completed job lists what to check", async ({ page }) => {
+  // An untranslated foreign lyric and an instrumental that came with lyric text.
+  const data = normalizedReviewFixture();
+  data.albums[0].tracks[0].lyrics = "I love you\n너를 사랑해";
+  data.albums[0].tracks[1].lyrics = "라라라";
+  const pending: Job = { ...fixtureJob(), data };
+  const report = [
+    "가을의 노래 · 2번 두 번째 노래 (Inst.): 연주곡 표시와 가사가 함께 있습니다. 원문을 확인해주세요. → 가사는 출력하지 않고 '가사 없음 / Instrumental'로 출력했습니다.",
+    '가을의 노래 · 1번 첫 번째 노래: 외국어 가사 1구간을 자동 번역해 "(번역 : …)"으로 넣었습니다. 번역 내용을 확인해주세요.',
+  ];
+  const completed: Job = { ...pending, status: "completed", operation: "generate", result_version: 1, has_zip: true,
+    outputs: [{ id: "output", name: "result.docx", size: 123 }], counts: { albumCount: 1, trackCount: 2, docxCount: 9 },
+    validation: { structureChecked: true, rendered: false, report } };
+  let current = pending;
+  const posted: string[] = [];
+  await page.route(`**${apiPath}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "POST" && url.pathname.endsWith("/generate")) { posted.push("generate"); current = completed; }
+    await route.fulfill({ json: { job: current } });
+  });
+  await page.route(`**${apiPath}`, route => route.fulfill({ json: { jobs: [current], workerReady: true, workerMode: "web", supportedFormats: ["docx"] } }));
+  await page.goto(origin);
+  await page.getByRole("button", { name: /음반 자료/ }).first().click();
+  const review = page.getByRole("region", { name: "검토 필요 항목" });
+  await expect(review).toContainText("그대로 생성하면 리포트에 표시 2건");
+  const generate = page.getByRole("button", { name: "전체 심의자료 생성" });
+  await expect(generate).toBeEnabled();
+  await expect(page.getByRole("region", { name: "저장 및 생성" })).toContainText("확인할 항목 2건이 남아 있어도 생성됩니다");
+  if (process.env.REVIEW_DOCS_SHOTS) await page.screenshot({ path: `${process.env.REVIEW_DOCS_SHOTS}/workspace-before-generate.png`, fullPage: true });
+  await generate.click();
+  await expect.poll(() => posted).toEqual(["generate"]);
+  const results = page.getByRole("region", { name: "완료 결과" });
+  await expect(results).toContainText("확인 리포트 2건");
+  await expect(results).toContainText("가사는 출력하지 않고 '가사 없음 / Instrumental'로 출력했습니다.");
+  await expect(results).toContainText("자료생성_확인사항.txt");
+  if (process.env.REVIEW_DOCS_SHOTS) await results.screenshot({ path: `${process.env.REVIEW_DOCS_SHOTS}/workspace-report.png` });
+});
+
 test("web processing enables analysis and clearly limits uploads to DOCX without a dedicated worker", async ({ page }) => {
   await page.route(`**${apiPath}`, (route) => route.fulfill({ json: { jobs: [], workerReady: true, workerMode: "web", supportedFormats: ["docx"] } }));
   await page.goto(origin);

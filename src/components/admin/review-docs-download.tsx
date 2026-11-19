@@ -77,6 +77,21 @@ async function downloadFromResponse(
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  // The documents were made; this many items are left for the operator to check.
+  const reportCount = Number(response.headers.get("X-Review-Docs-Report-Count") ?? "0");
+  return Number.isFinite(reportCount) && reportCount > 0 ? reportCount : 0;
+}
+
+/** Shown after a download that came with items to check. */
+function ReviewDocsReportNotice({ count, zipped = true }: { count: number; zipped?: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <p role="status" className={`rounded-[8px] border-2 px-3 py-2 text-xs font-semibold ${brandStatusTones.warning}`}>
+      {zipped
+        ? `자료는 생성되었습니다. 확인할 항목 ${count}건은 ZIP 안의 '자료생성_확인사항.txt'에 있습니다.`
+        : "자료는 생성되었습니다. 번역하지 못한 외국어 가사가 원문 그대로 들어 있으니 한글 번역을 넣어주세요."}
+    </p>
+  );
 }
 
 export function ReviewDocsSelectionProvider({
@@ -173,6 +188,7 @@ export function ReviewDocsBulkToolbar() {
     setIsDownloading,
   } = useReviewDocsSelection();
   const [error, setError] = React.useState("");
+  const [reportCount, setReportCount] = React.useState(0);
   const selectedCount = selectedIds.size;
   const allSelected = availableIds.length > 0 && selectedCount === availableIds.length;
 
@@ -183,6 +199,7 @@ export function ReviewDocsBulkToolbar() {
     }
 
     setError("");
+    setReportCount(0);
     setIsDownloading(true);
     try {
       const response = await fetch("/api/admin/submissions/review-docs", {
@@ -192,7 +209,7 @@ export function ReviewDocsBulkToolbar() {
         },
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });
-      await downloadFromResponse(response, "review-docs.zip");
+      setReportCount(await downloadFromResponse(response, "review-docs.zip"));
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -256,6 +273,7 @@ export function ReviewDocsBulkToolbar() {
           </button>
         </div>
       </div>
+      {reportCount > 0 ? <div className="mt-3"><ReviewDocsReportNotice count={reportCount} /></div> : null}
       {error ? (
         <p
           role="alert"
@@ -272,6 +290,7 @@ export function MelonReviewDocsDownloadForm() {
   const [genieLinksText, setGenieLinksText] = React.useState("");
   const [melonLinksText, setMelonLinksText] = React.useState("");
   const [error, setError] = React.useState("");
+  const [reportCount, setReportCount] = React.useState(0);
   const [isDownloading, setIsDownloading] = React.useState(false);
   const genieUrls = React.useMemo(
     () => parseReviewDocUrls(genieLinksText),
@@ -291,6 +310,7 @@ export function MelonReviewDocsDownloadForm() {
     }
 
     setError("");
+    setReportCount(0);
     setIsDownloading(true);
     try {
       const response = await fetch("/api/admin/review-docs/melon", {
@@ -300,7 +320,7 @@ export function MelonReviewDocsDownloadForm() {
         },
         body: JSON.stringify({ genieUrls, melonUrls }),
       });
-      await downloadFromResponse(response, "review-docs.zip");
+      setReportCount(await downloadFromResponse(response, "review-docs.zip"));
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -357,6 +377,7 @@ export function MelonReviewDocsDownloadForm() {
           <span>{isDownloading ? "생성 중" : "전체 ZIP 다운로드"}</span>
         </button>
       </div>
+      <ReviewDocsReportNotice count={reportCount} />
       {error ? (
         <p
           role="alert"
@@ -395,15 +416,17 @@ export function ReviewDocsSingleDownloadButton({
   kind?: keyof typeof singleDownloads;
 }) {
   const [error, setError] = React.useState("");
+  const [reportCount, setReportCount] = React.useState(0);
   const [isDownloading, setIsDownloading] = React.useState(false);
   const download = singleDownloads[kind];
 
   const handleDownload = async () => {
     setError("");
+    setReportCount(0);
     setIsDownloading(true);
     try {
       const response = await fetch(`/api/admin/submissions/${id}/${download.path}`);
-      await downloadFromResponse(response, download.filename, download.error);
+      setReportCount(await downloadFromResponse(response, download.filename, download.error));
     } catch (downloadError) {
       setError(
         downloadError instanceof Error
@@ -430,6 +453,7 @@ export function ReviewDocsSingleDownloadButton({
         )}
         <span>{isDownloading ? "생성 중" : download.label}</span>
       </button>
+      <ReviewDocsReportNotice count={reportCount} zipped={kind !== "mvLyrics"} />
       {error ? (
         <p
           role="alert"

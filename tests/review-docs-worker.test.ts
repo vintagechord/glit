@@ -66,7 +66,7 @@ test("worker generates a frozen snapshot, records every object and completes onl
   assert.equal(row.status, "completed"); assert.equal(row.lease_token, null);
   assert.equal(JSON.stringify(row.snapshot_data), originalSnapshot);
   assert.deepEqual(row.counts, { albumCount: 1, trackCount: 2, docxCount: 9 });
-  assert.deepEqual(row.validation, { structureChecked: true, rendered: false });
+  assert.deepEqual(row.validation, { structureChecked: true, rendered: false, report: [] });
   assert.ok(states.includes("validating"));
   const zip = new PizZip(blobs.get(row.zip_output!.objectKey)!, { checkCRC32: true });
   assert.equal(zip.file(/\.docx$/).length, 9);

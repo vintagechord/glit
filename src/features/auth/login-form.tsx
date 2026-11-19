@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
 import { TrackLookupModalTrigger } from "@/features/track/track-lookup-modal";
@@ -12,6 +12,7 @@ import { useAuthQuery } from "./auth-query";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
 import { PasswordInput } from "./password-input";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { hasBrowserAuthCookie, loadBrowserSupabase } from "@/lib/supabase/browser-session";
 
 const initialState: ActionState = {};
 
@@ -24,6 +25,25 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
   const effectiveNextPath = getAuthReturnPath(nextPath ?? query.next, isEnglishRoute);
   const signupHref = getAuthPageHref("signup", effectiveNextPath, isEnglishRoute);
   const forgotPasswordHref = getAuthPageHref("forgot-password", effectiveNextPath, isEnglishRoute);
+
+  // A member who is still signed in gets their page instead of an empty
+  // form. The account is verified with the auth server first, so a cookie
+  // the server no longer accepts simply leaves the form in place.
+  useEffect(() => {
+    if (!hasBrowserAuthCookie()) return;
+    let active = true;
+    void (async () => {
+      try {
+        const supabase = await loadBrowserSupabase();
+        const { data, error } = await supabase.auth.getUser();
+        if (!active || error || !data.user) return;
+        window.location.replace(effectiveNextPath ?? (isEnglishRoute ? "/en/mypage" : "/mypage"));
+      } catch {
+        // Stay on the form.
+      }
+    })();
+    return () => { active = false; };
+  }, [effectiveNextPath, isEnglishRoute]);
 
   const SubmitButton = () => {
     const { pending } = useFormStatus();

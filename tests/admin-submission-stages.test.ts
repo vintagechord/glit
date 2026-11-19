@@ -13,7 +13,8 @@ import {
   type StageFilterable,
 } from "../src/lib/admin/submission-stages";
 
-type Row = Required<{ [K in keyof AdminStageRow]: string | null }>;
+// The payment method only changes a badge label; no stage or filter reads it.
+type Row = Required<{ [K in keyof Omit<AdminStageRow, "payment_method">]: string | null }>;
 type Predicate = (row: Row) => boolean;
 
 /** Splits a PostgREST logic list on the commas outside parentheses. */
@@ -138,4 +139,15 @@ test("the partial-notice filter lists exactly the albums waiting for a station",
     const listed = applyAdminSubmissionStageFilter(new FakeQuery(), partialNoticeStage.key).matches(row);
     assert.equal(listed, isPartialResultNotice(row), JSON.stringify(row));
   }
+});
+
+test("a card order waiting for payment is not labelled as a bank deposit", async () => {
+  const { adminSubmissionStageBadge, gatewayPendingStageLabel } = await import("../src/lib/admin/submission-stages");
+  const row = { status: "WAITING_PAYMENT", payment_status: "PAYMENT_PENDING", current_order_id: "o" };
+  assert.equal(adminSubmissionStageBadge({ ...row, payment_method: "BANK" })?.label, "입금 확인 대기");
+  assert.equal(adminSubmissionStageBadge(row)?.label, "입금 확인 대기");
+  for (const payment_method of ["CARD", "PAYPAL"]) {
+    assert.equal(adminSubmissionStageBadge({ ...row, payment_method })?.label, gatewayPendingStageLabel);
+  }
+  assert.equal(adminSubmissionStageBadge({ status: "PRE_REVIEW", payment_status: "PAID", payment_method: "CARD" })?.label, "결제 완료 · 심의 접수 전");
 });

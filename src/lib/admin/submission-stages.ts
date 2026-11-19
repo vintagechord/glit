@@ -103,6 +103,7 @@ export const isAdminSubmissionStageFilter = (value: string): value is AdminSubmi
 export type AdminStageRow = {
   status?: string | null;
   payment_status?: string | null;
+  payment_method?: string | null;
   current_order_id?: string | null;
   result_notified_at?: string | null;
   partial_result_notified_at?: string | null;
@@ -130,11 +131,18 @@ export function adminSubmissionStageOf(row: AdminStageRow): AdminSubmissionStage
   return "unpaid";
 }
 
+/** A card or PayPal order waiting for its payment shares the bank_pending
+ * stage (and its count and filter); only the badge names it correctly. */
+export const gatewayPendingStageLabel = "카드 결제 대기";
+
 /** What a row's stage badge shows; null for background drafts. */
 export function adminSubmissionStageBadge(row: AdminStageRow): { label: string; tone: string } | null {
   const stage = adminSubmissionStageOf(row);
   if (!stage) return null;
   const { label, tone } = isPartialResultNotice(row) ? partialNoticeStage : adminSubmissionStages[stage];
+  if (stage === "bank_pending" && (row.payment_method === "CARD" || row.payment_method === "PAYPAL")) {
+    return { label: gatewayPendingStageLabel, tone };
+  }
   return { label, tone };
 }
 

@@ -46,11 +46,35 @@ function hasSameOriginalLyrics(original: string, candidate: string) {
   return true;
 }
 
-/** One shared translation pass feeds every DOCX, including saved URL submissions. */
+/** What the shared pass did. Documents are always produced from `lyrics`;
+ * the counts feed the report shown after generation. */
+export type ReviewLyricsTranslationResult = {
+  /** Final lyric text per track: originals untouched, translations annotated. */
+  lyrics: string[];
+  /** Per track: foreign passages the translation service annotated in this pass. */
+  translated: number[];
+  /** Per track: foreign passages left as they are, without a Korean translation. */
+  untranslated: number[];
+  /** Why passages were left untranslated, or null when every passage was covered. */
+  failure: string | null;
+};
+
+const TRANSLATION_LIMIT_MESSAGE =
+  "외국어 가사가 한 번에 번역 가능한 60,000자를 넘어 일부 구간은 번역하지 못했습니다. 음반을 나누어 생성하면 번역됩니다.";
+const TRANSLATION_TIMEOUT_MESSAGE =
+  "외국어 가사 번역 대기 시간을 초과해 일부 구간은 번역하지 못했습니다. 음반을 나누어 생성하거나 번역 서비스 상태를 확인해주세요.";
+
+/**
+ * One shared translation pass feeds every DOCX, including saved URL
+ * submissions. Foreign passages of any language get "원문 (번역 : 한글)"; the
+ * original lyrics are never changed. A translation service problem never
+ * stops the documents: the passages it could not translate stay as written
+ * and are counted, so the caller can report them.
+ */
 export async function translateLyricsForReviewDocuments(
   tracks: ReviewLyricsInput[],
   options: { translate?: TranslationProvider; timeoutMs?: number } = {},
-): Promise<string[]> {
+): Promise<ReviewLyricsTranslationResult> {
   const prepared = tracks.map((track) => {
     let lyrics = track.lyrics.replace(/\r\n?/g, "\n");
     let separateTranslation = "";
@@ -75,18 +99,23 @@ export async function translateLyricsForReviewDocuments(
     }
     return { lyrics, separateTranslation, spans: foreignLyricSpans(lyrics).filter((span) => !inlineLyricTranslation(lyrics.slice(span.end))) };
   });
-  const sources = [...new Set(prepared.flatMap((track) => track.spans.map((span) => span.source)))];
-  if (sources.reduce((sum, source) => sum + source.length, 0) > REVIEW_DOC_LIMITS.translationCharacters) {
-    throw new ReviewLyricsTranslationError("외국어 가사가 한 번에 번역 가능한 60,000자를 넘었습니다. 음반을 나누어 DOCX ZIP을 생성해주세요.");
+  let failure: string | null = null;
+  // Passages beyond the per-pass budget stay untranslated instead of failing the album.
+  let budget: number = REVIEW_DOC_LIMITS.translationCharacters;
+  const sources: string[] = [];
+  for (const source of new Set(prepared.flatMap((track) => track.spans.map((span) => span.source)))) {
+    if (source.length > budget) { failure ??= TRANSLATION_LIMIT_MESSAGE; continue; }
+    budget -= source.length;
+    sources.push(source);
   }
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? 180_000;
   const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko", signal: controller.signal }));
-  const providerError = () => new ReviewLyricsTranslationError(
+  const providerFailure = () => new ReviewLyricsTranslationError(
     !options.translate && !process.env.OPENAI_API_KEY?.trim()
       ? "외국어 가사 번역에 실패했습니다. 서버에 번역용 OPENAI_API_KEY가 없고 대체 번역 서비스도 응답하지 못했습니다. 관리자에게 번역 서비스 설정을 요청해주세요."
       : undefined,
-  );
+  ).message;
   const sourceChunks = new Map(sources.map((source) => {
     const chunks: string[] = [];
     let remaining = source;
@@ -117,39 +146,50 @@ export async function translateLyricsForReviewDocuments(
   if (batches.length) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let nextBatch = 0;
-    try {
-      await Promise.race([
-        Promise.all(Array.from({ length: Math.min(2, batches.length) }, async () => {
-          while (nextBatch < batches.length) {
-            controller.signal.throwIfAborted();
-            const batch = batches[nextBatch++];
+    const timedOut = Symbol("timeout");
+    const outcome = await Promise.race([
+      Promise.all(Array.from({ length: Math.min(2, batches.length) }, async () => {
+        while (nextBatch < batches.length && !controller.signal.aborted) {
+          const batch = batches[nextBatch++];
+          try {
             const result = await provider(batch);
-            if (!result || result.length !== batch.length || result.some((value, index) => typeof value !== "string" || !isUsableLyricsTranslation(value, batch[index]))) {
-              throw providerError();
-            }
-            result.forEach((value, index) => translated.set(batch[index], value.trim()));
+            // A reply of the wrong length cannot be matched to its sources.
+            if (!result || result.length !== batch.length) { failure ??= providerFailure(); continue; }
+            result.forEach((value, index) => {
+              if (typeof value === "string" && isUsableLyricsTranslation(value, batch[index])) translated.set(batch[index], value.trim());
+              else failure ??= providerFailure();
+            });
+          } catch {
+            // One failed request leaves its passages untranslated; the rest continue.
+            if (!controller.signal.aborted) failure ??= providerFailure();
           }
-        })),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new ReviewLyricsTranslationError(
-            "외국어 가사 번역 대기 시간을 초과했습니다. 음반을 나누어 생성하거나 번역 서비스 상태를 확인해주세요.",
-          )), timeoutMs);
-        }),
-      ]);
-    } catch (error) {
+        }
+      })),
+      new Promise<typeof timedOut>((resolve) => { timer = setTimeout(() => resolve(timedOut), timeoutMs); }),
+    ]).finally(() => clearTimeout(timer));
+    if (outcome === timedOut) {
       controller.abort();
-      throw error instanceof ReviewLyricsTranslationError ? error : providerError();
-    } finally {
-      clearTimeout(timer);
+      failure = TRANSLATION_TIMEOUT_MESSAGE;
     }
   }
-  return prepared.map(({ lyrics, spans, separateTranslation }) => {
-    for (const span of [...spans].reverse()) {
-      const translation = sourceChunks.get(span.source)!.map((chunk) => translated.get(chunk)!).join(" ");
-      lyrics = `${lyrics.slice(0, span.end)} (번역 : ${translation})${lyrics.slice(span.end)}`;
+  const result: ReviewLyricsTranslationResult = { lyrics: [], translated: [], untranslated: [], failure: null };
+  for (const track of prepared) {
+    let { lyrics } = track;
+    let done = 0;
+    let left = 0;
+    for (const span of [...track.spans].reverse()) {
+      const parts = sourceChunks.get(span.source)?.map((chunk) => translated.get(chunk));
+      // A long passage is annotated only when every part of it was translated.
+      if (!parts || parts.some((part) => !part)) { left += 1; continue; }
+      lyrics = `${lyrics.slice(0, span.end)} (번역 : ${parts.join(" ")})${lyrics.slice(span.end)}`;
+      done += 1;
     }
-    return separateTranslation ? `${lyrics}\n\n(번역 : ${separateTranslation})` : lyrics;
-  });
+    result.lyrics.push(track.separateTranslation ? `${lyrics}\n\n(번역 : ${track.separateTranslation})` : lyrics);
+    result.translated.push(done);
+    result.untranslated.push(left);
+  }
+  if (result.untranslated.some((count) => count > 0)) result.failure = failure ?? providerFailure();
+  return result;
 }
 
 export async function translateReviewData(input: ReviewDocumentData, options: { translate?: TranslationProvider; signal?: AbortSignal } = {}): Promise<ReviewDocumentData> {

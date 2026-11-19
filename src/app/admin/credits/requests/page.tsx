@@ -19,6 +19,7 @@ import {
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { MarkSectionSeen } from "@/components/admin/mark-section-seen";
 
 export const dynamic = "force-dynamic";
 
@@ -361,6 +362,8 @@ export default async function AdminCreditRequestsPage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
+      {/* The two tabs list different requests; each clears its own menu badge. */}
+      <MarkSectionSeen section={activeView === "magazine" ? "magazine" : "credit_requests"} renderedAt={new Date().toISOString()} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-foreground">

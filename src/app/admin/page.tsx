@@ -19,6 +19,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { formatDateTime } from "@/lib/format";
 import { formatDepositDue, isDepositOverdue } from "@/lib/bank-transfer-details";
 import { loadAdminDashboard, type DashboardSubmission } from "@/lib/admin/dashboard-summary";
+import { adminMenuAttentionKeys, loadAdminMenuAttention } from "@/lib/admin/menu-attention";
 import { adminSubmissionStageKeys, adminSubmissionStages, partialNoticeStage, type AdminSubmissionStageFilter } from "@/lib/admin/submission-stages";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
 
@@ -128,8 +129,12 @@ function SubmissionLine({ item, hash = "", extra }: { item: DashboardSubmission;
 }
 
 export default async function AdminPage() {
-  await requireAdminPage();
-  const dashboard = await loadAdminDashboard(createAdminClient());
+  const admin = await requireAdminPage();
+  const db = createAdminClient();
+  const [dashboard, menuAttention] = await Promise.all([
+    loadAdminDashboard(db),
+    loadAdminMenuAttention(db, admin.id),
+  ]);
   const { counts } = dashboard;
   const draftingCount = counts.drafting ?? 0;
 
@@ -358,17 +363,29 @@ export default async function AdminPage() {
             <div key={group.title} className="rounded-[12px] border-2 border-border bg-card p-4">
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">{group.title}</h3>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                {group.items.map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="flex h-full min-h-12 flex-col justify-center rounded-[8px] border-2 border-border bg-background px-3 py-2 transition hover:border-[#111111] dark:hover:border-[#f2cf27]"
-                    >
-                      <span className="text-sm font-black text-foreground">{item.label}</span>
-                      {item.note ? <span className="text-[11px] font-semibold text-muted-foreground">{item.note}</span> : null}
-                    </Link>
-                  </li>
-                ))}
+                {group.items.map((item) => {
+                  const attentionKey = (adminMenuAttentionKeys as Record<string, keyof typeof menuAttention | undefined>)[item.href];
+                  const unseen = attentionKey ? menuAttention[attentionKey] ?? 0 : 0;
+                  return (
+                    <li key={item.href} className="relative">
+                      <Link
+                        href={item.href}
+                        className={`flex h-full min-h-12 flex-col justify-center rounded-[8px] border-2 bg-background px-3 py-2 transition hover:border-[#111111] dark:hover:border-[#f2cf27] ${unseen > 0 ? "border-[#111111] dark:border-[#f2cf27]" : "border-border"}`}
+                      >
+                        <span className="text-sm font-black text-foreground">{item.label}</span>
+                        {item.note ? <span className="text-[11px] font-semibold text-muted-foreground">{item.note}</span> : null}
+                        {unseen > 0 ? (
+                          <span
+                            aria-label={`확인하지 않은 항목 ${unseen}건`}
+                            className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#111111] bg-[#d9362c] px-1.5 text-[11px] font-black leading-none text-white"
+                          >
+                            {unseen > 99 ? "99+" : unseen}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

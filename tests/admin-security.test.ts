@@ -64,7 +64,7 @@ test("service-role admin actions authorize before mutation", () => {
 
 test("service-role admin pages authorize before loading privileged data", () => {
   const pages = new Map([
-    ["../src/app/admin/page.tsx", "loadAdminDashboard(createAdminClient())"],
+    ["../src/app/admin/page.tsx", "createAdminClient()"],
     ["../src/app/admin/intake/page.tsx", "<DirectIntakeForm />"],
     ["../src/app/admin/review-docs/links/page.tsx", "<MelonReviewDocsDownloadForm />"],
     ["../src/app/admin/credits/page.tsx", "createAdminClient()"],

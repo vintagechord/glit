@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { reviewDocumentDataSchema, validateReviewData } from "./model";
+import { reviewDocumentDataSchema } from "./model";
 import { canonicalReviewUrls } from "./urls";
 import { validateReviewUpload } from "./upload-validation";
 import { getReviewRetrySourceIds } from "./retry";
@@ -111,8 +111,10 @@ export async function changeReviewJob(job: ReviewJob, owner: string, action: str
   if (action === "generate") {
     const data = job.draft_data ?? job.extracted_data;
     if (!data) throw new ReviewJobError("분석 결과가 없습니다.", 409, "EXTRACTION_REQUIRED");
-    const errors = validateReviewData(data).filter((issue) => issue.severity === "error");
-    if (errors.length) throw new ReviewJobError(`확인 또는 보완이 필요한 항목 ${errors.length}개가 있습니다. ${errors[0].message}`, 422, "REVIEW_REQUIRED");
+    // Unresolved items no longer block generation: the documents are made as
+    // they are and the items come back in the completion report. Only a job
+    // without a single song has nothing to generate.
+    if (!data.albums.some((album) => album.tracks.length)) throw new ReviewJobError("생성할 곡이 없습니다. 곡을 1개 이상 추가한 뒤 저장해주세요.", 422, "REVIEW_REQUIRED");
   }
   if (action === "retry" && job.status === "needs_review") {
     const current = job.draft_data ?? job.extracted_data;

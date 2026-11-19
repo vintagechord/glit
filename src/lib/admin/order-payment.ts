@@ -9,13 +9,30 @@ export function statusAfterPaymentConfirmation(currentStatus: ReviewStatus): Rev
     : currentStatus;
 }
 
+export type ConfirmedOrderMethod = "BANK" | "CARD" | "PAYPAL";
+
+/** Order states an administrator may settle without a gateway approval: the
+ * card or PayPal window was abandoned, failed or was canceled. An approval
+ * the gateway is still confirming (REVIEW_REQUIRED) is settled under 결제 내역. */
+const UNFINISHED_GATEWAY_ORDER_STATUSES = new Set(["CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED"]);
+
+const unpaidOrderConfirmErrors: Record<string, string> = {
+  PAYMENT_APPROVAL_IN_PROGRESS: "카드 승인을 확인하는 중인 주문입니다. 결제 내역에서 승인 여부를 먼저 정리해주세요.",
+  ORDER_NOT_CONFIRMABLE: "결제 완료로 처리할 수 없는 주문 상태입니다. 새로고침 후 다시 확인해주세요.",
+  PAYMENT_ALREADY_APPROVED: "이미 승인된 결제가 있는 주문입니다. 새로고침 후 결제 상태를 확인해주세요.",
+  ORDER_NOT_FOUND: "연결된 주문 정보를 확인하지 못했습니다.",
+  ADMIN_REQUIRED: "관리자 권한이 필요합니다.",
+};
+
 /** A linked order owns payment state for its entire item group. Admin review
  * edits may update a paid submission's review stage, but cannot rewrite money
- * state independently or mark a card/PayPal attempt as a bank deposit. */
+ * state independently. Marking an order paid settles the whole order: a bank
+ * order through the deposit confirmation, an unfinished card or PayPal order
+ * through the administrator override (no gateway request is made). */
 export async function confirmLinkedOrderPayment(
   db: Pick<ReturnType<typeof createAdminClient>, "from" | "rpc">,
   input: { orderId: string | null; currentPaymentStatus: string | null; nextPaymentStatus: string; actorUserId: string; adminMemo?: string | null },
-): Promise<{ error?: string; confirmedIds?: string[]; refundedIds?: string[] }> {
+): Promise<{ error?: string; confirmedIds?: string[]; confirmedMethod?: ConfirmedOrderMethod; refundedIds?: string[] }> {
   if (!input.orderId) return {};
   if (input.nextPaymentStatus === "REFUNDED" && input.currentPaymentStatus === "PAID") {
     // The gateway/bank reversal happened outside the app; this records it for
@@ -43,16 +60,31 @@ export async function confirmLinkedOrderPayment(
     .maybeSingle();
   if (error || !order) return { error: "연결된 주문 정보를 확인하지 못했습니다." };
   if (order.status === "PAID" && input.currentPaymentStatus === "PAID") return {};
-  if (order.status !== "BANK_PENDING" || order.payment_method !== "BANK") {
-    return { error: "입금 대기 중인 무통장 주문만 입금 확인할 수 있습니다. 카드 결제 결과는 결제사 확인이 필요합니다." };
+  if (order.status === "BANK_PENDING" && order.payment_method === "BANK") {
+    const { data, error: confirmError } = await db.rpc("confirm_submission_order_bank_payment", {
+      p_order_id: input.orderId,
+      p_actor_user_id: input.actorUserId,
+      p_admin_memo: input.adminMemo || null,
+    });
+    if (confirmError || !data?.length) return { error: "주문 입금 확인을 저장하지 못했습니다. 주문 상태를 새로고침해주세요." };
+    return { confirmedIds: data.map((row: { submission_id: string }) => row.submission_id), confirmedMethod: "BANK" };
   }
-  const { data, error: confirmError } = await db.rpc("confirm_submission_order_bank_payment", {
+  if (order.status === "REVIEW_REQUIRED") {
+    return { error: "카드 승인 결과를 확인해야 하는 주문입니다. 결제 내역에서 승인 여부를 먼저 정리해주세요." };
+  }
+  if ((order.payment_method !== "CARD" && order.payment_method !== "PAYPAL") || !UNFINISHED_GATEWAY_ORDER_STATUSES.has(order.status)) {
+    return { error: "결제 완료로 처리할 수 없는 주문 상태입니다. 새로고침 후 다시 확인해주세요." };
+  }
+  const { data, error: confirmError } = await db.rpc("admin_confirm_unpaid_order_payment", {
     p_order_id: input.orderId,
     p_actor_user_id: input.actorUserId,
     p_admin_memo: input.adminMemo || null,
   });
-  if (confirmError || !data?.length) return { error: "주문 입금 확인을 저장하지 못했습니다. 주문 상태를 새로고침해주세요." };
-  return { confirmedIds: data.map((row: { submission_id: string }) => row.submission_id) };
+  if (confirmError || !data?.length) {
+    const code = Object.keys(unpaidOrderConfirmErrors).find((key) => confirmError?.message?.includes(key));
+    return { error: code ? unpaidOrderConfirmErrors[code] : "결제 완료 처리를 저장하지 못했습니다. 주문 상태를 새로고침해주세요." };
+  }
+  return { confirmedIds: data.map((row: { submission_id: string }) => row.submission_id), confirmedMethod: order.payment_method };
 }
 
 export type UncertainPaymentOutcome = "APPROVED" | "FAILED";

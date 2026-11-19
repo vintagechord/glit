@@ -7,6 +7,7 @@ import {
   contentDispositionAttachment,
   getReviewDocsErrorPayload,
   ReviewDocsNotFoundError,
+  reviewDocsReportHeaders,
 } from "@/lib/admin/review-docs";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -68,6 +69,7 @@ export async function GET(
         "Content-Type": DOCX_MIME,
         "Content-Disposition": contentDispositionAttachment(document.filename),
         "Cache-Control": "no-store",
+        ...reviewDocsReportHeaders(document.report),
       },
     });
   } catch (error) {

@@ -36,6 +36,7 @@ import { memberSignInFromAuthUser } from "@/lib/admin/member-sign-in";
 import { SignInMethodBadges } from "@/components/admin/sign-in-method-badges";
 import { MvRatingControl } from "@/components/admin/mv-rating-control";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
+import { adminOperationalStageOptions, storedOperationalStage } from "@/lib/admin/operational-stage";
 import { AdminRefundPanel } from "@/components/admin/refund-panel";
 import { CertificateUploader } from "@/components/admin/certificate-uploader";
 import { ConfirmForm } from "@/components/admin/confirm-form";
@@ -209,13 +210,6 @@ const cashReceiptPurposeLabels: Record<string, string> = {
   PERSONAL_INCOME_DEDUCTION: "개인소득공제용",
   BUSINESS_EXPENSE_PROOF: "사업자지출증빙용",
 };
-
-const operationalStageOptions = [
-  { value: "APPLICATION_RECEIVED", label: "신청접수" },
-  { value: "PAYMENT_COMPLETE", label: "결제완료" },
-  { value: "REVIEW_IN_PROGRESS", label: "심의진행" },
-  { value: "RESULT_NOTIFIED", label: "결과 준비" },
-] as const;
 
 export default async function AdminSubmissionDetailPage({
   searchParams,
@@ -652,6 +646,11 @@ export default async function AdminSubmissionDetailPage({
     .filter((item) => item.submission_id)
     .map((item) => item.title?.trim() || "제목 미입력");
   const cashReceiptIssued = (cashReceiptResult.data as { status?: string } | null)?.status === "ISSUED";
+  // The card or PayPal window was opened and never finished (or failed): the
+  // administrator may still mark the order paid, or delete the application.
+  const hasUnfinishedGatewayOrder = submission.payment_status !== "PAID"
+    && ["CARD", "PAYPAL"].includes(currentOrder?.payment_method ?? "")
+    && ["CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED"].includes(currentOrder?.status ?? "");
   const depositDueDate = formatDepositDue(currentOrder?.deposit_due_at);
   const depositDueLabel = depositDueDate
     ? `${depositDueDate}${currentOrder?.status === "BANK_PENDING" && isDepositOverdue(currentOrder.deposit_due_at) ? " (기한 지남)" : ""}`
@@ -879,20 +878,17 @@ export default async function AdminSubmissionDetailPage({
       submission.status === "COMPLETED" ||
       stationSubmittedCount > 0 ||
       completedReviewCount > 0);
-  const currentOperationalStage =
-    (isMvSubmission ? hasResultPublished : hasAlbumResultNotified)
+  // An album's stage is what was saved, not what its stations imply: 결과 준비
+  // saved while stations are only 접수완료 must read back as 결과 준비.
+  const currentOperationalStage = !isMvSubmission
+    ? storedOperationalStage(submission)
+    : hasResultPublished
       ? "RESULT_NOTIFIED"
-      : isMvSubmission
-        ? hasMvReceptionStarted
-          ? "REVIEW_IN_PROGRESS"
-          : hasPaymentComplete
-            ? "PAYMENT_COMPLETE"
-            : "APPLICATION_RECEIVED"
-        : hasAlbumReviewInProgress
-          ? "REVIEW_IN_PROGRESS"
-          : hasPaymentComplete
-            ? "PAYMENT_COMPLETE"
-            : "APPLICATION_RECEIVED";
+      : hasMvReceptionStarted
+        ? "REVIEW_IN_PROGRESS"
+        : hasPaymentComplete
+          ? "PAYMENT_COMPLETE"
+          : "APPLICATION_RECEIVED";
   const stationResultProgressLabel =
     reviews.length > 0
       ? `${reviews.length}곳 중 ${completedReviewCount}곳 반영`
@@ -1401,13 +1397,18 @@ export default async function AdminSubmissionDetailPage({
                       defaultValue={currentOperationalStage}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"
                     >
-                      {operationalStageOptions.map((stage) => (
+                      {adminOperationalStageOptions.map((stage) => (
                         <option key={stage.value} value={stage.value}>
                           {stage.label}
                         </option>
                       ))}
                     </select>
                   )}
+                  {hasUnfinishedGatewayOrder ? (
+                    <p className="text-xs font-semibold text-[#d9362c]">
+                      카드 결제가 끝나지 않은 주문입니다. 다른 방법으로 결제를 받았다면 &lsquo;결제완료&rsquo;로 저장하세요.
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-4 space-y-2">

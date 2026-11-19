@@ -9,6 +9,7 @@ import {
   getReviewDocsErrorPayload,
   loadReviewDocSubmissionBundles,
   recordReviewDocsGeneratedEvents,
+  reviewDocsReportHeaders,
 } from "@/lib/admin/review-docs";
 import { persistHydratedReleasedAlbums } from "@/lib/admin/released-album-hydration";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,8 +40,11 @@ export async function POST(request: Request) {
   try {
     const supabase = createAdminClient();
     const bundles = await loadReviewDocSubmissionBundles(supabase, parsed.data.ids);
+    // Items to check (also written into the ZIP) never stop the download.
+    let report: string[] = [];
     const zip = await buildReviewDocsZip(bundles, {
       onHydrated: (hydrated) => persistHydratedReleasedAlbums(supabase, hydrated, auth.user.id),
+      onReport: (lines) => { report = lines; },
     });
     const filename = buildReviewDocsZipFilename(bundles);
     await recordReviewDocsGeneratedEvents({
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/zip",
         "Content-Disposition": contentDispositionAttachment(filename),
         "Cache-Control": "no-store",
+        ...reviewDocsReportHeaders(report),
       },
     });
   } catch (error) {
