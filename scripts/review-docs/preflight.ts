@@ -3,6 +3,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import PizZip from "pizzip";
 import { readReviewDocTemplate, REVIEW_DOC_TEMPLATE_FILES } from "../../src/lib/admin/review-docs";
+import { isTranslationModelConfigured } from "../../src/lib/openai-translation";
 import { createAdminClient } from "../../src/lib/supabase/admin";
 import { assertPrivateReviewBucket } from "../../src/lib/review-docs/storage";
 
@@ -113,7 +114,7 @@ type PreflightChecks = {
 
 export async function checkReviewWorker(
   checks: PreflightChecks = { converters: checkReviewConverters, templates: checkReviewTemplates, database: checkReviewDatabase, storage: checkReviewStorage },
-  translationConfigured = !!process.env.OPENAI_API_KEY?.trim(),
+  translationConfigured = isTranslationModelConfigured(),
 ) {
   for (const check of [checks.converters, checks.templates, checks.database, checks.storage]) await check();
   return { ok: true as const, converters: true, templates: true, database: true, privateStorage: true,

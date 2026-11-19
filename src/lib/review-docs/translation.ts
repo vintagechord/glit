@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { inlineLyricTranslation } from "../foreign-lyrics";
+import { isTranslationModelConfigured } from "../openai-translation";
 import { isUsableLyricsTranslation, translateLyricsBatch } from "../server-lyrics-translation";
 import { foreignLyricSpans, REVIEW_DOC_LIMITS, reviewDocumentDataSchema, type ReviewDocumentData, type ReviewTrack } from "./model";
 
@@ -112,8 +113,8 @@ export async function translateLyricsForReviewDocuments(
   const timeoutMs = options.timeoutMs ?? 180_000;
   const provider = options.translate ?? ((segments) => translateLyricsBatch(segments, { source: "auto", target: "ko", signal: controller.signal }));
   const providerFailure = () => new ReviewLyricsTranslationError(
-    !options.translate && !process.env.OPENAI_API_KEY?.trim()
-      ? "외국어 가사 번역에 실패했습니다. 서버에 번역용 OPENAI_API_KEY가 없고 대체 번역 서비스도 응답하지 못했습니다. 관리자에게 번역 서비스 설정을 요청해주세요."
+    !options.translate && !isTranslationModelConfigured()
+      ? "외국어 가사 번역에 실패했습니다. 서버에 번역용 키(AI_GATEWAY_API_KEY 또는 OPENAI_API_KEY)가 없고 대체 번역 서비스도 응답하지 못했습니다. 관리자에게 번역 서비스 설정을 요청해주세요."
       : undefined,
   ).message;
   const sourceChunks = new Map(sources.map((source) => {
