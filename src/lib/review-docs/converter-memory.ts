@@ -28,7 +28,12 @@ async function cgroupMemory(): Promise<Pick<ConverterMemory, "used" | "limit">> 
     ["/sys/fs/cgroup/memory/memory.usage_in_bytes", "/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.stat", "total_inactive_file"],
   ]) {
     try {
-      const [usage, maximum, stats] = await Promise.all([readFile(usagePath, "utf8"), readFile(limitPath, "utf8"), readFile(statPath, "utf8")]);
+      // Linux accounting files, never project files: the build must not go looking for them.
+      const [usage, maximum, stats] = await Promise.all([
+        readFile(/* turbopackIgnore: true */ usagePath, "utf8"),
+        readFile(/* turbopackIgnore: true */ limitPath, "utf8"),
+        readFile(/* turbopackIgnore: true */ statPath, "utf8"),
+      ]);
       const limit = Number(maximum.trim());
       if (!Number.isSafeInteger(limit) || limit <= 0) continue;
       const current = Number(usage.trim());

@@ -24,9 +24,13 @@ export async function extractFileBlocks(file: ReviewUpload, signal?: AbortSignal
   await assertConverterMemoryAvailable();
   signal?.throwIfAborted();
   const directory = await mkdtemp(path.join(os.tmpdir(), "onside-review-"));
-  const input = path.join(directory, `source.${extension}`);
+  // The build ships every project file whose name could match a path handed
+  // to the converter. Called `source.<extension>`, this temporary file pulled
+  // in image-source.ts, tools/onside-desk/source.mjs and their tests; no
+  // project file is named like this one.
+  const input = path.join(directory, `onside-review-input.${extension}`);
   try {
-    await writeFile(input, file.buffer, { mode: 0o600, signal });
+    await writeFile(/* turbopackIgnore: true */ input, file.buffer, { mode: 0o600, signal });
     signal?.throwIfAborted();
     return await new Promise((resolve, reject) => {
       // Keep Python in the supervisor's process group. Linux PDEATHSIG in the
