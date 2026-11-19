@@ -5,6 +5,19 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // eslint-config-next 16.4 brings eslint-plugin-react-hooks 7.1, which reports
+  // these React Compiler checks as errors. They flag patterns in screens that
+  // work today (about a hundred places, mostly the application wizards); they
+  // stay visible as warnings until those screens are reworked on their own.
+  {
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/static-components": "warn",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -439,7 +439,8 @@ const mvRatingSchema = z.object({
 });
 
 export async function updateSubmissionMvRatingAction(
-  payload: z.infer<typeof mvRatingSchema>,
+  // The unchecked form value: the schema below is what narrows it to a rating.
+  payload: z.input<typeof mvRatingSchema>,
 ): Promise<AdminActionState> {
   const actor = await requireAdminAction();
   const parsed = mvRatingSchema.safeParse(payload);
