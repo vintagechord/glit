@@ -2097,7 +2097,9 @@ export async function saveSubmissionAdminFormAction(
     console.error("admin save submission load error", currentSubmissionError, {
       submissionId,
     });
-    redirectWithError(currentSubmissionError.message ?? "submission load error");
+    // The database's own wording (once "Project not specified." from its
+    // gateway, 2026-11-17) tells the administrator nothing; nothing was saved.
+    redirectWithError("접수 정보를 불러오지 못해 저장하지 않았습니다. 잠시 후 다시 시도해주세요.");
   }
 
   if (!currentSubmission) {

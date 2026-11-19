@@ -231,17 +231,42 @@ export async function completeMultipartUpload(params: {
   return client.send(command);
 }
 
+/**
+ * Aborts a multipart upload; "gone" means nothing was left to abort because
+ * the upload had already been completed or aborted.
+ *
+ * S3 answers that case with NoSuchUpload. Backblaze answers 403 AccessDenied
+ * "not entitled" (measured on the production bucket 2026-11-19: of two aborts
+ * of one upload the second is denied, and so is the abort of a completed
+ * one), while ListParts on the same upload does say NoSuchUpload. Callers
+ * that forgave only NoSuchUpload retried the cleanup of every finished upload
+ * forever, so a denied abort is settled here by asking for the parts. A
+ * denial for an upload that still exists, or one that cannot be checked, is
+ * a real failure and is thrown as it came.
+ */
 export async function abortMultipartUpload(params: {
   objectKey: string;
   uploadId: string;
-}) {
+}): Promise<"aborted" | "gone"> {
   const { client, bucket } = getB2Config();
-  const command = new AbortMultipartUploadCommand({
-    Bucket: bucket,
-    Key: params.objectKey,
-    UploadId: params.uploadId,
-  });
-  return client.send(command);
+  const target = { Bucket: bucket, Key: params.objectKey, UploadId: params.uploadId };
+  try {
+    await client.send(new AbortMultipartUploadCommand(target));
+    return "aborted";
+  } catch (cause) {
+    const name = cause instanceof Error ? cause.name : "";
+    if (name === "NoSuchUpload") return "gone";
+    if (name !== "AccessDenied") throw cause;
+    const stillOpen = await client.send(new ListPartsCommand({ ...target, MaxParts: 1 })).then(
+      () => true,
+      (probe: unknown) => {
+        if (probe instanceof Error && probe.name === "NoSuchUpload") return false;
+        throw cause;
+      },
+    );
+    if (stillOpen) throw cause;
+    return "gone";
+  }
 }
 
 /** The name a download is saved under: the key's file part without the

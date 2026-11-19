@@ -38,10 +38,57 @@ test("provider diagnostics distinguish missing configuration and HTTP failures w
     { provider: "openai", category: "not_configured" },
     { provider: "google", category: "http", status: 429 },
     { provider: "lingva", category: "http", status: 403 },
-    { provider: "google", category: "http", status: 429 },
-    { provider: "lingva", category: "http", status: 403 },
   ]);
   captured.assertPrivate();
+});
+
+// Production 2026-11-16 and 11-19: the free Google route answered 429 and
+// Lingva 403 to every request from the server. Each lyric line was still sent
+// to both, twice, so one song made hundreds of requests that could not
+// succeed and the customer waited for all of them before seeing the failure.
+test("a provider that refuses the server is not asked again for the rest of the request", async (t) => {
+  const captured = captureDiagnostics(t);
+  const lines = Array.from({ length: 40 }, (_, index) => `Stay with me tonight number ${index + 1}`);
+  const calls = { google: 0, lingva: 0 };
+  const started = Date.now();
+  const result = await translateLyricsBatch(lines, {
+    fetchImpl: async (input) => {
+      const google = new URL(String(input)).hostname === "translate.googleapis.com";
+      calls[google ? "google" : "lingva"] += 1;
+      return new Response("refused", { status: google ? 429 : 403 });
+    },
+  });
+  assert.deepEqual(result, lines.map(() => ""));
+  // Lines already in flight when the refusal arrives may each have asked once.
+  assert.ok(calls.google <= 3, `google asked ${calls.google} times`);
+  assert.ok(calls.lingva <= 3, `lingva asked ${calls.lingva} times`);
+  assert.ok(Date.now() - started < 1_500, "no retry delays once nobody is left to ask");
+  assert.ok(captured.logs.filter(([label]) => label === "[translate] failed attempt").length <= 3, "one failure line per line that was really tried");
+  captured.assertPrivate();
+});
+
+test("one provider refusing does not stop the other, and a passing failure is still retried", async (t) => {
+  captureDiagnostics(t);
+  const lines = Array.from({ length: 12 }, (_, index) => `Hold me close ${index + 1}`);
+  let google = 0;
+  assert.deepEqual(await translateLyricsBatch(lines, {
+    fetchImpl: async (input) => {
+      if (new URL(String(input)).hostname === "translate.googleapis.com") { google += 1; return new Response("refused", { status: 429 }); }
+      return Response.json({ translation: `꼭 안아줘 ${decodeURIComponent(String(input).split("/").at(-1) ?? "").split(" ").at(-1)}` });
+    },
+  }), lines.map((_, index) => `꼭 안아줘 ${index + 1}`));
+  assert.ok(google <= 3, `google asked ${google} times`);
+
+  // A 500 or a dropped connection may pass: the same provider is asked again.
+  let attempts = 0;
+  assert.deepEqual(await translateLyricsBatch(["Hold me close"], {
+    fetchImpl: async (input) => {
+      if (new URL(String(input)).hostname !== "translate.googleapis.com") return new Response("down", { status: 500 });
+      attempts += 1;
+      return attempts === 1 ? new Response("down", { status: 500 }) : Response.json([[["꼭 안아줘"]]]);
+    },
+  }), ["꼭 안아줘"]);
+  assert.equal(attempts, 2);
 });
 
 test("network and timeout diagnostics do not include raw error messages", async (t) => {

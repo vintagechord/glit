@@ -104,14 +104,17 @@ const RATE_LIMITED_MESSAGE = "자동번역 요청이 너무 많습니다. 잠시
 // Preserve the existing free browser route when the server provider cannot
 // connect. Validation/rate-limit errors never take this path. No new provider
 // origin, credentials, unbounded retry or whole-song URL is introduced.
-async function translateWithGoogleInBrowser(text: string, source: string, target: string, signal: AbortSignal) {
+// A rate limit (429) is Google's answer to this browser's address, so the
+// caller's `limited` flag stops the fallback for the rest of the request
+// instead of sending every remaining lyric line to the same refusal.
+async function translateWithGoogleInBrowser(text: string, source: string, target: string, signal: AbortSignal, limited: { value: boolean }) {
   const url = new URL("https://translate.googleapis.com/translate_a/single");
   url.searchParams.set("client", "gtx");url.searchParams.set("sl", source);url.searchParams.set("tl", target);url.searchParams.set("dt", "t");url.searchParams.set("q", text);
-  for (let attempt = 0; attempt < 2 && !signal.aborted; attempt++) {
+  for (let attempt = 0; attempt < 2 && !signal.aborted && !limited.value; attempt++) {
     try {
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(8_000)]);
       const response = await withLyricsTranslationSignal(fetch(url.toString(), {method:"GET",cache:"no-store",signal:requestSignal}), requestSignal);
-      if (!response.ok) { if (response.status === 429) return ""; continue; }
+      if (!response.ok) { if (response.status === 429) { limited.value = true; return ""; } continue; }
       const data = await withLyricsTranslationSignal(response.json(), requestSignal);
       if (!Array.isArray(data) || !Array.isArray(data[0]) || !data[0].length || !data[0].every((chunk:unknown)=>Array.isArray(chunk) && typeof chunk[0] === "string" && chunk[0].trim())) continue;
       const value = normalizeLyricsTranslation(data[0].map((chunk:string[])=>chunk[0]).join(""));
@@ -142,6 +145,7 @@ export const requestLyricsTranslations = async (
   let nextBatch = 0;
   // A 429 is the per-address limit: its Korean explanation reaches the user.
   let rateLimitedMessage: string | null = null;
+  const googleLimited = { value: false };
   await Promise.allSettled(Array.from({length: Math.min(2, batches.length)}, async () => {
     while (nextBatch < batches.length && !signal.aborted) {
       let pending = batches[nextBatch++];
@@ -171,12 +175,12 @@ export const requestLyricsTranslations = async (
           }
         } catch { browserFallback = !signal.aborted; }
         pending = pending.filter(text => !results.has(text));
-        if (browserFallback && pending.length && !signal.aborted) {
+        if (browserFallback && pending.length && !signal.aborted && !googleLimited.value) {
           let nextText = 0;
           await Promise.allSettled(Array.from({length:Math.min(3,pending.length)},async()=>{
-            while (nextText < pending.length && !signal.aborted) {
+            while (nextText < pending.length && !signal.aborted && !googleLimited.value) {
               const text = pending[nextText++];
-              const value = await translateWithGoogleInBrowser(text,source,target,signal);
+              const value = await translateWithGoogleInBrowser(text,source,target,signal,googleLimited);
               if (value) results.set(text,value);
             }
           }));

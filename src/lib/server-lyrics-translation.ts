@@ -13,6 +13,7 @@ const translateConcurrency = 3;
 const lingvaTranslateOrigins = ["https://lingva.ml"];
 
 type TranslationProviderName = "openai" | "google" | "lingva";
+type FreeProviderName = Exclude<TranslationProviderName, "openai">;
 type TranslationFailureCategory = "http" | "network" | "timeout" | "aborted" | "invalid_response" | "not_configured" | "unknown";
 
 class TranslationProviderError extends Error {
@@ -49,6 +50,19 @@ const logTranslationProviderFailure = (provider: TranslationProviderName, error:
     ...(Number.isInteger(status) && status! >= 100 && status! <= 599 ? { status } : {}),
   });
 };
+
+/**
+ * A rate limit (429) or a block (403) is an answer to this server, not to one
+ * lyric line: the next line would be refused as well. In production the free
+ * Google route refused every request on 2026-11-16 and 11-19 and each line of
+ * a song was still sent to both free providers twice, so a request made
+ * hundreds of calls that could not succeed before it reported the failure.
+ * A provider that refuses is therefore left out for the rest of the request.
+ */
+const isProviderRefusal = (error: unknown) =>
+  error instanceof TranslationProviderError &&
+  error.category === "http" &&
+  (error.status === 429 || error.status === 403);
 
 const normalizeLanguageCode = (value: string, fallback: string) => {
   const normalized = value.trim().toLowerCase();
@@ -121,6 +135,7 @@ const translateLineWithLingva = async (
   const sourceCode = baseLanguageCode(source);
   const targetCode = baseLanguageCode(target);
 
+  let failure: unknown = null;
   for (const origin of lingvaTranslateOrigins) {
     const url = `${origin}/api/v1/${encodeURIComponent(sourceCode)}/${encodeURIComponent(targetCode)}/${encodeURIComponent(text)}`;
     try {
@@ -151,29 +166,37 @@ const translateLineWithLingva = async (
       if (normalized) return normalized;
       throw new TranslationProviderError("invalid_response", response.status);
     } catch (error) {
-      logTranslationProviderFailure("lingva", error);
+      failure = error;
     }
   }
 
+  // The caller reports the failure and decides whether to ask again.
+  if (failure) throw failure;
   return "";
 };
+
+const freeProviders = [
+  { name: "google", translate: translateLineWithGoogle },
+  { name: "lingva", translate: translateLineWithLingva },
+] as const;
+
+const anyProviderLeft = (refused: ReadonlySet<FreeProviderName>) =>
+  freeProviders.some((provider) => !refused.has(provider.name));
 
 const translateLineOnce = async (
   text: string,
   source: string,
   target: string,
   fetchImpl: typeof fetch,
+  refused: Set<FreeProviderName>,
 ) => {
-  const providers = [
-    { name: "google", translate: translateLineWithGoogle },
-    { name: "lingva", translate: translateLineWithLingva },
-  ] as const;
-
-  for (const provider of providers) {
+  for (const provider of freeProviders) {
+    if (refused.has(provider.name)) continue;
     try {
       const translated = await provider.translate(text, source, target, fetchImpl);
       if (isUsableLyricsTranslation(translated, text, target)) return translated;
     } catch (error) {
+      if (isProviderRefusal(error)) refused.add(provider.name);
       logTranslationProviderFailure(provider.name, error);
     }
   }
@@ -189,12 +212,13 @@ const translateLine = async (
   source: string,
   target: string,
   fetchImpl: typeof fetch,
+  refused: Set<FreeProviderName>,
 ) => {
   const chunks = splitTextForTranslation(text);
   if (chunks.length > 1) {
     const translations: string[] = [];
     for (const chunk of chunks) {
-      const translated = await translateLine(chunk, source, target, fetchImpl);
+      const translated = await translateLine(chunk, source, target, fetchImpl, refused);
       if (!translated.trim()) return "";
       translations.push(translated.trim());
     }
@@ -204,19 +228,22 @@ const translateLine = async (
   const maxAttempts = 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    // With every provider refusing, only the local reading of spelled-out
+    // letters is left: nothing was asked, so nothing is reported or retried.
+    const asked = anyProviderLeft(refused);
     try {
-      const translated = await translateLineOnce(text, source, target, fetchImpl);
+      const translated = await translateLineOnce(text, source, target, fetchImpl, refused);
       if (isUsableLyricsTranslation(translated, text, target)) return translated;
       throw new Error("Translation providers returned empty results");
     } catch {
-      const isLastAttempt = attempt === maxAttempts;
+      if (!asked) return "";
       console.error(
         "[translate] failed attempt",
         attempt,
         "length",
         text.length,
       );
-      if (isLastAttempt) {
+      if (attempt === maxAttempts || !anyProviderLeft(refused)) {
         return "";
       }
       await sleep(200 * attempt);
@@ -260,12 +287,13 @@ export const translateLyricsBatch = async (
     }
   }));
   const missing = uniqueTexts.filter(text => !translations.has(text));
+  const refused = new Set<FreeProviderName>();
   let nextText = 0;
   await Promise.allSettled(Array.from({ length: Math.min(translateConcurrency, missing.length) }, async () => {
     while (nextText < missing.length && !signal.aborted) {
       const text = missing[nextText++];
       try {
-        const translated = await withLyricsTranslationSignal(translateLine(text, source, target, fetchImpl), signal);
+        const translated = await withLyricsTranslationSignal(translateLine(text, source, target, fetchImpl, refused), signal);
         if (isUsableLyricsTranslation(translated, text, target)) translations.set(text, translated);
       } catch { /* Retain completed results; an aborted segment is never success. */ }
     }

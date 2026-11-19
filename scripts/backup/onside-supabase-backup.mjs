@@ -3,6 +3,11 @@
 // automatic backups). Runs from launchd (kr.onside.supabase-backup) on the
 // operator's Mac; see scripts/backup/README.md.
 //
+// The agent starts this with --scheduled at login and four times a day; the
+// backup is then made only when today's is still owed (schedule.mjs), so a
+// night the Mac spent switched off is made up the next time it is on. Without
+// the flag (a run from the terminal) the backup is always made.
+//
 //  - Database: one full `pg_dump --format=custom` (every schema: public, auth,
 //    storage metadata, cron, …), verified with `pg_restore --list` and row
 //    counts; 14 daily snapshots are kept.
@@ -17,10 +22,12 @@
 // come from the review desk's production connection file (mode 600).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { appendFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parseEnv } from 'node:util';
+import { scheduledRunDecision } from './schedule.mjs';
 
 // Moved from Mumbai (rwysjsmxtpuqekeltwxi, ap-south-1) to Seoul on 2026-11-02.
 const projectRef = 'ggpkzttyfkopcdctvxzz';
@@ -164,6 +171,24 @@ function prune() {
     if (statSync(path).mtimeMs < cutoff) { rmSync(path, { recursive: true, force: true }); removed.push(name); }
   }
   return removed;
+}
+
+const scheduled = process.argv.includes('--scheduled');
+if (scheduled) {
+  const decision = scheduledRunDecision(root);
+  // Today's backup exists: the usual case for all but one start a day.
+  if (!decision.run) {
+    if (decision.reason !== 'fresh') log(`skip: ${decision.reason}`);
+    process.exit(0);
+  }
+  // A start at login comes before Wi-Fi is up. Wait for name resolution
+  // (the system resolver, as pg_dump uses) instead of failing at once; if
+  // the network stays down the failure below is reported and the next start
+  // tries again.
+  for (let waited = 0; waited < 300; waited += 10) {
+    if (await lookup(`${projectRef}.supabase.co`).then(() => true, () => false)) break;
+    await new Promise(resolve => setTimeout(resolve, 10_000));
+  }
 }
 
 const lock = join(root, '.backup.lock');
