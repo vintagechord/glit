@@ -39,7 +39,12 @@ NEXT_PUBLIC_VIDEO_UPLOAD_MAX_MB=4096
 SPELLCHECK_SERVICE_URL=https://glit-spellcheck.onrender.com
 SPELLCHECK_SHARED_SECRET=optional-shared-secret
 
-# Optional OpenAI-backed lyric translation
+# Lyric translation model. One key is enough; without either, only the free
+# routes are tried and they refuse the production server.
+# - AI_GATEWAY_API_KEY: Vercel AI Gateway (`vercel ai-gateway api-keys create`).
+# - OPENAI_API_KEY: OpenAI directly; wins when both are set.
+AI_GATEWAY_API_KEY=your_ai_gateway_api_key
+AI_GATEWAY_TRANSLATION_MODEL=openai/gpt-5-mini
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_TRANSLATION_MODEL=gpt-5.5
 OPENAI_TRANSLATION_TIMEOUT_MS=15000
