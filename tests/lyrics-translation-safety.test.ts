@@ -139,6 +139,25 @@ test("Google fallback retains server successes, rejects echoes/censorship and ha
   assert.equal(release.length,3);release.forEach(resolve=>resolve());assert.equal((await result).length,10);assert.equal(peak,3);
 });
 
+// When Google is rate limiting this browser's address, every further line gets
+// the same answer: the fallback stops instead of asking once per lyric line.
+test("the browser stops asking Google once it answers with a rate limit",async(t)=>{
+  let server=0,google=0;
+  t.mock.method(globalThis,'fetch',async(input:RequestInfo|URL,init?:RequestInit)=>{
+    if(input==='/api/translate'){server++;const {lines}=JSON.parse(String(init?.body));return Response.json({translations:lines.map(()=>'')},{status:502});}
+    google++;return new Response('Sorry...',{status:429});
+  });
+  const lines=Array.from({length:40},(_,index)=>`Foreign sample ${index}`);
+  await assert.rejects(requestLyricsTranslations(lines),error=>{
+    assert.ok(error instanceof LyricsTranslationError);assert.equal(error.failedIndexes.length,40);return true;
+  });
+  assert.ok(google<=3,`google asked ${google} times`);assert.equal(server,2);
+  // The limit is remembered for one request only: the next click tries again.
+  google=0;
+  t.mock.method(globalThis,'fetch',async(input:RequestInfo|URL)=>input==='/api/translate'?Response.json({translations:['']},{status:502}):(google++,Response.json([[["깨끗한 예시"]]])));
+  assert.deepEqual(await requestLyricsTranslations(['A clean fixture']),['깨끗한 예시']);assert.equal(google,1);
+});
+
 test("browser cancellation returns a recoverable partial error even when fetch ignores its signal",async(t)=>{
   const controller=new AbortController();let calls=0;
   t.mock.method(globalThis,"fetch",async()=>{calls++;controller.abort();return new Promise<Response>(()=>{})});

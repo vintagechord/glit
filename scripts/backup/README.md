@@ -1,7 +1,13 @@
 # 온사이드 Supabase 일일 백업
 
-Supabase 무료 플랜은 자동 백업이 없으므로, 운영자 Mac이 매일 04:40(KST)에
+Supabase 무료 플랜은 자동 백업이 없으므로, 운영자 Mac이 하루 한 번
 `onside-supabase-backup.mjs`를 실행한다(launchd `kr.onside.supabase-backup`).
+
+기준 시각은 04:40(KST)이다. Mac이 그 시각에 꺼져 있으면 launchd는 다시 실행해 주지
+않으므로(2026-11-19 확인: 9일 중 6일 누락), 에이전트는 로그인할 때와 04:40·10:40·
+16:40·22:40에 스크립트를 `--scheduled`로 시작하고, 스크립트가 "가장 최근 04:40 이후에
+끝난 백업이 없을 때"만 실제로 백업한다(`schedule.mjs`). 다른 서비스의 측정 시간대
+(12:05–13:40, 18:05–19:40)에는 시작하지 않고 다음 시각으로 넘긴다.
 
 | 대상 | 방식 | 위치 |
 | --- | --- | --- |
@@ -24,8 +30,11 @@ Supabase 무료 플랜은 자동 백업이 없으므로, 운영자 Mac이 매일
 
    입력 프롬프트에 비밀번호를 붙여 넣는다. 비밀번호는 파일·명령줄에 남지 않는다.
 2. 스케줄 등록: `node scripts/backup/install-backup-agent.mjs`
-3. 즉시 한 번 실행해 확인: `launchctl kickstart gui/$(id -u)/kr.onside.supabase-backup`
-   후 `cat ~/OnsideBackups/last-status.json`
+   (스케줄을 바꾼 뒤에도 같은 명령으로 다시 등록한다.)
+3. 즉시 한 번 실행해 확인: `node scripts/backup/onside-supabase-backup.mjs`
+   후 `cat ~/OnsideBackups/last-status.json`. 플래그 없이 실행하면 오늘 백업이 있어도
+   항상 새로 만든다. `launchctl kickstart …`는 `--scheduled`로 시작하므로 오늘 백업이
+   있으면 아무것도 하지 않는다.
 
 Supabase·B2 API 키는 심의 데스크 운영 연결 파일
 (`~/Library/Application Support/Onside Review Desk/connection.env`, 권한 600)에서 읽는다.

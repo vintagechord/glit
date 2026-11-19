@@ -155,8 +155,8 @@ test('with the Cloudflare link configured, originals come through the Worker wit
 });
 
 test('the module the installed desk imports exposes every source function the server uses, including unread chats', async () => {
-  const module = await import('./source.mjs');
-  for (const name of ['sourceStatus', 'fetchSubmissions', 'fetchSubmission', 'downloadAsset', 'fetchUnreadChats']) assert.equal(typeof module[name], 'function', name);
+  const installed = await import('./source.mjs');
+  for (const name of ['sourceStatus', 'fetchSubmissions', 'fetchSubmission', 'downloadAsset', 'fetchUnreadChats']) assert.equal(typeof installed[name], 'function', name);
   // Unread chats are read through the same read-only guard: GET on the conversations table only.
   const seen = [];
   const source = createSource({ env: { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-role-fixture' }, fetchImpl: async (url, init) => { seen.push({ url: String(url), method: init.method }); return new Response(JSON.stringify([{ id: 'c1', guest_name: '홍길동', access_token: 'secret', unread_admin_count: 1 }]), { headers: { 'content-type': 'application/json' } }); } });
