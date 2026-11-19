@@ -38,19 +38,49 @@ test('album packet preserves original lyrics, title roles, source broadcaster ma
  assert.ok(result.warnings.some(w=>w.includes('Mr. Sunshine')));
  } finally {await fs.rm(dir,{recursive:true,force:true});}
 });
-test('MV types produce exactly one genuine legacy DOC and one safe copy-paste HTML', {skip:process.platform!=='darwin'},async()=>{
+test('MV types produce the lyric sheet as DOCX and as a genuine Word DOC, plus one safe copy-paste HTML', {skip:process.platform!=='darwin'},async()=>{
  for(const type of ['MV_DISTRIBUTION','MV_BROADCAST']) {
   const dir=await output();try {
    const result=await generateDocuments({submission:{...base,type,mv_song_title:'영상 제목',mv_lyrics:'하나\r둘\u2028셋 🎵',mv_storyline:'</textarea><script>alert(1)</script>',delivery_method:'EMAIL'},outputDir:dir,settings:{pagination:false}});
-   assert.equal(result.summary.docxCount,0);assert.equal(result.summary.docCount,1);assert.equal(result.summary.trackCount,0);assert.equal(result.artifacts.length,2);
-   assert.equal((await fs.readdir(dir)).length,2);
+   assert.equal(result.summary.docxCount,1);assert.equal(result.summary.docCount,1);assert.equal(result.summary.trackCount,0);assert.equal(result.artifacts.length,3);
+   assert.deepEqual((await fs.readdir(dir)).sort(),result.artifacts.map(a=>a.name).sort());
    const lyrics=result.artifacts.find(a=>a.type==='doc');assert.equal(lyrics.name,'가사_가수 이름_영상 제목.doc');
    const bytes=await fs.readFile(lyrics.path);assert.ok(bytes.subarray(0,8).equals(OLE_SIGNATURE));assert.ok(readCompoundStreams(bytes).has('WordDocument'));
    const content=await docText(lyrics.path);assert.match(content,/가수 <이름>/);assert.match(content,/영상 제목/);assert.match(content,/하나\n둘\n셋 🎵/);
+   // The same sheet as DOCX: the format every current Word, 한글 and viewer opens.
+   const sheet=result.artifacts.find(a=>a.type==='docx');assert.equal(sheet.name,'가사_가수 이름_영상 제목.docx');
+   const sheetZip=new PizZip(await fs.readFile(sheet.path),{checkCRC32:true});
+   assert.ok(Object.values(sheetZip.files).every(f=>!f.dir),'no ZIP folder entries');
+   const sheetText=sheetZip.file('word/document.xml').asText().replace(/<w:br\/>/g,'\n').replace(/<[^>]+>/g,'');
+   assert.match(sheetText,/영상 제목/);assert.match(sheetText,/하나\n둘\n셋 🎵/);
    const page=await fs.readFile(result.artifacts.find(a=>a.type==='html').path,'utf8');assert.ok(page.includes('&lt;/textarea&gt;&lt;script&gt;'));assert.doesNotMatch(page,/<script>/);
    assert.match(page,/이메일 전달 선택/);assert.match(page,/실제 이메일 수신/);
   } finally {await fs.rm(dir,{recursive:true,force:true});}
  }
+});
+test('the MV lyric DOC is written by LibreOffice when it is installed, and by the Mac converter with a notice when it is not', {skip:process.platform!=='darwin'},async()=>{
+ const submission={...base,type:'MV_DISTRIBUTION',mv_song_title:'영상 제목',mv_lyrics:'첫 줄\nSecond line\n셋째 줄'};
+ const soffice=['/Applications/LibreOffice.app/Contents/MacOS/soffice','/opt/homebrew/bin/soffice','/usr/local/bin/soffice'];
+ const installed=(await Promise.all(soffice.map(file=>fs.access(file).then(()=>true,()=>false)))).some(Boolean);
+ const notice=/Mac 기본 변환기로 만들었습니다\. Windows에서 열리지 않으면 함께 만든 DOCX 파일을 사용하세요/;
+ let dir=await output();try {
+  const result=await generateDocuments({submission,outputDir:dir,settings:{pagination:false}});
+  const bytes=await fs.readFile(result.artifacts.find(a=>a.type==='doc').path);
+  const streams=readCompoundStreams(bytes);
+  if(installed) {
+   // What Word itself writes and the Mac converter leaves out.
+   assert.ok(streams.has('\u0001CompObj'),'LibreOffice writes the CompObj stream of a Word document');
+   assert.ok(!result.warnings.some(w=>notice.test(w)));
+  } else assert.ok(result.warnings.some(w=>notice.test(w)));
+  assert.match(await docText(result.artifacts.find(a=>a.type==='doc').path),/첫 줄\nSecond line\n셋째 줄/);
+ } finally {await fs.rm(dir,{recursive:true,force:true});}
+ dir=await output();try {
+  // Without LibreOffice the document is still made, and the operator is told which file to use on Windows.
+  const result=await generateDocuments({submission,outputDir:dir,settings:{pagination:false,sofficePath:false}});
+  assert.equal(result.artifacts.filter(a=>['doc','docx'].includes(a.type)).length,2);
+  assert.ok(result.warnings.some(w=>notice.test(w)));
+  assert.match(await docText(result.artifacts.find(a=>a.type==='doc').path),/첫 줄\nSecond line\n셋째 줄/);
+ } finally {await fs.rm(dir,{recursive:true,force:true});}
 });
 test('filenames and empty delivery state never claim receipt',()=>{
  assert.equal(safeDocumentName('../a/b:*?'), 'a b');
@@ -61,7 +91,7 @@ test('MV filenames fit filesystem byte limits without shortening document conten
  const dir=await output();try {
   const artist='가나다라마바사'.repeat(15),title='영상제목'.repeat(25);
   const result=await generateDocuments({submission:{...base,type:'MV_DISTRIBUTION',artist_name:artist,title,mv_song_title:title,mv_lyrics:'원문 유지'},outputDir:dir,settings:{pagination:false}});
-  assert.equal(result.artifacts.length,2);for(const artifact of result.artifacts)assert.ok(Buffer.byteLength(artifact.name)<=255);
+  assert.equal(result.artifacts.length,3);for(const artifact of result.artifacts)assert.ok(Buffer.byteLength(artifact.name)<=255);
   const content=await docText(result.artifacts.find(a=>a.type==='doc').path);assert.ok(content.includes(artist));assert.ok(content.includes(title));
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

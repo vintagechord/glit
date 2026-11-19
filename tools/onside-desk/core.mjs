@@ -9,6 +9,12 @@ export const STAGES = ['RECEIVED', 'CHECKING', 'PREPARING', 'READY', 'SUBMITTED'
 export const DEFAULT_SETTINGS = { managerName: '정준영', managerPhone: '010-9068-9035', managerEmail: 'vintagechord@daum.net', companyName: '빈티지코드', autoSync: true, autoGenerate: false, chatAlerts: true };
 export const now = () => new Date().toISOString();
 export const safeName = (value, fallback = '파일') => String(value || fallback).normalize('NFC').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, '_').replace(/^\.+/, '').trim().slice(0, 110) || fallback;
+/** Plain text as Windows Notepad reads it: UTF-8 mark, CRLF line ends. */
+export const windowsText = value => '\uFEFF' + String(value).replace(/^\uFEFF/, '').replace(/\r\n?|\n/g, '\r\n');
+/** Content-Disposition for a download. RFC 5987 leaves ( ) ' * ! unescaped by
+ * encodeURIComponent although they are not allowed there; a strict client
+ * would then drop the Korean name or its extension. */
+export const attachmentDisposition = name => `attachment; filename*=UTF-8''${encodeURIComponent(name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
 export function childPath(root, ...parts) {
   const resolved = path.resolve(root, ...parts);
   if (!resolved.startsWith(path.resolve(root) + path.sep)) throw new Error('허용되지 않은 파일 경로입니다.');

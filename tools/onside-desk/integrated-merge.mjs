@@ -1,4 +1,5 @@
 import PizZip from 'pizzip';
+import { normalizeDocxPackage } from './ooxml-normalize.mjs';
 
 // 통합신청서 합치기: TBS, WBS and PBC take one application listing many
 // albums. The desk (and the web) write one integrated form per album; this
@@ -132,7 +133,8 @@ export function mergeIntegratedForms({ station, files }) {
   const body = rows.map((group, index) => (layout.numbered ? [setFirstCellText(group[0], String(index + 1)), ...group.slice(1)] : group).join('')).join('');
   base.zip.file('word/document.xml', `${base.before}${base.header.join('')}${body}${base.after}`);
   return {
-    buffer: base.zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }),
+    // Forms generated before 2026-11-19 carry table borders Word ignores; the merged file is written valid.
+    buffer: normalizeDocxPackage(base.zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })).buffer,
     filename: `${station}신청서_통합_${rows.length}건.docx`,
     albums: rows.length, files: forms.length, duplicates, layout: layout.label, warnings,
   };

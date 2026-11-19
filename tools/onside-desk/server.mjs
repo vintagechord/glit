@@ -12,12 +12,12 @@ import { createRemoteReviewClient } from './remote.mjs';
 import { createSiteMonitor, notificationText, worst } from './monitor.mjs';
 import { upgradeManualMvCases, upgradeManualReferenceCleanup } from './manual-upgrade.mjs';
 import { needsLyricsTranslation } from './manual-translation.mjs';
-import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings } from './core.mjs';
+import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings, windowsText, attachmentDisposition } from './core.mjs';
 import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './integrated-merge.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export const DESK_VERSION = '2.14.1';
+export const DESK_VERSION = '2.15.0';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
@@ -361,7 +361,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const retained = (item.downloads || []).filter(record => !listedKeys.has(record.sourceKey) && !results.some(result => result.sourceKey === record.sourceKey));
     item.downloads = [...results, ...retained];
     const message = [current.submission.files_submitted_by_email ? '신청 시 이메일로 전달한 파일이 있습니다. 수신함에서 실제 파일을 확인하고 앱의 이메일 파일 추가 기능으로 보관하세요.' : '', !assets.length ? '서비스에서 다운로드할 업로드 파일을 찾지 못했습니다.' : '', ...errors].filter(Boolean).join('\n');
-    await fs.writeFile(path.join(destination, '파일 수신 현황.txt'), `신청 ID: ${id}\n확인 일시: ${now()}\n\n${message}\n\n다운로드한 파일\n${results.map(r => `${r.name} (${r.bytes} bytes) SHA256 ${r.sha256}`).join('\n')}\n\n로컬 추가 파일\n${(item.attachments || []).map(a => a.name).join('\n')}`, { mode: 0o600 });
+    await fs.writeFile(path.join(destination, '파일 수신 현황.txt'), windowsText(`신청 ID: ${id}\n확인 일시: ${now()}\n\n${message}\n\n다운로드한 파일\n${results.map(r => `${r.name} (${r.bytes} bytes) SHA256 ${r.sha256}`).join('\n')}\n\n로컬 추가 파일\n${(item.attachments || []).map(a => a.name).join('\n')}`), { mode: 0o600 });
     store.audit(id, 'download', `${results.length}개 원본 파일 저장${errors.length ? `, ${errors.length}개 실패` : ''}`);
     await store.save();
     return { count: results.length, warnings: message ? message.split('\n') : [], failed: errors.length };
@@ -406,7 +406,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       const artifactList = (result.artifacts || []).map(a => ({ name: a.name, type: a.type, bytes: a.bytes }));
       if (album) {
       await atomicJSON(path.join(dir, '신청내용_생성시점.json'), { generatedAt: now(), submission: current.submission, tracks: current.tracks, stations: current.stations, stationReviews: current.stationReviews, local: current.local, warnings });
-      await fs.writeFile(path.join(dir, '제출전_확인사항.txt'), `온사이드 심의 데스크\n신청 ID ${id}\n\n${warnings.length ? warnings.map(x => `□ ${x}`).join('\n') : '신청 내용 기준 자동 점검을 통과했습니다.'}\n\n□ 생성된 문서의 페이지·가사·크레딧을 최종 확인\n□ 이메일 전달 파일 실제 수신 여부 확인\n□ 기관별 제출 화면의 필수 항목 확인\n\n자동 점검은 기관의 접수·심의 승인을 의미하지 않습니다.\n`, { mode: 0o600 });
+      await fs.writeFile(path.join(dir, '제출전_확인사항.txt'), windowsText(`온사이드 심의 데스크\n신청 ID ${id}\n\n${warnings.length ? warnings.map(x => `□ ${x}`).join('\n') : '신청 내용 기준 자동 점검을 통과했습니다.'}\n\n□ 생성된 문서의 페이지·가사·크레딧을 최종 확인\n□ 이메일 전달 파일 실제 수신 여부 확인\n□ 기관별 제출 화면의 필수 항목 확인\n\n자동 점검은 기관의 접수·심의 승인을 의미하지 않습니다.\n`), { mode: 0o600 });
       for (const name of ['신청내용_생성시점.json', '제출전_확인사항.txt']) {
         const st = await fs.stat(path.join(dir, name));
         if (st.isFile()) artifactList.push({ name, type: path.extname(name).slice(1), bytes: st.size });
@@ -659,7 +659,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         const stat = await fs.stat(file).catch(() => null);
         if (!stat) return sendJSON(res, 404, { error: '합친 통합신청서를 찾을 수 없습니다.' });
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'); res.setHeader('Content-Length', stat.size);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        res.setHeader('Content-Disposition', attachmentDisposition(name));
         return await pipeline(createReadStream(file), res);
       }
       if (url.pathname === '/api/connection' && req.method === 'GET') return sendJSON(res, 200, await remote.health());
@@ -704,7 +704,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (!gen?.artifacts.some(a => a.name === name)) return sendJSON(res, 404, { error: '생성 파일을 찾을 수 없습니다.' });
         const file = childPath(caseDir(id), '생성 이력', genId, name);
         const stat = await fs.stat(file); res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Length', stat.size);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+        res.setHeader('Content-Disposition', attachmentDisposition(name));
         return await pipeline(createReadStream(file), res);
       }
       const resultAsset = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)\/result-assets\/(ratingImage|usageGuide|certificate)$/);
@@ -712,7 +712,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         const [, id, kind] = resultAsset;
         const asset = await remote.downloadAsset(remoteCaseId(id), kind);
         res.setHeader('Content-Type', asset.contentType || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName(asset.filename || kind))}`);
+        res.setHeader('Content-Disposition', attachmentDisposition(safeName(asset.filename || kind)));
         if (asset.contentLength && /^\d+$/.test(String(asset.contentLength))) res.setHeader('Content-Length', asset.contentLength);
         return await pipeline(Readable.fromWeb(asset.body), res);
       }
@@ -757,7 +757,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (item.source !== 'manual' || !item.importInfo?.filename) return sendJSON(res, 404, { error: '수동 작업 기준파일을 찾을 수 없습니다.' });
         const file = childPath(caseDir(id), '기준파일', item.importInfo.filename);
         const stat = await fs.stat(file); res.setHeader('Content-Type', 'application/octet-stream'); res.setHeader('Content-Length', stat.size);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(item.importInfo.filename)}`);
+        res.setHeader('Content-Disposition', attachmentDisposition(item.importInfo.filename));
         return await pipeline(createReadStream(file), res);
       }
       if (action === 'results' && req.method === 'GET') {

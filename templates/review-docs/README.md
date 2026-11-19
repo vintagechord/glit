@@ -215,3 +215,21 @@ TBS/WBS/PBC 반복 제목과 전체 앨범 출력에 잘림·겹침이 없었습
 `/System/Library/Fonts`와 「맑은 고딕 → Apple SD Gothic Neo」 대체를 지정해야
 한글이 보인다. PBC는 가로 A4 한 쪽(2개 앨범)·네 쪽(8개 앨범), TBS는 세로 A4로
 나왔고 반복 머리행, 페이지를 넘는 행, 긴 기획사 이름 줄바꿈에 겹침·잘림이 없었다.
+
+2026-11-19 Windows 호환 정리: Windows의 MS Word에서 일부 문서가 열리지 않고 표
+선이 보이지 않는다는 보고로 16개 양식(웹 8, 데스크 8)을 ISO/IEC 29500 XSD로
+검증했다. 원인은 (1) 가요심의요청서의 `mc:Ignorable`이 선언되지 않은 접두어
+(w14·wp14·w15)를 가리킴 — Word가 문서를 거부, (2) 심의폼·TBS·WBS의
+`w:tblBorders`가 `w:tblLayout` 뒤에 있어 Word가 테두리를 무시, (3) 테마의 스타일
+목록이 1개뿐(3개 필요), (4) `w:pPr`·`w:rPr`·`w:tcPr` 자식 순서 위반, (5) 좌우
+테두리를 start/end로 표기, (6) ZIP 폴더 항목이었다. LibreOffice·Pages·Polaris는
+모두 너그럽게 열기 때문에 드러나지 않았다. `tools/onside-desk/ooxml-normalize.mjs`
+가 이를 바로잡고 표와 칸마다 선을 명시하며, 생성되는 모든 DOCX도 저장 전에
+같은 정리를 거친다. 양식을 교체·수정한 뒤에는 아래를 실행한다(멱등).
+
+```bash
+node scripts/review-docs/normalize-ooxml.mjs templates/review-docs/*.docx tools/onside-desk/templates/*.docx
+```
+
+정리 전후를 같은 fixture로 LibreOffice 렌더링해 20쪽이 픽셀 단위로 같음을
+확인했고, 양식 16개와 생성 문서(웹 24종, 데스크 11종)가 XSD 검증을 통과했다.
