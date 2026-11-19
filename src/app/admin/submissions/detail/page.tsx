@@ -1025,7 +1025,11 @@ export default async function AdminSubmissionDetailPage({
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-[#111111] bg-[#111111] px-3 py-1 text-[11px] font-semibold uppercase tracking-normal text-white transition hover:bg-[#1556a4] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"
             />
           ) : null}
-          <AdminDeleteButton ids={[submission.id]} redirectTo={adminSubmissionListHref} />
+          <AdminDeleteButton
+            ids={[submission.id]}
+            redirectTo={adminSubmissionListHref}
+            paid={submission.payment_status === "PAID" || submission.payment_status === "REFUNDED"}
+          />
         </div>
       </div>
 

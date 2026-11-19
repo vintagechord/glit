@@ -11,17 +11,23 @@ export function AdminDeleteButton({
   redirectTo,
   className,
   label = "삭제",
+  paid = false,
 }: {
   ids: string[];
   redirectTo?: string;
   className?: string;
   label?: string;
+  /** A paid or refunded application: the confirmation says what is kept. */
+  paid?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
   const remove = async () => {
-    if (pending || !(await showCenteredConfirm("삭제하시겠습니까?"))) return;
+    const question = paid
+      ? "결제 완료된 접수입니다. 삭제하면 접수 내용과 제출 파일이 모두 지워지고 되돌릴 수 없습니다. 주문·결제 내역은 그대로 남습니다. 삭제하시겠습니까?"
+      : "삭제하시겠습니까?";
+    if (pending || !(await showCenteredConfirm(question))) return;
     startTransition(async () => {
       // The reason a delete was refused (a paid order, for example) must reach the admin.
       const result = await deleteSubmissionsAction({ ids }).catch(() => ({ error: "접수 삭제에 실패했습니다. 잠시 후 다시 시도해주세요." }));
