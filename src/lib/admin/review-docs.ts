@@ -317,7 +317,9 @@ const sanitizeFilenamePart = (value: string, fallback: string) => {
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")
     .trim();
-  return Array.from(cleaned || fallback).slice(0, 80).join("");
+  // 60 characters per name: an extracted ZIP repeats the album label three
+  // times (ZIP folder / album folder / file), and Windows refuses paths over 260.
+  return Array.from(cleaned || fallback).slice(0, 60).join("");
 };
 
 const uniquePath = (pathName: string, used: Set<string>) => {
@@ -1816,9 +1818,9 @@ export function buildReviewDocsZipFilename(bundles: ReviewDocSubmissionBundle[])
 
 export function contentDispositionAttachment(filename: string) {
   const asciiFallback = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(
-    filename,
-  )}`;
+  // RFC 5987: ( ) ' * ! are not allowed unescaped in the UTF-8 name.
+  const encoded = encodeURIComponent(filename).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }
 
 export function getReviewDocsErrorPayload(error: unknown) {

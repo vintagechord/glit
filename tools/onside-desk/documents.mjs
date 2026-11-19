@@ -1,8 +1,11 @@
 import { cleanLyricRecord } from './reference-cleanup.mjs';
+import { normalizeDocxPackage } from './ooxml-normalize.mjs';
+import { windowsText } from './core.mjs';
 import fs from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -19,8 +22,10 @@ const text = v => typeof v === 'string' ? documentText(v).trim() : typeof v === 
 const first = (...values) => values.map(text).find(Boolean) || '';
 const settingText = (settings,key,fallback) => settings[key] === undefined ? fallback : text(settings[key]);
 const html = v => text(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// 60 characters per name: an extracted ZIP repeats the album label three times
+// (ZIP folder / album folder / file), and Windows refuses paths over 260.
 export function safeDocumentName(value, fallback='자료') {
-  return [...(text(value).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g,'').replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'') || fallback)].slice(0,85).join('');
+  return [...(text(value).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g,'').replace(/[<>:"/\\|?*\u0000-\u001F\u007F]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'') || fallback)].slice(0,60).join('');
 }
 // ZIP recipients may use a 255-byte filename limit even when this Mac accepts more.
 function portableFilename(value) {
@@ -163,28 +168,56 @@ export function renderDocumentTemplate({template,templateName:name,data}) {
       if(value&&!rendered.includes(comparable(value))) throw new Error(`${name}: 곡명 또는 가사 본문이 완전히 출력되지 않았습니다.`);
     }
   }
-  return doc.getZip().generate({type:'nodebuffer',compression:'DEFLATE'});
+  // Schema order, explicit borders and a folder-free package: what Word on Windows and 한글 need to open the file as drawn.
+  return normalizeDocxPackage(doc.getZip().generate({type:'nodebuffer',compression:'DEFLATE'})).buffer;
 }
 async function renderTemplate(name,data) {
   const input=await fs.readFile(path.join(templateDir,name));
   return {buffer:renderDocumentTemplate({template:input,templateName:name,data}),templateHash:createHash('sha256').update(input).digest('hex')};
 }
-async function legacyWordDocument(docx,expectedValues) {
+// LibreOffice writes the Word 97 file the way Word itself does (fonts, paragraphs,
+// the CompObj stream and language of a real Word document). The Mac's own
+// converter is the fallback: its files open on a Mac but were reported not to
+// open on Windows.
+const sofficeCandidates=['/Applications/LibreOffice.app/Contents/MacOS/soffice','/opt/homebrew/bin/soffice','/usr/local/bin/soffice'];
+async function findSoffice(settings) {
+  if(settings.sofficePath===false) return null;
+  for(const candidate of [settings.sofficePath,...sofficeCandidates]) {
+    if(typeof candidate!=='string'||!path.isAbsolute(candidate)) continue;
+    try {await fs.access(candidate,fsConstants.X_OK);return candidate;} catch {/* try the next location */}
+  }
+  return null;
+}
+async function legacyWordDocument(docx,expectedValues,settings={}) {
   if(process.platform!=='darwin') throw new Error('뮤비 가사 DOC 생성에는 이 Mac의 문서 변환기가 필요합니다.');
   const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'onside-mv-doc-'));
   try {
-    const input=path.join(temporary,'lyrics.docx'),output=path.join(temporary,'lyrics.doc');
+    const input=path.join(temporary,'lyrics.docx');
     await fs.writeFile(input,docx,{mode:0o600});
+    const verified=async file=>{
+      const buffer=await fs.readFile(file);
+      if(!buffer.subarray(0,8).equals(OLE_SIGNATURE)) throw new Error('Word DOC 형식 검증에 실패했습니다.');
+      const word=readCompoundStreams(buffer).get('WordDocument')?.();
+      if(!word||word.length<32||word.readUInt16LE(0)!==0xa5ec) throw new Error('Word DOC 본문 검증에 실패했습니다.');
+      const {stdout}=await run('/usr/bin/textutil',['-convert','txt','-stdout',file],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
+      const comparable=value=>documentText(value).replace(/\s+/g,'');
+      const roundTrip=comparable(stdout);
+      if(expectedValues.some(value=>value&&!roundTrip.includes(comparable(value)))) throw new Error('Word DOC 변환 과정에서 곡명 또는 가사가 누락되었습니다.');
+      return buffer;
+    };
+    const soffice=await findSoffice(settings);
+    if(soffice) {
+      try {
+        const converted=path.join(temporary,'word97');
+        await fs.mkdir(converted,{mode:0o700});
+        // A private profile: an open LibreOffice window never blocks or is touched by the conversion.
+        await run(soffice,[`-env:UserInstallation=${pathToFileURL(path.join(temporary,'profile')).href}`,'--headless','--norestore','--convert-to','doc:MS Word 97','--outdir',converted,input],{timeout:90000,maxBuffer:1024*1024});
+        return {buffer:await verified(path.join(converted,'lyrics.doc')),converter:'libreoffice'};
+      } catch {/* fall back to the Mac converter below */}
+    }
+    const output=path.join(temporary,'lyrics.doc');
     await run('/usr/bin/textutil',['-convert','doc','-output',output,input],{timeout:30000,maxBuffer:100000});
-    const buffer=await fs.readFile(output);
-    if(!buffer.subarray(0,8).equals(OLE_SIGNATURE)) throw new Error('Word DOC 형식 검증에 실패했습니다.');
-    const word=readCompoundStreams(buffer).get('WordDocument')?.();
-    if(!word||word.length<32||word.readUInt16LE(0)!==0xa5ec) throw new Error('Word DOC 본문 검증에 실패했습니다.');
-    const {stdout}=await run('/usr/bin/textutil',['-convert','txt','-stdout',output],{encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024});
-    const comparable=value=>documentText(value).replace(/\s+/g,'');
-    const roundTrip=comparable(stdout);
-    if(expectedValues.some(value=>value&&!roundTrip.includes(comparable(value)))) throw new Error('Word DOC 변환 과정에서 곡명 또는 가사가 누락되었습니다.');
-    return buffer;
+    return {buffer:await verified(output),converter:'textutil'};
   } catch { throw new Error('뮤비 가사를 Word DOC로 변환하지 못했습니다. Mac 문서 변환기와 저장 공간을 확인한 뒤 다시 생성하세요.'); }
   finally {await fs.rm(temporary,{recursive:true,force:true});}
 }
@@ -248,6 +281,8 @@ export async function generateDocuments({submission,source,tracks=[],stations=[]
     const dest=path.join(outputDir,rel);
     if(!dest.startsWith(outputDir+path.sep)) throw new Error('잘못된 파일 경로입니다.');
     await fs.mkdir(path.dirname(dest),{recursive:true,mode:0o700});
+    // Windows Notepad needs the UTF-8 mark and CRLF line ends to show Korean text and line breaks.
+    if(type==='text'&&typeof buffer==='string') buffer=windowsText(buffer);
     // Generation directories are versioned by the application; refuse an accidental overwrite.
     await fs.writeFile(dest,buffer,{mode:0o600,flag:'wx'});
     artifacts.push({name:rel,path:dest,type,bytes:Buffer.byteLength(buffer)});return dest;
@@ -276,11 +311,15 @@ export async function generateDocuments({submission,source,tracks=[],stations=[]
     const mv=normalizedTracks([{track_no:1,track_title:first(submission.mv_song_title_official,submission.mv_song_title,submission.mv_song_title_kr,submission.title),lyrics:currentLyrics(submission,'mv_lyrics'),lyrics_with_translation:submission.lyrics_with_translation,translated_lyrics:submission.korean_lyrics_translation,composer:submission.mv_composer,lyricist:submission.mv_lyricist,arranger:submission.mv_arranger,is_instrumental:submission.is_instrumental,instrumental_confirmed:submission.instrumental_confirmed}],mvWarnings,manual)[0];
     warnings.push(...mvWarnings.map(w=>w.replace(/^1번(?: 트랙)?\s*/,'')));
     const {buffer,templateHash}=await renderTemplate('lyrics-mv.docx',{...data,...mv});templateHashes['lyrics-mv.docx']=templateHash;
-    const lyricName=`가사_${filenamePart(data.artist_display,'가수 미입력',100)}_${filenamePart(mv.track_title,'제목 미입력',100)}.doc`;
-    await write(lyricName,await legacyWordDocument(buffer,[data.artist_display,mv.track_title,mv.lyrics_with_translation]),'doc');
+    // The same lyric sheet in both Word formats: DOCX opens in every current Word, 한글 and viewer; DOC is for forms that still ask for it.
+    const lyricName=`가사_${filenamePart(data.artist_display,'가수 미입력',100)}_${filenamePart(mv.track_title,'제목 미입력',100)}`;
+    await write(`${lyricName}.docx`,buffer,'docx');
+    const legacy=await legacyWordDocument(buffer,[data.artist_display,mv.track_title,mv.lyrics_with_translation],settings);
+    await write(`${lyricName}.doc`,legacy.buffer,'doc');
+    if(legacy.converter!=='libreoffice') warnings.push('가사 DOC를 Mac 기본 변환기로 만들었습니다. Windows에서 열리지 않으면 함께 만든 DOCX 파일을 사용하세요. LibreOffice가 설치되어 있으면 표준 Word 형식으로 만듭니다.');
     const fields=copyFields(submission,data,stations,stationReviews,files),name=submission.type==='MV_DISTRIBUTION'?'영등위_복사붙여넣기':'방송용_복사붙여넣기';
     await write(`${name}_${filenamePart(label,'자료',180)}.html`,`<!doctype html><html lang="ko"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>${html(name)}</title><style>body{font:16px -apple-system,sans-serif;max-width:850px;margin:40px auto;color:#202620}h1{font-size:25px}section{margin:24px 0}label{display:block;font-weight:700;margin-bottom:8px}textarea{width:100%;box-sizing:border-box;padding:12px;font:inherit;border:1px solid #a8b5a9;border-radius:6px;line-height:1.6}p{color:#57625a}</style><h1>${html(name.replaceAll('_',' '))}</h1><p>각 칸을 클릭하고 전체 선택하여 복사하세요. 빈칸은 신청 자료에서 확인되지 않은 항목입니다. 심의기관의 실제 신청 화면에 맞춰 입력하세요.</p>${fields.map(f=>`<section><label>${html(f.label)}</label><textarea readonly rows="${Math.min(15,Math.max(2,f.value.split('\n').length+1))}">${html(f.value)}</textarea></section>`).join('')}</html>`,'html');
-    return {artifacts,warnings,screening,summary:{type:submission.type,source:submission.source,caseCount:1,trackCount:0,docCount:1,docxCount:0,applicationDate:data.application_date,templateHashes,screeningCounts:screening.counts,requiresReview:warnings.length>0,visuallyVerified:false}};
+    return {artifacts,warnings,screening,summary:{type:submission.type,source:submission.source,caseCount:1,trackCount:0,docCount:1,docxCount:1,applicationDate:data.application_date,templateHashes,screeningCounts:screening.counts,requiresReview:warnings.length>0,visuallyVerified:false}};
   }
   await write('가사_확인사항.txt',screeningReport(screening),'text');
   const docs=artifacts.filter(a=>a.type==='docx');

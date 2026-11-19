@@ -9,7 +9,9 @@ const toAsciiFilename = (filename: string) => {
 
 export const buildAttachmentDisposition = (filename: string) => {
   const asciiFilename = toAsciiFilename(filename);
-  return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  // RFC 5987: ( ) ' * ! are not allowed unescaped in the UTF-8 name.
+  const encoded = encodeURIComponent(filename).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encoded}`;
 };
 
 export const buildAttachmentHeaders = (params: {

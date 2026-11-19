@@ -1,5 +1,6 @@
 import Docxtemplater from "docxtemplater";
 import PizZip from "pizzip";
+import { normalizeDocxPackage } from "../../../tools/onside-desk/ooxml-normalize.mjs";
 
 type TemplatePrimitive = string | number | boolean | null | undefined;
 
@@ -203,10 +204,12 @@ export function renderReviewDocTemplate({
     );
 
     validateRenderedDocx(document.getZip(), templateName, sanitizeTemplateValue(data) as Record<string, ReviewDocTemplateValue>, templateXml);
-    return document.getZip().generate({
+    // Schema order, explicit borders and a folder-free package: what Word on
+    // Windows and 한글 need to open the file as drawn.
+    return normalizeDocxPackage(document.getZip().generate({
       type: "nodebuffer",
       compression: "DEFLATE",
-    });
+    })).buffer;
   } catch (error) {
     if (error instanceof ReviewDocTemplateRenderError) throw error;
     throw new ReviewDocTemplateRenderError(templateName);
