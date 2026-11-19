@@ -1874,9 +1874,8 @@ export async function recordRefundAction(
   };
 }
 
+// Paid and refunded applications can be deleted; their order stays as the money record.
 const adminDeleteErrors: Record<string, string> = {
-  PAID_SUBMISSION:
-    "결제 완료된 접수는 삭제할 수 없습니다. 환불했다면 접수 상세의 '환불 처리'에서 환불을 기록한 뒤 삭제해주세요.",
   ORDER_HAS_OTHER_SUBMISSIONS:
     "같은 주문에 묶인 다른 접수가 있습니다. 함께 주문한 접수를 모두 선택해 삭제해주세요.",
   PAYMENT_APPROVAL_IN_PROGRESS:

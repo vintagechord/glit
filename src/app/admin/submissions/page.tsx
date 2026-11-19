@@ -719,7 +719,7 @@ export default async function AdminSubmissionsPage({
                       >
                         상세보기
                       </Link>
-                      <AdminDeleteButton ids={[submission.id]} />
+                      <AdminDeleteButton ids={[submission.id]} paid={submission.payment_status === "PAID" || submission.payment_status === "REFUNDED"} />
                     </div>
                   </div>
                 </div>
