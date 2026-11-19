@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import PizZip from "pizzip";
-import { buildReviewDocsZip, getReviewDocsErrorPayload, type ReviewDocSubmissionBundle } from "../src/lib/admin/review-docs";
+import { buildReviewDocsZip, REVIEW_DOCS_REPORT_FILENAME, type ReviewDocSubmissionBundle } from "../src/lib/admin/review-docs";
 
 const fixture = (): ReviewDocSubmissionBundle => ({
   submission: {
@@ -43,13 +43,23 @@ test("complete saved URL submissions receive inline translations in every lyric 
   }
 });
 
-test("a partial translation fails the ZIP instead of delivering untranslated lyrics", async () => {
-  await assert.rejects(buildReviewDocsZip([fixture()], { translate: async () => ["나는 너를 사랑해", ""] }), (error) => {
-    const payload = getReviewDocsErrorPayload(error);
-    assert.equal(payload.status, 502);
-    assert.equal("code" in payload.body ? payload.body.code : undefined, "REVIEW_TRANSLATION_FAILED");
-    return true;
+test("a partial translation still delivers the ZIP, with the untranslated lyrics listed in its report", async () => {
+  let reported: string[] = [];
+  const zip = await buildReviewDocsZip([fixture()], {
+    translate: async (batch) => batch.map((_, index) => (index === 0 ? "나는 너를 사랑해" : "")),
+    onReport: (lines) => { reported = lines; },
   });
+  const archive = new PizZip(zip, { checkCRC32: true });
+  assert.ok(archive.file(/\.docx$/).length > 0);
+  assert.ok(reported.length >= 2);
+  assert.match(reported[0], /구간을 번역하지 못해 원문 그대로 출력했습니다/);
+  assert.match(reported.at(-1)!, /^번역 실패 사유: /);
+  assert.equal(archive.file(REVIEW_DOCS_REPORT_FILENAME)!.asText().replace(/^\uFEFF/, "").split("\r\n").filter((line) => /^\d+\. /.test(line)).length, reported.length);
+  // A ZIP with nothing to check has no report file and does not call back.
+  let quiet = false;
+  const clean = await buildReviewDocsZip([fixture()], { translate: async (batch) => batch.map(() => "번역"), onReport: () => { quiet = true; } });
+  assert.equal(new PizZip(clean).file(REVIEW_DOCS_REPORT_FILENAME), null);
+  assert.equal(quiet, false);
 });
 
 test("latest station rules preserve primary genre, title marks, company and three WBS songs", async () => {

@@ -53,11 +53,11 @@ export type AdminDashboard = {
 };
 
 const submissionColumns =
-  "id, title, artist_name, artist_name_kr, type, status, payment_status, current_order_id, result_notified_at, partial_result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone";
+  "id, title, artist_name, artist_name_kr, type, status, payment_status, payment_method, current_order_id, result_notified_at, partial_result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone";
 
 type SubmissionRow = {
   id: string; title: string | null; artist_name: string | null; artist_name_kr: string | null; type: string; status: string;
-  payment_status: string | null; current_order_id: string | null; result_notified_at: string | null;
+  payment_status: string | null; payment_method?: string | null; current_order_id: string | null; result_notified_at: string | null;
   partial_result_notified_at: string | null;
   user_id: string | null; guest_name: string | null; applicant_name: string | null;
   amount_krw: number | null; updated_at: string | null; created_at: string; is_oneclick: boolean | null;

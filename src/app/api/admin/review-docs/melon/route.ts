@@ -8,6 +8,7 @@ import {
   buildReviewDocsZipFilename,
   contentDispositionAttachment,
   getReviewDocsErrorPayload,
+  reviewDocsReportHeaders,
 } from "@/lib/admin/review-docs";
 
 export const runtime = "nodejs";
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
 
   try {
     const bundles = await buildExternalReviewDocSubmissionBundles(urls);
-    const zip = await buildReviewDocsZip(bundles);
+    let report: string[] = [];
+    const zip = await buildReviewDocsZip(bundles, { onReport: (lines) => { report = lines; } });
     const filename = buildReviewDocsZipFilename(bundles);
 
     return new NextResponse(new Uint8Array(zip), {
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/zip",
         "Content-Disposition": contentDispositionAttachment(filename),
         "Cache-Control": "no-store",
+        ...reviewDocsReportHeaders(report),
       },
     });
   } catch (error) {

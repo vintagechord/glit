@@ -6,6 +6,7 @@ import { updateMagazineRequestStatusFormAction } from "@/features/magazine/actio
 import { formatDate, formatDateTime } from "@/lib/format";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { brandStatusTones } from "@/lib/brand-status-tones";
+import { MarkSectionSeen } from "@/components/admin/mark-section-seen";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export default async function AdminMagazinePage({
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       {savedFlag ? <AdminSaveToast message="저장되었습니다." /> : null}
+      <MarkSectionSeen section="magazine" renderedAt={new Date().toISOString()} />
       <h1 className="font-display text-3xl text-foreground">
         매거진 발행 요청 관리
       </h1>

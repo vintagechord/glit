@@ -4,7 +4,7 @@ import { generateReviewDocuments } from "@/lib/admin/review-docs";
 import { extractFiles } from "./extract";
 import { extractUrls } from "./urls";
 import { translateReviewData } from "./translation";
-import { validateReviewData, type ReviewDocumentData } from "./model";
+import { type ReviewDocumentData } from "./model";
 import { getReviewRetrySourceIds, mergeRetryExtraction } from "./retry";
 import { jobDatabaseError } from "./jobs";
 import { REVIEW_JOB_LIMITS, ReviewJobError, type ReviewJob, type ReviewJobOutput } from "./jobs-types";
@@ -39,9 +39,9 @@ export async function processReviewJob(job: ReviewJob, signal?: AbortSignal) {
     signal?.throwIfAborted();
     if (job.operation === "generate") {
       if (!job.snapshot_data) throw new ReviewJobError("확정 데이터가 없습니다.", 422, "SNAPSHOT_MISSING");
-      const errors = validateReviewData(job.snapshot_data).filter((i) => i.severity === "error");
-      if (errors.length) throw new ReviewJobError("확인이 필요한 항목이 남아 있습니다. 수정본을 저장 후 생성해주세요.", 422, "REVIEW_REQUIRED");
-      const generated = await generateReviewDocuments(job.snapshot_data);
+      // Missing translations are filled in here; the pass is bounded so the
+      // web runner's time limit still leaves room to render and upload.
+      const generated = await generateReviewDocuments(job.snapshot_data, { timeoutMs: 100_000 });
       await updateClaim(job, { status: "validating" }, signal);
       // Generation verifies DOCX/ZIP structure. Rendering is reported separately, never implied.
       const outputs: ReviewJobOutput[] = [];
@@ -51,7 +51,9 @@ export async function processReviewJob(job: ReviewJob, signal?: AbortSignal) {
       }
       const zip = await persistOutput(job, job.mode === "mv" ? "영등위_가사.zip" : "음반_심의자료.zip", generated.zip, "application/zip", signal);
       await updateClaim(job, { outputs, zip_output: zip, result_version: job.version, template_version: generated.templateVersion,
-        counts: { albumCount: generated.albumCount, trackCount: generated.trackCount, docxCount: generated.docxCount }, validation: generated.validation,
+        counts: { albumCount: generated.albumCount, trackCount: generated.trackCount, docxCount: generated.docxCount },
+        // The report is capped so one very long job cannot bloat the row.
+        validation: { ...generated.validation, report: generated.report.slice(0, 300).map((line) => line.slice(0, 1000)) },
         status: "completed", error_code: null, error_message: null, retryable: false, lease_token: null, lease_until: null }, signal);
     } else {
       const reextract = job.operation === "reextract";

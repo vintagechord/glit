@@ -68,23 +68,43 @@ test("SDK load and pay failures close the initialized order and preserve guest o
   }
 });
 
-test("linked admin payments confirm the entire bank order and never reset or manually approve gateway orders", async () => {
+test("linked admin payments confirm the entire order (bank deposit or an unfinished card order) and never reset it", async () => {
   const calls: { method: string; args: unknown }[] = [];
   let order = { id: ORDER, status: "BANK_PENDING", payment_method: "BANK" };
+  let rpcFailure: { code?: string; message?: string } | null = null;
   const query = { select() { return query; }, eq() { return query; }, async maybeSingle() { return { data: order, error: null }; } };
   const db = {
     from() { return query; },
-    async rpc(method: string, args: unknown) { calls.push({ method, args }); return { data: [{ submission_id: ID }, { submission_id: OTHER }], error: null }; },
+    async rpc(method: string, args: unknown) { calls.push({ method, args }); return rpcFailure ? { data: null, error: rpcFailure } : { data: [{ submission_id: ID }, { submission_id: OTHER }], error: null }; },
   } as unknown as Parameters<typeof confirmLinkedOrderPayment>[0];
   const input = { orderId: ORDER, currentPaymentStatus: "PAYMENT_PENDING", nextPaymentStatus: "PAID", actorUserId: "admin-fixture", adminMemo: "Deposit checked" };
-  assert.deepEqual(await confirmLinkedOrderPayment(db, input), { confirmedIds: [ID, OTHER] });
+  assert.deepEqual(await confirmLinkedOrderPayment(db, input), { confirmedIds: [ID, OTHER], confirmedMethod: "BANK" });
   assert.deepEqual(calls, [{ method: "confirm_submission_order_bank_payment", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_admin_memo: "Deposit checked" } }]);
   calls.length = 0;
   for (const nextPaymentStatus of ["UNPAID", "REFUNDED"]) {
     assert.ok((await confirmLinkedOrderPayment(db, { ...input, nextPaymentStatus })).error);
   }
-  for (const status of ["CARD_PENDING", "PAYPAL_PENDING", "FAILED", "CANCELED", "REVIEW_REQUIRED"]) {
-    order = { id: ORDER, status, payment_method: "CARD" };
+  // An administrator may settle a card or PayPal order whose payment never
+  // finished (window abandoned, failed or canceled) without a gateway approval.
+  for (const [status, method] of [["CARD_PENDING", "CARD"], ["FAILED", "CARD"], ["CANCELED", "CARD"], ["PAYPAL_PENDING", "PAYPAL"]] as const) {
+    order = { id: ORDER, status, payment_method: method };
+    assert.deepEqual(await confirmLinkedOrderPayment(db, input), { confirmedIds: [ID, OTHER], confirmedMethod: method });
+    assert.deepEqual(calls, [{ method: "admin_confirm_unpaid_order_payment", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_admin_memo: "Deposit checked" } }]);
+    calls.length = 0;
+  }
+  // An approval the gateway is still confirming is settled under 결제 내역.
+  order = { id: ORDER, status: "REVIEW_REQUIRED", payment_method: "CARD" };
+  assert.match((await confirmLinkedOrderPayment(db, input)).error ?? "", /결제 내역/);
+  assert.equal(calls.length, 0);
+  order = { id: ORDER, status: "CARD_PENDING", payment_method: "CARD" };
+  for (const [message, expected] of [["PAYMENT_APPROVAL_IN_PROGRESS", /결제 내역/], ["ORDER_NOT_CONFIRMABLE", /새로고침/], ["PAYMENT_ALREADY_APPROVED", /새로고침/], ["boom", /저장하지 못했습니다/]] as const) {
+    rpcFailure = { message };
+    assert.match((await confirmLinkedOrderPayment(db, input)).error ?? "", expected);
+  }
+  rpcFailure = null;
+  calls.length = 0;
+  for (const status of ["REFUNDED", "CANCELED"]) {
+    order = { id: ORDER, status, payment_method: "BANK" };
     assert.ok((await confirmLinkedOrderPayment(db, input)).error);
   }
   assert.equal(calls.length, 0);

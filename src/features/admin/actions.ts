@@ -38,6 +38,7 @@ import { saveWbsTrackSelection } from "@/lib/admin/wbs-track-selection";
 import { setPartialResultNotice } from "@/lib/admin/partial-result-notice";
 import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
+import { adminOperationalStageLabelMap, adminOperationalStageValues, mapAdminOperationalStage } from "@/lib/admin/operational-stage";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { autoIssueRequestedCashReceipt } from "@/lib/cash-receipts-server";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
@@ -76,45 +77,7 @@ const submissionStatusSchema = z.object({
   adminMemo: z.string().optional(),
 });
 
-const adminOperationalStageValues = [
-  "APPLICATION_RECEIVED",
-  "PAYMENT_COMPLETE",
-  "REVIEW_IN_PROGRESS",
-  "RESULT_NOTIFIED",
-] as const;
-
 const adminOperationalStageEnum = z.enum(adminOperationalStageValues);
-type AdminOperationalStage = z.infer<typeof adminOperationalStageEnum>;
-
-const adminOperationalStageLabelMap: Record<AdminOperationalStage, string> = {
-  APPLICATION_RECEIVED: "신청접수",
-  PAYMENT_COMPLETE: "결제완료",
-  REVIEW_IN_PROGRESS: "심의진행",
-  RESULT_NOTIFIED: "결과 준비",
-};
-
-const mapAdminOperationalStage = (
-  stage: AdminOperationalStage,
-  currentPaymentStatus?: PaymentStatus | null,
-  currentStatus: ReviewStatus = "SUBMITTED",
-): { status: ReviewStatus; paymentStatus: PaymentStatus } => {
-  switch (stage) {
-    case "APPLICATION_RECEIVED":
-      return {
-        status: "SUBMITTED",
-        paymentStatus:
-          currentPaymentStatus && currentPaymentStatus !== "PAID"
-            ? currentPaymentStatus
-            : "PAYMENT_PENDING",
-      };
-    case "PAYMENT_COMPLETE":
-      return { status: currentPaymentStatus === "PAID" ? currentStatus : statusAfterPaymentConfirmation(currentStatus), paymentStatus: "PAID" };
-    case "REVIEW_IN_PROGRESS":
-      return { status: "IN_PROGRESS", paymentStatus: "PAID" };
-    case "RESULT_NOTIFIED":
-      return { status: "RESULT_READY", paymentStatus: "PAID" };
-  }
-};
 
 const submissionBasicInfoSchema = z.object({
   submissionId: z.string().uuid(),
@@ -684,7 +647,10 @@ export async function updatePaymentStatusAction(
     const outcomes = await Promise.all(orderPayment.confirmedIds.map((submissionId) => sendPaidSubmissionNotificationsById({
       submissionId, paymentKey: `bank:${submission.current_order_id ?? submissionId}`,
     })));
-    return { message: "주문 전체의 입금이 확인되었습니다.", warning: outcomes.find((item) => item.warning)?.warning };
+    return {
+      message: orderPayment.confirmedMethod === "BANK" ? "주문 전체의 입금이 확인되었습니다." : "주문 전체를 결제 완료로 처리했습니다.",
+      warning: outcomes.find((item) => item.warning)?.warning,
+    };
   }
   if (orderPayment.refundedIds) {
     for (const id of orderPayment.refundedIds) revalidateUserDashboards(id);
@@ -1915,6 +1881,8 @@ const adminDeleteErrors: Record<string, string> = {
     "같은 주문에 묶인 다른 접수가 있습니다. 함께 주문한 접수를 모두 선택해 삭제해주세요.",
   PAYMENT_APPROVAL_IN_PROGRESS:
     "카드 결제 승인을 확인 중인 접수입니다. 결제 내역에서 승인 여부를 먼저 정리한 뒤 삭제해주세요.",
+  PAYPAL_CAPTURE_IN_PROGRESS:
+    "PayPal 결제 승인을 확인 중인 접수입니다. 잠시 후 다시 시도해주세요.",
 };
 
 export async function deleteSubmissionsAction(
@@ -2216,7 +2184,10 @@ export async function saveSubmissionAdminFormAction(
       submissionId,
       update: submissionUpdate,
     });
-    redirectWithError(submissionError.message ?? "submission update error");
+    // An open card or PayPal window locks the application against edits.
+    redirectWithError(submissionError.message?.includes("PAYMENT_IN_PROGRESS")
+      ? "결제창이 열린 채 끝나지 않은 접수라 내용을 수정할 수 없습니다. 운영 단계를 '결제완료'로 저장하거나, 필요 없는 접수면 삭제해주세요."
+      : submissionError.message ?? "submission update error");
   }
 
   if (
@@ -2275,7 +2246,7 @@ export async function saveSubmissionAdminFormAction(
     const changeSummary = [
       ...changes,
       currentPaymentStatus !== "PAID" && nextPaymentStatus === "PAID" && nextStatus === "PRE_REVIEW"
-        ? "입금이 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다."
+        ? `${orderPayment.confirmedMethod && orderPayment.confirmedMethod !== "BANK" ? "결제가" : "입금이"} 확인되었습니다. 자료 확인 후 방송국·기관 접수를 진행합니다.`
         : null,
     ]
       .filter(Boolean)
