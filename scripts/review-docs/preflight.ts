@@ -1,9 +1,8 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import PizZip from "pizzip";
-import { REVIEW_DOC_TEMPLATE_FILES } from "../../src/lib/admin/review-docs";
+import { readReviewDocTemplate, REVIEW_DOC_TEMPLATE_FILES } from "../../src/lib/admin/review-docs";
 import { createAdminClient } from "../../src/lib/supabase/admin";
 import { assertPrivateReviewBucket } from "../../src/lib/review-docs/storage";
 
@@ -65,10 +64,10 @@ export async function checkReviewConverters() {
   validateConverterCheckOutput(stdout);
 }
 
-export async function checkReviewTemplates(directory = path.resolve("templates/review-docs")) {
+export async function checkReviewTemplates(directory?: string) {
   try {
     for (const filename of Object.values(REVIEW_DOC_TEMPLATE_FILES)) {
-      const buffer = await readFile(path.join(directory, filename));
+      const buffer = await readReviewDocTemplate(filename, directory);
       const zip = new PizZip(buffer, { checkCRC32: true });
       if (!zip.file("[Content_Types].xml") || !zip.file("word/document.xml")?.asText().trim()) throw new Error("invalid template");
     }

@@ -37,7 +37,6 @@ import {
 import { parseReleasedAlbumUrl } from "@/lib/released-album-url";
 import { cleanLyricText } from "../../../tools/onside-desk/reference-cleanup.mjs";
 
-const TEMPLATE_DIR = path.join(process.cwd(), "templates", "review-docs");
 
 export const REVIEW_DOC_TEMPLATE_FILES = {
   songReviewRequest: "song-review-request.docx",
@@ -148,16 +147,30 @@ const ALBUM_TEMPLATE_KEYS = Object.keys(REVIEW_DOC_TEMPLATE_FILES).filter(
   (key) => key !== "lyricsMv",
 ) as ReviewDocTemplateKey[];
 
+/**
+ * Reads one template file.
+ *
+ * The stored templates are read through a path whose folder is written out,
+ * so the build ships exactly templates/review-docs with every route that can
+ * generate documents. A folder handed in by a caller (tests, the validation
+ * script) is read without the build looking at it. While the folder was a
+ * variable the build could not tell which files were meant and shipped the
+ * whole repository (tests, documents, migrations) with 54 server routes.
+ */
+export const readReviewDocTemplate = (filename: string, templateDir?: string) =>
+  templateDir === undefined
+    ? readFile(path.join(process.cwd(), "templates", "review-docs", filename))
+    : readFile(/* turbopackIgnore: true */ path.join(templateDir, filename));
+
 async function loadReviewDocTemplates(
-  templateDir = TEMPLATE_DIR,
+  templateDir?: string,
   keys: ReviewDocTemplateKey[] = ALBUM_TEMPLATE_KEYS,
 ) {
   const entries = keys.map((key) => [key, REVIEW_DOC_TEMPLATE_FILES[key]] as const);
   const checks = await Promise.all(
     entries.map(async ([key, filename]) => {
-      const filePath = path.join(templateDir, filename);
       try {
-        return { key, filename, buffer: await readFile(filePath) };
+        return { key, filename, buffer: await readReviewDocTemplate(filename, templateDir) };
       } catch (error) {
         const code =
           error && typeof error === "object" && "code" in error
