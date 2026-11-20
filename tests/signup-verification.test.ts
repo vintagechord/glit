@@ -83,6 +83,19 @@ test("transactional signup stores unknown temporary credentials and confirms onl
   assert.doesNotMatch(JSON.stringify(result), /private-signup|attacker-known/);
 });
 
+// The signup form has asked only for email and consents since 2026-05-25, but
+// the action still copied name, company and phone from any hand-made POST into
+// user_metadata, which handle_new_user copies into the profile. Whoever first
+// signed up with someone else's address could seed that person's profile.
+test("a signup post cannot seed the profile name, company or phone before the inbox is verified", async () => {
+  const auth = await fixture();
+  const result = await auth.signupAction({}, form({ ...signup, name: "Someone Else", company: "Other Company", phone: "010-1234-5678", agreeMarketing: "on" }));
+  assert.equal(result.verificationPending, true);
+  const created = auth.calls.find(call => call.method === "create")?.input;
+  assert.deepEqual(created?.user_metadata, { name: "", company: "", phone: "", marketingConsent: true });
+  assert.doesNotMatch(JSON.stringify(auth.calls), /Someone Else|Other Company|010-1234-5678/);
+});
+
 test("duplicate signup reports an existing email without changing credentials or sending more mail", async () => {
   for (const code of ["email_exists", "user_already_exists"]) {
     for (const account of [

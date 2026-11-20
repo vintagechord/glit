@@ -33,10 +33,15 @@ try:
         raise RuntimeError("Local PostgreSQL did not become ready")
     sql("create role anon; create role authenticated; create role service_role bypassrls;"
         "grant usage on schema public to anon,authenticated,service_role;"
-        "create table public.submissions(id uuid primary key,result_notified_at timestamptz,updated_at timestamptz default now());"
-        "grant select,update on public.submissions to service_role;")
+        "create table public.submissions(id uuid primary key,result_notified_at timestamptz,updated_at timestamptz default now(),"
+        "status text,result_status text,result_memo text,mv_rating text,mv_desired_rating text,certificate_b2_path text,"
+        "mv_certificate_object_key text,guest_email text);"
+        "create table public.station_reviews(id uuid primary key default gen_random_uuid(),submission_id uuid,station_id uuid,"
+        "status text,result_note text,track_results_json jsonb,age_rating text,updated_at timestamptz default now());"
+        "grant select,update on public.submissions to service_role;"
+        "grant select on public.station_reviews to service_role;")
     for name in ["*_email_worker_and_rate_limits.sql", "*_durable_email_outbox.sql", "*_review_email_attachment_refs.sql",
-                 "*_email_outbox_acknowledgement.sql"]:
+                 "*_email_outbox_acknowledgement.sql", "*_result_notice_ignores_unrelated_edits.sql"]:
         path = sorted((root / "supabase/migrations").glob(name))[-1]
         sql(path.read_text())
         print("PASS", path.name)
@@ -46,6 +51,8 @@ try:
     print("PASS immutable attachment queue, schema validation, longer lease and browser-role denial")
     sql((root / "tests/sql/email-outbox-acknowledgement.sql").read_text())
     print("PASS 확인 완료 leaves the warning counts, survives a refused retry and is cleared by 재발송")
+    sql((root / "tests/sql/email-outbox-result-fingerprint.sql").read_text())
+    print("PASS a result mail is marked notified while its result is unchanged, whatever else was edited")
     sql("select public.dispatch_email_outbox();")
     request = "select (public.consume_email_rate_limit(repeat('f',64),3,60000)->>'allowed')::boolean;"
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:

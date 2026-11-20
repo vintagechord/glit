@@ -168,7 +168,9 @@ test("provider errors are allowlisted and social-only profile hides password whi
   await expect(page.getByText("Linked", { exact: true })).toBeVisible();
   await expect(page.locator('form[action="/auth/link/kakao"] button')).toBeDisabled();
   await page.goto("http://social-ui.test/en/profile?password=yes");
-  await expect(page.locator('input[type="password"]')).toHaveCount(2);
+  const passwordInputs = page.locator('input[type="password"]');
+  await expect(passwordInputs).toHaveCount(3);
+  expect(await passwordInputs.evaluateAll(inputs => inputs.map(input => input.getAttribute("name")))).toEqual(["currentPassword", "newPassword", "confirmPassword"]);
 });
 
 test("saved consent offers a session retry without asking the member to agree again", async ({ page }) => {

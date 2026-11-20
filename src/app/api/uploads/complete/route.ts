@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { readStoredObjectSize, UploadSignatureMismatchError, verifyUploadedObjectSignature } from "@/lib/upload-content-verification";
 import { deleteUnreferencedUploadObject } from "@/lib/upload-object-references";
 import { getUploadPutGrant, markUploadPutGrantCompleted } from "@/lib/upload-put-grants";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-complete-ip",
     identifier: getRequestIdentifier(request.headers),
-    limit: 60,
+    limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {

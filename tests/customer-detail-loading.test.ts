@@ -89,3 +89,43 @@ test("a missing column is dropped and retried instead of failing the page", asyn
   assert.ok(detail);
   assert.equal(requests.filter((url) => url.pathname.endsWith("/submissions")).length, 2);
 });
+
+test("a failed submission read rejects, so the guest result page shows a retryable error instead of 404", async () => {
+  // A statement timeout (500) or a pool timeout (504) is not retried by
+  // supabase-js and comes back as an error object, not as "no row".
+  for (const [status, failure] of [
+    [500, { code: "57014", message: "canceling statement due to statement timeout" }],
+    [504, { code: "PGRST003", message: "Timed out acquiring connection from connection pool." }],
+  ] as const) {
+    const reported: string[] = [];
+    const failing = createClient("https://fixture.supabase.co", "fixture-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: async (input) => {
+          const table = new URL(String(input)).pathname.split("/").pop();
+          return table === "submissions" ? response(failure, status) : response([]);
+        },
+      },
+    });
+    await assert.rejects(
+      loadCustomerSubmissionDetail(failing, { guestToken: submissionRow.guest_token }, { onError: (name) => reported.push(name) }),
+      `HTTP ${status} must not read as a missing submission`,
+    );
+    assert.deepEqual(reported, ["submission"]);
+  }
+});
+
+test("a lookup code that matches no guest submission still reads as missing", async () => {
+  const requests: URL[] = [];
+  const empty = createClient("https://fixture.supabase.co", "fixture-key", {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: async (input) => {
+        requests.push(new URL(String(input)));
+        return response([]);
+      },
+    },
+  });
+  assert.equal(await loadCustomerSubmissionDetail(empty, { guestToken: "00000000-0000-4000-8000-000000000000" }, { onError: () => undefined }), null);
+  assert.equal(requests.length, 1, "no related reads for a missing submission");
+});

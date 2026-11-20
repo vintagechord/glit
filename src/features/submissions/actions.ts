@@ -2,6 +2,7 @@
 
 import { hasNonKoreanLyrics as hasNonKoreanLyricsText } from "@/lib/lyrics-tools";
 import { randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { after } from "next/server";
 import { z } from "zod";
 
@@ -26,8 +27,11 @@ import {
   normalizeMvDesiredRating,
   resolveMvProductionCompanyUpdate,
 } from "@/lib/mv-request-options";
+import { retiredMvFieldUpdate } from "@/lib/mv-retired-fields";
+import { submissionCommitErrorMessage } from "@/lib/submission-save-errors";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
+import { consumePersistentRateLimit, getRequestIdentifier } from "@/lib/request-rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
@@ -387,9 +391,35 @@ const recordEmailDeliveryIssue = async ({
   }
 };
 
+/** Whether this application already landed in the cart once (its first
+ * SUBMITTED event). Read it before the current save records its own event. A
+ * guest can save a cart item back as a draft and submit it again with another
+ * address, so only the first landing may send the lookup mail. A history that
+ * cannot be read counts as yes: the mail is skipped, never the save. */
+const hasLandedInCartBefore = async (db: SupabaseClient, submissionId: string) => {
+  const { count, error } = await db
+    .from("submission_events")
+    .select("id", { count: "exact", head: true })
+    .eq("submission_id", submissionId)
+    .eq("event_type", "SUBMITTED");
+  return Boolean(error) || (count ?? 0) > 0;
+};
+
+// The lookup mail goes to an address nobody has verified. Shared limits per
+// client address cap how many fresh drafts one client can turn into mail, and
+// the per-recipient limit keeps one inbox from being flooded.
+const GUEST_CART_EMAIL_WINDOW_MS = 60 * 60_000;
+const guestCartSavedEmailLimits = (address: string, recipient: string) => [
+  { namespace: "guest-cart-email-ip", identifier: address, limit: 10, windowMs: GUEST_CART_EMAIL_WINDOW_MS },
+  { namespace: "guest-cart-email-ip-day", identifier: address, limit: 30, windowMs: 24 * GUEST_CART_EMAIL_WINDOW_MS },
+  { namespace: "guest-cart-email-to", identifier: recipient, limit: 10, windowMs: 24 * GUEST_CART_EMAIL_WINDOW_MS },
+];
+
 /** A guest's cart entry lives only in this browser's storage. Send the
  * lookup link once when the application first lands in the cart so the
- * applicant can return from another device or after clearing the browser. */
+ * applicant can return from another device or after clearing the browser.
+ * Callers check hasLandedInCartBefore first; a mail refused here never fails
+ * the save. */
 const sendGuestCartSavedEmail = async (input: {
   submissionId: string;
   guestToken: string | undefined;
@@ -402,6 +432,13 @@ const sendGuestCartSavedEmail = async (input: {
   if (!input.guestToken || input.guestToken.length < 8 || !recipient) return;
   const baseUrl = getBaseUrl();
   try {
+    const address = getRequestIdentifier(await headers());
+    for (const limit of guestCartSavedEmailLimits(address, recipient)) {
+      if (!(await consumePersistentRateLimit(limit)).allowed) {
+        console.warn("[Submission] guest cart-saved email rate limited", { submissionId: input.submissionId, namespace: limit.namespace });
+        return;
+      }
+    }
     const result = await sendSubmissionUpdateEmail({
       email: recipient,
       title: input.title,
@@ -1487,7 +1524,7 @@ export async function saveAlbumSubmissionAction(
       submissionId: parsed.data.submissionId,
     });
     return {
-      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      error: submissionCommitErrorMessage(commitError),
       // Claiming and releasing the lease touched updated_at without changing
       // content; the browser must not mistake that for another tab's save.
       updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
@@ -1522,6 +1559,13 @@ export async function saveAlbumSubmissionAction(
         : "심의 접수가 완료되었습니다."
       : "임시 저장이 완료되었습니다.";
 
+  const guestCartMailDue =
+    parsed.data.status === "SUBMITTED" &&
+    deferPayment &&
+    isGuest &&
+    !wasPreviouslySubmitted &&
+    !(await hasLandedInCartBefore(db, parsed.data.submissionId));
+
   // Background checkpoints use DRAFT saves frequently. They are state
   // snapshots, not lifecycle events, so recording every keystroke-level save
   // would bury the meaningful submission history.
@@ -1536,7 +1580,7 @@ export async function saveAlbumSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
-  if (parsed.data.status === "SUBMITTED" && deferPayment && isGuest && !wasPreviouslySubmitted) {
+  if (guestCartMailDue) {
     await sendGuestCartSavedEmail({
       submissionId: parsed.data.submissionId,
       guestToken: parsed.data.guestToken ?? undefined,
@@ -1937,10 +1981,8 @@ export async function saveMvSubmissionAction(
     release_date: parsed.data.releaseDate || null,
     genre: parsed.data.genre?.trim() || null,
     mv_runtime: parsed.data.runtime?.trim() || null,
-    // Retired inputs are omitted by new clients; preserve any historical value.
-    ...(parsed.data.format !== undefined
-      ? { mv_format: parsed.data.format.trim() || null }
-      : {}),
+    // Retired inputs are omitted by new clients; preserve any stored value.
+    ...retiredMvFieldUpdate(parsed.data),
     mv_director: parsed.data.director?.trim() || null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
@@ -1951,9 +1993,7 @@ export async function saveMvSubmissionAction(
     }),
     mv_agency: parsed.data.agency?.trim() || null,
     mv_album_title: parsed.data.albumTitle?.trim() || null,
-    mv_production_date: parsed.data.productionDate || null,
     mv_distribution_company: parsed.data.distributionCompany?.trim() || null,
-    mv_business_reg_no: parsed.data.businessRegNo?.trim() || null,
     mv_usage: parsed.data.usage?.trim() || null,
     mv_desired_rating:
       parsed.data.mvType === "MV_DISTRIBUTION"
@@ -2131,7 +2171,7 @@ export async function saveMvSubmissionAction(
       submissionId: parsed.data.submissionId,
     });
     return {
-      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      error: submissionCommitErrorMessage(commitError),
       updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
     };
   }
@@ -2150,6 +2190,13 @@ export async function saveMvSubmissionAction(
         : "뮤직비디오 심의 접수가 완료되었습니다."
       : "임시 저장이 완료되었습니다.";
 
+  const guestCartMailDue =
+    parsed.data.status === "SUBMITTED" &&
+    deferPayment &&
+    isGuest &&
+    !wasPreviouslySubmitted &&
+    !(await hasLandedInCartBefore(db, parsed.data.submissionId));
+
   if (parsed.data.status !== "DRAFT" && !wasPreviouslySubmitted) {
     await db.from("submission_events").insert({
       submission_id: parsed.data.submissionId,
@@ -2161,7 +2208,7 @@ export async function saveMvSubmissionAction(
 
   let receiptEmailSent = false;
   let bankGuideEmailSent = false;
-  if (parsed.data.status === "SUBMITTED" && deferPayment && isGuest && !wasPreviouslySubmitted) {
+  if (guestCartMailDue) {
     await sendGuestCartSavedEmail({
       submissionId: parsed.data.submissionId,
       guestToken: parsed.data.guestToken ?? undefined,

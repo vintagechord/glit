@@ -160,6 +160,13 @@ test("logout uses the canonical origin and an internal-only redirect path", () =
   assert.doesNotMatch(source, /new URL\(request\.url\)\.origin/);
 });
 
+test("logging out ends this browser's session only, not the member's other devices", () => {
+  // auth-js signs out every session by default ('global'); one click in the
+  // header also signed the member out on their phone.
+  const source = read("src/app/logout/route.ts");
+  assert.match(source, /supabase\.auth\.signOut\(\{ scope: "local" \}\)/);
+});
+
 test("public support writes have shared rate limiting and body caps", () => {
   for (const [path, namespace] of [
     ["src/app/api/chat/route.ts", "support-chat-write"],

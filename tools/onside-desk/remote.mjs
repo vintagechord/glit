@@ -97,7 +97,7 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
   };
   async function request(id, { method = 'GET', query, body = Buffer.alloc(0), contentType, idempotencyId, signal, timeout = 120_000 } = {}) {
     const config = readConfig();
-    const url = new URL(`/api/internal/review-desk/${['health', 'storage', 'intake'].includes(id) ? id : submissionId(id)}`, config.origin);
+    const url = new URL(`/api/internal/review-desk/${['health', 'storage', 'intake', 'translate'].includes(id) ? id : submissionId(id)}`, config.origin);
     if (query) for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, value === null ? '' : String(value));
     const timestamp = String(clock()), nonce = requestId(idempotencyId);
     const signed = { method, path: url.pathname + url.search, timestamp, requestId: nonce, actorId: config.actorId, body };
@@ -237,6 +237,15 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     if (!data || !Array.isArray(data.results)) throw new RemoteReviewError('삭제 결과를 확인하지 못했습니다. 목록을 새로고침해 처리 여부를 확인해 주세요.', 502, 'INVALID_PURGE_RESULT');
     return data;
   }
+  /** Review-document lyrics through the desk's signed route, which spends none of the public /api/translate allowance. */
+  async function translateLyrics({ lines, source = 'auto', target = 'ko', context } = {}, { signal } = {}) {
+    if (!Array.isArray(lines) || !lines.length) throw new RemoteReviewError('번역할 가사를 확인해 주세요.', 400, 'INVALID_TRANSLATION_REQUEST');
+    const nonce = requestId();
+    const body = Buffer.from(JSON.stringify({ requestId: nonce, lines, source, target, ...(context ? { context } : {}) }));
+    const data = await jsonBody(await request('translate', { method: 'POST', body, contentType: 'application/json', idempotencyId: nonce, signal, timeout: 60_000 }));
+    if (!data || !Array.isArray(data.translations) || data.translations.length !== lines.length) throw new RemoteReviewError('번역 응답 형식을 확인할 수 없습니다.', 502, 'INVALID_TRANSLATION_RESULT');
+    return { translations: data.translations.map(value => (typeof value === 'string' ? value : '')) };
+  }
   /** 관리자 대리 접수: active album packages for registering an emailed album as a guest submission. */
   async function listIntakePackages({ signal } = {}) {
     const data = await jsonBody(await request('intake', { signal, timeout: 30_000 }));
@@ -268,5 +277,5 @@ export function createRemoteReviewClient(env = process.env, options = {}) {
     if (!data || data.ok !== true) throw new RemoteReviewError('신청서 정보 반영 결과를 확인하지 못했습니다. 접수 상세에서 반영 여부를 확인해 주세요.', 502, 'INVALID_ALBUM_INFO_RESULT');
     return { changed: data.changed === true, albumInfo: data.albumInfo && typeof data.albumInfo === 'object' ? data.albumInfo : {} };
   }
-  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, purgeLeftovers, listIntakePackages, registerGuestAlbum, saveAlbumInfo };
+  return { configured: () => !!configFor(env, options), health, getResults, getEmailPreview, saveResults, uploadCertificate, downloadAsset, listStorage, purgeStorage, purgeLeftovers, listIntakePackages, registerGuestAlbum, saveAlbumInfo, translateLyrics };
 }

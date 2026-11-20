@@ -51,7 +51,9 @@ const dropColumn = (select: string, column: string) =>
   select.split(",").map((part) => part.trim()).filter((part) => !part.includes(column)).join(", ");
 
 /** Loads a submission as the customer sees it. Authorization is the caller's:
- * the guest page proves the lookup code, the admin preview proves the admin. */
+ * the guest page proves the lookup code, the admin preview proves the admin.
+ * Resolves to null only when no such submission exists; a failed read throws,
+ * so the page shows its retryable error instead of "page not found". */
 export async function loadCustomerSubmissionDetail(
   admin: SupabaseClient,
   target: { submissionId: string } | { guestToken: string },
@@ -75,7 +77,7 @@ export async function loadCustomerSubmissionDetail(
     const next = column ? dropColumn(select, column) : select;
     if (next === select) {
       report("submission", error);
-      return null;
+      throw new Error("Customer submission could not be loaded", { cause: error });
     }
     select = next;
   }

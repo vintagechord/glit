@@ -6,7 +6,7 @@ import { mkdir, open, writeFile } from "node:fs/promises";
 const submissionId = "11111111-1111-4111-8111-111111111111";
 const guestToken = "22222222-2222-4222-8222-222222222222";
 
-async function mockSubmissionServices(page: Page, options: { failFirstPut?: boolean; expireFirstPart?: boolean } = {}) {
+async function mockSubmissionServices(page: Page, options: { failedPuts?: number; expireFirstPart?: boolean } = {}) {
   const saves: Array<Record<string, unknown>> = [];
   const completed: string[] = [];
   const unexpected: string[] = [];
@@ -30,7 +30,7 @@ async function mockSubmissionServices(page: Page, options: { failFirstPut?: bool
     }
     if (url.pathname.startsWith("/__e2e__/file/")) {
       puts++;
-      await route.fulfill({ status: options.failFirstPut && puts === 1 ? 400 : 200, body: "", headers: { ETag: '"fixture"' } }); return;
+      await route.fulfill({ status: puts <= (options.failedPuts ?? 0) ? 400 : 200, body: "", headers: { ETag: '"fixture"' } }); return;
     }
     if (url.pathname === "/api/uploads/direct") {
       // The real browser creates multipart/form-data for downloaded application forms.
@@ -117,7 +117,10 @@ for (const kind of ["album", "mv"] as const) {
     await expect(emailChoice).toHaveCount(1);
     await emailChoice.click();
     await expect(emailChoice).toHaveAttribute("aria-pressed", "true");
-    await expect(files.getByText(/접수번호 11111111-1111-4111-8111-111111111111/)).toBeVisible();
+    // The subject names the artist, title and purpose; the application ID was
+    // dropped on purpose (PR #88). File mode types no title, so the placeholders show.
+    await expect(files.getByText(kind === "album" ? "[음반심의 파일] 아티스트명 / 앨범명" : "[MV심의 파일] 아티스트명 / 곡명 / 온라인용", { exact: true })).toBeVisible();
+    await expect(files.getByText(new RegExp(submissionId))).toHaveCount(0);
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
     await expect(preflight.getByRole("status")).toHaveText("입력·첨부 확인");
@@ -164,6 +167,8 @@ test("KBS-only broadcast submission shows only KBS guidance and distinguishes re
   await page.getByRole("radio", { name: /파일로 제출/ }).click();
   await page.getByRole("button", { name: "선택하고 계속", exact: true }).click();
   await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
+  // MV applications need the applicant's name and email on this step too (PR #100).
+  await fillGuestContact(page, "mv");
   await page.getByRole("button", { name: "파일 업로드로 이동", exact: true }).click();
   const guidance = page.locator(".broadcast-specs");
   await expect(guidance.locator(".broadcast-card")).toHaveCount(1);
@@ -174,7 +179,7 @@ test("KBS-only broadcast submission shows only KBS guidance and distinguishes re
   expect(results.errors).toEqual([]);
 });
 
-test("English album email delivery retains the application ID and does not claim material review is complete", async ({ page }) => {
+test("English album email delivery leaves the application ID out of the subject and does not claim material review is complete", async ({ page }) => {
   const results = await mockSubmissionServices(page);
   await page.goto("/en/dashboard/new/album");
   await page.getByRole("button", { name: /Not Released Yet/ }).click();
@@ -186,7 +191,11 @@ test("English album email delivery retains the application ID and does not claim
   await page.getByRole("button", { name: "Next Step", exact: true }).click();
   await page.getByRole("button", { name: "Send Files Later by Email", exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy Email Subject", exact: true })).toBeVisible();
-  await expect(page.getByText(/Application ID 11111111-1111-4111-8111-111111111111/)).toBeVisible();
+  // The application ID left the subject on purpose (PR #88). File mode asks for
+  // no title or artist, so the subject shows the placeholders, not the album.
+  const files = page.locator('[data-preflight-field="files"]');
+  await expect(files.getByText("[Album review files] Artist / Album title", { exact: true })).toBeVisible();
+  await expect(files.getByText(new RegExp(`Application ID|${submissionId}`))).toHaveCount(0);
   await page.getByRole("button", { name: "Next Step", exact: true }).click();
   const preflight = page.locator('section[aria-labelledby="submission-preflight-title"]');
   await expect(preflight.getByRole("status")).toHaveText("Required Fields and Attachments Checked");
@@ -199,7 +208,9 @@ test("English album email delivery retains the application ID and does not claim
 
 for (const kind of ["album", "mv"] as const) {
   test(`${kind} application and media uploads reach the cart with both attachments`, async ({ page }) => {
-    const results = await mockSubmissionServices(page, { failFirstPut: kind === "mv" });
+    // The wizard retries a small upload on its own (3 attempts, PR #87), so the
+    // first file fails every attempt before the manual retry is offered.
+    const results = await mockSubmissionServices(page, { failedPuts: kind === "mv" ? 3 : 0 });
     const files = await openFileSubmission(page, kind);
     const mediaName = kind === "album" ? "master.wav" : "video.mp4";
     await files.locator('input[type="file"]').setInputFiles([
@@ -207,7 +218,8 @@ for (const kind of ["album", "mv"] as const) {
       { name: "application.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("fixture application") },
     ]);
     if (kind === "mv") {
-      await expect(files.getByText("실패", { exact: true })).toBeVisible();
+      // About 6 seconds of automatic retry pauses come first.
+      await expect(files.getByText("실패", { exact: true })).toBeVisible({ timeout: 30_000 });
       await files.getByRole("button", { name: "실패한 파일 다시 업로드", exact: true }).click();
     }
     await expect(files.getByText("첨부 완료", { exact: true })).toHaveCount(2);

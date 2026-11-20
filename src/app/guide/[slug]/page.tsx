@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ReliableLink as Link } from "@/components/site/reliable-link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 

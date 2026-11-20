@@ -2381,6 +2381,8 @@ Object.assign(exactTranslations, {
   "기존 결제 요청을 정리하지 못했습니다. 잠시 후 다시 시도해주세요.": "We could not clear the previous payment request. Please try again shortly.",
   "결제 상태가 변경되어 접수를 수정할 수 없습니다.": "The payment status changed, so this application cannot be edited.",
   "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.": "The application was not saved completely. Check the details and try again.",
+  "확인되지 않은 첨부 파일이 있습니다. 해당 파일을 삭제한 뒤 다시 올려주세요.": "An attached file could not be verified. Remove that file and upload it again.",
+  "업로드가 중단되었습니다.": "The upload was stopped.",
   "신청서는 저장되었습니다. 내 음악 관리 연결을 완료하도록 다시 저장해주세요.": "Your application was saved. Save again to complete the link to My Music.",
   "결제 전 신청서 저장이 완료되었습니다.": "Your application has been saved and is ready for payment.",
   "카드 결제 요청이 접수되었습니다.": "Your card payment request has been received.",
@@ -2754,6 +2756,7 @@ Object.assign(exactTranslations, {
   "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.": "Too many requests. Please try again shortly.",
   "메시지 요청 크기가 너무 큽니다.": "Your message is too large.",
   "메시지 내용을 확인해주세요.": "Check your message.",
+  "메시지는 2,000자까지 보낼 수 있습니다. 나눠서 보내주세요.": "Messages can be up to 2,000 characters. Please send longer text in parts.",
   "이전 메시지 조회 정보를 확인해주세요.": "Check the earlier-message lookup information.",
   "채팅 메시지를 불러오지 못했습니다.": "We could not load the chat messages.",
   "읽음 처리할 채팅방을 확인해주세요.": "Check the conversation to mark as read.",
@@ -3428,6 +3431,8 @@ function localizeUrl(raw: string) {
 
 function localizeLink(link: Element) {
   if (!link.matches("a[href]") || link.matches("[data-no-localize]")) return;
+  // A download keeps its file address: /forms/*.hwp has no /en twin.
+  if (link.hasAttribute("download")) return;
   const href = link.getAttribute("href");
   if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
   const next = localizeUrl(href);
@@ -3602,10 +3607,17 @@ function handleDocumentClick(event: MouseEvent) {
   const anchor = (event.target as Element | null)?.closest?.("a[href]");
   if (!anchor) return;
   if (anchor.matches("[data-no-localize]")) return;
+  // Downloads and links to another tab are the browser's, as in next/link.
+  const target = anchor.getAttribute("target");
+  if (anchor.hasAttribute("download") || (target && target !== "_self")) return;
   const href = anchor.getAttribute("href");
   if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
   const next = localizeUrl(href);
-  if (next === href) return;
+  // A next/link keeps pushing its Korean href prop after the pack rewrote the
+  // anchor to /en. Preventing the default stops it (it checks
+  // e.defaultPrevented), and the English page loads instead.
+  const rewritten = attributeSnapshots.get(anchor)?.get("href")?.translated === href;
+  if (next === href && !rewritten) return;
   event.preventDefault();
   window.location.assign(next);
 }

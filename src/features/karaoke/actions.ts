@@ -1,5 +1,6 @@
 "use server";
 
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { APP_CONFIG } from "@/lib/config";
@@ -177,7 +178,9 @@ export async function createKaraokeRequestAction(
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError) {
+  // A visitor without auth cookies gets AuthSessionMissingError here: that is a guest,
+  // not a failed sign-in.
+  if (userError && !isAuthSessionMissingError(userError)) {
     return { error: "로그인 정보를 확인할 수 없습니다." };
   }
 

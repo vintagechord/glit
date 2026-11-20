@@ -4,6 +4,7 @@ import {
   consumeRateLimit,
   getRequestIdentifier,
 } from "@/lib/request-rate-limit";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 /**
  * Supabase's legacy signed-upload URL does not bind the declared content
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-init-ip",
     identifier: getRequestIdentifier(request.headers),
-    limit: 60,
+    limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {

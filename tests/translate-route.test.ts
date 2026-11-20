@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 import test from "node:test";
 import {build} from "esbuild";
+import {lyricsTranslationModelBatches} from "../src/lib/lyrics-translation-validation";
+import {translateLyricsBatch} from "../src/lib/server-lyrics-translation";
 
 type Fixture={POST:(request:Request)=>Promise<Response>;state:{result:string[];failure:Error|null;allowed:boolean;onTranslate:(()=>void)|null;deny:string[];limits:Array<{namespace:string;identifier:string;limit:number;windowMs:number;cost?:number}>};calls:Array<{lines:string[];options:{context?:string;signal:AbortSignal}}>};
 async function fixture():Promise<Fixture>{
@@ -53,12 +55,13 @@ test('shared per-address limits and a daily site budget guard the provider, with
   await api.POST(request({lines:'wrong'}));await api.POST(request({lines:[]}));
   assert.equal(api.state.limits.length,0);
   let response=await api.POST(request({lines:['Source']}));assert.equal(response.status,200);
-  assert.deepEqual(api.state.limits.map(limit=>[limit.namespace,limit.identifier]),[['translate-ip-600000','fixture'],['translate-ip-86400000','fixture'],['translate-daily-budget','site']]);
+  // Every limit, the per-address ones included, is charged in model calls.
+  assert.deepEqual(api.state.limits.map(limit=>[limit.namespace,limit.identifier,limit.cost]),[['translate-ip-600000','fixture',1],['translate-ip-86400000','fixture',1],['translate-daily-budget','site',1]]);
+  assert.deepEqual(api.state.limits.map(limit=>limit.limit),[30,60,10]);
   assert.equal(api.state.limits[1].windowMs,86_400_000);assert.equal(api.state.limits[2].windowMs,86_400_000);
-  assert.equal(api.state.limits[2].cost,1);
-  api.state.limits.length=0;api.state.result=Array(45).fill('번역');
-  await api.POST(request({lines:Array(45).fill('Source')}));
-  assert.equal(api.state.limits[2].cost,3,'the budget counts provider batches of 20 lines');
+  api.state.limits.length=0;api.state.result=Array.from({length:45},()=>'번역');
+  await api.POST(request({lines:Array.from({length:45},(_,index)=>`Source ${index}`)}));
+  assert.deepEqual(api.state.limits.map(limit=>limit.cost),[3,3,3],'45 lines are three model calls of 20 lines');
   for(const namespace of ['translate-ip-600000','translate-ip-86400000']){
     const limited=await fixture();limited.state.deny=[namespace];
     response=await limited.POST(request({lines:['Source']}));
@@ -72,4 +75,58 @@ test('shared per-address limits and a daily site budget guard the provider, with
   // 503 keeps the wizard's free in-browser fallback available to real users.
   assert.equal(response.status,503);assert.match((await response.json()).error,/오늘 자동번역 사용량이 한도에 도달/);
   assert.equal(exhausted.calls.length,0);
+});
+
+// One anonymous client could spend the AI Gateway key's whole monthly limit:
+// a request counted as 1 against its address however many paid calls it made.
+test('a request is charged every model call it makes, without a cap, and only for lines sent to the model',async()=>{
+  const api=await fixture();
+  // Excerpts of 1,001 characters fit three to a 4,000-character batch: 59 of them are 20 calls.
+  const long=Array.from({length:59},(_,index)=>`${String(index).padStart(3,'0')} ${'a'.repeat(997)}`);
+  api.state.result=long.map(()=>'번역');
+  await api.POST(request({lines:long}));
+  assert.deepEqual(api.state.limits.map(limit=>limit.cost),[20,20,20]);
+  // A repeated line is sent once.
+  api.state.limits.length=0;api.state.result=Array.from({length:45},()=>'번역');
+  await api.POST(request({lines:Array(45).fill('Source')}));
+  assert.deepEqual(api.state.limits.map(limit=>limit.cost),[1,1,1]);
+  // Korean lines come back as they are without a model call, so nothing is spent.
+  api.state.limits.length=0;api.state.result=['한국어 가사','두 번째 줄'];
+  const response=await api.POST(request({lines:['한국어 가사','두 번째 줄']}));
+  assert.equal(response.status,200);assert.equal(api.state.limits.length,0);
+});
+
+test('the charge equals the model calls the server translation makes',async(t)=>{
+  const originalKey=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='fixture-key';
+  t.after(()=>{if(originalKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=originalKey});
+  for(const lines of [
+    Array.from({length:59},(_,index)=>`${String(index).padStart(3,'0')} ${'a'.repeat(997)}`),
+    [...Array(45).fill('Source'),'한국어 가사','Mixed 한국어 line'],
+    [`${'word '.repeat(900)}end`,'Short line'],
+  ]){
+    let modelCalls=0;
+    await translateLyricsBatch(lines,{fetchImpl:async(input,init)=>{
+      assert.equal(new URL(String(input)).hostname,'api.openai.com');modelCalls++;
+      const data=JSON.parse(JSON.parse(String(init?.body)).input);
+      return Response.json({status:'completed',output_text:JSON.stringify({translations:data.lines.map((line:{index:number;text:string})=>({index:line.index,source:line.text,translation:`번역 ${line.index}`}))})});
+    }});
+    assert.equal(modelCalls,lyricsTranslationModelBatches(lines,'ko').length);
+  }
+});
+
+test('the daily site budget leaves most of the monthly key for review documents and follows its setting',async()=>{
+  const previous=process.env.TRANSLATE_DAILY_BATCH_BUDGET;
+  const budgetFor=async(setting:string|undefined)=>{
+    if(setting===undefined)delete process.env.TRANSLATE_DAILY_BATCH_BUDGET;else process.env.TRANSLATE_DAILY_BATCH_BUDGET=setting;
+    const api=await fixture();api.state.result=['번역'];
+    await api.POST(request({lines:['Source']}));
+    return api.state.limits.find(limit=>limit.namespace==='translate-daily-budget')?.limit;
+  };
+  try{
+    assert.equal(await budgetFor(undefined),10);
+    assert.equal(await budgetFor('40'),40);
+    for(const invalid of ['0','-3','abc','2.5',''])assert.equal(await budgetFor(invalid),10,`setting ${JSON.stringify(invalid)}`);
+  }finally{
+    if(previous===undefined)delete process.env.TRANSLATE_DAILY_BATCH_BUDGET;else process.env.TRANSLATE_DAILY_BATCH_BUDGET=previous;
+  }
 });

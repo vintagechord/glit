@@ -45,6 +45,45 @@ export type SupportChatBroadcastPayload = {
   deletedId?: string;
 };
 
+/** The longest message a visitor can send; the API and the database refuse more. */
+export const supportChatMessageMaxLength = 2000;
+
+export const supportChatMessageTooLongError =
+  "메시지는 2,000자까지 보낼 수 있습니다. 나눠서 보내주세요.";
+
+// Visitors see who wrote a message (they, our team or the system), never
+// which staff account: an admin's name, login e-mail or user id stays out of
+// everything a visitor receives, including rows stored before this rule.
+export const toVisitorChatMessage = (
+  message: SupportChatMessage,
+): SupportChatMessage =>
+  message.senderType === "VISITOR"
+    ? message
+    : { ...message, senderUserId: null, senderName: null };
+
+// A visitor's conversation list is answered for the tokens its request
+// carried. A conversation started while it was loading is not in that answer,
+// so its token and entry stay; tokens the request asked about follow the
+// answer (a conversation left, or hidden after logout, drops out).
+export const mergeListedChatTokens = (
+  current: string[],
+  requested: string[],
+  listed: string[],
+) => [...current.filter((token) => !requested.includes(token)), ...listed];
+
+export const mergeListedChatConversations = (
+  current: SupportChatConversation[],
+  requested: string[],
+  listed: SupportChatConversation[],
+) => [
+  ...listed,
+  ...current.filter(
+    (item) =>
+      !requested.includes(item.accessToken) &&
+      !listed.some((next) => next.id === item.id),
+  ),
+];
+
 export const supportChatStorageKey = "onside:support-chat:v1";
 
 export const supportChatConversationTokensStorageKey =

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { ReliableLink as Link } from "@/components/site/reliable-link";
 import { JsonLd } from "@/components/seo/json-ld";
 import { GUIDE_CONTENT_UPDATED } from "@/lib/onside-trust";
 import { GUIDE_TOPIC_LINKS } from "@/lib/review-guide-links";

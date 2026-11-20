@@ -68,6 +68,39 @@ test("SDK load and pay failures close the initialized order and preserve guest o
   }
 });
 
+test("a karaoke card window that never opens closes its attempt, so the same request can be paid again", async (t) => {
+  // Only submission checkouts closed an unopened order. A karaoke attempt left
+  // REQUESTED refused every retry of the request (KARAOKE_PAYMENT_ALREADY_IN_PROGRESS).
+  const result = await browserBundle;
+  const loaded = { exports: {} as typeof import("../src/lib/inicis/popup") };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
+  const saved = Object.fromEntries(["window", "document", "fetch"].map(key => [key, Reflect.get(globalThis, key)]));
+  t.mock.method(console, "error", () => undefined);
+  try {
+    const calls: { url: string; method: string }[] = [];
+    const store = { getItem: () => null, setItem() {}, removeItem() {} };
+    const element = (tagName: string) => ({ tagName, id: "", style: { removeProperty() {} }, listeners: {} as Record<string, () => void>, addEventListener(name: string, fn: () => void) { this.listeners[name] = fn; }, removeEventListener(name: string) { delete this.listeners[name]; }, appendChild() {}, remove() {}, getAttribute() { return null; } });
+    const body = element("body");
+    Reflect.set(globalThis, "document", { documentElement: element("html"), body, querySelectorAll: () => [], querySelector: () => null, getElementById: () => null, createElement: element });
+    Object.assign(body, { appendChild(el: ReturnType<typeof element>) { if (el.tagName === "script") queueMicrotask(() => el.listeners.error?.()); } });
+    Reflect.set(globalThis, "window", { navigator: { userAgent: "Desktop fixture" }, location: { pathname: "/karaoke-request", origin: "https://onside.test" }, localStorage: store, sessionStorage: store, dispatchEvent() {}, setTimeout, clearTimeout });
+    Reflect.set(globalThis, "fetch", async (url: string, options: RequestInit = {}) => {
+      calls.push({ url: String(url), method: options.method ?? "GET" });
+      if (String(url).includes("/close?")) return new Response("fixture close bridge");
+      return Response.json({ orderId: ORDER, stdJsUrl: "https://fixture.invalid/sdk.js", stdParams: { oid: ORDER, closeUrl: CLOSE } });
+    });
+    const opened = await loaded.exports.openInicisCardPopup({ context: "karaoke", requestId: ID });
+    assert.equal(opened.ok, false);
+    assert.deepEqual(calls.map(call => [call.url.replace(/\?.*$/, ""), call.method]), [["/api/inicis/karaoke/order", "POST"], [CLOSE.replace(/\?.*$/, ""), "POST"]]);
+    assert.equal(calls[1].url, CLOSE);
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) Reflect.deleteProperty(globalThis, key);
+      else Reflect.set(globalThis, key, value);
+    }
+  }
+});
+
 test("linked admin payments confirm the entire order (bank deposit or an unfinished card order) and never reset it", async () => {
   const calls: { method: string; args: unknown }[] = [];
   let order = { id: ORDER, status: "BANK_PENDING", payment_method: "BANK" };

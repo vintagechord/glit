@@ -20,6 +20,7 @@ import {
 } from "@/lib/submission-upload-access";
 import { isAllowedSubmissionUpload, safeUploadContentType } from "@/lib/upload-file-types";
 import { createUploadPutGrant } from "@/lib/upload-put-grants";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-init-ip",
     identifier: getRequestIdentifier(request.headers),
-    limit: 60,
+    limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {

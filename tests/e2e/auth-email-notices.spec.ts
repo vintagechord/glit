@@ -12,14 +12,17 @@ test.beforeAll(async () => {
       resolveDir: process.cwd(), loader: "tsx",
     },
     bundle: true, write: false, platform: "browser", format: "iife", jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"production"' },
+    // Next inlines NEXT_PUBLIC_* at build time; here any other env read (such
+    // as a module-level one) must see undefined instead of throwing. Keep the
+    // exact NODE_ENV key: without it esbuild makes it "development".
+    define: { "process.env.NODE_ENV": '"production"', "process.env": '{"NODE_ENV":"production"}' },
     plugins: [{ name: "email-notice-fixture", setup(plugin) {
-      plugin.onResolve({ filter: /^(next\/(?:navigation|link)|(?:\.\/|@\/features\/auth\/)actions|@\/lib\/email-delivery-mode|@\/components\/site\/footer|@\/features\/track\/track-lookup-modal)$/ }, args => ({ path: args.path, namespace: "fixture" }));
+      plugin.onResolve({ filter: /^(next\/(?:navigation|link)|(?:\.\/|@\/features\/auth\/)actions|@\/lib\/email-delivery-mode|@\/lib\/legal-content|@\/features\/track\/track-lookup-modal)$/ }, args => ({ path: args.path, namespace: "fixture" }));
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ loader: "jsx", resolveDir: process.cwd(), contents: {
         "next/navigation": "export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useRouter=()=>({push:(href)=>window.__fixture.redirects.push(href)});",
         "next/link": "import React from 'react';export default function Link({children,...props}){return <a {...props}>{children}</a>}",
         "@/lib/email-delivery-mode": "export const getEmailDeliveryMode=()=> 'transactional';",
-        "@/components/site/footer": "export const privacyContent='Privacy',termsContent='Terms',refundContent='Refund',termsContentEn='Terms',privacyContentEn='Privacy',refundContentEn='Refund';",
+        "@/lib/legal-content": "export const privacyContent='Privacy',termsContent='Terms',refundContent='Refund',termsContentEn='Terms',privacyContentEn='Privacy',refundContentEn='Refund';",
         "@/features/track/track-lookup-modal": "export const TrackLookupModalTrigger=()=>null;",
       }[path] ?? "const call=(kind,form)=>{window.__fixture.calls.push({kind,form:Object.fromEntries(form)});return new Promise(resolve=>window.__fixture.resolve=resolve);};export const signupAction=(_,form)=>call('signup',form);export const resetPasswordAction=(_,form)=>call('reset',form);export const loginAction=(_,form)=>call('login',form);" }));
     } }],

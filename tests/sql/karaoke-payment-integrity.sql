@@ -226,4 +226,121 @@ begin
 end;
 $test$;
 
+-- 2026-11-21: a card attempt nobody claimed (the window was abandoned, or it
+-- never opened and its close call was lost) no longer refuses every later
+-- payment of the request: the next begin supersedes it. An attempt whose
+-- approval is being confirmed, or whose outcome is unknown, still keeps the
+-- request locked until it is settled.
+do $test$
+declare
+  v_user_id uuid := '91111111-1111-4111-8111-111111111111';
+  v_request_id uuid := '95555555-5555-4555-8555-555555555555';
+  v_state text := '01234567-89ab-4cde-8fab-0123456789ab';
+  v_row record;
+  v_payment public.karaoke_payments%rowtype;
+  v_request public.karaoke_requests%rowtype;
+  v_refused boolean;
+begin
+  insert into public.karaoke_requests (
+    id, user_id, title, payment_method, payment_status, amount_krw
+  ) values (
+    v_request_id, v_user_id, 'Abandoned karaoke card window', 'CARD', 'UNPAID', 50000
+  );
+
+  perform public.begin_karaoke_payment_order(
+    v_request_id, v_user_id, 'KRP-TEST-ABANDONED', 50000,
+    jsonb_build_object('closeState', v_state)
+  );
+  -- The member presses pay again on the same request.
+  select * into v_row
+  from public.begin_karaoke_payment_order(
+    v_request_id, v_user_id, 'KRP-TEST-RETRY', 50000,
+    jsonb_build_object('closeState', v_state)
+  );
+  assert v_row.order_id = 'KRP-TEST-RETRY';
+
+  select * into v_payment
+  from public.karaoke_payments
+  where order_id = 'KRP-TEST-ABANDONED';
+  assert v_payment.status = 'CANCELED' and v_payment.result_code = 'SUPERSEDED',
+    'the abandoned attempt was not superseded';
+  select * into v_request
+  from public.karaoke_requests
+  where id = v_request_id;
+  assert v_request.order_id = 'KRP-TEST-RETRY'
+    and v_request.payment_status = 'PAYMENT_PENDING';
+
+  -- A late callback for the superseded attempt can neither be claimed nor
+  -- approved, so it can never charge the card.
+  v_refused := false;
+  begin
+    perform public.claim_inicis_karaoke_approval('KRP-TEST-ABANDONED', v_state);
+  exception
+    when sqlstate '55000' then v_refused := true;
+  end;
+  assert v_refused, 'a superseded attempt could still be claimed';
+  v_refused := false;
+  begin
+    perform public.approve_karaoke_payment_order(
+      'KRP-TEST-ABANDONED', 50000, 'TID-KARAOKE-SUPERSEDED', '0000',
+      'late approval', '{}'::jsonb, now()
+    );
+  exception
+    when sqlstate '55000' then v_refused := true;
+  end;
+  assert v_refused, 'a superseded attempt could still be approved';
+
+  -- The gateway callback claims the new attempt: a begin now must neither
+  -- supersede it nor start a second attempt.
+  select * into v_row
+  from public.claim_inicis_karaoke_approval('KRP-TEST-RETRY', v_state);
+  assert not v_row.already_approved and not v_row.already_processing;
+  v_refused := false;
+  begin
+    perform public.begin_karaoke_payment_order(
+      v_request_id, v_user_id, 'KRP-TEST-WHILE-CLAIMED', 50000,
+      jsonb_build_object('closeState', v_state)
+    );
+  exception
+    when sqlstate '55000' then
+      if sqlerrm <> 'KARAOKE_PAYMENT_ALREADY_IN_PROGRESS' then raise; end if;
+      v_refused := true;
+  end;
+  assert v_refused, 'begin superseded an attempt that is being approved';
+
+  -- An unknown gateway outcome keeps the lock as well.
+  perform public.settle_inicis_karaoke_approval(
+    'KRP-TEST-RETRY', v_state, 'UNCERTAIN', 'TIMEOUT',
+    'Unknown gateway state', '{}'::jsonb
+  );
+  v_refused := false;
+  begin
+    perform public.begin_karaoke_payment_order(
+      v_request_id, v_user_id, 'KRP-TEST-WHILE-UNCERTAIN', 50000,
+      jsonb_build_object('closeState', v_state)
+    );
+  exception
+    when sqlstate '55000' then
+      if sqlerrm <> 'KARAOKE_PAYMENT_ALREADY_IN_PROGRESS' then raise; end if;
+      v_refused := true;
+  end;
+  assert v_refused, 'begin superseded an attempt whose outcome is unknown';
+
+  select * into v_payment
+  from public.karaoke_payments
+  where order_id = 'KRP-TEST-RETRY';
+  assert v_payment.status = 'REQUESTED'
+    and v_payment.result_code = 'APPROVAL_UNCERTAIN';
+  assert not exists (
+    select 1 from public.karaoke_payments
+    where order_id in ('KRP-TEST-WHILE-CLAIMED', 'KRP-TEST-WHILE-UNCERTAIN')
+  );
+  select * into v_request
+  from public.karaoke_requests
+  where id = v_request_id;
+  assert v_request.order_id = 'KRP-TEST-RETRY'
+    and v_request.payment_status = 'PAYMENT_PENDING';
+end;
+$test$;
+
 rollback;

@@ -56,18 +56,22 @@ for (const width of [390, 1024, 1440]) for (const english of [false, true]) test
   await expect(benefits.getByRole("button")).toHaveCount(3);
   await expect(benefits.getByText(english ? "Preview" : "미리보기", { exact: true })).toHaveCount(0);
   const heading = page.getByRole("heading", { level: 1 });
+  // The h1 sits inside the hero banner's padding (#109/#110) on a carousel slide
+  // that scrolls sideways (#121), so the banner box marks the hero column's edge.
+  const hero = page.getByRole("region", { name: english ? "Onside banners" : "온사이드 안내 배너", exact: true });
   const apply = page.getByRole("main").getByRole("link", { name: english ? "Apply" : "심의 신청", exact: true });
   const headingBounds = (await heading.boundingBox())!;
+  const heroBounds = (await hero.boundingBox())!;
   const benefitBounds = (await benefits.boundingBox())!;
   const applyBounds = (await apply.boundingBox())!;
   const sampleBounds = (await sample.boundingBox())!;
   expect(benefitBounds.y).toBeGreaterThan(headingBounds.y + headingBounds.height);
   expect(applyBounds.y).toBeGreaterThan(benefitBounds.y + benefitBounds.height);
   if (width >= 1024) {
-    expect(sampleBounds.x).toBeGreaterThan(headingBounds.x + headingBounds.width);
+    expect(sampleBounds.x).toBeGreaterThan(heroBounds.x + heroBounds.width);
     expect(Math.abs(sampleBounds.y - headingBounds.y)).toBeLessThan(120);
   } else {
-    expect(Math.abs(sampleBounds.x - headingBounds.x)).toBeLessThan(8);
+    expect(Math.abs(sampleBounds.x - heroBounds.x)).toBeLessThan(8);
     expect(sampleBounds.y).toBeGreaterThan(applyBounds.y + applyBounds.height);
   }
   for (const removedCopy of [

@@ -27,11 +27,17 @@ export async function POST(request: Request) {
     if (auth.data !== true) return NextResponse.json({ ok: false }, { status: 401 });
     const started = await db.from("email_worker_config").update({ last_started_at: new Date().toISOString() }).eq("singleton", true);
     if (started.error) return NextResponse.json({ ok: false }, { status: 503 });
-    const [result, receipts] = await Promise.all([
+    // Wait for both drains before answering: work after the response is not
+    // guaranteed, and a send frozen mid-lease would end up "uncertain".
+    const [outbox, paid] = await Promise.allSettled([
       // Batches of three while a worst-case send still fits before the deadline.
       drainEmailOutbox({ limit: 9, batchSize: 3, deadline: startedAt + maxDuration * 1_000 - RESPONSE_MARGIN_MS }),
       drainPaidSubmissionNotifications({ limit: 2 }),
     ]);
+    if (outbox.status === "rejected") throw outbox.reason;
+    if (paid.status === "rejected") throw paid.reason;
+    const result = outbox.value;
+    const receipts = paid.value;
     const finished = await db.from("email_worker_config").update({ last_finished_at: new Date().toISOString(), last_error: false }).eq("singleton", true);
     return NextResponse.json({ ok: !finished.error, ...result, receipts }, { status: finished.error ? 503 : 200, headers: { "cache-control": "no-store" } });
   } catch {

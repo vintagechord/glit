@@ -13,6 +13,8 @@ import { LEFTOVER_BATCH_LIMIT, type deleteStorageLeftovers, type loadStorageInve
 import { buildGuestAlbumIntakeRecord, guestAlbumIntakeFailure, guestAlbumIntakeSchema, type listGuestAlbumIntakePackages } from "./guest-album-intake";
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
 import { albumInfoSchema, type saveManagedAlbumInfo } from "./album-info-save";
+import { isUsableLyricsTranslation, LYRICS_TRANSLATION_LIMITS } from "@/lib/lyrics-translation-validation";
+import type { translateLyricsBatch } from "@/lib/server-lyrics-translation";
 
 const uuid = z.string().uuid();
 const revision = z.string().datetime({ offset: true });
@@ -91,7 +93,7 @@ export function createReviewDeskHandlers(deps: Dependencies) {
         ]);
         const schemaReady = !protocol.error && protocol.data?.protocol === DESK_PROTOCOL_VERSION && !station.error && !outbox.error;
         return jsonResponse({ ok: schemaReady, protocol: DESK_PROTOCOL_VERSION, schemaReady,
-          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true, guestAlbumIntake: true, albumInfoSync: true },
+          capabilities: { stationResults: schemaReady, bulkStationResults: schemaReady && protocol.data?.bulkStationResults === true, onlineBundle: schemaReady, certificate: schemaReady, separateEmailSend: true, emailPreview: true, storagePurge: true, guestAlbumIntake: true, albumInfoSync: true, deskTranslation: true },
           ...(schemaReady ? {} : { error: "심의 연동 서비스 업데이트가 아직 완료되지 않았습니다." }),
         }, schemaReady ? 200 : 503);
       }
@@ -305,12 +307,61 @@ export function createReviewDeskIntakeHandlers(deps: IntakeDependencies) {
       }
       const row = (Array.isArray(data) ? data[0] : data) as { submission_id?: string; created?: boolean } | null;
       if (!row?.submission_id) return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      // A retry returns the submission the first attempt created, unchanged,
+      // so the desk records the payment state it kept, not the one asked for.
+      let paid = input.paid;
+      if (row.created !== true) {
+        const { data: stored, error: storedError } = await auth.db.from("submissions").select("payment_status").eq("id", row.submission_id).maybeSingle();
+        if (storedError || !stored) return failure(503, "이미 등록된 접수의 결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+        paid = stored.payment_status === "PAID";
+      }
       try { deps.revalidate(row.submission_id); } catch { /* The submission exists; pages refresh on their own. */ }
-      return jsonResponse({ ok: true, created: row.created === true, submissionId: row.submission_id, guestToken: input.requestId, trackUrl: deps.trackUrl(input.requestId), paid: input.paid });
+      return jsonResponse({ ok: true, created: row.created === true, submissionId: row.submission_id, guestToken: input.requestId, trackUrl: deps.trackUrl(input.requestId), paid });
     } catch (error) {
       if (error && typeof error === "object" && "status" in error && error.status === 413) return failure(413, "입력 데이터가 허용 크기를 초과했습니다.");
       return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
     }
   }
   return { GET, POST };
+}
+
+const deskLanguage = (value: string | undefined, fallback: string) => {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return normalized === "auto" || /^[a-z]{2,8}(?:-[a-z0-9]{2,8})?$/.test(normalized) ? normalized : fallback;
+};
+const translateBody = z.object({
+  requestId: uuid,
+  lines: z.array(z.string().max(LYRICS_TRANSLATION_LIMITS.apiLine)).min(1).max(LYRICS_TRANSLATION_LIMITS.apiSegments),
+  source: z.string().max(20).optional(),
+  target: z.string().max(20).optional(),
+  context: z.string().max(LYRICS_TRANSLATION_LIMITS.context).optional(),
+});
+type TranslateDependencies = Pick<Dependencies, "secret" | "createDb"> & { translate: typeof translateLyricsBatch };
+
+/** The desk's review-document lyrics: the engine and checks of /api/translate,
+ * but signed by the desk, so the owner's own work never spends the public
+ * route's per-visitor and daily allowance (counted in paid model calls). An
+ * unusable answer comes back empty, for the desk to leave that line to a person. */
+export function createReviewDeskTranslateHandlers(deps: TranslateDependencies) {
+  async function POST(request: Request) {
+    try {
+      const bytes = await readBoundedDeskBody(request, 512 * 1024);
+      const auth = await authenticateDeskAdmin(deps, request, bytes);
+      if (auth.error) return auth.error;
+      if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return failure(415, "JSON 형식으로 요청해주세요.");
+      const parsed = translateBody.safeParse(await Promise.resolve().then(() => JSON.parse(bytes.toString("utf8"))).catch(() => null));
+      if (!parsed.success) return failure(400, `번역할 가사를 1~${LYRICS_TRANSLATION_LIMITS.apiSegments}줄씩 보내주세요.`);
+      if (parsed.data.requestId !== auth.requestId) return failure(400, "요청 식별자가 일치하지 않습니다.");
+      const { lines, context } = parsed.data;
+      if (lines.reduce((total, line) => total + line.length, 0) > LYRICS_TRANSLATION_LIMITS.total) return failure(413, "한 번에 번역할 수 있는 가사 분량을 넘었습니다.");
+      const target = deskLanguage(parsed.data.target, "ko");
+      const result = await deps.translate(lines, { source: deskLanguage(parsed.data.source, "auto"), target, context, signal: AbortSignal.timeout(50_000) });
+      const translations = lines.map((line, index) => typeof result[index] === "string" && (!line.trim() || isUsableLyricsTranslation(result[index], line, target)) ? result[index] : "");
+      return jsonResponse({ ok: true, translations });
+    } catch (error) {
+      if (error && typeof error === "object" && "status" in error && error.status === 413) return failure(413, "입력 데이터가 허용 크기를 초과했습니다.");
+      return failure(502, "번역 서비스가 응답하지 않았습니다. 잠시 후 다시 시도해주세요.");
+    }
+  }
+  return { POST };
 }

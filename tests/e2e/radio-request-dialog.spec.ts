@@ -153,7 +153,8 @@ test("closing and reopening the guide preserves the selected language and edited
 
 test("a rejected broadcaster cannot open a song request guide", async ({ page }) => {
   await mount(page, "rejected");
-  await page.getByRole("button", { name: /Arirang · 부적격/ }).click();
+  // A finished multi-song station reads "N곡 부적격" alone (owner decision 2026-11-03, #78).
+  await page.getByRole("button", { name: /Arirang · 2곡 부적격/ }).click();
   await expect(page.getByRole("dialog", { name: "트랙별 결과" })).toBeVisible();
   await expect(page.getByRole("button", { name: "라디오 신청 가이드", exact: true })).toHaveCount(0);
 });

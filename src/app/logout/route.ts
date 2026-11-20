@@ -6,7 +6,9 @@ import { getBaseUrl } from "@/lib/url";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
-  await supabase.auth.signOut();
+  // This browser only: the default ('global') also signed the member out on
+  // every other device.
+  await supabase.auth.signOut({ scope: "local" });
 
   const requestedPath = (() => {
     try {

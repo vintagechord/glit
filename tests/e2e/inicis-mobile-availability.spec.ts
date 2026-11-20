@@ -1,9 +1,19 @@
-import { devices, expect, test, type Page } from "@playwright/test";
+import { devices, expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { GUEST_SUBMISSION_CART_STORAGE_KEY } from "../../src/lib/guest-submission-cart";
-import { INICIS_MOBILE_REDIRECT_MESSAGE } from "../../src/lib/inicis/device";
+import { INICIS_MOBILE_REDIRECT_MESSAGE, INICIS_MOBILE_UNAVAILABLE_MESSAGE } from "../../src/lib/inicis/device";
 
-// The dev server for this spec runs with INICIS_MOBILE_HASH_KEY_PROD set, so
-// phones are offered the INIpayMobile card flow next to bank transfer.
+// Phones get the INIpayMobile card flow only when the server under test has
+// INICIS_MOBILE_HASH_KEY_PROD (or _STG in stg mode). Only Vercel has the real
+// key; any placeholder runs the card case here because the order API is mocked.
+// The server's own health check, not the rendered button, decides which case
+// runs, so a cart that ignores the key fails instead of being skipped.
+async function serverHasMobileCardKey(request: APIRequestContext) {
+  const { checks = [] } = (await (await request.get("/api/health")).json()) as { checks?: Array<{ name: string; ok: boolean }> };
+  const check = checks.find(({ name }) => /^inicis (prod|stg) mobile env$/.test(name));
+  expect(check, "/api/health reports the INIpayMobile hash key check").toBeDefined();
+  return check!.ok;
+}
+
 const submissionId = "11111111-1111-4111-8111-111111111111";
 const orderId = "22222222-2222-4222-8222-222222222222";
 const pgOrderId = "SUBP-1761900000000-11111111-abcdef12";
@@ -75,7 +85,8 @@ async function guardServices(page: Page, origin: string) {
 test.describe("mobile checkout offers INIpayMobile card payment and bank transfer", () => {
   test.use({ userAgent: devices["iPhone 13"].userAgent, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test("card payment leaves for the mobile gateway with a top-level EUC-KR form", async ({ page, baseURL }, testInfo) => {
+  test("card payment leaves for the mobile gateway with a top-level EUC-KR form", async ({ page, baseURL, request }, testInfo) => {
+    test.skip(!(await serverHasMobileCardKey(request)), "The server has no INICIS_MOBILE_HASH_KEY_PROD/_STG; start it with a placeholder key to run the card flow.");
     const effects = await guardServices(page, new URL(baseURL!).origin);
     await page.goto("/mypage/cart");
     await page.getByRole("button", { name: "결제하기", exact: true }).click();
@@ -98,6 +109,21 @@ test.describe("mobile checkout offers INIpayMobile card payment and bank transfe
     expect(effects.errors).toEqual([]);
   });
 
+  test("without the mobile hash key phones keep bank transfer and see why card payment is PC-only", async ({ page, baseURL, request }) => {
+    test.skip(await serverHasMobileCardKey(request), "The server has the INIpayMobile hash key; the card case covers phones.");
+    const effects = await guardServices(page, new URL(baseURL!).origin);
+    await page.goto("/mypage/cart");
+    await page.getByRole("button", { name: "결제하기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "카드 결제 · PC에서 이용", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "무통장 입금", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText(INICIS_MOBILE_UNAVAILABLE_MESSAGE, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toBeVisible();
+    expect(effects.writes).toEqual([]);
+    expect(effects.gateway).toEqual([]);
+    expect(effects.unexpected).toEqual([]);
+    expect(effects.errors).toEqual([]);
+  });
+
   test("bank transfer collects the depositor name and expected deposit date", async ({ page, baseURL }) => {
     const effects = await guardServices(page, new URL(baseURL!).origin);
     await page.goto("/mypage/cart");
@@ -116,7 +142,7 @@ test.describe("mobile checkout offers INIpayMobile card payment and bank transfe
     await expect(page.locator(`#order-${orderId}`)).toContainText("입금 대기");
     await expect(page.locator(`#order-${orderId}`)).toContainText("홍길동");
     await expect(page.locator(`#order-${orderId}`)).toContainText("2099-01-01");
-    expect(effects.writes).toEqual([{ path: "/api/cart/bank", body: { submissionIds: [submissionId], guestTokensBySubmissionId: { [submissionId]: guestToken }, depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } }]);
+    expect(effects.writes).toEqual([{ path: "/api/cart/bank", body: { submissionIds: [submissionId], guestTokensBySubmissionId: { [submissionId]: guestToken }, depositorName: "홍길동", depositDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), cashReceipt: null } }]);
     expect(effects.gateway).toEqual([]);
     expect(effects.unexpected).toEqual([]);
     expect(effects.errors).toEqual([]);

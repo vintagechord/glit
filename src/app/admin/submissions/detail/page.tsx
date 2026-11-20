@@ -878,9 +878,11 @@ export default async function AdminSubmissionDetailPage({
       submission.status === "COMPLETED" ||
       stationSubmittedCount > 0 ||
       completedReviewCount > 0);
-  // An album's stage is what was saved, not what its stations imply: 결과 준비
-  // saved while stations are only 접수완료 must read back as 결과 준비.
-  const currentOperationalStage = !isMvSubmission
+  // The stage is what was saved, not what the stations imply: 결과 준비 saved
+  // while stations are only 접수완료 must read back as 결과 준비, and a broadcast
+  // MV with a 보완 요청 station stays in 심의진행. Only an online MV follows
+  // its single 영등위 result.
+  const currentOperationalStage = !isMvDistribution
     ? storedOperationalStage(submission)
     : hasResultPublished
       ? "RESULT_NOTIFIED"
@@ -889,6 +891,9 @@ export default async function AdminSubmissionDetailPage({
         : hasPaymentComplete
           ? "PAYMENT_COMPLETE"
           : "APPLICATION_RECEIVED";
+  // A refund (recorded from 환불 처리) stops the review: its stage is shown,
+  // not offered.
+  const isRefunded = submission.payment_status === "REFUNDED";
   const stationResultProgressLabel =
     reviews.length > 0
       ? `${reviews.length}곳 중 ${completedReviewCount}곳 반영`
@@ -1382,7 +1387,13 @@ export default async function AdminSubmissionDetailPage({
                   <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     운영 단계
                   </label>
-                  {isMvSubmission && hasResultPublished ? (
+                  {/* The stage shown here. A save that leaves it unchanged
+                      changes no stage, so a page drawn before a station
+                      result, a refund or a save in another tab cannot write
+                      its old stage back. The select is keyed on the stage:
+                      a refresh redraws it on the stored one. */}
+                  <input type="hidden" name="renderedOperationalStage" value={currentOperationalStage} />
+                  {isRefunded || (isMvDistribution && hasResultPublished) ? (
                     <>
                       <input
                         type="hidden"
@@ -1390,13 +1401,14 @@ export default async function AdminSubmissionDetailPage({
                         value={currentOperationalStage}
                       />
                       <input
-                        value="결과 준비"
+                        value={isRefunded ? "환불" : "결과 준비"}
                         readOnly
                         className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-muted-foreground"
                       />
                     </>
                   ) : (
                     <select
+                      key={currentOperationalStage}
                       name="operationalStage"
                       defaultValue={currentOperationalStage}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm"

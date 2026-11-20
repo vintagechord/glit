@@ -344,3 +344,28 @@ test("an in-review purge deletes through the received scope only and records why
   assert.ok(fixture.submission_files.find(row => row.id === "b1")?.purged_at);
   assert.match(String(fixture.submission_events.at(-1)?.message), /심의 진행 중 심의 데스크의 원본 보관을 확인하고/);
 });
+
+test("the desk's finished re-check answers for a named review with nothing left on B2, and still refuses an unfinished one", async () => {
+  // The desk deletes this Mac's originals only after this answer. A case the
+  // service no longer lists (its copy already purged, files sent by e-mail)
+  // must still get a decision instead of being skipped — or deleted unchecked.
+  const api = await load();
+  const fixture = purgeFixture();
+  for (const row of [...fixture.submission_files, ...fixture.submission_supplement_files] as Row[]) row.purged_at = "2026-11-02T00:00:00Z";
+  const E = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", F = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+  fixture.submissions.push(finishedAlbum(E), finishedAlbum(F));
+  fixture.station_reviews.push({ id: "r-e", submission_id: E, status: "APPROVED", updated_at: "2026-10-05T00:00:00Z" });
+  fixture.submission_supplement_requests.push({ id: "req-e", submission_id: E, status: "OPEN" });
+  fixture.station_reviews.push({ id: "r-f", submission_id: F, status: "RECEIVED", updated_at: "2026-10-05T00:00:00Z" });
+  const { db } = fakeDb(fixture);
+  const removed: string[] = [];
+  const results = await api.purgeCustomerFiles(db, [A, B, E, F], owner, async key => { removed.push(key); return 1; });
+  assert.deepEqual(results.map(r => [r.submissionId, r.ok, r.deletedFiles]), [[A, true, 0], [B, false, 0], [E, false, 0], [F, false, 0]]);
+  assert.deepEqual(removed, []);
+  assert.equal(fixture.submission_events.length, 0, "nothing was deleted, so nothing is recorded");
+  // The admin storage page and the desk's list still show only reviews with files to delete.
+  assert.ok(!(await api.loadPurgeCandidates(db)).some(c => c.submissionId === A));
+  assert.ok(!(await api.loadPurgeCandidates(db, undefined, "received")).some(c => c.submissionId === A));
+  // An in-review case named in a received-scope purge with nothing left is not offered either.
+  assert.equal((await api.purgeCustomerFiles(db, [B], owner, async () => 1, "received"))[0].ok, false);
+});

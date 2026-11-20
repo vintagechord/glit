@@ -8,8 +8,10 @@ cleanup_order_sql() {
 }
 trap cleanup_order_sql EXIT
 order_sql_container_id="$(docker run --rm --detach --network none --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine)"
-for order_sql_attempt in {1..30}; do
-  if docker exec "$order_sql_container_id" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+# Over TCP: the image's init-time server listens on the socket only and is
+# restarted before the real one starts.
+for order_sql_attempt in {1..120}; do
+  if docker exec "$order_sql_container_id" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi
   sleep 1
 done
 order_psql() { docker exec --interactive "$order_sql_container_id" psql -U postgres --set ON_ERROR_STOP=1 "$@"; }
@@ -31,6 +33,14 @@ order_psql --single-transaction < "$order_sql_root/supabase/migrations/202610311
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261109120000_order_items_official_artist.sql"
 # Albums ordered together: the suites below run against these definitions too.
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261114120000_album_additional_half_price.sql"
+# An administrator settling an unfinished card order: the receipt checks below
+# run against it. (admin_delete_submissions from this file is replaced again by
+# 20261102170000 before its own checks run, as before.)
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261119120000_admin_unpaid_card_order_resolution.sql"
+# An administrator deleting only the full-price album of a paid order (2026-11-21).
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261121091000_album_discount_survives_base_deletion.sql"
+# One receipt key per order when an administrator settles a card order (2026-11-21).
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261121104000_admin_confirmed_order_single_receipt.sql"
 order_psql < "$order_sql_root/tests/sql/album-additional-half-price.sql"
 # Order items keep the album tier and list price: the migration runs inside the
 # test's transaction (to check its backfill of earlier orders), then for real.

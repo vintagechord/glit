@@ -210,6 +210,45 @@ test("uploads still in flight or known only by file path are never leftovers", a
   assert.ok(leftoverKeys.has(keys.replaced), "a finished grant is not a reference");
 });
 
+test("karaoke attachments and proof shots are kept, though their keys look like uploads of deleted submissions", async () => {
+  const { buildObjectKey } = await import("../src/lib/b2");
+  const { loadStorageInventory, deleteStorageLeftovers } = await load();
+  // Built as /api/uploads/presign builds them: the form's random upload id
+  // (or the promotion id) stands where a submission id would.
+  const karaoke = {
+    request: buildObjectKey({ userId: member, submissionId: "77777777-7777-4777-8777-777777777777", title: "봄날", filename: "mr.mp3" }),
+    recommendation: buildObjectKey({ userId: member, submissionId: "88888888-8888-4888-8888-888888888888", title: "karaoke-recommendation", filename: "proof.png" }),
+    vote: buildObjectKey({ userId: member, submissionId: "99999999-9999-4999-8999-999999999999", title: "karaoke-recommendation", filename: "vote.png" }),
+  };
+  const files = Object.values(karaoke);
+  const sizes = [4_000_000, 200_000, 100_000];
+  const entries = [...bucket(), ...files.map((key, index) => ({ key, versionId: `k${index}`, size: sizes[index], lastModified: OLD, latest: true, marker: false }))];
+  const listEntries = async () => ({ entries, truncated: false });
+  const withRows = () => ({
+    ...tables(),
+    karaoke_requests: [{ id: "k-request", file_path: karaoke.request }],
+    karaoke_promotion_recommendations: [{ id: "k-recommendation", proof_path: karaoke.recommendation }],
+    karaoke_votes: [{ id: "k-vote", proof_path: karaoke.vote }],
+  });
+
+  const inventory = await loadStorageInventory(fakeDb(withRows()), { candidates: [guestCandidate], now: NOW, listEntries });
+  for (const key of files) assert.ok(!inventory.leftovers.some(leftover => leftover.key === key), key);
+  assert.deepEqual(inventory.groups.find(group => group.key === "other"), { key: "other", count: 5, bytes: 1_050_000 + 4_300_000 });
+  assert.deepEqual(inventory.held.map(entry => entry.submissionId), [DRAFT], "never shown as an application that cannot be cleaned yet");
+
+  // A listing that missed the karaoke rows (as every listing did before)
+  // offered these files; the fresh check at deletion time still keeps them.
+  const stale = await loadStorageInventory(fakeDb(tables()), { now: NOW, listEntries });
+  const ids = stale.leftovers.filter(leftover => files.includes(leftover.key)).map(leftover => leftover.id);
+  assert.equal(ids.length, 3);
+  const removed: string[] = [];
+  const results = await deleteStorageLeftovers(fakeDb(withRows()), ids, {
+    now: NOW, listEntries, deleteVersion: async (key, versionId) => { removed.push(`${key}#${versionId}`); },
+  });
+  assert.deepEqual(removed, []);
+  assert.ok(results.every(result => !result.ok && result.deletedVersions === 0));
+});
+
 test("certificates are never offered, whatever happened to their submission", async () => {
   const { loadStorageInventory } = await load();
   const replacedCertificate = `submissions/${GONE}/certificate/b4e51331-a943-4b47-85e0-8420b62d5c26_494d990f5311ea53_old.pdf`;

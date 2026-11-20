@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { ReliableLink as Link } from "@/components/site/reliable-link";
 import { ArrowRight } from "lucide-react";
 
 import { JsonLd } from "@/components/seo/json-ld";

@@ -20,9 +20,13 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { chatHistoryQuery, type ChatHistoryCursor } from "@/lib/support-chat-cursor";
 import { showCenteredConfirm } from "@/lib/centered-dialog";
 import {
+  mergeListedChatConversations,
+  mergeListedChatTokens,
   supportChatAdminChannelName,
   supportChatChannelName,
   supportChatConversationTokensStorageKey,
+  supportChatMessageMaxLength,
+  supportChatMessageTooLongError,
   supportChatStatusLabels,
   supportChatStorageKey,
   readSupportChatAdminSignal,
@@ -317,13 +321,21 @@ export function ChatbotWidget() {
     }
   }, []);
 
+  // Merging inside the updater also keeps a token remembered after the list
+  // request was sent (a conversation the visitor just started).
   const syncStoredTokensFromConversations = React.useCallback(
-    (items: SupportChatConversation[]) => {
-      const nextTokens = normalizeTokenList(
-        items.map((item) => item.accessToken),
-      );
-      setStoredTokens(nextTokens);
-      writeStoredConversationTokens(nextTokens, activeTokenRef.current);
+    (items: SupportChatConversation[], requestTokens: string[]) => {
+      setStoredTokens((current) => {
+        const nextTokens = normalizeTokenList(
+          mergeListedChatTokens(
+            current,
+            requestTokens,
+            items.map((item) => item.accessToken),
+          ),
+        );
+        writeStoredConversationTokens(nextTokens, activeTokenRef.current);
+        return nextTokens;
+      });
     },
     [],
   );
@@ -364,8 +376,10 @@ export function ChatbotWidget() {
         }
         if (requestId !== listRequestIdRef.current) return;
         const nextConversations = sortConversations(payload.conversations ?? []);
-        setConversations(nextConversations);
-        syncStoredTokensFromConversations(nextConversations);
+        setConversations((current) =>
+          sortConversations(mergeListedChatConversations(current, requestTokens, nextConversations)),
+        );
+        syncStoredTokensFromConversations(nextConversations, requestTokens);
       } catch (loadError) {
         if (requestId === listRequestIdRef.current) {
           setError(
@@ -755,6 +769,11 @@ export function ChatbotWidget() {
     event.preventDefault();
     const body = draft.trim();
     if (!body || sending) return;
+    // The draft stays so the visitor can send it in parts.
+    if (body.length > supportChatMessageMaxLength) {
+      setError(supportChatMessageTooLongError);
+      return;
+    }
 
     const requestToken = activeTokenRef.current;
     const requestSelection = selectionRef.current;

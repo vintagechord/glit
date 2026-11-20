@@ -40,8 +40,10 @@ begin
     perform public.save_submission_review_result(sid,actor,null,'APPROVED');
     raise exception 'global broadcast overwrite still allowed';
   exception when others then if sqlerrm <> 'REVIEW_BROADCAST_PER_STATION_REQUIRED' then raise; end if; end;
+  -- A station reopened for a fix reports NEEDS_FIX; the album stays in 결과 준비
+  -- until the administrator moves it back (20261119121000).
   result := public.save_station_review_result(sid,kbs,actor,revision,'NEEDS_FIX','영상 보완','[]',null);
-  if result->>'submissionStatus'<>'IN_PROGRESS' or result->>'resultStatus'<>'NEEDS_FIX' or result->'row'->>'age_rating' is not null then raise exception 'reopened result not propagated'; end if;
+  if result->>'submissionStatus'<>'RESULT_READY' or result->>'resultStatus'<>'NEEDS_FIX' or result->'row'->>'age_rating' is not null then raise exception 'reopened result not propagated'; end if;
 end $$;
 -- Album completeness and the selected WBS subset are independently enforced inside SQL.
 do $$
@@ -120,11 +122,46 @@ begin
   result := public.save_station_review_result(sid,kbs,actor,revision,'APPROVED','KBS 완료 · 메모 수정','[]','12');
   if result->>'submissionStatus'<>'COMPLETED' then raise exception 'memo edit reopened a closed application as %', result->>'submissionStatus'; end if;
   revision := (result->'row'->>'updated_at')::timestamptz;
+  -- Reopening a station of a closed application keeps it closed (20261119121000).
   result := public.save_station_review_result(sid,kbs,actor,revision,'NEEDS_FIX','보완','[]',null);
-  if result->>'submissionStatus'<>'IN_PROGRESS' then raise exception 'reopened station did not resume progress'; end if;
+  if result->>'submissionStatus'<>'COMPLETED' or result->>'resultStatus'<>'NEEDS_FIX' then raise exception 'a reopened station moved a closed application to %', result->>'submissionStatus'; end if;
   revision := (result->'row'->>'updated_at')::timestamptz;
   result := public.save_station_review_result(sid,kbs,actor,revision,'NOT_SENT',null,'[]',null);
-  if result->>'submissionStatus'<>'PRE_REVIEW' then raise exception 'paid application without sent stations should wait in PRE_REVIEW, got %', result->>'submissionStatus'; end if;
+  if result->>'submissionStatus'<>'COMPLETED' then raise exception 'a station set back to NOT_SENT moved a closed application to %', result->>'submissionStatus'; end if;
+end $$;
+
+-- 2026-11-21: a paid album in 심의진행 whose stations are all 접수예정 stays in
+-- 심의진행: the administrator moved it there before sending a station, or set
+-- the only 접수완료 station back to 접수예정. Rewriting it as PRE_REVIEW moved
+-- the stage backwards, and for an album paid through an order the order-state
+-- guard (0097) refused the write, so every station save failed.
+do $$
+declare actor uuid := '22222222-2222-4222-8222-222222222222'; kbs uuid := '66666666-6666-4666-8666-666666666666';
+  ordered uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'; intake uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  refunded uuid := 'ffffffff-ffff-4fff-8fff-ffffffffffff'; result jsonb; revision timestamptz;
+begin
+  insert into public.submissions(id,type,status,payment_status,payment_method,mv_selected_station_codes,package_id,current_order_id) values
+    (ordered,'MV_BROADCAST','IN_PROGRESS','PAID','CARD','{KBS}',null,'d0000000-0000-4000-8000-000000000001'),
+    (intake,'MV_BROADCAST','IN_PROGRESS','PAID','BANK','{KBS}',null,null),
+    (refunded,'MV_BROADCAST','IN_PROGRESS','REFUNDED','CARD','{KBS}',null,null);
+  -- A note on the 접수예정 station of an album paid through an order.
+  result := public.save_station_review_result(ordered,kbs,actor,null,'NOT_SENT','접수 준비 메모');
+  if result->>'submissionStatus'<>'IN_PROGRESS' then raise exception 'a note moved an album in review to %', result->>'submissionStatus'; end if;
+  -- A mistaken 접수완료 set back to 접수예정.
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  result := public.save_station_review_result(ordered,kbs,actor,revision,'SENT',null);
+  revision := (result->'row'->>'updated_at')::timestamptz;
+  result := public.save_station_review_result(ordered,kbs,actor,revision,'NOT_SENT',null);
+  if result->>'submissionStatus'<>'IN_PROGRESS'
+    or (select status::text from public.submissions where id=ordered)<>'IN_PROGRESS'
+    or (select status::text from public.station_reviews where submission_id=ordered and station_id=kbs)<>'NOT_SENT' then
+    raise exception 'setting 접수완료 back to 접수예정 left the album at %', result->>'submissionStatus'; end if;
+  -- The same for a paid album without an order (administrator intake).
+  result := public.save_station_review_result(intake,kbs,actor,null,'NOT_SENT','접수 준비 메모');
+  if result->>'submissionStatus'<>'IN_PROGRESS' then raise exception 'a note moved an intake album in review to %', result->>'submissionStatus'; end if;
+  -- An application that is not paid still becomes SUBMITTED, as before.
+  result := public.save_station_review_result(refunded,kbs,actor,null,'NOT_SENT',null);
+  if result->>'submissionStatus'<>'SUBMITTED' then raise exception 'an unpaid application in review became %', result->>'submissionStatus'; end if;
 end $$;
 reset role;
 -- Restore the audit-failure fixture for the bulk-save suite that runs next.

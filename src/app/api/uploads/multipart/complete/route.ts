@@ -31,6 +31,7 @@ import {
   getSubmissionUploadConflictMessage,
   shouldStageSubmissionUpload,
 } from "@/lib/submission-upload-access";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,7 +106,7 @@ const retireFailedGrant = async (grant: MultipartUploadGrant) => {
 export async function POST(request: Request) {
   const startedAt = Date.now();
   let completionGrant: MultipartUploadGrant | null = null;
-  const requestLimit = consumeRateLimit({ namespace: "upload-multipart-complete-ip", identifier: getRequestIdentifier(request.headers), limit: 60, windowMs: 60 * 60 * 1_000 });
+  const requestLimit = consumeRateLimit({ namespace: "upload-multipart-complete-ip", identifier: getRequestIdentifier(request.headers), limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR, windowMs: 60 * 60 * 1_000 });
   if (!requestLimit.allowed) return NextResponse.json({ error: "업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." }, { status: 429, headers: { "Retry-After": String(requestLimit.retryAfterSeconds) } });
   const body = await readBoundedJsonBody(request, 256 * 1024);
   if (!body.ok) return NextResponse.json({ error: "업로드 정보를 확인해주세요." }, { status: body.reason === "too_large" ? 413 : 400 });

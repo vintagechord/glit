@@ -20,6 +20,7 @@ import {
   supportChatStatusLabels,
   readSupportChatAdminSignal,
   toSupportChatAdminSignal,
+  toVisitorChatMessage,
   type SupportChatBroadcastPayload,
   type SupportChatConversation,
   type SupportChatMessage,
@@ -318,6 +319,12 @@ export function AdminChatClient({
     ) => {
       // The full payload goes only to the conversation's own channel, whose
       // name contains the access token. The shared admin channel gets an id.
+      // The visitor listens on that channel, so the reply goes without the
+      // admin's name or user id.
+      const visitorPayload = {
+        ...payload,
+        message: payload.message && toVisitorChatMessage(payload.message),
+      };
       const signal = toSupportChatAdminSignal(payload);
       await Promise.allSettled([
         options?.conversationChannel === false
@@ -325,7 +332,7 @@ export function AdminChatClient({
           : channelRef.current?.send({
               type: "broadcast",
               event: "message",
-              payload,
+              payload: visitorPayload,
             }),
         signal
           ? adminChannelRef.current?.send({

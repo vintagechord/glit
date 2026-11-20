@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ReliableLink as Link } from "@/components/site/reliable-link";
 import { Plus } from "lucide-react";
 
 import { faqItems } from "@/lib/onside-content";

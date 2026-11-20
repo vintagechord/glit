@@ -202,7 +202,8 @@ export async function POST(request: NextRequest) {
       conversation_id: parsed.data.conversationId,
       sender_type: "ADMIN",
       sender_user_id: auth.user.id,
-      sender_name: auth.user.name || auth.user.email || "관리자",
+      // Never the login e-mail: visitors' clients receive admin messages.
+      sender_name: auth.user.name?.trim() || "관리자",
       body: parsed.data.body,
     })
     .select(messageSelect)

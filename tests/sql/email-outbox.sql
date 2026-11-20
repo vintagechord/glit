@@ -26,7 +26,8 @@ begin
   assert (select result_notified_at is not null from public.submissions where id=submission), 'result timestamp missing';
 
   select * into row1 from public.enqueue_email_outbox(repeat('8',64),'supabase-smtp','fixture@example.invalid','MV change','body',null,'submission update',now()+interval '1 hour',submission,true);
-  update public.submissions set result_notified_at=null,updated_at=now()+interval '1 second' where id=submission;
+  -- A newer result: the result itself changed after the mail was queued.
+  update public.submissions set result_notified_at=null,result_status='REJECTED',updated_at=now()+interval '1 second' where id=submission;
   select * into claimed from public.claim_email_outbox(1,row1.id);
   perform public.finish_email_outbox(row1.id,claimed.lease_token,'accepted','late-fixture-id');
   assert (select result_notified_at is null from public.submissions where id=submission), 'old acceptance marked newer result notified';

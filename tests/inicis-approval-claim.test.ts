@@ -154,17 +154,22 @@ test("gateway transport only reports cancellation or rejection after explicit pr
   const result = await apiBundle;
   const loaded = { exports: {} as typeof import("../src/lib/inicis/api") };
   new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), loaded, loaded.exports);
-  for (const scenario of ["empty", "malformed", "declined", "timeout-cancelled", "timeout-uncertain"] as const) {
+  // A decline code may carry letters (the mobile path already accepts them);
+  // R201 says an earlier approval of the same token completed, so that one may
+  // have charged the card and stays unconfirmed.
+  for (const scenario of ["empty", "malformed", "declined", "declined-alphanumeric", "already-approved", "timeout-cancelled", "timeout-uncertain"] as const) {
     t.mock.method(globalThis, "fetch", async (url: RequestInfo | URL) => {
       if (String(url).endsWith("/netCancel")) return scenario === "timeout-cancelled" ? Response.json({ resultCode: "0000", mid: "fixture-mid", MOID: ORDER, tid: "fixture-tid" }) : new Response("");
       if (scenario.startsWith("timeout")) throw new Error("timeout");
       if (scenario === "empty") return new Response("");
       if (scenario === "malformed") return Response.json({ unexpected: "body" });
+      if (scenario === "declined-alphanumeric") return Response.json({ resultCode: "V801", resultMsg: "한도 초과" });
+      if (scenario === "already-approved") return Response.json({ resultCode: "R201", resultMsg: "이미 처리된 승인 요청" });
       return Response.json({ resultCode: "9999", resultMsg: "Declined" });
     });
     const response = await loaded.exports.requestStdPayApproval({ authUrl: "https://stgstdpay.inicis.com/api/payAuth", netCancelUrl: "https://stgstdpay.inicis.com/api/netCancel", idcName: "stg", expectedOrderId: ORDER, authToken: "fixture-token", timestamp: "1792123456789" });
     assert.equal(response.ok, false);
-    assert.equal(response.confirmedFailure, scenario === "declined" || scenario === "timeout-cancelled", scenario);
+    assert.equal(response.confirmedFailure, ["declined", "declined-alphanumeric", "timeout-cancelled"].includes(scenario), scenario);
     t.mock.restoreAll();
   }
 });

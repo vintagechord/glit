@@ -259,7 +259,10 @@ export async function requestStdPayApproval({
         data,
         netCancellation,
         // A missing or malformed result is not proof that no charge occurred.
-        confirmedFailure: netCancellation?.ok === true || /^\d{4,6}$/.test(resultCode) && resultCode !== String(res.status),
+        // Decline codes may carry letters; R201 says an earlier approval of the
+        // same token completed, which may have charged the card.
+        confirmedFailure: netCancellation?.ok === true ||
+          (/^[0-9A-Za-z]{4,6}$/.test(resultCode) && resultCode !== String(res.status) && resultCode !== "R201"),
         secureSignatureMatches: false,
       };
     }

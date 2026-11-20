@@ -16,8 +16,6 @@ import { formatShortDate } from "@/lib/format";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-
 import { getServerSessionUser } from "@/lib/supabase/server-user";
 import { officialArtistName } from "@/lib/submissions/artist-display";
 
@@ -119,11 +117,12 @@ export async function DashboardArtistDetailPageView({
   };
 
   // Both reads are scoped before they start; artist metadata does not need to
-  // finish before the member's own submission history can load.
-  const admin = createAdminClient();
+  // finish before the member's own submission history can load. The member's
+  // session reads the artist, so the artists policy shows only an artist
+  // linked to one of their own submissions.
   const [{ data: artist }, { data: submissionData, error: submissionError }] =
     await Promise.all([
-      admin.from("artists").select("id, name, thumbnail_url").eq("id", artistId).maybeSingle(),
+      supabase.from("artists").select("id, name, thumbnail_url").eq("id", artistId).maybeSingle(),
       runSubmissionQuery(),
     ]);
 

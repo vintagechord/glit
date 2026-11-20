@@ -34,7 +34,9 @@ export async function drainPaidSubmissionNotifications({ limit = 2, store = data
   if (getEmailDeliveryMode() !== "transactional") return summary;
   const events = await store.claim(Math.min(5, Math.max(1, Math.floor(limit))));
   summary.claimed = events.length;
-  await Promise.all(events.map(async event => {
+  // Let every event finish before reporting a failure, so one acknowledgement
+  // outage does not abandon a sibling whose mail is still being sent.
+  const settled = await Promise.allSettled(events.map(async event => {
     let recorded = false;
     try {
       const result = await notify({ submissionId: event.submission_id, paymentKey: event.payment_key });
@@ -44,5 +46,7 @@ export async function drainPaidSubmissionNotifications({ limit = 2, store = data
     if (saved && recorded) summary.recorded++;
     else summary.retry++;
   }));
+  const failed = settled.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+  if (failed) throw failed.reason;
   return summary;
 }

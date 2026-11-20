@@ -131,3 +131,29 @@ test('editing translated lyrics through the local patch invalidates stale combin
   const effective=applyOverrides(detail,local),review=reviewLyrics(effective);
   assert.equal(effective.tracks[0].lyrics_with_translation,'');assert.equal(review.counts.translation_missing,0);assert.equal(review.requiresReview,false);
 });
+
+test('review-document translation uses the desk\'s signed route and falls back to the public one only where it does not exist yet',async()=>{
+  const detail=album([track('Hello world\n한국어 가사')]);
+  const sent=[];
+  const result=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',
+    fetchImpl:()=>{throw new Error('the public route must not be used');},
+    translateBatch:async(payload)=>{sent.push(payload);return {translations:['안녕 세상아']};}});
+  assert.equal(result.translatedCount,1);
+  assert.deepEqual(sent.map(p=>({lines:p.lines,source:p.source,target:p.target})),[{lines:['Hello world'],source:'auto',target:'ko'}]);
+  assert.equal(typeof sent[0].context,'string');
+  // A service deployed before the route answers 404: the public route still works.
+  const publicCalls=[];
+  const fallback=await translateMissingLyrics({detail,serviceUrl:'https://onside.test',
+    fetchImpl:async(url)=>{publicCalls.push(url);return json(['안녕 세상아']);},
+    translateBatch:async()=>{throw Object.assign(new Error('not found'),{status:404});}});
+  assert.equal(fallback.translatedCount,1);assert.deepEqual(publicCalls,['https://onside.test/api/translate']);
+  // Any other failure keeps the lyrics unchanged, as before.
+  await assert.rejects(()=>translateMissingLyrics({detail,serviceUrl:'https://onside.test',fetchImpl:()=>{throw new Error('must not call');},
+    translateBatch:async()=>{throw Object.assign(new Error('busy'),{status:503});}}),/변경하지 않았습니다/);
+});
+
+test('the desk translates review documents through its remote client\'s signed route by default',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const server=await readFile(new URL('../server.mjs',import.meta.url),'utf8');
+  assert.match(server,/translateBatch: \(payload, signal\) => remote\.translateLyrics\(payload, \{ signal \}\)/);
+});

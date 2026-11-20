@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 import { archiveClientDocument } from "./support/music-archive-mount";
 
 // Production UI with an entirely intercepted document, API, and object store.
@@ -21,15 +22,14 @@ type Call = { action: string; fileId?: string; requestId?: string; decision?: st
 let html: string;
 test.beforeAll(async () => { html = await archiveClientDocument("./tests/e2e/support/submission-supplements-mount", "SubmissionSupplementsFixture"); });
 
-async function fixture(context: BrowserContext, options: { delayUpload?: boolean; failUploadOnce?: boolean; lostCompletion?: boolean; lostInit?: boolean; initiallyDenied?: boolean } = {}) {
+async function fixture(context: BrowserContext, options: { delayUpload?: boolean; dropPart?: number; lostCompletion?: boolean; lostInit?: boolean; initiallyDenied?: boolean } = {}) {
   const request: RequestRow = { id: requestId, note: "KBS 1번 트랙의 음원과 전체 가사를 보완해주세요.", status: "OPEN", created_at: "2026-10-24T01:00:00Z", revisions: [{ id: "revision-1", revision_no: 1, status: "DRAFT", note: "", review_note: "", files: [] }] };
   const calls: Call[] = [];
   const stored = new Map<string, Map<number, Buffer>>();
   const completed = new Set<string>();
   const uploadedParts: string[] = [];
   let nextFile = 0;
-  let uploadFailed = false;
-  let completionLost = false;
+  let dropPart = options.dropPart;
   let initLost = false;
   let denied = Boolean(options.initiallyDenied);
   let deleted = false;
@@ -51,7 +51,8 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
       const [id, part] = url.pathname.slice(1).split("/");
       uploadedParts.push(`${id}:${part}`);
       if (holdUpload) { waitingUploads.push(route); return; }
-      if (options.failUploadOnce && !uploadFailed) { uploadFailed = true; await route.abort("connectionreset"); return; }
+      // Every attempt of this part drops until reconnect().
+      if (Number(part) === dropPart) { await route.abort("connectionreset"); return; }
       stored.get(id)!.set(Number(part), http.postDataBuffer() ?? Buffer.alloc(0));
       await route.fulfill({ status: 200, headers: { etag: `"fixture-part-${part}-abcdefgh"`, "access-control-allow-origin": "*", "access-control-expose-headers": "etag" } }); return;
     }
@@ -80,7 +81,8 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
         const valid = body.parts?.length === expectedParts && body.parts.every((part, index) => part.partNumber === index + 1 && part.etag === `fixture-part-${index + 1}-abcdefgh` && data.has(index + 1));
         if (!valid || Buffer.concat([...data.values()]).length !== row.size_bytes) { await route.fulfill({ status: 409, json: { error: "Invalid multipart fixture" } }); return; }
         completed.add(row.id);
-        if (options.lostCompletion && !completionLost) { completionLost = true; await route.abort("connectionreset"); return; }
+        // The server finishes the file, but no completion reply reaches the browser.
+        if (options.lostCompletion) { await route.abort("connectionreset"); return; }
         row.status = "VERIFIED";
         await route.fulfill({ json: { ok: true, verified: true } }); return;
       }
@@ -121,6 +123,7 @@ async function fixture(context: BrowserContext, options: { delayUpload?: boolean
   return {
     calls, request, stored, uploadedParts,
     allowAccess: () => { denied = false; },
+    reconnect: () => { dropPart = undefined; },
     releaseUpload: async () => { holdUpload = false; await Promise.all(waitingUploads.splice(0).map(route => route.abort("aborted").catch(() => undefined))); },
   };
 }
@@ -138,7 +141,9 @@ test("guest multi-file multipart, submission, rejection, second revision and adm
   await expect(page.getByRole("status")).toContainText("파일 전송이 완료되었습니다");
   expect(state.calls.filter(call => call.action === "complete")).toHaveLength(2);
   for (const [index, row] of state.request.revisions[0].files.entries()) {
-    expect(Buffer.concat([...state.stored.get(row.id)!.values()])).toEqual(uploadFiles[index].buffer);
+    // Parts go three at a time and can reach the store out of order.
+    const parts = [...state.stored.get(row.id)!.entries()].sort(([a], [b]) => a - b).map(([, chunk]) => chunk);
+    expect(Buffer.concat(parts)).toEqual(uploadFiles[index].buffer);
   }
   await page.getByLabel("보완 내용", { exact: true }).fill("요청하신 음원과 가사입니다.");
   await page.getByRole("button", { name: "보완 제출", exact: true }).click();
@@ -163,17 +168,28 @@ test("guest multi-file multipart, submission, rejection, second revision and adm
   expect(state.calls.filter(call => call.action === "submit")).toHaveLength(2);
 });
 
-test("network failure cancels only the unfinished file and allows a clean retry", async ({ page, context }) => {
-  const state = await fixture(context, { failUploadOnce: true });
+test("a network drop that outlasts the retries keeps the unfinished file and resumes only its missing part", async ({ page, context }) => {
+  test.slow(); // waits through the real retry pauses
+  const state = await fixture(context, { dropPart: 1 });
+  // Resuming matches the file's name, size and modified time, so the same
+  // file on disk is picked twice (a buffer gets a new modified time each time).
+  const audio = test.info().outputPath("supplement.wav");
+  await writeFile(audio, uploadFiles[0].buffer);
   await open(page);
-  await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(uploadFiles[0]);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(audio);
+  // Each part is tried five times with growing pauses (about 15s) before the upload stops.
+  await expect(page.getByRole("alert")).toContainText("네트워크가 불안정해 전송을 멈췄습니다", { timeout: 40_000 });
   await expect(page.getByRole("button", { name: "보완 제출", exact: true })).toBeDisabled();
-  expect(state.calls.filter(call => call.action === "abort")).toHaveLength(1);
+  expect(state.uploadedParts.filter(part => part.endsWith(":1"))).toHaveLength(5);
+  expect(state.calls.filter(call => call.action === "abort")).toHaveLength(0);
   expect(state.calls.filter(call => call.action === "complete")).toHaveLength(0);
-  await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(uploadFiles[0]);
+  state.reconnect();
+  const sentBeforeRetry = state.uploadedParts.length;
+  await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(audio);
   await expect(page.getByRole("status")).toContainText("파일 전송이 완료되었습니다");
-  expect(state.request.revisions[0].files.map(row => row.status)).toEqual(["ABORTED", "VERIFIED"]);
+  expect(state.uploadedParts.slice(sentBeforeRetry).map(part => part.split(":")[1])).toEqual(["1"]);
+  expect(state.calls.filter(call => call.action === "init")).toHaveLength(1);
+  expect(state.request.revisions[0].files.map(row => row.status)).toEqual(["VERIFIED"]);
   await expect(page.getByRole("button", { name: "보완 제출", exact: true })).toBeEnabled();
 });
 
@@ -181,7 +197,8 @@ test("user cancellation interrupts an in-flight part and can be retried", async 
   const state = await fixture(context, { delayUpload: true });
   await open(page);
   await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(uploadFiles[0]);
-  await expect.poll(() => state.uploadedParts.length).toBe(1);
+  // Parts go three at a time, so three of the four are held in flight.
+  await expect.poll(() => state.uploadedParts.length).toBe(3);
   await page.getByRole("button", { name: "전송 취소", exact: true }).click();
   await state.releaseUpload();
   await expect(page.getByRole("alert")).toContainText("전송을 취소했습니다");
@@ -194,15 +211,18 @@ test("uncertain completion is rechecked after reload without aborting or uploadi
   const state = await fixture(context, { lostCompletion: true });
   await open(page);
   await page.getByLabel("보완 파일 선택", { exact: true }).setInputFiles(uploadFiles[0]);
-  await expect(page.getByRole("alert")).toBeVisible();
+  // Completion is sent four times with growing pauses (about 7s) before it is left to a recheck.
+  await expect(page.getByRole("alert")).toContainText("전송 확인 다시 시도", { timeout: 30_000 });
   expect(state.calls.filter(call => call.action === "abort")).toHaveLength(0);
   await open(page);
   await expect(page.getByRole("button", { name: "보완 제출", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "전송 확인 다시 시도", exact: true }).click();
   await expect(page.getByRole("button", { name: "보완 제출", exact: true })).toBeEnabled();
   expect(state.calls.filter(call => call.action === "init")).toHaveLength(1);
-  expect(state.calls.filter(call => call.action === "complete")).toHaveLength(1);
+  expect(state.uploadedParts).toHaveLength(4);
+  expect(state.calls.filter(call => call.action === "complete")).toHaveLength(4);
   expect(state.calls.filter(call => call.action === "recheck")).toHaveLength(1);
+  expect(state.calls.filter(call => call.action === "abort")).toHaveLength(0);
 });
 
 test("a lost init response leaves a removable pending row that blocks submitting other verified files", async ({ page, context }) => {

@@ -197,12 +197,12 @@ export function SiteFooter() {
                 FAQ
               </Link>
               {REVIEW_GUIDE_LINKS.map((guide) => (
-                <Link key={guide.slug} href={`/guide/${guide.slug}`} className={footerLinkClass}>
+                <Link key={guide.slug} href={`${siteLinkPrefix}/guide/${guide.slug}`} className={footerLinkClass}>
                   {guide.menuLabel}
                 </Link>
               ))}
               {GUIDE_TOPIC_LINKS.map((topic) => (
-                <Link key={topic.path} href={topic.path} className={footerLinkClass}>
+                <Link key={topic.path} href={`${siteLinkPrefix}${topic.path}`} className={footerLinkClass}>
                   {topic.label}
                 </Link>
               ))}

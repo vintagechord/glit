@@ -370,7 +370,9 @@ export const openInicisCardPopup = async (
     window.INIStdPay?.pay(formId);
     return { ok: true, orderId: initData.orderId };
   } catch (error) {
-    if (initData && isSubmission) await cancelUnopenedInicisOrder(initData);
+    // Close the attempt the window never opened, so the same submission or
+    // karaoke request can be paid again (the test page's close URL is skipped).
+    if (initData) await cancelUnopenedInicisOrder(initData);
     console.error("[Inicis][STDPay][direct-open-error]", error);
     return {
       ok: false,

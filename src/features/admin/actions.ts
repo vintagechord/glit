@@ -32,6 +32,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
+import { resultNoticeResetOnStatusChange } from "@/lib/admin/result-notice-reset";
 import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
 import { saveSubmissionNotificationEmail } from "@/lib/admin/notification-recipient-edit";
 import { saveWbsTrackSelection } from "@/lib/admin/wbs-track-selection";
@@ -362,7 +363,7 @@ export async function updateSubmissionStatusAction(
 
   const { data: updatedSubmission, error } = await supabase
     .from("submissions")
-    .update({ status: parsed.data.status })
+    .update({ status: parsed.data.status, ...resultNoticeResetOnStatusChange(previous.status, parsed.data.status) })
     .eq("id", parsed.data.submissionId)
     .select("id, status")
     .maybeSingle();
@@ -2054,6 +2055,10 @@ export async function saveSubmissionAdminFormAction(
 
   const status = String(formData.get("status") ?? "").trim();
   const operationalStage = String(formData.get("operationalStage") ?? "").trim();
+  // The stage the page showed. A select left on it is no stage change: the
+  // application may have moved on since the page was drawn (a station result,
+  // the desk, another tab), and writing the old stage back would undo that.
+  const renderedOperationalStage = String(formData.get("renderedOperationalStage") ?? "").trim();
   const adminMemo = String(formData.get("adminMemo") ?? "").trim();
   // The detail page leaves the note out (disabled field) when it could not
   // load it; an absent field must never clear the stored note.
@@ -2113,7 +2118,9 @@ export async function saveSubmissionAdminFormAction(
   const currentStatus = currentSubmissionRow.status as ReviewStatus;
   const currentPaymentStatus = currentSubmissionRow.payment_status as PaymentStatus;
   const mappedStage = parsedOperationalStage.success
-    ? mapAdminOperationalStage(parsedOperationalStage.data, currentPaymentStatus, currentStatus)
+    ? parsedOperationalStage.data === renderedOperationalStage
+      ? { status: currentStatus, paymentStatus: currentPaymentStatus }
+      : mapAdminOperationalStage(parsedOperationalStage.data, currentPaymentStatus, currentStatus)
     : null;
   const mappedStageLabel = parsedOperationalStage.success
     ? adminOperationalStageLabelMap[parsedOperationalStage.data]
@@ -2168,28 +2175,42 @@ export async function saveSubmissionAdminFormAction(
 
   const submissionUpdate: Record<string, unknown> = {};
   submissionUpdate.status = nextStatus;
+  Object.assign(submissionUpdate, resultNoticeResetOnStatusChange(currentStatus, nextStatus));
   if (!currentSubmissionRow.current_order_id) submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;
   const isMvRow = currentSubmissionRow.type?.startsWith("MV_") ?? false;
   if (isMvRow && artistNameOfficial) submissionUpdate.artist_name_kr = artistNameOfficial;
 
-  const { data: updatedSubmission, error: submissionError } = await supabase
-    .from("submissions")
-    .update(submissionUpdate)
-    .eq("id", submissionId)
-    .select("id, status, payment_status, title, artist_name")
-    .maybeSingle();
+  // A save that leaves the row as it is (a staff note, an untouched stage)
+  // writes nothing to it: the order trigger refuses every update of an
+  // application whose order was refunded in review, and the write would only
+  // move updated_at.
+  const storedRow = currentSubmissionRow as Record<string, unknown>;
+  const rowUnchanged = !orderPayment.confirmedIds && !orderPayment.refundedIds
+    && Object.entries(submissionUpdate).every(([column, value]) => storedRow[column] === value);
+  const { data: updatedSubmission, error: submissionError } = rowUnchanged
+    ? { data: currentSubmissionRow, error: null }
+    : await supabase
+      .from("submissions")
+      .update(submissionUpdate)
+      .eq("id", submissionId)
+      .select("id, status, payment_status, title, artist_name")
+      .maybeSingle();
 
   if (submissionError) {
     console.error("admin save submission status error", submissionError, {
       submissionId,
       update: submissionUpdate,
     });
-    // An open card or PayPal window locks the application against edits.
+    // An open card or PayPal window locks the application against edits, and
+    // an order refunded in review or result keeps its rows as they are
+    // (protect_submission_order_state, 0097_submission_orders.sql).
     redirectWithError(submissionError.message?.includes("PAYMENT_IN_PROGRESS")
       ? "결제창이 열린 채 끝나지 않은 접수라 내용을 수정할 수 없습니다. 운영 단계를 '결제완료'로 저장하거나, 필요 없는 접수면 삭제해주세요."
-      : submissionError.message ?? "submission update error");
+      : currentPaymentStatus === "REFUNDED" && submissionError.message?.includes("ORDER_STATE_REQUIRES_ATOMIC_ACTION")
+        ? "환불된 주문의 접수는 작품명·아티스트명을 바꿀 수 없습니다."
+        : submissionError.message ?? "submission update error");
   }
 
   if (

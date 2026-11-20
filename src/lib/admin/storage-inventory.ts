@@ -111,6 +111,8 @@ export type StorageInventory = {
 type SubmissionRow = { id: string; title: string | null; status: string | null; payment_status: string | null };
 type References = {
   liveUploads: Set<string>;
+  /** Karaoke attachments and proof shots: upload-shaped keys karaoke rows still point at. */
+  karaokeFiles: Set<string>;
   liveSupplements: Set<string>;
   unsentMail: Set<string>;
   submissions: Map<string, SubmissionRow>;
@@ -181,8 +183,9 @@ async function loadReferences(db: AdminClient, keys: Array<{ key: string; namesp
   const uploadKeys = keys.filter((entry) => entry.namespace === "upload").map((entry) => entry.key);
   const supplementKeys = keys.filter((entry) => entry.namespace === "supplement").map((entry) => entry.key);
   const liveUploads = new Set<string>();
+  const karaokeFiles = new Set<string>();
   const liveSupplements = new Set<string>();
-  const collect = (target: Set<string>, rows: unknown, column: "object_key" | "file_path" = "object_key") => {
+  const collect = (target: Set<string>, rows: unknown, column: "object_key" | "file_path" | "proof_path" = "object_key") => {
     for (const row of (rows ?? []) as Array<Record<string, unknown>>) {
       const key = String(row[column] ?? "").trim();
       if (key) target.add(key);
@@ -190,18 +193,28 @@ async function loadReferences(db: AdminClient, keys: Array<{ key: string; namesp
   };
   for (const part of chunk(uploadKeys, KEY_LOOKUP_CHUNK)) {
     // A live file row (by object key, or by file path for older rows), a staged
-    // upload, or an upload still in flight under its grant.
-    const [byKey, byPath, ...others] = await Promise.all([
+    // upload, or an upload still in flight under its grant. Karaoke request
+    // attachments and recommendation/vote proof shots are written with the
+    // same key shape (a random upload id where the submission id would be)
+    // and are known only to their karaoke rows.
+    const lookups = await Promise.all([
       db.from("submission_files").select("object_key").in("object_key", part).is("purged_at", null),
       db.from("submission_files").select("file_path").in("file_path", part).is("purged_at", null),
       db.from("submission_upload_staging").select("object_key").in("object_key", part),
       db.from("upload_put_grants").select("object_key").in("object_key", part).eq("status", "PENDING"),
       db.from("multipart_upload_grants").select("object_key").in("object_key", part).in("status", ["ACTIVE", "COMPLETING", "ABORTING"]),
+      db.from("karaoke_requests").select("file_path").in("file_path", part),
+      db.from("karaoke_promotion_recommendations").select("proof_path").in("proof_path", part),
+      db.from("karaoke_votes").select("proof_path").in("proof_path", part),
     ]);
-    if ([byKey, byPath, ...others].some((lookup) => lookup.error)) throw new Error("upload reference check failed");
+    if (lookups.some((lookup) => lookup.error)) throw new Error("upload reference check failed");
+    const [byKey, byPath, staged, putGrants, multipartGrants, karaokeRequests, recommendations, votes] = lookups;
     collect(liveUploads, byKey.data);
     collect(liveUploads, byPath.data, "file_path");
-    for (const lookup of others) collect(liveUploads, lookup.data);
+    for (const lookup of [staged, putGrants, multipartGrants]) collect(liveUploads, lookup.data);
+    collect(karaokeFiles, karaokeRequests.data, "file_path");
+    collect(karaokeFiles, recommendations.data, "proof_path");
+    collect(karaokeFiles, votes.data, "proof_path");
   }
   for (const part of chunk(supplementKeys, KEY_LOOKUP_CHUNK)) {
     const live = await db.from("submission_supplement_files").select("object_key").in("object_key", part).is("purged_at", null);
@@ -228,7 +241,7 @@ async function loadReferences(db: AdminClient, keys: Array<{ key: string; namesp
     if (error) throw new Error("submission lookup failed");
     for (const row of (data ?? []) as SubmissionRow[]) submissions.set(String(row.id).toLowerCase(), row);
   }
-  return { liveUploads, liveSupplements, unsentMail, submissions };
+  return { liveUploads, karaokeFiles, liveSupplements, unsentMail, submissions };
 }
 
 const UUID_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[-_]/i;
@@ -259,10 +272,11 @@ const newestTime = (entries: StoredEntry[]) =>
  * Accounts for every stored byte under the app prefix. Customer uploads a
  * record still needs are split into the purge list (candidates) and those
  * held back; certificates (always, every version), copies an unsent mail will
- * read, recent files and other namespaces are kept. Everything else is a
- * leftover: replaced or deleted uploads whose bytes Backblaze still keeps,
- * uploads and mail copies of deleted submissions, copies of mails already
- * sent, and older versions of uploads or mail copies that are still needed.
+ * read, karaoke attachments, recent files and other namespaces are kept.
+ * Everything else is a leftover: replaced or deleted uploads whose bytes
+ * Backblaze still keeps, uploads and mail copies of deleted submissions,
+ * copies of mails already sent, and older versions of uploads or mail copies
+ * that are still needed.
  */
 export async function loadStorageInventory(db: AdminClient, options: InventoryOptions = {}): Promise<StorageInventory> {
   const { prefix } = getB2Config();
@@ -307,7 +321,9 @@ export async function loadStorageInventory(db: AdminClient, options: InventoryOp
       });
     };
 
-    if (namespace === "other") { add("other", list); continue; }
+    // A karaoke file is not a submission's, so it is kept like the other
+    // namespaces instead of passing for a deleted submission's upload.
+    if (namespace === "other" || refs.karaokeFiles.has(key)) { add("other", list); continue; }
     // Certificates are kept apart and never cleaned up here, even when their
     // submission was deleted (owner decision 2026-11-10).
     if (namespace === "certificate") { add("certificate", list); continue; }
