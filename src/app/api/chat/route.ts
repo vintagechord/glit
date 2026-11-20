@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadChatHistory, parseChatHistoryCursor, type ChatHistoryCursor } from "@/lib/support-chat-history";
 
 import {
+  toVisitorChatMessage,
   type SupportChatConversation,
   type SupportChatMessage,
   type SupportChatPayload,
@@ -11,6 +12,7 @@ import {
 import {
   parseVisitorChatLeavePayload,
   parseVisitorChatMessagePayload,
+  visitorChatMessageRefusal,
 } from "@/lib/support-chat-request";
 import {
   consumePersistentRateLimit,
@@ -243,7 +245,8 @@ async function getViewer() {
 }
 
 async function buildPayload(row: ConversationRow, cursor?: ChatHistoryCursor): Promise<SupportChatPayload> {
-  return { conversation: mapConversation(row), ...await loadChatHistory(createAdminClient(), row.id, cursor) };
+  const history = await loadChatHistory(createAdminClient(), row.id, cursor);
+  return { conversation: mapConversation(row), ...history, messages: history.messages.map(toVisitorChatMessage) };
 }
 
 async function listVisitorConversations(params: {
@@ -430,7 +433,7 @@ export async function POST(request: NextRequest) {
   const parsed = parseVisitorChatMessagePayload(payload.value);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "메시지 내용을 확인해주세요." },
+      { error: visitorChatMessageRefusal(parsed.error) },
       { status: 400 },
     );
   }

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ReliableLink as Link } from "@/components/site/reliable-link";
 
 import { APP_CONFIG } from "@/lib/config";
 import { formatKoreanDate, GUIDE_CONTENT_UPDATED, ONSIDE_TRUST_FACTS, type TrustFact } from "@/lib/onside-trust";
