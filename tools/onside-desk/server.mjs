@@ -14,10 +14,11 @@ import { upgradeManualMvCases, upgradeManualReferenceCleanup } from './manual-up
 import { needsLyricsTranslation } from './manual-translation.mjs';
 import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings, windowsText, attachmentDisposition } from './core.mjs';
 import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './integrated-merge.mjs';
+import { CUSTOMER_FILE_RETENTION_DAYS, customerFilesExpireAt, removeCustomerFiles } from './customer-file-retention.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export const DESK_VERSION = '2.15.0';
+export const DESK_VERSION = '2.16.0';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
@@ -31,7 +32,7 @@ async function sessionToken(dataRoot) {
   return token;
 }
 
-export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, openUrl, monitor, notify, timers = true } = {}) {
+export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, openUrl, monitor, notify, timers = true, clock = Date.now } = {}) {
   process.umask(0o077);
   if (!source) {
     const envFile = path.join(dataRoot, 'connection.env');
@@ -130,6 +131,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const activeOperations = new Map();
   let emptyingTrash = false;
   let purgingStorage = false;
+  const EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
+  let expiryRun = null, expiryCheckedAt = -Infinity;
   const getCase = (id, includeDeleted = false) => { const item = Object.hasOwn(store.data.cases, id) && store.data.cases[id]; if (!item) throw Object.assign(new Error('신청 내역을 찾을 수 없습니다. 먼저 동기화하세요.'), { status: 404 }); if (item.deletedAt && !includeDeleted) throw Object.assign(new Error('휴지통으로 이동한 신청입니다. 복원한 뒤 작업하세요.'), { status: 410, code: 'CASE_DELETED' }); return item; };
   const safeError = error => error?.message && !/(?:eyJ[A-Za-z0-9_-]{20}|https?:|secret|credential|Bearer)/i.test(error.message) ? error.message.slice(0, 500) : '작업에 실패했습니다. 연결 설정과 저장 공간을 확인한 뒤 다시 시도하세요.';
   function summary(item) {
@@ -159,7 +162,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const base = { ...item.detail, source: item.source || 'online', localAttachments: item.attachments || [], warnings: [...new Set([...(item.detail.warnings || []), ...(item.source === 'manual' ? item.importInfo?.warnings || [] : [])])] };
     const effective = applyOverrides(base, item.local);
     const screening = item.source === 'manual' ? await reviewer(effective) : undefined;
-    return { ...effective, sourceSubmission: item.detail.submission, local: item.local, generations: item.generations || [], localAttachments: item.attachments || [], downloads: item.downloads || [], history: item.history || [], fetchedAt: item.fetchedAt, warnings: [...caseWarnings(base, item.local), ...(offlineWarning ? [offlineWarning] : [])], sourceChanged: !!item.sourceChanged,
+    return { ...effective, sourceSubmission: item.detail.submission, local: item.local, generations: item.generations || [], localAttachments: item.attachments || [], downloads: item.downloads || [], history: item.history || [], fetchedAt: item.fetchedAt,
+      ...(item.source === 'manual' ? {} : { customerFilesExpireAt: customerFilesExpireAt(item.submission), customerFilesExpiredAt: item.customerFilesExpiredAt || null }), warnings: [...caseWarnings(base, item.local), ...(offlineWarning ? [offlineWarning] : [])], sourceChanged: !!item.sourceChanged,
       ...(item.source === 'manual' ? { online: item.online || null, importInfo: item.importInfo, screening: { ...screening, acknowledged: !!screening?.sourceHash && item.local.reviewAcknowledgedRevision === screening.sourceHash } } : {}) };
   }
   async function importManual(body, filename, type) {
@@ -214,6 +218,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         const dailyBackup = path.join(dataRoot, '자동백업', `${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())}.json`);
         if (!await fs.stat(dailyBackup).catch(() => null)) await atomicJSON(dailyBackup, store.data);
         for (const id of toGenerate) if (store.data.cases[id] && !store.data.cases[id].deletedAt) enqueue(id, 'generate');
+        // Runs in the background, at most once an hour, so a sync stays quick.
+        if (!expiryRun && clock() - expiryCheckedAt >= EXPIRY_INTERVAL_MS) {
+          expiryCheckedAt = clock();
+          expiryRun = expireCustomerFiles().catch(() => {}).finally(() => { expiryRun = null; });
+        }
         return { count: submissions.length, lastSync: store.data.lastSync };
       } catch (error) {
         connected = false; store.data.syncError = safeError(error); await store.save(); throw error;
@@ -332,6 +341,43 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (recorded) await store.save();
       return result;
     } finally { purgingStorage = false; }
+  }
+  /**
+   * 결과 통보 7일 경과: deletes the customer's files of every review whose result
+   * notice is 7 days old — first the service copy (the service re-checks that
+   * the review is finished), then this Mac's originals and e-mail files.
+   * Each case is re-read from the service first; anything the service still
+   * holds in review, or a service deletion that fails, keeps its files and is
+   * tried again on a later run.
+   */
+  async function expireCustomerFiles() {
+    const at = clock();
+    const busy = id => activeOperations.get(id) || store.data.jobs.some(job => job.caseId === id && ['queued', 'running'].includes(job.status));
+    const isDue = submission => { const expireAt = customerFilesExpireAt(submission); return !!expireAt && Date.parse(expireAt) <= at; };
+    const due = Object.entries(store.data.cases).filter(([id, item]) => item.source !== 'manual' && !item.deletedAt && !item.purgeRequestedAt && !item.customerFilesExpiredAt && !busy(id) && isDue(item.submission));
+    const expired = [];
+    if (!due.length || purgingStorage || !remote.configured()) return { expired };
+    purgingStorage = true;
+    try {
+      const stored = new Map((await remote.listStorage({ scope: 'received', signal: shutdown.signal })).items.map(entry => [entry.submissionId, entry]));
+      for (const [id, item] of due) {
+        try { await detail(id, true); } catch { continue; }
+        if (!isDue(item.submission) || busy(id)) continue;
+        const service = stored.get(id);
+        if (service && service.stage !== 'finished') continue;
+        if (service) {
+          const result = (await remote.purgeStorage([id], { scope: 'finished', signal: shutdown.signal }).catch(() => null))?.results?.find(entry => entry?.submissionId === id);
+          if (!result?.ok) continue;
+          if (result.deletedFiles) store.audit(id, 'storage', `결과 통보 ${CUSTOMER_FILE_RETENTION_DAYS}일 경과: 서비스 저장소의 고객 업로드 파일 ${result.deletedFiles}개(${Math.max(1, Math.round(Number(result.freedBytes || 0) / 1024 ** 2))}MB)를 삭제했습니다.`);
+        }
+        const removed = await removeCustomerFiles(caseDir(id));
+        item.downloads = []; item.attachments = []; item.customerFilesExpiredAt = now();
+        store.audit(id, 'storage', `결과 통보 ${CUSTOMER_FILE_RETENTION_DAYS}일 경과: 이 Mac의 고객 제출 파일 ${removed.files}개(${Math.round(removed.bytes / 1024 ** 2)}MB)를 삭제했습니다.`);
+        await store.save();
+        expired.push(id);
+      }
+    } finally { purgingStorage = false; }
+    return { expired };
   }
   async function download(id, job) {
     const current = await detail(id, true);
@@ -824,7 +870,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     timer = setInterval(() => { if (store.data.settings.autoSync) void sync().catch(() => {}); }, 5 * 60 * 1000); timer.unref();
     if (store.data.settings.autoSync && source.sourceStatus().configured) void sync().catch(() => {});
   }
-  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, checkChats, async idle() { await queue; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); clearInterval(chatTimer); shutdown.abort(); await queue.catch(() => {}); await store.save(); await new Promise(resolve => server.close(resolve)); } };
+  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, checkChats, expireCustomerFiles, async idle() { await queue; await expiryRun; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); clearInterval(chatTimer); shutdown.abort(); await queue.catch(() => {}); await expiryRun; await store.save(); await new Promise(resolve => server.close(resolve)); } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
