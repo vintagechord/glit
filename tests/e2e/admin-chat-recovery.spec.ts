@@ -39,7 +39,7 @@ async function broadcast(page: Page, payload: unknown) {
 }
 
 test("admin chat recovers from overlapping foreground/poll loads and retains fetched messages after read-receipt failure", async ({ page }) => {
-  let firstThread: Route | undefined; let firstList: Route | undefined; let threads = 0; let lists = 0;
+  let firstThread: Route | undefined; let firstList: Route | undefined; let threads = 0; let holdNextList = false;
   await mount(page, "admin", async route => {
     const url = new URL(route.request().url());
     if (route.request().method() === "PATCH") return route.fulfill({ status: 500, json: { error: "읽음 저장 테스트 실패" } });
@@ -47,16 +47,19 @@ test("admin chat recovers from overlapping foreground/poll loads and retains fet
       if (++threads === 1) { firstThread = route; return; }
       return route.fulfill({ json: { conversation: { ...a, unreadAdminCount: 1 }, messages: [message()] } });
     }
-    if (++lists === 1) { firstList = route; return; }
+    // Hold only the refresh-button load; the quiet list refetch an admin signal triggers is answered.
+    if (holdNextList) { holdNextList = false; firstList = route; return; }
     return route.fulfill({ json: { conversations: [a, b] } });
   });
   await expect.poll(() => !!firstThread).toBe(true);
-  await broadcast(page, { conversation: a });
+  // Since #75 the shared admin channel carries only a conversation id and the client refetches it.
+  await broadcast(page, { conversationId: a.id });
   await expect(page.getByText("최신 답변", { exact: true })).toBeVisible();
   await expect(page.getByText("읽음 저장 테스트 실패", { exact: true })).toBeVisible();
   await firstThread!.fulfill({ json: { conversation: a, messages: [message(a, "이전 요청의 오래된 답변")] } });
   await expect(page.getByText("이전 요청의 오래된 답변")).toHaveCount(0);
   const refresh = page.getByRole("button", { name: "채팅 목록 새로고침" });
+  holdNextList = true;
   await refresh.click(); await expect.poll(() => !!firstList).toBe(true);
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect(refresh).toBeEnabled();
@@ -78,7 +81,7 @@ test("admin chat keeps drafts and in-flight replies in their own conversation an
   await expect(page.getByText("이전 상담 기록", { exact: true })).toBeVisible();
   await expect(page.getByText("상담 A 최신 기록", { exact: true })).toBeVisible();
   expect(await page.getByText(/^(이전 상담 기록|상담 A 최신 기록)$/).allTextContents()).toEqual(["이전 상담 기록", "상담 A 최신 기록"]);
-  await broadcast(page, { conversation: a });
+  await broadcast(page, { conversationId: a.id });
   await expect(page.getByText("이전 상담 기록", { exact: true })).toBeVisible();
   await draft.fill("A 답변 초안");
   await page.getByRole("button", { name: /상담 B.*B 상담 목록/ }).click();

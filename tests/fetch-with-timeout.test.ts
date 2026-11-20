@@ -17,8 +17,10 @@ test("API deadlines cover stalled headers and bodies without repeating writes", 
   assert.ok(address && typeof address !== "string");
   const url = `http://127.0.0.1:${address.port}`;
   try {
-    await assert.rejects(fetchWithTimeout(`${url}/headers`, { method: "POST" }, 100), { name: "TimeoutError" });
-    const response = await fetchWithTimeout(`${url}/body`, undefined, 100);
+    // Neither reply ever finishes, so the deadlines can be roomy: a busy
+    // machine then still delivers the request (and the body's headers) first.
+    await assert.rejects(fetchWithTimeout(`${url}/headers`, { method: "POST" }, 1_000), { name: "TimeoutError" });
+    const response = await fetchWithTimeout(`${url}/body`, undefined, 1_000);
     await assert.rejects(response.json(), (error: Error) => /^(AbortError|TimeoutError)$/.test(error.name));
     assert.equal(writes, 1);
   } finally {
