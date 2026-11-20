@@ -5,6 +5,7 @@ import { parseEnv } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import { prunePreviousApps } from './previous-apps.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sourceBundle = process.argv[2] || '/private/tmp/onside-desk-build/온사이드 심의 데스크.app';
@@ -45,8 +46,8 @@ if (Object.keys(additions).length) await fs.appendFile(connection, '\n' + Object
 await fs.chmod(connection, 0o600);
 // Only an existing installation's own service is stopped.
 try { execFileSync('/bin/launchctl', ['bootout', identity], { stdio: 'ignore' }); } catch {}
+const previous = path.join(dataRoot, '이전 앱 버전');
 if (await fs.stat(target).catch(() => null)) {
-  const previous = path.join(dataRoot, '이전 앱 버전');
   await fs.mkdir(previous, { recursive: true, mode: 0o700 });
   await fs.rename(target, path.join(previous, `온사이드 심의 데스크-${Date.now()}.app`));
 }
@@ -64,4 +65,9 @@ execFileSync('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, plist]);
 execFileSync('/bin/launchctl', ['kickstart', identity]);
 const shortcut = path.join(os.homedir(), 'Desktop', '온사이드 심의 데스크.app');
 if (!await fs.lstat(shortcut).catch(() => null)) await fs.symlink(target, shortcut);
-console.log(JSON.stringify({ installed: target, dataRoot, shortcut, service: identity }));
+// The two newest previous apps stay for rollback; each older copy is ~146MB.
+const prunedPreviousApps = await prunePreviousApps(previous).catch(error => {
+  console.warn(`이전 앱 버전 정리 실패: ${error.message}`);
+  return [];
+});
+console.log(JSON.stringify({ installed: target, dataRoot, shortcut, service: identity, prunedPreviousApps }));
