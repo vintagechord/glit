@@ -18,7 +18,7 @@ import { CUSTOMER_FILE_RETENTION_DAYS, customerFilesExpireAt, removeCustomerFile
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
-export const DESK_VERSION = '2.16.0';
+export const DESK_VERSION = '2.16.1';
 // The app window keeps the page (and its token) open across service restarts
 // and updates, so the token is kept in the private data folder instead of
 // changing on every start, which left an open window failing every request.
@@ -365,11 +365,13 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (!isDue(item.submission) || busy(id)) continue;
         const service = stored.get(id);
         if (service && service.stage !== 'finished') continue;
-        if (service) {
-          const result = (await remote.purgeStorage([id], { scope: 'finished', signal: shutdown.signal }).catch(() => null))?.results?.find(entry => entry?.submissionId === id);
-          if (!result?.ok) continue;
-          if (result.deletedFiles) store.audit(id, 'storage', `결과 통보 ${CUSTOMER_FILE_RETENTION_DAYS}일 경과: 서비스 저장소의 고객 업로드 파일 ${result.deletedFiles}개(${Math.max(1, Math.round(Number(result.freedBytes || 0) / 1024 ** 2))}MB)를 삭제했습니다.`);
-        }
+        // Always ask the service, even when it lists nothing for the case (its
+        // copy already deleted, files sent by e-mail, admin intake): only it
+        // knows whether every station result is final and no supplement
+        // request is open. Until it answers ok, this Mac keeps the originals.
+        const result = (await remote.purgeStorage([id], { scope: 'finished', signal: shutdown.signal }).catch(() => null))?.results?.find(entry => entry?.submissionId === id);
+        if (!result?.ok) continue;
+        if (result.deletedFiles) store.audit(id, 'storage', `결과 통보 ${CUSTOMER_FILE_RETENTION_DAYS}일 경과: 서비스 저장소의 고객 업로드 파일 ${result.deletedFiles}개(${Math.max(1, Math.round(Number(result.freedBytes || 0) / 1024 ** 2))}MB)를 삭제했습니다.`);
         const removed = await removeCustomerFiles(caseDir(id));
         item.downloads = []; item.attachments = []; item.customerFilesExpiredAt = now();
         store.audit(id, 'storage', `결과 통보 ${CUSTOMER_FILE_RETENTION_DAYS}일 경과: 이 Mac의 고객 제출 파일 ${removed.files}개(${Math.round(removed.bytes / 1024 ** 2)}MB)를 삭제했습니다.`);

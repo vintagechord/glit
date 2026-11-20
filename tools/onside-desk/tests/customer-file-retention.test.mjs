@@ -45,7 +45,7 @@ test('removing customer files keeps the receipt note and every generated documen
   assert.deepEqual(await removeCustomerFiles(path.join(dir, 'missing')), { files: 0, bytes: 0 });
 });
 
-async function setup(t, { submission: overrides = {}, stored = 'finished', purgeOk = true } = {}) {
+async function setup(t, { submission: overrides = {}, stored = 'finished', purgeOk = true, purgeDeleted = 1 } = {}) {
   const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'onside-retention-desk-'));
   const submission = { id, type: 'MV_DISTRIBUTION', title: '보관 검증', artist_name: '검증 가수', updated_at: '2026-11-01T09:00:00Z', ...paid, ...overrides };
   let fresh = {};
@@ -59,7 +59,7 @@ async function setup(t, { submission: overrides = {}, stored = 'finished', purge
   const remote = {
     configured: () => true,
     listStorage: async ({ scope } = {}) => { calls.list++; assert.equal(scope, 'received'); return { items: stored ? [{ submissionId: id, stage: stored, fileCount: 1, totalBytes: 4, files: [{ id: 'file-1', source: 'upload', sizeBytes: 4 }] }] : [] }; },
-    purgeStorage: async (ids, options) => { calls.purge.push({ ids, options }); return { ok: purgeOk, results: ids.map(submissionId => purgeOk ? { submissionId, ok: true, deletedFiles: 1, failedFiles: 0, freedBytes: 4 } : { submissionId, ok: false, deletedFiles: 0, failedFiles: 1, freedBytes: 0, error: '삭제 실패' }) }; },
+    purgeStorage: async (ids, options) => { calls.purge.push({ ids, options }); return { ok: purgeOk, results: ids.map(submissionId => purgeOk ? { submissionId, ok: true, deletedFiles: purgeDeleted, failedFiles: 0, freedBytes: 4 * purgeDeleted } : { submissionId, ok: false, deletedFiles: 0, failedFiles: 1, freedBytes: 0, error: '삭제 실패' }) }; },
   };
   // The desk's clock starts at the notice, so setup's own sync finds nothing due.
   let clock = Date.parse(notifiedAt);
@@ -152,13 +152,29 @@ test('when the service copy cannot be deleted, this Mac keeps its files and trie
   assert.equal(s.item().customerFilesExpiredAt, undefined);
 });
 
-test('a service copy already deleted by hand still lets this Mac delete its files', async t => {
-  const s = await setup(t, { stored: null });
+test('a service copy already deleted by hand still lets this Mac delete its files once the service confirms the review is finished', async t => {
+  const s = await setup(t, { stored: null, purgeDeleted: 0 });
   s.setNow(eightDaysLater);
   const result = await s.desk.expireCustomerFiles();
   assert.deepEqual(result.expired, [id]);
-  assert.equal(s.calls.purge.length, 0);
+  // The service is still asked: it alone knows the station results and open supplement requests.
+  assert.equal(s.calls.purge.length, 1);
+  assert.equal(s.calls.purge[0].options.scope, 'finished');
   assert.deepEqual(await s.originals(), ['파일 수신 현황.txt']);
+  assert.ok(!s.item().history.some(entry => /서비스 저장소의 고객 업로드 파일/.test(entry.message)));
+});
+
+test('a review the service no longer lists but has not finished (pending station, open supplement) keeps this Mac\'s files', async t => {
+  // Before 2026-11-21 a case missing from the service list was deleted here without
+  // any check, although its station results or a supplement request were still open.
+  const s = await setup(t, { stored: null, purgeOk: false });
+  s.setNow(eightDaysLater);
+  const result = await s.desk.expireCustomerFiles();
+  assert.deepEqual(result.expired, []);
+  assert.equal(s.calls.purge.length, 1);
+  assert.deepEqual(await s.originals(), ['01_mv.mp4', '파일 수신 현황.txt']);
+  assert.deepEqual(await fs.readdir(path.join(s.caseDir, '이메일 파일')), ['abcd1234_메일.mp4']);
+  assert.equal(s.item().customerFilesExpiredAt, undefined);
 });
 
 test('a sync starts the check, so files go without anyone opening the desk', async t => {

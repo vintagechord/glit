@@ -32,6 +32,7 @@ import {
   normalizeAlbumDiscountPercent,
 } from "@/lib/album-pricing";
 import { requireAdminAction } from "@/lib/admin/action-auth";
+import { resultNoticeResetOnStatusChange } from "@/lib/admin/result-notice-reset";
 import { albumInfoSchema, saveManagedAlbumInfo } from "@/lib/admin/album-info-save";
 import { saveSubmissionNotificationEmail } from "@/lib/admin/notification-recipient-edit";
 import { saveWbsTrackSelection } from "@/lib/admin/wbs-track-selection";
@@ -362,7 +363,7 @@ export async function updateSubmissionStatusAction(
 
   const { data: updatedSubmission, error } = await supabase
     .from("submissions")
-    .update({ status: parsed.data.status })
+    .update({ status: parsed.data.status, ...resultNoticeResetOnStatusChange(previous.status, parsed.data.status) })
     .eq("id", parsed.data.submissionId)
     .select("id, status")
     .maybeSingle();
@@ -2168,6 +2169,7 @@ export async function saveSubmissionAdminFormAction(
 
   const submissionUpdate: Record<string, unknown> = {};
   submissionUpdate.status = nextStatus;
+  Object.assign(submissionUpdate, resultNoticeResetOnStatusChange(currentStatus, nextStatus));
   if (!currentSubmissionRow.current_order_id) submissionUpdate.payment_status = nextPaymentStatus;
   if (title) submissionUpdate.title = title;
   if (artistName) submissionUpdate.artist_name = artistName;

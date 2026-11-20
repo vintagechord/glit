@@ -210,7 +210,10 @@ export async function loadPurgeCandidates(db: AdminClient, onlyIds?: string[], s
         inReview ? [] : ownRequests.flatMap((request) => (request.revisions ?? []).flatMap((revision) => revision.files ?? [])),
         prefix,
       );
-      if (!files.length) continue;
+      // A finished review named by id still gets a decision with nothing left
+      // on B2: the desk deletes its own copy of the customer's files only after
+      // this answer, and the lists keep showing reviews with files to delete.
+      if (!files.length && !(onlyIds && scope === "finished")) continue;
       candidates.push({
         submissionId: submission.id,
         title: submission.title,
