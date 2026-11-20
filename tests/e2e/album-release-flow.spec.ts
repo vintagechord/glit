@@ -64,7 +64,8 @@ test.beforeEach(async ({ page }) => {
     if (url.pathname.startsWith("/__e2e__/album-upload/") && request.method() === "PUT") {
       uploads.puts += 1;
       if (uploads.holdPut) await new Promise<void>((resolve) => { uploads.releasePut = resolve; });
-      await route.fulfill({ status: 200, headers: { ETag: '"e2e-audio-etag"' }, body: "" });
+      // A transfer the wizard stopped while it was held has no request left to answer.
+      await route.fulfill({ status: 200, headers: { ETag: '"e2e-audio-etag"' }, body: "" }).catch(() => undefined);
       return;
     }
     if (url.pathname === "/api/uploads/complete" && request.method() === "POST") {
@@ -300,7 +301,7 @@ test("rejects song URLs before advancing to audio attachment", async ({ page }) 
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).not.toBeVisible();
 });
 
-test("released albums can continue while an upload is stalled and ignore its late UI updates", async ({ page }) => {
+test("released albums can continue while an upload is stalled, which stops that transfer", async ({ page }) => {
   await page.goto(`${albumPath}?mode=oneclick`);
   await page.getByRole("button", { name: "URL 입력으로 계속" }).click();
   const url = "https://www.melon.com/album/detail.htm?albumId=1234567";
@@ -320,13 +321,19 @@ test("released albums can continue while an upload is stalled and ignore its lat
   await page.getByRole("button", { name: "다음 단계", exact: true }).click();
   const emailDialog = page.getByRole("alertdialog", { name: "확인해주세요." });
   await expect(emailDialog).toContainText("이메일로 음원 파일을 보내주세요.");
+  // Choosing e-mail stops the stalled transfer (2026-11-21): its file would
+  // never be attached, and a later upload of the same file must not race it
+  // over the multipart resume record.
+  const stopped = page.waitForEvent("requestfailed", (request) => request.url().includes("/__e2e__/album-upload/"));
   await emailDialog.getByRole("button", { name: "확인", exact: true }).click();
+  await stopped;
   await expect(page.getByRole("heading", { name: "접수할 앨범 URL", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "결제하기", exact: true })).toHaveCount(0);
-  expect(uploads.completed).toHaveLength(0);
   expect(uploads.saved.some(body => body.includes('"filesSubmittedByEmail":true'))).toBe(true);
   uploads.holdPut = false; uploads.releasePut?.();
-  await expect.poll(() => uploads.completed.length).toBe(1);
+  await page.waitForTimeout(500);
+  expect(uploads.completed).toHaveLength(0);
+  expect(uploads.puts).toBe(1);
   await page.getByRole("button", { name: "이전 단계", exact: true }).click();
   await expect(page.getByText("접수 완료 후 아래 주소로 파일을 보내주세요.")).toBeVisible();
   await openFinalReview(page, url);
