@@ -59,6 +59,42 @@ function Section({ title, children, note }: { title: string; children: React.Rea
   );
 }
 
+type GuestFields = { name: string; phone: string; email: string; company: string };
+
+/** The request body POST /api/admin/intake receives for a checked draft. The
+ * applicant is the customer in the visible 고객 fields, which startDraft fills
+ * from the analyzed form and the admin can correct. The draft's own applicant
+ * copy has no input, so a value the server refuses there (an e-mail with a
+ * name after it, a 연락처 over 40 characters) could never be fixed. */
+export function buildDirectIntakePayload({ kind, requestId, draft, guest, packageId, stationCodes, paid, adminMemo }: {
+  kind: IntakeKind; requestId: string; draft: IntakeDraft; guest: GuestFields;
+  packageId: string; stationCodes: string[]; paid: boolean | null; adminMemo: string;
+}) {
+  const guestPayload = { name: guest.name.trim(), phone: guest.phone.trim(), email: guest.email.trim(), company: guest.company.trim() };
+  const applicant = { applicantName: guestPayload.name, applicantEmail: guestPayload.email, applicantPhone: guestPayload.phone };
+  return kind === "ALBUM"
+    ? {
+      kind, requestId, packageId, paid, guest: guestPayload,
+      submission: {
+        title: draft.album.title, artistName: draft.album.artistName, artistNameEn: draft.album.artistNameEn,
+        releaseDate: draft.album.releaseDate || null, genre: draft.album.genre, distributor: draft.album.distributor,
+        productionCompany: draft.album.productionCompany, previousRelease: draft.album.previousRelease,
+        artistType: draft.album.artistType || null, artistMembers: draft.album.artistType === "GROUP" ? draft.album.artistMembers : "",
+        ...applicant,
+        adminMemo: [adminMemo.trim(), draft.fileName ? `기준파일: ${draft.fileName}` : ""].filter(Boolean).join("\n"),
+      },
+      tracks: draft.tracks.filter((track) => track.trackTitle.trim()).map((track) => ({ ...track, broadcastSelected: false })),
+    }
+    : {
+      kind, requestId, paid, stationCodes, guest: guestPayload,
+      mv: {
+        ...draft.mv, desiredRating: kind === "MV_DISTRIBUTION" ? draft.mv.desiredRating : "",
+        ...applicant,
+        adminMemo: [adminMemo.trim(), draft.fileName ? `기준파일: ${draft.fileName}` : ""].filter(Boolean).join("\n"),
+      },
+    };
+}
+
 export function DirectIntakeForm() {
   const [kind, setKind] = React.useState<IntakeKind>("ALBUM");
   const [file, setFile] = React.useState<File | null>(null);
@@ -156,28 +192,7 @@ export function DirectIntakeForm() {
     const problem = validate();
     if (problem) { setError(problem); return; }
     requestId.current ??= crypto.randomUUID();
-    const guestPayload = { name: guest.name.trim(), phone: guest.phone.trim(), email: guest.email.trim(), company: guest.company.trim() };
-    const payload = kind === "ALBUM"
-      ? {
-        kind, requestId: requestId.current, packageId, paid, guest: guestPayload,
-        submission: {
-          title: draft.album.title, artistName: draft.album.artistName, artistNameEn: draft.album.artistNameEn,
-          releaseDate: draft.album.releaseDate || null, genre: draft.album.genre, distributor: draft.album.distributor,
-          productionCompany: draft.album.productionCompany, previousRelease: draft.album.previousRelease,
-          artistType: draft.album.artistType || null, artistMembers: draft.album.artistType === "GROUP" ? draft.album.artistMembers : "",
-          applicantName: draft.applicant.name, applicantEmail: draft.applicant.email, applicantPhone: draft.applicant.phone,
-          adminMemo: [adminMemo.trim(), draft.fileName ? `기준파일: ${draft.fileName}` : ""].filter(Boolean).join("\n"),
-        },
-        tracks: draft.tracks.filter((track) => track.trackTitle.trim()).map((track) => ({ ...track, broadcastSelected: false })),
-      }
-      : {
-        kind, requestId: requestId.current, paid, stationCodes, guest: guestPayload,
-        mv: {
-          ...draft.mv, desiredRating: kind === "MV_DISTRIBUTION" ? draft.mv.desiredRating : "",
-          applicantName: draft.applicant.name, applicantEmail: draft.applicant.email, applicantPhone: draft.applicant.phone,
-          adminMemo: [adminMemo.trim(), draft.fileName ? `기준파일: ${draft.fileName}` : ""].filter(Boolean).join("\n"),
-        },
-      };
+    const payload = buildDirectIntakePayload({ kind, requestId: requestId.current, draft, guest, packageId, stationCodes, paid, adminMemo });
     setBusy("submit"); setError(null);
     try {
       const response = await fetchWithTimeout("/api/admin/intake", {

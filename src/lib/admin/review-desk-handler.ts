@@ -305,8 +305,16 @@ export function createReviewDeskIntakeHandlers(deps: IntakeDependencies) {
       }
       const row = (Array.isArray(data) ? data[0] : data) as { submission_id?: string; created?: boolean } | null;
       if (!row?.submission_id) return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");
+      // A retry returns the submission the first attempt created, unchanged,
+      // so the desk records the payment state it kept, not the one asked for.
+      let paid = input.paid;
+      if (row.created !== true) {
+        const { data: stored, error: storedError } = await auth.db.from("submissions").select("payment_status").eq("id", row.submission_id).maybeSingle();
+        if (storedError || !stored) return failure(503, "이미 등록된 접수의 결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+        paid = stored.payment_status === "PAID";
+      }
       try { deps.revalidate(row.submission_id); } catch { /* The submission exists; pages refresh on their own. */ }
-      return jsonResponse({ ok: true, created: row.created === true, submissionId: row.submission_id, guestToken: input.requestId, trackUrl: deps.trackUrl(input.requestId), paid: input.paid });
+      return jsonResponse({ ok: true, created: row.created === true, submissionId: row.submission_id, guestToken: input.requestId, trackUrl: deps.trackUrl(input.requestId), paid });
     } catch (error) {
       if (error && typeof error === "object" && "status" in error && error.status === 413) return failure(413, "입력 데이터가 허용 크기를 초과했습니다.");
       return failure(500, "비회원 접수를 등록하지 못했습니다. 잠시 후 다시 시도해주세요.");

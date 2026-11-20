@@ -42,6 +42,11 @@ export async function GET(req: NextRequest) {
   if (!isRatingCode(rating)) {
     return NextResponse.json({ error: "등급 값을 확인해주세요." }, { status: 400 });
   }
+  // A REJECT result gives no files, as on the customer routes and the desk;
+  // the shared resolver would hand out the 19 mark for it.
+  if (rating === "REJECT") {
+    return NextResponse.json({ error: "심의 불가 결과에는 제공되는 파일이 없습니다." }, { status: 404 });
+  }
 
   try {
     const admin = createAdminClient();

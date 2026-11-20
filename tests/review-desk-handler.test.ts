@@ -299,13 +299,17 @@ const packageId = "55555555-5555-4555-8555-555555555555";
 const intakePath = "/api/internal/review-desk/intake";
 function intakeFixture() {
   const calls: Array<{ name: string; input?: unknown }> = [];
-  const state = { admin: true, rpcError: null as string | null, packageActive: true };
+  const state = { admin: true, rpcError: null as string | null, packageActive: true, created: true, stored: null as Record<string, unknown> | null, storedError: false };
   const db = {
     from(table: string) {
       const query = {
         select() { return query; }, eq() { return query; },
         async maybeSingle() {
           if (table === "profiles") return { data: { role: state.admin ? "admin" : "user" }, error: null };
+          if (table === "submissions") {
+            calls.push({ name: "stored" });
+            return { data: state.storedError ? null : state.stored, error: state.storedError ? { message: "private fixture database error" } : null };
+          }
           assert.equal(table, "packages");
           return { data: state.packageActive ? { price_krw: 130000 } : null, error: null };
         },
@@ -315,7 +319,7 @@ function intakeFixture() {
     async rpc(name: string, args: Record<string, unknown>) {
       assert.equal(name, "admin_register_guest_album");
       calls.push({ name: "rpc", input: args });
-      return state.rpcError ? { data: null, error: { message: state.rpcError } } : { data: [{ submission_id: sid, created: true }], error: null };
+      return state.rpcError ? { data: null, error: { message: state.rpcError } } : { data: [{ submission_id: sid, created: state.created }], error: null };
     },
   } as unknown as SupabaseClient;
   const handlers = createReviewDeskIntakeHandlers({ secret: () => secret, createDb: () => db,
@@ -353,6 +357,25 @@ test("desk intake registers a guest album with the signed request ID as its look
   assert.equal(args.p_parent.artist_id, "66666666-6666-4666-8666-666666666666");
   assert.deepEqual(args.p_tracks.map(track => [track.track_title, track.is_title, track.title_role, track.broadcast_selected]), [["첫 곡", true, "MAIN", true], ["둘째 곡", true, "SUB", false]]);
   assert.deepEqual(f.calls.filter(call => call.name === "revalidate").map(call => call.input), [sid]);
+  assert.ok(!f.calls.some(call => call.name === "stored"), "a new registration reports what it saved");
+});
+
+test("a retried desk intake reports the payment state the existing submission kept", async () => {
+  const f = intakeFixture();
+  // The first attempt committed as 고객 결제 대기, but its response was lost.
+  // The operator switched to 결제 완료 and registered again with the same
+  // request ID; the database function returns the existing submission unchanged.
+  f.state.created = false; f.state.stored = { payment_status: "UNPAID" };
+  const retried = await f.handlers.POST(signedRequest("POST", { ...intakeBody, paid: true }, { path: intakePath }));
+  assert.equal(retried.status, 200);
+  assert.deepEqual(await retried.json(), { ok: true, created: false, submissionId: sid, guestToken: requestId, trackUrl: `https://onside.example/track/${requestId}`, paid: false });
+  f.state.stored = { payment_status: "PAID" };
+  assert.equal((await (await f.handlers.POST(signedRequest("POST", { ...intakeBody, paid: false }, { path: intakePath }))).json()).paid, true);
+  // A stored state that cannot be read is not guessed from the request.
+  f.state.storedError = true;
+  const unknown = await f.handlers.POST(signedRequest("POST", intakeBody, { path: intakePath }));
+  assert.equal(unknown.status, 503);
+  assert.doesNotMatch(JSON.stringify(await unknown.json()), /private fixture/);
 });
 
 test("desk intake explains package and validation refusals and lists packages", async () => {

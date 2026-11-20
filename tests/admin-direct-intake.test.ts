@@ -5,6 +5,7 @@ import test from "node:test";
 import { legacyWordBlocksToDocx, LegacyWordError, readLegacyWordBlocks } from "../src/lib/admin/legacy-word-doc";
 import { analyzeReferenceFile, ReferenceImportError, stripFormGuidance } from "../src/lib/admin/reference-import";
 import { buildGuestMvIntakeParent, directIntakeSchema, mvIntakeAmountKrw } from "../src/lib/admin/direct-intake";
+import { buildGuestAlbumIntakeRecord } from "../src/lib/admin/guest-album-intake";
 import { extractDocxBlocks } from "../src/lib/review-docs/docx-extract";
 
 const form = (name: string) => readFileSync(new URL(`../public/forms/${name}`, import.meta.url));
@@ -97,6 +98,28 @@ test("the intake request validates album and MV drafts", () => {
   }
   assert.equal(directIntakeSchema.safeParse({ kind: "MV_BROADCAST", requestId: "x", paid: true, guest, mv: { title: "a", artistName: "b" } }).success, false);
   assert.equal(directIntakeSchema.safeParse({ kind: "ALBUM", requestId: "11111111-1111-4111-8111-111111111111", packageId: "22222222-2222-4222-8222-222222222222", paid: true, guest, submission: { title: "앨범", artistName: "가수" }, tracks: [] }).success, false);
+});
+
+test("an analyzed form is sent with the customer details the admin sees and corrects", async () => {
+  const { buildDirectIntakePayload } = await import("../src/components/admin/direct-intake-form");
+  // The reader keeps cells the server refuses (an e-mail with a name after it,
+  // a 연락처 over 40 characters) and the form prefills the 고객 fields with
+  // them. Nothing on the page edits the draft's own applicant copy.
+  const rows = [["음반명", "앨범"], ["곡명", "HUG"], ["아티스트", "가수"], ["이메일", "hong@naver.com(홍길동)"], ["연락처", "대표 010-1234-5678 / 담당 홍길동 실장 010-9876-5432"]];
+  const body = legacyWordBlocksToDocx(rows.map((cells) => ({ kind: "row" as const, cells })));
+  const corrected = { name: "홍길동", phone: "010-1234-5678", email: "hong@naver.com", company: "" };
+  for (const kind of ["ALBUM", "MV_DISTRIBUTION", "MV_BROADCAST"] as const) {
+    const draft = await analyzeReferenceFile({ body, fileName: "form.docx", kind });
+    const parsed = directIntakeSchema.safeParse(buildDirectIntakePayload({
+      kind, requestId: "11111111-1111-4111-8111-111111111111", draft, guest: corrected, paid: true, adminMemo: "",
+      packageId: "22222222-2222-4222-8222-222222222222", stationCodes: kind === "MV_BROADCAST" ? ["KBS"] : [],
+    }));
+    if (!parsed.success) assert.fail(`${kind}: ${parsed.error.issues.map((issue) => issue.path.join(".")).join(", ")}`);
+    const parent = parsed.data.kind === "ALBUM"
+      ? buildGuestAlbumIntakeRecord({ ...parsed.data, operation: "register-guest-album" }, null).parent
+      : buildGuestMvIntakeParent(parsed.data, null);
+    assert.deepEqual([parent.applicant_name, parent.applicant_email, parent.applicant_phone], ["홍길동", "hong@naver.com", "010-1234-5678"], kind);
+  }
 });
 
 test("the guest MV registration is one admin-only transaction mirroring the album intake", () => {

@@ -13,8 +13,9 @@ type Call = { kind: string; key?: string; url?: string; bucket?: string; paths?:
 type Fixture = {
   certificate: Handler; ratingImage: Handler; guide: Handler; legacy: Handler;
   adminAssets: { POST: Handler; DELETE: Handler };
+  adminRatingDownload: Handler;
   managedRatingImageStoragePath: (objectKey?: string | null) => string | null;
-  state: { isAdmin: boolean; settings: unknown; submission: Record<string, unknown> };
+  state: { isAdmin: boolean; settings: unknown; settingsError: unknown; submission: Record<string, unknown> };
   calls: Call[];
 };
 
@@ -30,6 +31,7 @@ async function fixture(): Promise<Fixture> {
         "export {GET as guide} from './src/app/api/submissions/[id]/mv-guide/route';",
         "export {GET as legacy} from './src/app/api/b2/download/route';",
         "export * as adminAssets from './src/app/api/admin/mv-rating-assets/route';",
+        "export {GET as adminRatingDownload} from './src/app/api/admin/mv-rating-assets/download/route';",
         "export {managedRatingImageStoragePath} from './src/lib/mv-assets';",
         "export {state,calls} from 'mv-result-fixture';",
       ].join("\n"),
@@ -42,11 +44,11 @@ async function fixture(): Promise<Fixture> {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'mv-result-fixture';";
         const modules: Record<string, string> = {
-          "mv-result-fixture": `export const state={isAdmin:true,settings:null,submission:{id:'${submissionId}',type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'APPROVED',result_notified_at:null,mv_desired_rating:'15',certificate_b2_path:'${certificateKey}',certificate_original_name:'current.pdf',certificate_mime:'application/pdf'}};export const calls=[];`,
+          "mv-result-fixture": `export const state={isAdmin:true,settings:null,settingsError:null,submission:{id:'${submissionId}',type:'MV_DISTRIBUTION',status:'RESULT_READY',result_status:'APPROVED',result_notified_at:null,mv_desired_rating:'15',certificate_b2_path:'${certificateKey}',certificate_original_name:'current.pdf',certificate_mime:'application/pdf'}};export const calls=[];`,
           "@/lib/payments/submission": `${shared} export const ensureSubmissionOwner=async()=>({submission:state.submission,error:null}); export const ensureSubmissionResultReader=(...args)=>ensureSubmissionOwner(...args);`,
           "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:{id:'admin'}}})},rpc:async()=>({data:state.isAdmin})});`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({
-            from(){const chain={select(){return chain},eq(){return chain},maybeSingle:async()=>({data:state.settings?{value:state.settings}:null,error:null}),upsert:async(row)=>{calls.push({kind:'settings',value:row.value});state.settings=row.value;return {error:null}}};return chain},
+            from(){const chain={select(){return chain},eq(){return chain},maybeSingle:async()=>state.settingsError?{data:null,error:state.settingsError}:{data:state.settings?{value:state.settings}:null,error:null},upsert:async(row)=>{calls.push({kind:'settings',value:row.value});state.settings=row.value;return {error:null}}};return chain},
             storage:{from(bucket){return {
               upload:async(path)=>{calls.push({kind:'upload',bucket,path});return {error:null}},
               remove:async(paths)=>{calls.push({kind:'remove',bucket,paths});return {error:null}},
@@ -97,6 +99,17 @@ test("a rejected online music video hands out no files from any customer route",
   assert.deepEqual(fileCalls(api), []);
 });
 
+test("the admin rating-mark download gives no mark for a rejected music video either", async () => {
+  const api = await fixture();
+  const download = (rating: string) => api.adminRatingDownload(get(`/api/admin/mv-rating-assets/download?rating=${rating}`));
+  const rejected = await download("REJECT");
+  assert.equal(rejected.status, 404);
+  assert.equal((await rejected.json()).error, "심의 불가 결과에는 제공되는 파일이 없습니다.");
+  assert.deepEqual(fileCalls(api), []);
+  assert.equal((await download("19")).status, 200);
+  assert.deepEqual(fileCalls(api).map(call => call.url), ["https://iamonside.com/media/mv-ratings/19.png"]);
+});
+
 test("replacement rating marks are stored in Supabase Storage, never under the B2 customer prefix", async () => {
   const api = await fixture();
   const upload = async (name: string) => {
@@ -128,6 +141,24 @@ test("replacement rating marks are stored in Supabase Storage, never under the B
   const removals = api.calls.filter(call => call.kind === "remove").length;
   assert.equal((await removeAll()).status, 200);
   assert.equal(api.calls.filter(call => call.kind === "remove").length, removals);
+});
+
+test("a failed settings read stops a mark upload or reset before the other marks are lost", async () => {
+  const api = await fixture();
+  const marks = Object.fromEntries(["ALL", "12", "15", "19"].map(code =>
+    [code, { objectKey: `${publicMv}/rating-images/${code}/1.png`, originalName: `${code}.png` }]));
+  api.state.settings = { images: marks };
+  // maybeSingle answers a missing row with no error, so any error is a failed read.
+  api.state.settingsError = { code: "PGRST003", message: "Timed out acquiring connection from connection pool." };
+  const form = new FormData();
+  form.set("rating", "15");
+  form.set("file", new File([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])], "15.png", { type: "image/png" }));
+  const upload = await api.adminAssets.POST(new Request("https://iamonside.com/api/admin/mv-rating-assets", { method: "POST", body: form }));
+  const reset = await api.adminAssets.DELETE(new Request("https://iamonside.com/api/admin/mv-rating-assets", { method: "DELETE", body: JSON.stringify({ rating: "15" }) }));
+  assert.deepEqual([upload.status, reset.status], [503, 503]);
+  assert.match((await upload.json()).error, /설정을 불러오지 못했습니다/);
+  assert.deepEqual(api.calls.filter(call => ["upload", "settings", "remove", "b2-delete"].includes(call.kind)), []);
+  assert.deepEqual(api.state.settings, { images: marks });
 });
 
 test("only marks this app uploaded to the mv bucket count as removable storage paths", async () => {

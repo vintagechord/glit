@@ -77,6 +77,11 @@ const ensureAdmin = async () => {
   return { user, isAdmin };
 };
 
+/**
+ * The stored marks, or null when they could not be read. Uploads and resets
+ * save the whole map, so saving after a failed read would drop every other
+ * replacement mark. maybeSingle answers a missing row without an error.
+ */
 const loadSettings = async (admin: ReturnType<typeof createAdminClient>) => {
   const { data, error } = await admin
     .from("site_settings")
@@ -84,12 +89,19 @@ const loadSettings = async (admin: ReturnType<typeof createAdminClient>) => {
     .eq("key", MV_RATING_IMAGE_SETTING_KEY)
     .maybeSingle();
 
-  if (error && error.code !== "PGRST116") {
+  if (error) {
     console.warn("[admin][mv-rating-assets] settings load failed", error);
+    return null;
   }
 
   return parseMvRatingImageSettings(data?.value);
 };
+
+const settingsUnavailable = () =>
+  NextResponse.json(
+    { error: "연령등급 이미지 설정을 불러오지 못했습니다. 잠시 후 다시 시도해주세요." },
+    { status: 503 },
+  );
 
 const saveSettings = async (
   admin: ReturnType<typeof createAdminClient>,
@@ -196,6 +208,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
   const settings = await loadSettings(admin);
+  if (!settings) return settingsUnavailable();
   const previousObjectKey = settings.images[rating]?.objectKey ?? null;
   const uploadedAt = new Date().toISOString();
 
@@ -268,6 +281,7 @@ export async function DELETE(req: NextRequest) {
 
   const admin = createAdminClient();
   const settings = await loadSettings(admin);
+  if (!settings) return settingsUnavailable();
   const previousObjectKey = settings.images[rating]?.objectKey ?? null;
   delete settings.images[rating];
 
