@@ -129,8 +129,8 @@ export function AboutContent({ english = false }: { english?: boolean }) {
         </h2>
         <p className="mt-2 max-w-3xl break-keep text-sm font-semibold leading-7 text-muted-foreground">
           {t(
-            "심의만 하는 곳이 아닙니다. 비트마켓, 스튜디오, 아트상품 스토어, 장비 수리까지 음악 일을 함께 하는 회사의 심의 브랜드입니다.",
-            "Not a review-only desk: the review brand of a company that also runs a beat market, a studio, an art-goods store and equipment repair.",
+            "빈티지하우스는 국내 뮤지션들과 함께 호흡하며 다양한 비즈니스를 진행하고 있습니다.",
+            "Vintage House works hand in hand with Korean musicians across a range of businesses.",
           )}
         </p>
         <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
