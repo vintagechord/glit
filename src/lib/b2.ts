@@ -134,7 +134,10 @@ export function buildObjectKey(opts: {
 }) {
   const { prefix } = getB2Config();
   const safe = sanitizeFileName(opts.filename);
-  const titleSegment = sanitizeFileName(opts.title?.trim() || "untitled");
+  const sanitizedTitle = sanitizeFileName(opts.title?.trim() || "untitled");
+  // "." and ".." would be path segments, which browsers rewrite and the
+  // ownership check refuses.
+  const titleSegment = sanitizedTitle === "." || sanitizedTitle === ".." ? "untitled" : sanitizedTitle;
   const submissionPart = opts.submissionId ? `${opts.submissionId}/` : "";
   const uniquePrefix = randomUUID();
   const folderSegment = opts.folder

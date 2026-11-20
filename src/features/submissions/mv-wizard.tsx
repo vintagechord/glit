@@ -4220,20 +4220,22 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-genre" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       장르
                     </label>
                     <input
+                      id="mv-genre"
                       value={genre}
                       onChange={(event) => setGenre(event.target.value)}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-runtime" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       러닝타임
                     </label>
                     <input
+                      id="mv-runtime"
                       placeholder="예: 03:25"
                       value={runtime}
                       onChange={(event) => setRuntime(event.target.value)}
@@ -4397,10 +4399,11 @@ export function MvWizard({
                     </div>
                   ) : null}
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-memo" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       메모 (선택)
                     </label>
                     <textarea
+                      id="mv-memo"
                       value={memo}
                       onChange={(event) => setMemo(event.target.value)}
                       className="h-20 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -4507,30 +4510,33 @@ export function MvWizard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-lyricist" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       작사가 (선택)
                     </label>
                     <input
+                      id="mv-lyricist"
                       value={lyricist}
                       onChange={(event) => setLyricist(event.target.value)}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-arranger" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       편곡자 (선택)
                     </label>
                     <input
+                      id="mv-arranger"
                       value={arranger}
                       onChange={(event) => setArranger(event.target.value)}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-song-memo" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       메모 (선택)
                     </label>
                     <input
+                      id="mv-song-memo"
                       value={songMemo}
                       onChange={(event) => setSongMemo(event.target.value)}
                       className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -5129,10 +5135,11 @@ export function MvWizard({
                 </div>
               </div>
               <div className="mt-6 space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <label htmlFor="mv-bank-depositor" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   입금자명
                 </label>
                 <input
+                  id="mv-bank-depositor"
                   value={bankDepositorName}
                   onChange={(event) => setBankDepositorName(event.target.value)}
                   placeholder="입금자명을 입력해주세요."
@@ -5254,10 +5261,11 @@ export function MvWizard({
                     </div>
                     {cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION" && (
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="mv-cash-receipt-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           휴대폰 번호
                         </label>
                         <input
+                          id="mv-cash-receipt-phone"
                           value={cashReceiptPhone}
                           onChange={(event) =>
                             setCashReceiptPhone(event.target.value)
@@ -5269,10 +5277,11 @@ export function MvWizard({
                     )}
                     {cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF" && (
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="mv-cash-receipt-business-number" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           사업자번호
                         </label>
                         <input
+                          id="mv-cash-receipt-business-number"
                           value={cashReceiptBusinessNumber}
                           onChange={(event) =>
                             setCashReceiptBusinessNumber(event.target.value)
@@ -5286,10 +5295,11 @@ export function MvWizard({
                 )}
                 {paymentDocumentType === "TAX_INVOICE" && (
                   <div className="mt-4 space-y-3">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="mv-tax-invoice-business-number" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
                     <input
+                      id="mv-tax-invoice-business-number"
                       value={taxInvoiceBusinessNumber}
                       onChange={(event) =>
                         setTaxInvoiceBusinessNumber(event.target.value)

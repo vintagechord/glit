@@ -286,9 +286,9 @@ export async function MagazinePageView({
           <p className="relative w-fit rounded-[6px] border-2 border-white bg-white px-2.5 py-1 text-xs font-black text-[#111111]">
             크레딧 안내
           </p>
-          <h2 className="relative mt-3 max-w-3xl text-2xl font-black">
+          <h1 className="relative mt-3 max-w-3xl text-2xl font-black">
             앨범심의 결제 완료 1건당 크레딧 1개가 지급됩니다.
-          </h2>
+          </h1>
           <p className="relative mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/82">
             지급된 크레딧은 온사이드가 제공하는 연계 서비스 신청에 사용할 수
             있습니다.

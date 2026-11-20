@@ -31,6 +31,7 @@ import {
 } from "@/lib/upload-file-types";
 import { createUploadPutGrant } from "@/lib/upload-put-grants";
 import { Upload } from "@aws-sdk/lib-storage";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -263,7 +264,7 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-init-ip",
     identifier: requestIdentifier,
-    limit: 60,
+    limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {

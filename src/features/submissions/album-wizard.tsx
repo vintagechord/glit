@@ -5224,10 +5224,11 @@ export function AlbumWizard({
                       )}
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          <label htmlFor="album-track-featuring" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             피처링
                           </label>
                           <input
+                            id="album-track-featuring"
                             value={activeTrack.featuring}
                             placeholder="피처링이 있는 경우 피처링 아티스트"
                             onChange={(event) =>
@@ -5408,10 +5409,11 @@ export function AlbumWizard({
                           </details>
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          <label htmlFor="album-track-notes" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             특이사항
                           </label>
                           <input
+                            id="album-track-notes"
                             value={activeTrack.notes}
                             onChange={(event) =>
                               updateTrack(
@@ -5989,7 +5991,9 @@ export function AlbumWizard({
                   const uploadsReady =
                     uploads.length > 0 &&
                     uploads.every((upload) => upload.status === "done");
-                  const includeFiles = uploadsReady || uploadedFiles.length > 0 || emailSubmitConfirmed;
+                  // A file that is still finishing would get its upload receipt
+                  // replaced by this save; send the list once uploads settle.
+                  const includeFiles = !uploadInProgress && (uploadsReady || uploadedFiles.length > 0 || emailSubmitConfirmed);
                   await saveAlbumDrafts(draftsForUpload, { includeFiles });
                 }}
                 disabled={isSaving || isAddingAlbum}
@@ -6183,10 +6187,11 @@ export function AlbumWizard({
                 </div>
               </div>
               <div className="mt-6 space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <label htmlFor="album-bank-depositor" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   입금자명
                 </label>
                 <input
+                  id="album-bank-depositor"
                   value={bankDepositorName}
                   onChange={(event) => setBankDepositorName(event.target.value)}
                   placeholder="입금자명을 입력해주세요."
@@ -6308,10 +6313,11 @@ export function AlbumWizard({
                     </div>
                     {cashReceiptPurpose === "PERSONAL_INCOME_DEDUCTION" && (
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="album-cash-receipt-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           휴대폰 번호
                         </label>
                         <input
+                          id="album-cash-receipt-phone"
                           value={cashReceiptPhone}
                           onChange={(event) =>
                             setCashReceiptPhone(event.target.value)
@@ -6323,10 +6329,11 @@ export function AlbumWizard({
                     )}
                     {cashReceiptPurpose === "BUSINESS_EXPENSE_PROOF" && (
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        <label htmlFor="album-cash-receipt-business-number" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                           사업자번호
                         </label>
                         <input
+                          id="album-cash-receipt-business-number"
                           value={cashReceiptBusinessNumber}
                           onChange={(event) =>
                             setCashReceiptBusinessNumber(event.target.value)
@@ -6340,10 +6347,11 @@ export function AlbumWizard({
                 )}
                 {paymentDocumentType === "TAX_INVOICE" && (
                   <div className="mt-4 space-y-3">
-                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    <label htmlFor="album-tax-invoice-business-number" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       사업자번호
                     </label>
                     <input
+                      id="album-tax-invoice-business-number"
                       value={taxInvoiceBusinessNumber}
                       onChange={(event) =>
                         setTaxInvoiceBusinessNumber(event.target.value)

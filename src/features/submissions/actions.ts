@@ -26,6 +26,8 @@ import {
   normalizeMvDesiredRating,
   resolveMvProductionCompanyUpdate,
 } from "@/lib/mv-request-options";
+import { retiredMvFieldUpdate } from "@/lib/mv-retired-fields";
+import { submissionCommitErrorMessage } from "@/lib/submission-save-errors";
 import { archiveReviewContextSchema, getArchiveReviewEntry, storedArchiveReviewContextSchema } from "@/lib/music-archive/review-entry";
 import { linkArchiveSubmission } from "@/lib/music-archive/service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -1487,7 +1489,7 @@ export async function saveAlbumSubmissionAction(
       submissionId: parsed.data.submissionId,
     });
     return {
-      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      error: submissionCommitErrorMessage(commitError),
       // Claiming and releasing the lease touched updated_at without changing
       // content; the browser must not mistake that for another tab's save.
       updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
@@ -1937,10 +1939,8 @@ export async function saveMvSubmissionAction(
     release_date: parsed.data.releaseDate || null,
     genre: parsed.data.genre?.trim() || null,
     mv_runtime: parsed.data.runtime?.trim() || null,
-    // Retired inputs are omitted by new clients; preserve any historical value.
-    ...(parsed.data.format !== undefined
-      ? { mv_format: parsed.data.format.trim() || null }
-      : {}),
+    // Retired inputs are omitted by new clients; preserve any stored value.
+    ...retiredMvFieldUpdate(parsed.data),
     mv_director: parsed.data.director?.trim() || null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
@@ -1951,9 +1951,7 @@ export async function saveMvSubmissionAction(
     }),
     mv_agency: parsed.data.agency?.trim() || null,
     mv_album_title: parsed.data.albumTitle?.trim() || null,
-    mv_production_date: parsed.data.productionDate || null,
     mv_distribution_company: parsed.data.distributionCompany?.trim() || null,
-    mv_business_reg_no: parsed.data.businessRegNo?.trim() || null,
     mv_usage: parsed.data.usage?.trim() || null,
     mv_desired_rating:
       parsed.data.mvType === "MV_DISTRIBUTION"
@@ -2131,7 +2129,7 @@ export async function saveMvSubmissionAction(
       submissionId: parsed.data.submissionId,
     });
     return {
-      error: "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.",
+      error: submissionCommitErrorMessage(commitError),
       updatedAt: await readSubmissionVersion(db, parsed.data.submissionId),
     };
   }

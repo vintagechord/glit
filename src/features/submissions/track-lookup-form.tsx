@@ -22,10 +22,11 @@ export function TrackLookupForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <label htmlFor="track-lookup-code" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           조회 코드
         </label>
         <input
+          id="track-lookup-code"
           value={token}
           onChange={(event) => setToken(event.target.value)}
           className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"

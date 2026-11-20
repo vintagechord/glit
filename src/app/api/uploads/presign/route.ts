@@ -15,6 +15,7 @@ import {
 } from "@/lib/request-rate-limit";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { isAllowedKaraokeUpload, karaokeUploadTypeError } from "@/lib/upload-file-types";
+import { UPLOAD_REQUESTS_PER_IP_PER_HOUR } from "@/lib/upload-request-limits";
 
 const schema = z.object({
   submissionId: z.string().uuid(),
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   const requestLimit = consumeRateLimit({
     namespace: "upload-init-ip",
     identifier: getRequestIdentifier(request.headers),
-    limit: 60,
+    limit: UPLOAD_REQUESTS_PER_IP_PER_HOUR,
     windowMs: 60 * 60 * 1_000,
   });
   if (!requestLimit.allowed) {
