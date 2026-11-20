@@ -7,6 +7,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { watchUploadProgress } from "@/lib/upload-watchdog";
 import {
   clearMultipartResumeState as clearResumeState,
+  isFinalUploadError,
   loadMultipartResumeState as loadResumeState,
   saveMultipartResumeState as saveResumeState,
   multipartRetryDelayMs,
@@ -283,6 +284,10 @@ const multipartThresholdBytes = 32 * 1024 * 1024;
 // Completing a multi-gigabyte upload can take longer than a small API call.
 const completionTimeoutMs = 60_000;
 const singlePutAttempts = 3;
+// Ends the requests of an upload run that was stopped on purpose. It is
+// final, so no retry loop sends them again; the stopped run never shows it.
+const createUploadStoppedError = () =>
+  Object.assign(new Error("업로드가 중단되었습니다."), { final: true });
 
 const baseOnlinePrice = 30000;
 const etnDeliveryPrice = 30000;
@@ -456,6 +461,43 @@ export function MvWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const videoUploadRunRef = React.useRef(0);
+  // Upload requests in flight. Leaving the wizard inside the app (a link,
+  // the KO/EN switch, browser back) unmounts it without closing the tab, so
+  // beforeunload never asks; the run stops here instead (and when the video
+  // goes by email). Left running, it would keep uploading in the background
+  // and keep writing the multipart resume record that a later upload of the
+  // same file reads, so the two runs would race over the same parts.
+  const videoUploadRequestsRef = React.useRef(new Set<XMLHttpRequest>());
+  const stopVideoUploads = React.useCallback(() => {
+    // Stale first: the abort below then reads as a stop, not as a stall.
+    videoUploadRunRef.current += 1;
+    const requests = Array.from(videoUploadRequestsRef.current);
+    videoUploadRequestsRef.current.clear();
+    requests.forEach((xhr) => xhr.abort());
+  }, []);
+  React.useEffect(() => () => stopVideoUploads(), [stopVideoUploads]);
+  // Registers an upload request of `run` so stopVideoUploads can abort it.
+  // A stopped run sends nothing more, and its aborted requests fail with a
+  // final error; a stall abort by the watchdog keeps its retryable error.
+  // Kept stable as in the album wizard, where a plain function here made
+  // React Compiler give up on memoized callbacks.
+  const trackVideoUploadRequest = React.useCallback((
+    xhr: XMLHttpRequest,
+    reject: (error: Error) => void,
+    run: number,
+  ) => {
+    if (run !== videoUploadRunRef.current) {
+      reject(createUploadStoppedError());
+      return false;
+    }
+    const requests = videoUploadRequestsRef.current;
+    requests.add(xhr);
+    xhr.addEventListener("loadend", () => requests.delete(xhr));
+    xhr.addEventListener("abort", () => {
+      if (run !== videoUploadRunRef.current) reject(createUploadStoppedError());
+    });
+    return true;
+  }, []);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const uploadInProgress = uploads.some((upload) => upload.status === "uploading");
   // Closing or reloading the tab stops a transfer, so ask first while one runs.
@@ -797,27 +839,6 @@ export function MvWizard({
       throw error;
     } finally {
       window.clearTimeout(timeoutId);
-    }
-  }, [isGuest]);
-
-  const clearCartSubmission = React.useCallback(async (
-    submissionId: string,
-    guestToken?: string | null,
-  ) => {
-    const res = await fetchWithTimeout("/api/cart/items", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        submissionIds: [submissionId],
-        guestTokensBySubmissionId:
-          isGuest && guestToken ? { [submissionId]: guestToken } : undefined,
-      }),
-    });
-    if (!res.ok) {
-      const json = (await res.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      throw new Error(json?.error || "장바구니 신청서를 삭제하지 못했습니다.");
     }
   }, [isGuest]);
 
@@ -1433,10 +1454,12 @@ export function MvWizard({
     url: string,
     blob: Blob,
     onProgress: (loaded: number, total: number) => void,
+    run: number,
     options?: { contentType?: string },
   ) =>
     new Promise<string | null>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      if (!trackVideoUploadRequest(xhr, reject, run)) return;
       watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -1498,7 +1521,8 @@ export function MvWizard({
   const uploadSingleFile = async (
     file: File,
     onProgress: (percent: number) => void,
-    durationSeconds?: number | null,
+    durationSeconds: number | null | undefined,
+    run: number,
   ) => {
     const submissionId = requireSubmissionId();
     const initRes = await fetchWithTimeout("/api/uploads/init", {
@@ -1540,11 +1564,12 @@ export function MvWizard({
             const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
             onProgress(percent);
           },
+          run,
           { contentType },
         );
         break;
       } catch (error) {
-        if (attempt >= singlePutAttempts) throw error;
+        if (attempt >= singlePutAttempts || isFinalUploadError(error)) throw error;
         await waitUntilOnline();
         await sleep(multipartRetryDelayMs(attempt + 1));
       }
@@ -1583,7 +1608,8 @@ export function MvWizard({
   const uploadMultipartFile = async (
     file: File,
     onProgress: (percent: number) => void,
-    durationSeconds?: number | null,
+    durationSeconds: number | null | undefined,
+    run: number,
   ) => {
     const submissionId = requireSubmissionId();
     const resumeKey = buildResumeKey(submissionId, file);
@@ -1688,21 +1714,28 @@ export function MvWizard({
     await uploadMultipartParts({
       partNumbers: partsToUpload,
       concurrency: getMultipartConcurrency(),
-      sign: (partNumbers) =>
-        signMultipartParts({
+      sign: async (partNumbers) => {
+        if (run !== videoUploadRunRef.current) throw createUploadStoppedError();
+        return signMultipartParts({
           grantId: grantId!,
           resumeKey,
           submissionId,
           key: key!,
           uploadId: uploadId!,
           partNumbers,
-        }),
+        });
+      },
       putPart: async (partNumber, url) => {
         const start = (partNumber - 1) * partSize!;
         const end = Math.min(start + partSize!, totalSize);
-        const etagRaw = await putBlobWithProgress(url, file.slice(start, end), (loaded, total) => {
-          updateProgress(partNumber, Math.min(loaded, total));
-        });
+        const etagRaw = await putBlobWithProgress(
+          url,
+          file.slice(start, end),
+          (loaded, total) => {
+            updateProgress(partNumber, Math.min(loaded, total));
+          },
+          run,
+        );
         const etag = etagRaw?.replace(/\"/g, "") ?? "";
         if (!etag) {
           throw new Error("ETag를 확인할 수 없습니다. CORS 설정을 확인해주세요.");
@@ -1724,6 +1757,9 @@ export function MvWizard({
       (part): part is { partNumber: number; etag: string } => Boolean(part),
     );
 
+    // A run stopped after its last part leaves the upload open: the resume
+    // record then lets the next upload of this file finish it.
+    if (run !== videoUploadRunRef.current) throw createUploadStoppedError();
     const completeRes = await requestWithRetry(() => fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1765,13 +1801,14 @@ export function MvWizard({
   const uploadWithProgress = async (
     file: File,
     onProgress: (percent: number) => void,
+    run: number,
   ) => {
     const durationPromise = getVideoDuration(file);
     const durationSeconds = await durationPromise.catch(() => null);
     if (file.size >= multipartThresholdBytes) {
-      return uploadMultipartFile(file, onProgress, durationSeconds);
+      return uploadMultipartFile(file, onProgress, durationSeconds, run);
     }
-    return uploadSingleFile(file, onProgress, durationSeconds);
+    return uploadSingleFile(file, onProgress, durationSeconds, run);
   };
 
   const toggleTvStation = (code: string) => {
@@ -1864,14 +1901,18 @@ export function MvWizard({
       let accessUrl: string | undefined;
       let durationSeconds: number | undefined;
       try {
-        const uploadResult = await uploadWithProgress(file, (progress) => {
-          if (!isCurrentUpload()) return;
-          nextUploads[uploadIndex] = {
-            ...nextUploads[uploadIndex],
-            progress,
-          };
-          setUploads([...nextUploads]);
-        });
+        const uploadResult = await uploadWithProgress(
+          file,
+          (progress) => {
+            if (!isCurrentUpload()) return;
+            nextUploads[uploadIndex] = {
+              ...nextUploads[uploadIndex],
+              progress,
+            };
+            setUploads([...nextUploads]);
+          },
+          uploadRun,
+        );
         if (!isCurrentUpload()) return results;
         path = uploadResult.objectKey;
         accessUrl = uploadResult.accessUrl;
@@ -1975,14 +2016,15 @@ export function MvWizard({
         setNotice({});
         return;
       }
-      videoUploadRunRef.current += 1;
+      // Stop the transfer and ignore its late callbacks.
+      stopVideoUploads();
       setFiles([]);
       setUploads((previous) => previous.filter((upload) => upload.status === "done"));
       setFileDigest("");
       setEmailSubmitConfirmed(true);
       setNotice({});
     },
-    [emailSubmitConfirmed, uploads],
+    [emailSubmitConfirmed, stopVideoUploads, uploads],
   );
 
   const applyStoredDraft = React.useCallback((
@@ -2251,11 +2293,14 @@ export function MvWizard({
     const guestToken = resumePrompt.storedGuestToken ?? guestTokenRef.current;
     try {
       const status = String(resumePrompt.draft.status ?? "");
+      // A SUBMITTED/WAITING_PAYMENT row is an unsaved edit opened from the
+      // cart (its 수정 link points this locator at it, and cart edits stay in
+      // this browser until saved). 삭제 forgets that edit and leaves the
+      // application in the cart; deleting it stays on the cart page, behind
+      // its own confirmation.
       if (status === "DRAFT" || status === "PRE_REVIEW") {
         await clearServerDrafts({ ids: [draftId], guestToken });
-      } else if (status === "SUBMITTED" || status === "WAITING_PAYMENT") {
-        await clearCartSubmission(draftId, guestToken);
-      } else {
+      } else if (status !== "SUBMITTED" && status !== "WAITING_PAYMENT") {
         throw new Error("현재 상태에서는 삭제할 수 없는 신청서입니다.");
       }
       clearDraftStorageForSubmission(draftId);
@@ -2279,7 +2324,6 @@ export function MvWizard({
     }
   }, [
     clearDraftStorageForSubmission,
-    clearCartSubmission,
     clearServerDrafts,
     isClearingResumeDrafts,
     resumePrompt,

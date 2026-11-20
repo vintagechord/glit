@@ -6,6 +6,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { watchUploadProgress } from "@/lib/upload-watchdog";
 import {
   clearMultipartResumeState,
+  isFinalUploadError,
   loadMultipartResumeState,
   saveMultipartResumeState,
   requestWithRetry,
@@ -275,6 +276,10 @@ const directUploadMaxBytes = SERVER_UPLOAD_MAX_BYTES;
 const albumMultipartThresholdBytes = 32 * 1024 * 1024;
 // Completing a multi-gigabyte upload can take longer than a small API call.
 const completionTimeoutMs = 60_000;
+// Ends the requests of an upload run that was stopped on purpose. It is
+// final, so no retry loop sends them again; the stopped run never shows it.
+const createUploadStoppedError = () =>
+  Object.assign(new Error("업로드가 중단되었습니다."), { final: true });
 const uploadMaxLabel = MEDIA_UPLOAD_MAX_LABEL;
 const draftDeleteTimeoutMs = 8000;
 const digitsOnly = (value: string) => value.replace(/[^0-9]/g, "");
@@ -481,14 +486,53 @@ export function AlbumWizard({
   const [fileDigest, setFileDigest] = React.useState("");
   const [emailSubmitConfirmed, setEmailSubmitConfirmed] = React.useState(false);
   const audioUploadRunRef = React.useRef(0);
-  const handOffAudioByEmail = React.useCallback(() => {
-    // Ignore late upload callbacks after the user moves on to email delivery.
+  // Upload requests in flight. Leaving the wizard inside the app (a link,
+  // the KO/EN switch, browser back) unmounts it without closing the tab, so
+  // beforeunload never asks; the run stops here instead (and when the file
+  // goes by email). Left running, it would keep uploading in the background
+  // and keep writing the multipart resume record that a later upload of the
+  // same file reads, so the two runs would race over the same parts.
+  const audioUploadRequestsRef = React.useRef(new Set<XMLHttpRequest>());
+  const stopAudioUploads = React.useCallback(() => {
+    // Stale first: the abort below then reads as a stop, not as a stall.
     audioUploadRunRef.current += 1;
+    const requests = Array.from(audioUploadRequestsRef.current);
+    audioUploadRequestsRef.current.clear();
+    requests.forEach((xhr) => xhr.abort());
+  }, []);
+  React.useEffect(() => () => stopAudioUploads(), [stopAudioUploads]);
+  // Registers an upload request of `run` so stopAudioUploads can abort it.
+  // A stopped run sends nothing more, and its aborted requests fail with a
+  // final error; a stall abort by the watchdog keeps its retryable error.
+  // Kept stable: as a plain function called inside the request promises,
+  // React Compiler would treat setNotice as changing and skip the memoized
+  // callbacks that use it.
+  const trackAudioUploadRequest = React.useCallback((
+    xhr: XMLHttpRequest,
+    reject: (error: Error) => void,
+    run: number,
+  ) => {
+    if (run !== audioUploadRunRef.current) {
+      reject(createUploadStoppedError());
+      return false;
+    }
+    const requests = audioUploadRequestsRef.current;
+    requests.add(xhr);
+    xhr.addEventListener("loadend", () => requests.delete(xhr));
+    xhr.addEventListener("abort", () => {
+      if (run !== audioUploadRunRef.current) reject(createUploadStoppedError());
+    });
+    return true;
+  }, []);
+  const handOffAudioByEmail = React.useCallback(() => {
+    // Stop the transfer and ignore its late callbacks once the user moves
+    // on to email delivery.
+    stopAudioUploads();
     setFiles([]);
     setUploads((previous) => previous.filter((upload) => upload.status === "done"));
     setFileDigest("");
     setEmailSubmitConfirmed(true);
-  }, []);
+  }, [stopAudioUploads]);
   const [showCdInfo, setShowCdInfo] = React.useState(false);
   const [packageConfirmTarget, setPackageConfirmTarget] =
     React.useState<PackageOption | null>(null);
@@ -1847,9 +1891,11 @@ export function AlbumWizard({
     url: string,
     blob: Blob,
     onProgress: (loaded: number, total: number) => void,
+    run: number,
   ) =>
     new Promise<string | null>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
+      if (!trackAudioUploadRequest(xhr, reject, run)) return;
       watchUploadProgress(xhr, reject);
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
@@ -1907,6 +1953,7 @@ export function AlbumWizard({
   const uploadMultipartAudioFile = async (
     file: File,
     onProgress: (percent: number) => void,
+    run: number,
   ) => {
     const submissionId = requireSubmissionId();
     const mimeType = file.type || "application/octet-stream";
@@ -1995,8 +2042,10 @@ export function AlbumWizard({
     await uploadMultipartParts({
       partNumbers: partsToUpload,
       concurrency: getMultipartConcurrency(),
-      sign: (partNumbers) =>
-        signMultipartParts({ grantId, resumeKey, submissionId, key, uploadId, partNumbers }),
+      sign: async (partNumbers) => {
+        if (run !== audioUploadRunRef.current) throw createUploadStoppedError();
+        return signMultipartParts({ grantId, resumeKey, submissionId, key, uploadId, partNumbers });
+      },
       putPart: async (partNumber, url) => {
         const start = (partNumber - 1) * partSize;
         const end = Math.min(start + partSize, file.size);
@@ -2012,6 +2061,7 @@ export function AlbumWizard({
               Math.min(100, Math.round((totalLoaded / file.size) * 100)),
             );
           },
+          run,
         );
         const etag = etagRaw?.replace(/\"/g, "") ?? "";
         if (!etag) {
@@ -2030,6 +2080,9 @@ export function AlbumWizard({
       },
     });
 
+    // A run stopped after its last part leaves the upload open: the resume
+    // record then lets the next upload of this file finish it.
+    if (run !== audioUploadRunRef.current) throw createUploadStoppedError();
     const completeResponse = await requestWithRetry(() => fetchWithTimeout("/api/uploads/multipart/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2066,6 +2119,7 @@ export function AlbumWizard({
   const uploadWithProgress = async (
     file: File,
     onProgress: (percent: number) => void,
+    run: number,
   ) => {
     const submissionId = requireSubmissionId();
     const mimeType = file.type || "application/octet-stream";
@@ -2114,7 +2168,8 @@ export function AlbumWizard({
         formData.append("file", file);
 
         const xhr = new XMLHttpRequest();
-      watchUploadProgress(xhr, reject);
+        if (!trackAudioUploadRequest(xhr, reject, run)) return;
+        watchUploadProgress(xhr, reject);
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
           const percent = Math.round((event.loaded / event.total) * 100);
@@ -2147,7 +2202,7 @@ export function AlbumWizard({
     };
 
     if (file.size >= albumMultipartThresholdBytes) {
-      return uploadMultipartAudioFile(file, onProgress);
+      return uploadMultipartAudioFile(file, onProgress, run);
     }
 
     let initRes: Response | null = null;
@@ -2196,7 +2251,8 @@ export function AlbumWizard({
     const putPresignedFile = () =>
       new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-      watchUploadProgress(xhr, reject);
+        if (!trackAudioUploadRequest(xhr, reject, run)) return;
+        watchUploadProgress(xhr, reject);
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
           const percent = Math.round((event.loaded / event.total) * 100);
@@ -2222,6 +2278,7 @@ export function AlbumWizard({
           lastError = null;
           break;
         } catch (error) {
+          if (isFinalUploadError(error)) throw error;
           lastError = error;
           if (attempt < 2) {
             await new Promise((resolve) =>
@@ -2232,6 +2289,7 @@ export function AlbumWizard({
       }
       if (lastError) throw lastError;
     } catch (error) {
+      if (isFinalUploadError(error)) throw error;
       console.warn("[Upload][album] presigned PUT failed, fallback to direct", error);
       const fallback = await directUploadFallback();
       return completeUpload(fallback.objectKey);
@@ -2295,14 +2353,18 @@ export function AlbumWizard({
 
       let path: string;
       try {
-        const uploadResult = await uploadWithProgress(file, (progress) => {
-          if (!isCurrentUpload()) return;
-          nextUploads[uploadIndex] = {
-            ...nextUploads[uploadIndex],
-            progress,
-          };
-          setUploads([...nextUploads]);
-        });
+        const uploadResult = await uploadWithProgress(
+          file,
+          (progress) => {
+            if (!isCurrentUpload()) return;
+            nextUploads[uploadIndex] = {
+              ...nextUploads[uploadIndex],
+              progress,
+            };
+            setUploads([...nextUploads]);
+          },
+          uploadRun,
+        );
         if (!isCurrentUpload()) return results;
         path = uploadResult.objectKey;
       } catch (error) {
@@ -2692,10 +2754,12 @@ export function AlbumWizard({
       if (draftIds.length + cartIds.length !== ids.length) {
         throw new Error("현재 상태에서는 삭제할 수 없는 신청서가 포함되어 있습니다.");
       }
-      if (cartIds.length > 0) {
-        await clearCartSubmissions(cartIds, guestTokensBySubmissionId);
-      }
-      if (draftIds.length > 0) {
+      // Cart rows here are an unsaved edit opened from the cart: its 수정
+      // link points this locator at them, and cart edits stay in this
+      // browser until they are saved. 삭제 forgets that edit (with any album
+      // added during it) and leaves the application in the cart; deleting it
+      // stays on the cart page, behind its own confirmation.
+      if (cartIds.length === 0 && draftIds.length > 0) {
         await clearServerDrafts({
           ids: draftIds,
           guestToken,
@@ -2707,6 +2771,13 @@ export function AlbumWizard({
         });
       }
       clearDraftStorageForSubmissions(ids);
+      // The locator may list ids the server no longer returned (a paid or
+      // removed album). Forget it while it still holds exactly the ids this
+      // prompt was built from; otherwise a kept cart edit would come back on
+      // every visit.
+      if (resumePrompt.storedSubmissionIds?.length) {
+        clearDraftStorageForSubmissions(resumePrompt.storedSubmissionIds);
+      }
       resumePromptHandledRef.current = true;
       setResumePrompt(null);
       setResumeChecked(true);
@@ -2722,7 +2793,6 @@ export function AlbumWizard({
     }
   }, [
     clearDraftStorageForSubmissions,
-    clearCartSubmissions,
     clearServerDrafts,
     currentGuestToken,
     isClearingResumeDrafts,
@@ -3032,6 +3102,7 @@ export function AlbumWizard({
     if (isOneClick || isDownloadedApplicationFlow) return true;
     const issue = getAlbumLyricsReviewIssues(tracks, profanityTerms).find((item) => item.blocking);
     if (!issue) return true;
+    if (!restoreAuthoringDrafts()) return false;
     setActiveTrackIndex(issue.trackIndex);
     setStep(4);
     setNotice({ error: issue.message });
@@ -3781,30 +3852,40 @@ export function AlbumWizard({
     }
   };
 
-  // Back from the file step: restore the authoring layout (album 1 in the
-  // form, the others in albumDrafts) that the earlier steps rebuild the list
-  // from, as the resume path does. Otherwise an additional album selected on
-  // the file step becomes the "current" draft and album 1 drops out.
-  const returnFromUploadStep = () => {
-    if (uploadDrafts && uploadDrafts.length > 0) {
-      if (
-        uploadDraftIndex !== 0 &&
-        uploads.some((upload) => upload.status !== "done")
-      ) {
-        setNotice({ error: "파일 업로드가 완료된 뒤 이전 단계로 이동할 수 있습니다." });
-        return;
-      }
-      const drafts = resolveUploadDrafts();
-      if (!drafts || drafts.length === 0) return;
-      setAlbumDrafts(drafts.slice(1));
-      setUploadDrafts(null);
-      setUploadDraftIndex(0);
-      if (uploadDraftIndex !== 0) {
-        applyDraftToForm(drafts[0], {
-          emailSubmitConfirmed: drafts[0].emailSubmitConfirmed,
-        });
-      }
+  // Every move from the file or final-check step (5–6) back to steps 1–4
+  // runs this first: it restores the authoring layout (album 1 in the form,
+  // the others in albumDrafts) that the earlier steps rebuild the list from,
+  // as the resume path does. On steps 5–6 only uploadDrafts holds each
+  // album's uploaded files and email choice; albumDrafts still has the copies
+  // made before the file step. Skipping this makes the next 다음 단계 rebuild
+  // the list from those copies, so additional albums lose their files (and a
+  // later 임시 저장 deletes them on the server), and an additional album
+  // selected on the file step becomes the "current" draft while album 1
+  // drops out. Returns false when the move has to wait.
+  const restoreAuthoringDrafts = () => {
+    if (!uploadDrafts || uploadDrafts.length === 0) return true;
+    if (
+      uploadDraftIndex !== 0 &&
+      uploads.some((upload) => upload.status !== "done")
+    ) {
+      setNotice({ error: "파일 업로드가 완료된 뒤 이전 단계로 이동할 수 있습니다." });
+      return false;
     }
+    const drafts = resolveUploadDrafts();
+    if (!drafts || drafts.length === 0) return false;
+    setAlbumDrafts(drafts.slice(1));
+    setUploadDrafts(null);
+    setUploadDraftIndex(0);
+    if (uploadDraftIndex !== 0) {
+      applyDraftToForm(drafts[0], {
+        emailSubmitConfirmed: drafts[0].emailSubmitConfirmed,
+      });
+    }
+    return true;
+  };
+
+  const returnFromUploadStep = () => {
+    if (!restoreAuthoringDrafts()) return;
     setStep(hasTrackStep ? 4 : 3);
   };
 
@@ -4137,37 +4218,39 @@ export function AlbumWizard({
     }
   };
 
-  const handlePreflightNavigate = React.useCallback(
-    (target: SubmissionPreflightTarget) => {
-      setNotice({});
-      if (target.step === 3) setShowBasicErrors(true);
-      if (typeof target.trackIndex === "number") {
-        setActiveTrackIndex(target.trackIndex);
-      }
-      const nextStep = initialArchiveEntry && target.step < 5 ? 5 : target.step;
-      skipNextStepScroll(nextStep);
-      setStep(nextStep);
-      window.setTimeout(() => {
-        const element = Array.from(
-          document.querySelectorAll<HTMLElement>("[data-preflight-field]"),
-        ).find(
-          (candidate) =>
-            candidate.dataset.preflightField === target.field &&
-            (typeof target.trackIndex !== "number" ||
-              candidate.dataset.trackIndex === undefined ||
-              candidate.dataset.trackIndex === String(target.trackIndex)),
-        );
-        element?.scrollIntoView({
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "instant"
-            : "smooth",
-          block: "center",
-        });
-        element?.focus({ preventScroll: true });
-      }, 80);
-    },
-    [initialArchiveEntry, skipNextStepScroll],
-  );
+  // Not memoized: restoreAuthoringDrafts reads this render's upload state.
+  const handlePreflightNavigate = (target: SubmissionPreflightTarget) => {
+    const nextStep = initialArchiveEntry && target.step < 5 ? 5 : target.step;
+    // The final check's 수정 opens an authoring step; put the album list
+    // back together first (it also resets the active track, so it runs
+    // before the track below is selected).
+    if (nextStep < 5 && !restoreAuthoringDrafts()) return;
+    setNotice({});
+    if (target.step === 3) setShowBasicErrors(true);
+    if (typeof target.trackIndex === "number") {
+      setActiveTrackIndex(target.trackIndex);
+    }
+    skipNextStepScroll(nextStep);
+    setStep(nextStep);
+    window.setTimeout(() => {
+      const element = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-preflight-field]"),
+      ).find(
+        (candidate) =>
+          candidate.dataset.preflightField === target.field &&
+          (typeof target.trackIndex !== "number" ||
+            candidate.dataset.trackIndex === undefined ||
+            candidate.dataset.trackIndex === String(target.trackIndex)),
+      );
+      element?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+        block: "center",
+      });
+      element?.focus({ preventScroll: true });
+    }, 80);
+  };
 
   const albumCheckpointSnapshot: AlbumCheckpointSnapshot = {
     step,
@@ -6030,7 +6113,7 @@ export function AlbumWizard({
             <section aria-label="접수할 앨범 URL 확인" className="rounded-[20px] border-2 border-[#111111] bg-card p-5 dark:border-[#f2cf27] sm:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-base font-black">접수할 앨범 URL</h2>
-                <button type="button" onClick={() => setStep(3)} className="min-h-11 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-foreground">
+                <button type="button" onClick={() => { if (restoreAuthoringDrafts()) setStep(3); }} className="min-h-11 rounded-full border border-border px-4 py-2 text-xs font-semibold hover:border-foreground">
                   URL·접수자 정보 수정
                 </button>
               </div>

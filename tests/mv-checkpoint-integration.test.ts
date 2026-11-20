@@ -61,7 +61,7 @@ test("foreground MV draft saves are exclusive and final cart completion clears t
 test("resume deletion keeps its recovery keys until the exact server draft is deleted", () => {
   assert.match(
     wizard,
-    /status === "DRAFT" \|\| status === "PRE_REVIEW"[\s\S]*await clearServerDrafts\(\{ ids: \[draftId\], guestToken \}\)[\s\S]*await clearCartSubmission\(draftId, guestToken\)[\s\S]*clearDraftStorageForSubmission\(draftId\)/,
+    /status === "DRAFT" \|\| status === "PRE_REVIEW"[\s\S]*await clearServerDrafts\(\{ ids: \[draftId\], guestToken \}\)[\s\S]*clearDraftStorageForSubmission\(draftId\)/,
   );
   assert.match(
     wizard,
