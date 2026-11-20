@@ -43,7 +43,12 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   generator ||= (await import('./documents.mjs')).generateDocuments;
   importer ||= async input => (await import('./manual-import.mjs')).importReferenceDocument(input);
   reviewer ||= async input => (await import('./screening.mjs')).reviewLyrics(input);
-  translator ||= async input => (await import('./manual-translation.mjs')).translateMissingLyrics(input);
+  // Review-document lyrics go through the desk's signed route, which spends none
+  // of the public /api/translate allowance (the public route stays the fallback).
+  translator ||= async input => (await import('./manual-translation.mjs')).translateMissingLyrics({
+    ...input,
+    ...(typeof remote.translateLyrics === 'function' && remote.configured() ? { translateBatch: (payload, signal) => remote.translateLyrics(payload, { signal }) } : {}),
+  });
   openFolder ||= target => { const child = spawn('/usr/bin/open', [target], { stdio: 'ignore' }); child.on('error', () => {}); };
   openUrl ||= openFolder;
   // Site monitoring settings live outside state.json so backups never copy the Vercel token.

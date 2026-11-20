@@ -248,3 +248,21 @@ test('the received scope is signed into the path and in-review purges carry the 
   await client.purgeStorage([id]);
   assert.equal(seen.at(-1).body.scope, undefined);
 });
+
+test('lyrics translation for review documents is a signed request to the desk route', async () => {
+  // The anonymous /api/translate counts every visitor's paid model calls; the
+  // desk's own document work goes through its signed route instead.
+  const { client, calls } = mockClient((url, init) => {
+    verifyCall(url, init); assert.equal(new URL(url).pathname, '/api/internal/review-desk/translate'); assert.equal(init.method, 'POST');
+    const body = JSON.parse(init.body.toString());
+    assert.equal(body.requestId, init.headers['x-onside-desk-request']);
+    assert.deepEqual({ lines: body.lines, source: body.source, target: body.target, context: body.context }, { lines: ['Hello world'], source: 'auto', target: 'ko', context: 'Hello world' });
+    return json({ ok: true, translations: ['안녕 세상아'] });
+  });
+  assert.deepEqual(await client.translateLyrics({ lines: ['Hello world'], source: 'auto', target: 'ko', context: 'Hello world' }), { translations: ['안녕 세상아'] });
+  assert.equal(calls.length, 1);
+  const malformed = mockClient(() => json({ ok: true, translations: 'nope' })).client;
+  await assert.rejects(malformed.translateLyrics({ lines: ['Hello'] }), error => error.code === 'INVALID_TRANSLATION_RESULT');
+  const missing = mockClient(() => json({ ok: false, error: 'not found' }, 404)).client;
+  await assert.rejects(missing.translateLyrics({ lines: ['Hello'] }), error => error.status === 404);
+});

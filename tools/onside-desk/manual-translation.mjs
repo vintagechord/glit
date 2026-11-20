@@ -73,7 +73,7 @@ const ENDS_SENTENCE=/[.!?。…~♪"'」』]$/;
  * "(번역: …)" on its own line under each run of such lines. Online cases are
  * included only when the caller asks (document generation). The caller
  * persists the returned overrides, which hold only the changed lyric fields. */
-export async function translateMissingLyrics({detail,serviceUrl,fetchImpl=fetch,signal,allowOnline=false}={}) {
+export async function translateMissingLyrics({detail,serviceUrl,fetchImpl=fetch,translateBatch,signal,allowOnline=false}={}) {
   const manual=detail?.source==='manual'||detail?.submission?.source==='manual';
   if(!detail?.submission||(!manual&&!allowOnline)) throw new Error('관리자 수동 작업에서만 번역을 보완할 수 있습니다.');
   const base=new URL(serviceUrl);
@@ -89,15 +89,31 @@ export async function translateMissingLyrics({detail,serviceUrl,fetchImpl=fetch,
     for(let i=0;i<unique.length;i+=120) batches.push({plan,lines:unique.slice(i,i+120)});
   }
   if(batches.length>20) throw new Error('한 번에 번역할 수 있는 트랙 수를 넘었습니다. 일부 트랙을 먼저 보완하세요. 저장된 가사는 변경하지 않았습니다.');
+  // The desk's signed route spends no public allowance; a service deployed
+  // before that route existed answers 404, and the public route still works.
+  let signedRoute=typeof translateBatch==='function';
   for(const {plan,lines} of batches) {
     const context=plan.source.slice(0,12000).replace(/[\uD800-\uDBFF]$/,'');
     const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(55000)]):AbortSignal.timeout(55000);
-    let response;
-    try {response=await fetchImpl(endpoint.href,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,source:'auto',target:'ko',context}),signal:requestSignal,redirect:'error',credentials:'omit'});}
-    catch {throw new Error('번역 서비스에 연결하지 못했거나 요청이 취소되었습니다. 저장된 가사는 변경하지 않았습니다.');}
-    if(response.status===429) throw new Error('번역 요청이 일시적으로 많습니다. 잠시 후 다시 시도하세요. 저장된 가사는 변경하지 않았습니다.');
-    // The service reports segments it could not translate (502) next to the ones it did.
-    const result=response.ok||response.status===502?await responseJSON(response).catch(()=>null):null;
+    let result=null;
+    if(signedRoute) {
+      try {result=await translateBatch({lines,source:'auto',target:'ko',context},requestSignal);}
+      catch(error) {
+        if(error?.status!==404) {
+          if(error?.status===429) throw new Error('번역 요청이 일시적으로 많습니다. 잠시 후 다시 시도하세요. 저장된 가사는 변경하지 않았습니다.');
+          throw new Error('번역 서비스에 연결하지 못했거나 요청이 취소되었습니다. 저장된 가사는 변경하지 않았습니다.');
+        }
+        signedRoute=false;
+      }
+    }
+    if(!result) {
+      let response;
+      try {response=await fetchImpl(endpoint.href,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,source:'auto',target:'ko',context}),signal:requestSignal,redirect:'error',credentials:'omit'});}
+      catch {throw new Error('번역 서비스에 연결하지 못했거나 요청이 취소되었습니다. 저장된 가사는 변경하지 않았습니다.');}
+      if(response.status===429) throw new Error('번역 요청이 일시적으로 많습니다. 잠시 후 다시 시도하세요. 저장된 가사는 변경하지 않았습니다.');
+      // The service reports segments it could not translate (502) next to the ones it did.
+      result=response.ok||response.status===502?await responseJSON(response).catch(()=>null):null;
+    }
     if(!result) throw new Error('번역 서비스가 모든 구간을 번역하지 못했습니다. 저장된 가사는 변경하지 않았습니다.');
     if(!Array.isArray(result.translations)||result.translations.length!==lines.length) throw new Error('번역 응답의 구간 수가 일치하지 않습니다. 저장된 가사는 변경하지 않았습니다.');
     for(const [index,line] of lines.entries()) {

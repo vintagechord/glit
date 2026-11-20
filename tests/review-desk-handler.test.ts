@@ -421,3 +421,39 @@ test("purging files of submissions still in review requires the desk's local-cop
   assert.equal(response.status, 200);
   assert.deepEqual(f.calls.find(call => call.name === "purge")?.input, { ids: [sid], actorId: actor, scope: "received" });
 });
+
+test("the desk translates review-document lyrics through its own signed route, never the public budget", async () => {
+  // The desk used the anonymous /api/translate, whose per-visitor and daily
+  // limits now count model calls; one large album would have used them up.
+  const { createReviewDeskTranslateHandlers } = await import("../src/lib/admin/review-desk-handler");
+  const calls: Array<{ lines: string[]; options: Record<string, unknown> }> = [];
+  const state = { admin: true };
+  const db = { from() { const query = { select() { return query; }, eq() { return query; }, async maybeSingle() { return { data: { role: state.admin ? "admin" : "user" }, error: null }; } }; return query; } } as unknown as SupabaseClient;
+  const handlers = createReviewDeskTranslateHandlers({ secret: () => secret, createDb: () => db,
+    async translate(lines, options) { calls.push({ lines, options: { ...options, signal: undefined } }); return lines.map(line => line === "Hello world" ? "안녕 세상아" : line === "censored" ? "***" : ""); } });
+  const path = "/api/internal/review-desk/translate";
+  const body = { requestId, lines: ["Hello world", "censored", ""], source: "auto", target: "ko", context: "Hello world" };
+
+  const unsigned = await handlers.POST(new Request(`https://fixture.invalid${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+  assert.equal(unsigned.status, 401);
+  assert.equal(calls.length, 0);
+
+  const response = await handlers.POST(signedRequest("POST", body, { path }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result.translations, ["안녕 세상아", "", ""], "an unusable answer is left out, as on the public route");
+  assert.deepEqual(calls, [{ lines: ["Hello world", "censored", ""], options: { source: "auto", target: "ko", context: "Hello world", signal: undefined } }]);
+
+  state.admin = false;
+  assert.equal((await handlers.POST(signedRequest("POST", body, { path }))).status, 403);
+  state.admin = true;
+  assert.equal((await handlers.POST(signedRequest("POST", { ...body, requestId: sid }, { path }))).status, 400);
+  assert.equal((await handlers.POST(signedRequest("POST", { ...body, lines: Array.from({ length: 121 }, () => "a") }, { path }))).status, 400);
+  assert.equal(calls.length, 1);
+});
+
+test("the desk health check announces the signed translation route", async () => {
+  const f = fixture();
+  const health = await (await f.handlers.GET(signedRequest("GET", undefined, { path: "/api/internal/review-desk/health" }), { params: Promise.resolve({ id: "health" }) })).json();
+  assert.equal(health.capabilities.deskTranslation, true);
+});
