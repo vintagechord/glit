@@ -6,9 +6,13 @@ import { build } from "esbuild";
 
 type Fixture = {
   createKaraokeRequestAction: (payload: Record<string, unknown>) => Promise<{ error?: string; message?: string }>;
-  state: { user: { id: string } | null; deny: string[]; limits: Array<{ namespace: string; identifier: string; limit: number; windowMs: number }> };
+  state: { user: { id: string } | null; authError: string | null; deny: string[]; limits: Array<{ namespace: string; identifier: string; limit: number; windowMs: number }> };
   calls: Array<{ name: string; args: Record<string, unknown> }>;
 };
+
+// A visitor with no auth cookies gets { user: null, error: AuthSessionMissingError } from
+// supabase-js, not error: null. state.authError stands in for any other sign-in failure,
+// such as the social-signup-incomplete AuthError from src/lib/supabase/server.ts.
 
 async function fixture(): Promise<Fixture> {
   const result = await build({
@@ -19,8 +23,8 @@ async function fixture(): Promise<Fixture> {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls} from 'karaoke-fixture';";
         const modules: Record<string, string> = {
-          "karaoke-fixture": "export const calls=[]; export const state={user:null,deny:[],limits:[]};",
-          "@/lib/supabase/server": `${shared} export const createServerSupabase=async()=>({auth:{getUser:async()=>({data:{user:state.user},error:null})}});`,
+          "karaoke-fixture": "export const calls=[]; export const state={user:null,authError:null,deny:[],limits:[]};",
+          "@/lib/supabase/server": `${shared} import {AuthError,AuthSessionMissingError} from '@supabase/supabase-js'; export const createServerSupabase=async()=>({auth:{getUser:async()=>state.user?{data:{user:state.user},error:null}:{data:{user:null},error:state.authError?new AuthError(state.authError,403,'social_signup_incomplete'):new AuthSessionMissingError()}}});`,
           "@/lib/supabase/admin": `${shared} export const createAdminClient=()=>({rpc:async(name,args)=>{calls.push({name,args});return {data:[{result_request_id:'request-1'}],error:null};}});`,
           "@/lib/request-rate-limit": `${shared} export const consumePersistentRateLimit=async input=>{state.limits.push(input);const allowed=!state.deny.includes(input.namespace);return {allowed,retryAfterSeconds:allowed?0:60};}; export const getRequestIdentifier=headers=>headers.get('x-real-ip')||'unknown';`,
           "@/lib/admin/action-auth": "export const requireAdminAction=async()=>({id:'admin'});",
@@ -28,7 +32,7 @@ async function fixture(): Promise<Fixture> {
           "next/headers": "export const headers=async()=>new Headers({'x-real-ip':'198.51.100.9'});",
           "next/navigation": "export const redirect=url=>{throw Error('redirect:'+url)};",
         };
-        return { contents: modules[path], loader: "js" };
+        return { contents: modules[path], loader: "js", resolveDir: process.cwd() };
       });
     } }],
   });
@@ -46,6 +50,8 @@ test("guest karaoke requests pass shared per-address and per-email limits before
     ["karaoke-request-ip", "198.51.100.9"], ["karaoke-request-ip-day", "198.51.100.9"], ["karaoke-request-guest-email", "Guest@Example.invalid"],
   ]);
   assert.equal(karaoke.calls.length, 1);
+  assert.equal(karaoke.calls[0].args.p_user_id, null);
+  assert.equal(karaoke.calls[0].args.p_guest_email, "Guest@Example.invalid");
   for (const namespace of ["karaoke-request-ip", "karaoke-request-ip-day", "karaoke-request-guest-email"]) {
     const limited = await fixture();
     limited.state.deny = [namespace];
@@ -62,6 +68,14 @@ test("member karaoke requests are limited per member, and invalid input spends n
   const invalid = await fixture();
   assert.equal((await invalid.createKaraokeRequestAction({ title: "" })).error, "입력값을 확인해주세요.");
   assert.equal(invalid.state.limits.length, 0);
+});
+
+test("a sign-in that fails for any reason other than a missing session still stops the request", async () => {
+  const karaoke = await fixture();
+  karaoke.state.authError = "회원가입 동의를 완료해주세요.";
+  assert.equal((await karaoke.createKaraokeRequestAction(guestRequest)).error, "로그인 정보를 확인할 수 없습니다.");
+  assert.equal(karaoke.state.limits.length, 0);
+  assert.equal(karaoke.calls.length, 0);
 });
 
 test("admin karaoke list pages with a stable order and keeps the page after saving", () => {

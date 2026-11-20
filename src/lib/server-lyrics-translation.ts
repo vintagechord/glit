@@ -1,7 +1,7 @@
 import { translateLyricsWithOpenAI } from "./openai-translation";
 import { translateSpelledOutLetters } from "./foreign-lyrics";
 
-import { isUsableLyricsTranslation, normalizeLyricsTranslation, splitLyricsTranslationText, lyricsTranslationBatches, truncateLyricsContext, hasForeignLyricsLetters, withLyricsTranslationSignal } from "./lyrics-translation-validation";
+import { isUsableLyricsTranslation, normalizeLyricsTranslation, splitLyricsTranslationText, lyricsTranslationModelBatches, truncateLyricsContext, hasForeignLyricsLetters, withLyricsTranslationSignal } from "./lyrics-translation-validation";
 export { isUsableLyricsTranslation } from "./lyrics-translation-validation";
 
 const sleep = (ms: number) =>
@@ -267,10 +267,11 @@ export const translateLyricsBatch = async (
     return withLyricsTranslationSignal((options.fetchImpl ?? fetch)(input, { ...init, signal: requestSignal }), requestSignal);
   };
   const prepared = lines.map(line => ({ source: line.trim(), chunks: splitLyricsTranslationText(line) }));
-  const uniqueTexts = [...new Set(prepared.filter(line => !(target.split("-")[0] === "ko" && !hasForeignLyricsLetters(line.source))).flatMap(line => line.chunks))];
+  // The same calls /api/translate charges against its limits.
+  const batches = lyricsTranslationModelBatches(lines, target);
+  const uniqueTexts = batches.flat();
   const translations = new Map<string, string>();
   const context = truncateLyricsContext(options.context ?? lines.join("\n"));
-  const batches = lyricsTranslationBatches(uniqueTexts);
   let nextBatch = 0;
   let reportedMissingKey = false;
   await Promise.allSettled(Array.from({ length: Math.min(2, batches.length) }, async () => {

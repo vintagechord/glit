@@ -58,6 +58,15 @@ export function lyricsTranslationBatches(texts: string[], maxCount: number = LYR
   return batches;
 }
 
+/** The model calls one server translation makes: every distinct chunk of the
+ * lines, and toward Korean only lines with foreign letters (Korean lines are
+ * kept as they are). The /api/translate limits charge the same count. */
+export function lyricsTranslationModelBatches(lines: string[], target: string) {
+  const toKorean = target.split("-")[0] === "ko";
+  const texts = lines.filter(line => !(toKorean && !hasForeignLyricsLetters(line))).flatMap(line => splitLyricsTranslationText(line));
+  return lyricsTranslationBatches([...new Set(texts)]);
+}
+
 /** A mock or stalled response body must obey the same cancellation as fetch. */
 export function withLyricsTranslationSignal<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {

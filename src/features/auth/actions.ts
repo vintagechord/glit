@@ -253,10 +253,10 @@ export async function signupAction(
   // Transactional signup sets the real password only after mailbox ownership
   // is proved. A pre-registered account cannot activate a known password.
   const temporaryPassword = needsVerification ? randomBytes(32).toString("base64url") : null;
+  // The form asks only for the address and consents. Name, company and phone
+  // are never read from it: whoever first signs up with an address would
+  // otherwise seed that inbox owner's profile (handle_new_user copies them).
   const parsed = getSignupSchema(english).safeParse({
-    name: (formData.get("name") || "").toString().trim() || undefined,
-    company: (formData.get("company") || "").toString().trim() || undefined,
-    phone: (formData.get("phone") || "").toString().trim() || undefined,
     email: formData.get("email"),
     password: temporaryPassword ?? formData.get("password"),
     confirmPassword: temporaryPassword ?? formData.get("confirmPassword"),
@@ -309,9 +309,9 @@ export async function signupAction(
         ...(needsVerification ? { signupVerificationFlow: SIGNUP_VERIFICATION_FLOW } : {}),
       },
       user_metadata: {
-        name: parsed.data.name ?? "",
-        company: parsed.data.company ?? "",
-        phone: parsed.data.phone ?? "",
+        name: "",
+        company: "",
+        phone: "",
         marketingConsent: parsed.data.agreeMarketing === "on",
       },
     });
@@ -333,7 +333,6 @@ export async function signupAction(
 
     const emailResult = await sendWelcomeEmail({
       email: parsed.data.email,
-      name: parsed.data.name,
     });
 
     if (!emailResult.ok && !emailResult.skipped) {
