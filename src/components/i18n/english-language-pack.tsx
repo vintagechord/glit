@@ -2382,6 +2382,7 @@ Object.assign(exactTranslations, {
   "결제 상태가 변경되어 접수를 수정할 수 없습니다.": "The payment status changed, so this application cannot be edited.",
   "접수 저장이 완료되지 않았습니다. 내용을 확인한 뒤 다시 시도해주세요.": "The application was not saved completely. Check the details and try again.",
   "확인되지 않은 첨부 파일이 있습니다. 해당 파일을 삭제한 뒤 다시 올려주세요.": "An attached file could not be verified. Remove that file and upload it again.",
+  "업로드가 중단되었습니다.": "The upload was stopped.",
   "신청서는 저장되었습니다. 내 음악 관리 연결을 완료하도록 다시 저장해주세요.": "Your application was saved. Save again to complete the link to My Music.",
   "결제 전 신청서 저장이 완료되었습니다.": "Your application has been saved and is ready for payment.",
   "카드 결제 요청이 접수되었습니다.": "Your card payment request has been received.",
