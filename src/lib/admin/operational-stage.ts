@@ -35,6 +35,9 @@ export function mapAdminOperationalStage(
   currentPaymentStatus?: PaymentStatus | null,
   currentStatus: ReviewStatus = "SUBMITTED",
 ): { status: ReviewStatus; paymentStatus: PaymentStatus } {
+  // A refund is recorded only from 환불 처리 and stops the review: no stage
+  // marks the application paid again or moves its review.
+  if (currentPaymentStatus === "REFUNDED") return { status: currentStatus, paymentStatus: "REFUNDED" };
   switch (stage) {
     case "APPLICATION_RECEIVED":
       return {

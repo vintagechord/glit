@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { reviewStatusValues } from "../src/constants/review-status";
 import {
   adminOperationalStageValues,
   mapAdminOperationalStage,
@@ -40,10 +41,31 @@ test("saving the stage a row already stands on stores the same row", () => {
   assert.equal(adminOperationalStageValues.length, 4);
 });
 
+test("a refunded application keeps its status and refund whatever stage is saved", () => {
+  // A refund is recorded from 환불 처리 and stops the review. 결제완료, 심의진행
+  // and 결과 준비 all stored PAID, so a save turned a refunded desk album (no
+  // order) back into a paid one; 신청접수 reset a refunded order's review.
+  for (const stage of adminOperationalStageValues) {
+    for (const status of reviewStatusValues) {
+      assert.deepEqual(mapAdminOperationalStage(stage, "REFUNDED", status), { status, paymentStatus: "REFUNDED" }, `${stage} on ${status}`);
+    }
+  }
+});
+
 test("the album detail page reads the stage from the stored row", () => {
   const page = readFileSync("src/app/admin/submissions/detail/page.tsx", "utf8");
   assert.match(page, /storedOperationalStage\(submission\)/);
   assert.doesNotMatch(page, /hasAlbumResultNotified\)\s*\?\s*"RESULT_NOTIFIED"/, "station results no longer decide the album stage");
+});
+
+test("a broadcast MV reads its stage from the stored row, like an album", () => {
+  // A 보완 요청 station gives a broadcast MV a result_status while it is still
+  // in review. Taken for a published result, it showed and posted 결과 준비,
+  // and once a save had stored that, the locked select could not undo it.
+  const page = readFileSync("src/app/admin/submissions/detail/page.tsx", "utf8");
+  assert.match(page, /currentOperationalStage = !isMvDistribution\s*\?\s*storedOperationalStage\(submission\)/);
+  assert.doesNotMatch(page, /isMvSubmission && hasResultPublished \?/, "only an online MV's 영등위 result locks the select");
+  assert.match(page, /\(isMvDistribution && hasResultPublished\) \?/);
 });
 
 test("a card order whose payment never finished can be settled or removed by the administrator", () => {
