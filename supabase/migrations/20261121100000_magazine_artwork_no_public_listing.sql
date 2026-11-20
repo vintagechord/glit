@@ -1,0 +1,17 @@
+-- magazine-artwork is a public bucket, so its files are served by URL
+-- (getPublicUrl, /object/public/...) without any storage.objects policy.
+-- "Magazine artwork public readable" (0061) had no TO clause, so it also let
+-- anyone holding the public anon key list the bucket through the Storage API:
+-- every member's <uid>/uploads/... folder, file names and upload times, and
+-- with them artwork for requests not yet published, canceled requests, and
+-- uploads abandoned before a request was filed.
+--
+-- Nothing lists this bucket with a member or anonymous session. The browser
+-- only uploads with a one-time signed URL, which Storage checks against its
+-- token, not a policy; the server reads, removes and links files with the
+-- service role; administrators keep "Admin manages magazine artwork".
+--
+-- Not wrapped in an insufficient_privilege handler: the migration role
+-- created this project's storage.objects policies, and a privacy fix that
+-- silently did nothing would be worse than a failed push.
+drop policy if exists "Magazine artwork public readable" on storage.objects;
