@@ -6,7 +6,8 @@
  * store, a music studio and a repair shop; say so, and say what the service
  * does. Every line is something the site already does or the owner stated as
  * copy. No rankings, no "best", no promise about a review's outcome or about
- * airplay.
+ * airplay. Owner 2026-11-20 reworded three lines: the "since" title, the
+ * family line and the offices line are the owner's exact copy.
  */
 import { APP_CONFIG } from "@/lib/config";
 
@@ -56,7 +57,7 @@ export type OnsideReason = { key: "since" | "family" | "offices" | "online" | "p
 export const ONSIDE_REASONS: OnsideReason[] = [
   {
     key: "since",
-    title: { ko: "2017년부터 이어온 심의 대행", en: "Review submissions since 2017" },
+    title: { ko: "Since 2017", en: "Since 2017" },
     body: {
       ko: "음반 심의와 뮤직비디오 심의 접수를 2017년부터 대행해 왔습니다.",
       en: "Onside has handled album and music video review submissions since 2017.",
@@ -66,16 +67,16 @@ export const ONSIDE_REASONS: OnsideReason[] = [
     key: "family",
     title: { ko: "음악 회사가 직접 운영합니다", en: "Run by a music company" },
     body: {
-      ko: `${APP_CONFIG.businessName}는 ${sisterNames}를 함께 운영합니다. 온사이드는 그 심의 브랜드입니다.`,
-      en: "Vintage House also runs the Watermelon beat market, the Artmelon store, a music studio and the Machfix repair shop. Onside is its review brand.",
+      ko: `${APP_CONFIG.businessName}는 온사이드를 포함해 ${sisterNames}를 함께 운영합니다.`,
+      en: "Vintage House runs Onside together with the Watermelon beat market, the Artmelon art-goods store, the Vintage House music studio and the Machfix repair shop.",
     },
   },
   {
     key: "offices",
     title: { ko: "필요한 접수처를 한 번에", en: "Every office in one application" },
     body: {
-      ko: "TV·라디오 방송국 15곳의 음반 심의, 영상물등급위원회 등급분류와 방송국별 뮤직비디오 심의를 한곳에서 접수합니다.",
-      en: "Album reviews at 15 TV and radio stations, KMRB music video ratings and station music video reviews, submitted from one place.",
+      ko: "TV·라디오 방송국 15곳의 음반 심의, 영상물등급위원회 등급분류와 방송국별 뮤직비디오 심의 등 국내 가능한 모든 심의 접수가 가능합니다.",
+      en: "Album reviews at 15 TV and radio stations, KMRB music video ratings, station music video reviews: every review available in Korea can be submitted here.",
     },
   },
   {

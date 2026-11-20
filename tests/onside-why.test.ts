@@ -67,3 +67,19 @@ test("each review guide carries its whole search phrase, and the home page says 
   // The page that makes the case ranks with the guides in the sitemap.
   assert.match(read("src/app/sitemap.ts"), /\{ path: "\/about", priority: 0\.9,/);
 });
+
+test("the about page copy is the owner's wording of 2026-11-20", () => {
+  const reason = Object.fromEntries(ONSIDE_REASONS.map((entry) => [entry.key, entry]));
+  assert.equal(reason.since.title.ko, "Since 2017");
+  assert.equal(
+    reason.family.body.ko,
+    "(주)빈티지하우스는 온사이드를 포함해 비트마켓 워터멜론, 아트상품 스토어 아트멜론, 뮤직 스튜디오 빈티지하우스, 수리 전문점 마하픽스를 함께 운영합니다.",
+  );
+  assert.equal(
+    reason.offices.body.ko,
+    "TV·라디오 방송국 15곳의 음반 심의, 영상물등급위원회 등급분류와 방송국별 뮤직비디오 심의 등 국내 가능한 모든 심의 접수가 가능합니다.",
+  );
+  const content = read("src/components/about/about-content.tsx");
+  assert.ok(content.includes('"빈티지하우스는 국내 뮤지션들과 함께 호흡하며 다양한 비즈니스를 진행하고 있습니다."'));
+  assert.doesNotMatch(JSON.stringify(ONSIDE_REASONS) + content, /그 심의 브랜드|심의만 하는 곳이 아닙니다/);
+});
