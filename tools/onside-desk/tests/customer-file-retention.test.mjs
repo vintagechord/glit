@@ -20,6 +20,12 @@ test('customer files expire 7 days after the result notice of a finished paid re
   assert.equal(customerFilesExpireAt({ ...paid, status: 'COMPLETED' }), '2026-11-08T09:00:00.000Z');
 });
 
+test('a result mail sent while a station result was open does not start the 7 days', () => {
+  // 2026-11-21 (owner): such a mail reads 결과 통보 완료 · 일부 대기; the days count from the final notice.
+  assert.equal(customerFilesExpireAt({ ...paid, partial_result_notified_at: notifiedAt }), null);
+  assert.equal(customerFilesExpireAt({ ...paid, partial_result_notified_at: null }), '2026-11-08T09:00:00.000Z');
+});
+
 test('no expiry while the result is not fully notified or the review is not paid', () => {
   assert.equal(customerFilesExpireAt({ ...paid, result_notified_at: null }), null);
   assert.equal(customerFilesExpireAt({ ...paid, status: 'IN_PROGRESS', result_notified_at: null, partial_result_notified_at: notifiedAt }), null);

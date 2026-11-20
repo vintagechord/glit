@@ -16,8 +16,10 @@ function fakeDb(partial: number | null) {
         chain[op] = (...args: unknown[]) => { ops.push([op, ...args]); return chain; };
       }
       const answer = () => {
+        // The partial-notice filter: albums moved on with the button, and result
+        // mails sent while a station result was open (both in one or() list).
         const waitingOnStation = table === "submissions" &&
-          ops.some(([op, column, operator, value]) => op === "not" && column === "partial_result_notified_at" && operator === "is" && value === null);
+          ops.some(([op, filters]) => op === "or" && String(filters).includes("partial_result_notified_at.not.is.null"));
         if (waitingOnStation) return partial === null ? { count: null, data: null, error: { message: "down" } } : { count: partial, data: null, error: null };
         return { count: 0, data: [], error: null };
       };
