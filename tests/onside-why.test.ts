@@ -73,7 +73,7 @@ test("the about page copy is the owner's wording of 2026-11-20", () => {
   assert.equal(reason.since.title.ko, "Since 2017");
   assert.equal(
     reason.family.body.ko,
-    "(주)빈티지하우스는 온사이드를 포함 비트마켓 워터멜론, 아트상품 스토어 아트멜론, 뮤직 스튜디오 빈티지하우스, 수리 전문점 마하픽스를 함께 운영합니다.",
+    "(주)빈티지하우스는 온사이드를 포함해 비트마켓 워터멜론, 아트상품 스토어 아트멜론, 뮤직 스튜디오 빈티지하우스, 수리 전문점 마하픽스를 함께 운영합니다.",
   );
   assert.equal(
     reason.offices.body.ko,

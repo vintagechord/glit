@@ -67,7 +67,7 @@ export const ONSIDE_REASONS: OnsideReason[] = [
     key: "family",
     title: { ko: "음악 회사가 직접 운영합니다", en: "Run by a music company" },
     body: {
-      ko: `${APP_CONFIG.businessName}는 온사이드를 포함 ${sisterNames}를 함께 운영합니다.`,
+      ko: `${APP_CONFIG.businessName}는 온사이드를 포함해 ${sisterNames}를 함께 운영합니다.`,
       en: "Vintage House runs Onside together with the Watermelon beat market, the Artmelon art-goods store, the Vintage House music studio and the Machfix repair shop.",
     },
   },
