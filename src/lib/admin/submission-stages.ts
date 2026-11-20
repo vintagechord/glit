@@ -82,12 +82,14 @@ export const isAdminSubmissionStage = (value: string): value is AdminSubmissionS
   (adminSubmissionStageKeys as readonly string[]).includes(value);
 
 /**
- * An album the operator sent on to "notified" while a station still has no
- * result (a broadcaster that cannot announce results for now). It counts as
- * notified, but the application stays IN_PROGRESS: customers keep seeing that
- * station as pending, and once every station has a result the album waits
- * for its result mail like any other. Only the badge and this filter tell
- * the two apart, so the operator can find the albums to finish later.
+ * A result notice that left a station open. Either the operator sent an album
+ * on with the button while a broadcaster could not announce its result (the
+ * application stays IN_PROGRESS, nothing is mailed), or a result mail went out
+ * for a 결과 준비 application whose stations were not all decided (owner
+ * decision 2026-11-21). Both count as notified; once the remaining results are
+ * saved the application waits for its final result mail like any other. Only
+ * the badge and this filter tell them apart from a finished notice, so the
+ * operator can find the applications to finish later.
  */
 export const partialNoticeStage = {
   key: "notified_partial",
@@ -111,9 +113,19 @@ export type AdminStageRow = {
 
 const resultStatuses = new Set(["RESULT_READY", "COMPLETED"]);
 
-/** The mark only counts during a paid review in progress. */
+/** The button's mark: it only counts during a paid review in progress. */
 export const isPartialResultNotice = (row: AdminStageRow) =>
   row.payment_status === "PAID" && row.status === "IN_PROGRESS" && Boolean(row.partial_result_notified_at);
+
+/** A result mail accepted while a station result was still open. The final
+ * result mail clears the mark when it is sent, and a later station save clears
+ * result_notified_at, which turns this back into 결과 안내 대기. */
+export const isPartialResultMail = (row: AdminStageRow) =>
+  row.payment_status === "PAID" && resultStatuses.has(row.status ?? "") &&
+  Boolean(row.result_notified_at) && Boolean(row.partial_result_notified_at);
+
+export const hasPartialResultNotice = (row: AdminStageRow) =>
+  isPartialResultNotice(row) || isPartialResultMail(row);
 
 /** DRAFT rows are background autosaves and have no stage. */
 export function adminSubmissionStageOf(row: AdminStageRow): AdminSubmissionStage | null {
@@ -139,7 +151,7 @@ export const gatewayPendingStageLabel = "카드 결제 대기";
 export function adminSubmissionStageBadge(row: AdminStageRow): { label: string; tone: string } | null {
   const stage = adminSubmissionStageOf(row);
   if (!stage) return null;
-  const { label, tone } = isPartialResultNotice(row) ? partialNoticeStage : adminSubmissionStages[stage];
+  const { label, tone } = hasPartialResultNotice(row) ? partialNoticeStage : adminSubmissionStages[stage];
   if (stage === "bank_pending" && (row.payment_method === "CARD" || row.payment_method === "PAYPAL")) {
     return { label: gatewayPendingStageLabel, tone };
   }
@@ -159,6 +171,7 @@ const notRefunded = "payment_status.is.null,payment_status.neq.REFUNDED";
 const unpaid = "payment_status.is.null,payment_status.eq.UNPAID";
 
 const partialNotice = "payment_status.eq.PAID,status.eq.IN_PROGRESS,partial_result_notified_at.not.is.null";
+const partialMail = "payment_status.eq.PAID,status.in.(RESULT_READY,COMPLETED),result_notified_at.not.is.null,partial_result_notified_at.not.is.null";
 
 /** Narrows a submissions query to one stage; mirrors adminSubmissionStageOf. */
 export function applyAdminSubmissionStageFilter<T extends StageFilterable<T>>(
@@ -173,7 +186,7 @@ export function applyAdminSubmissionStageFilter<T extends StageFilterable<T>>(
         .or(`and(status.in.(RESULT_READY,COMPLETED),result_notified_at.not.is.null),and(${partialNotice})`)
         .or(notRefunded);
     case "notified_partial":
-      return query.eq("payment_status", "PAID").eq("status", "IN_PROGRESS").not("partial_result_notified_at", "is", null);
+      return query.or(`and(${partialNotice}),and(${partialMail})`);
     case "result_pending":
       return query.in("status", ["RESULT_READY", "COMPLETED"]).is("result_notified_at", null).or(notRefunded);
     case "in_review":

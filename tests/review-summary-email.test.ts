@@ -12,7 +12,7 @@ async function fixture() {
       plugin.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => {
         const shared = "import {state,calls,db} from 'summary-fixture';";
         const files: Record<string, string> = {
-          "summary-fixture": `export const calls=[];export const state={email:'artist@example.invalid',providers:[],notificationEmail:null,mode:'transactional',result:{ok:true,status:'accepted'},receipt:null,changeRecipientDuringPrepare:false,submission:{id:'${id}',type:'ALBUM',title:'봄의 기록',artist_name:'예시 아티스트',user_id:'member',guest_token:'fictional-guest-link',guest_email:'guest@example.invalid',status:'IN_PROGRESS',result_status:null,updated_at:'2026-10-25T03:00:00Z',certificate_b2_path:null},stations:[{id:'kbs',code:'KBS',name:'KBS',trackIds:['track1'],review:{status:'APPROVED',track_results:[{track_id:'track1',status:'APPROVED'}],updated_at:'2026-10-25T03:00:00Z',age_rating:null}},{id:'mbc',code:'MBC',name:'MBC',trackIds:['track1'],review:{status:'SENT',track_results:[],updated_at:null,age_rating:null}},{id:'sbs',code:'SBS',name:'SBS',trackIds:['track1'],review:{status:'NOT_SENT',track_results:[],updated_at:null,age_rating:null}}]};export const db={auth:{admin:{getUserById:async()=>({data:{user:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:null})}},from(table){const chain={select(){return chain},eq(){return chain},order(){return chain},async range(){return{data:state.receipt?[state.receipt]:[],error:null}},async maybeSingle(){return{data:table==='profiles'?{phone:null,notification_email:state.notificationEmail}:structuredClone(state.submission),error:null}}};return chain}};`,
+          "summary-fixture": `export const calls=[];export const state={updateError:false,email:'artist@example.invalid',providers:[],notificationEmail:null,mode:'transactional',result:{ok:true,status:'accepted'},receipt:null,changeRecipientDuringPrepare:false,submission:{id:'${id}',type:'ALBUM',title:'봄의 기록',artist_name:'예시 아티스트',user_id:'member',guest_token:'fictional-guest-link',guest_email:'guest@example.invalid',status:'IN_PROGRESS',result_status:null,updated_at:'2026-10-25T03:00:00Z',certificate_b2_path:null},stations:[{id:'kbs',code:'KBS',name:'KBS',trackIds:['track1'],review:{status:'APPROVED',track_results:[{track_id:'track1',status:'APPROVED'}],updated_at:'2026-10-25T03:00:00Z',age_rating:null}},{id:'mbc',code:'MBC',name:'MBC',trackIds:['track1'],review:{status:'SENT',track_results:[],updated_at:null,age_rating:null}},{id:'sbs',code:'SBS',name:'SBS',trackIds:['track1'],review:{status:'NOT_SENT',track_results:[],updated_at:null,age_rating:null}}]};export const db={auth:{admin:{getUserById:async()=>({data:{user:{id:'member',email:state.email,identities:state.providers.map(provider=>({provider}))}},error:null})}},from(table){const chain={update(values){calls.push({kind:'update',table,values});const u={eq(){return u},not(){return u},is(){return u},then(resolve){resolve({data:null,error:state.updateError?{message:'fixture'}:null})}};return u},select(){return chain},eq(){return chain},order(){return chain},async range(){return{data:state.receipt?[state.receipt]:[],error:null}},async maybeSingle(){return{data:table==='profiles'?{phone:null,notification_email:state.notificationEmail}:structuredClone(state.submission),error:null}}};return chain}};`,
           "@/lib/supabase/admin": `${shared}export const createAdminClient=()=>db;`,
           "@/lib/email-delivery-mode": `${shared}export const getEmailDeliveryMode=()=>state.mode;`,
           "@/lib/email-transport": `${shared}import{createHash}from'node:crypto';export const sendTransactionalEmail=async mail=>{calls.push({kind:'send',mail});state.receipt={status:state.result.status,idempotency_key:createHash('sha256').update(mail.operation+'\\0'+mail.to.toLowerCase()+'\\0'+mail.idempotencyKey).digest('hex'),recipient_email:mail.to};return state.result;};`,
@@ -25,8 +25,8 @@ async function fixture() {
     } }],
   });
   type Api = Pick<typeof import("../src/lib/admin/submission-notifications"), "getReviewSummaryEmailPreviewById" | "sendReviewSummaryNotificationById"> & Pick<typeof import("../src/lib/email"), "renderReviewSummaryEmail"> & {
-    state: { email: string | null; providers: string[]; notificationEmail: string | null; mode: string; result: {ok:boolean;status:string;queued?:boolean};receipt:Record<string,unknown>|null;changeRecipientDuringPrepare:boolean;submission:Record<string,unknown>;stations:Array<{id:string;code:string;name:string;trackIds:string[];review:{status:string;track_results:unknown[];updated_at:string|null;age_rating:string|null}}> };
-    calls:Array<{kind:string;mail?:{html:string;subject:string;to:string;idempotencyKey:string;markResultNotified:boolean;attachmentRefs?:unknown[]}}>;
+    state: { updateError: boolean; email: string | null; providers: string[]; notificationEmail: string | null; mode: string; result: {ok:boolean;status:string;queued?:boolean};receipt:Record<string,unknown>|null;changeRecipientDuringPrepare:boolean;submission:Record<string,unknown>;stations:Array<{id:string;code:string;name:string;trackIds:string[];review:{status:string;track_results:unknown[];updated_at:string|null;age_rating:string|null}}> };
+    calls:Array<{kind:string;table?:string;values?:Record<string,unknown>;mail?:{html:string;subject:string;to:string;idempotencyKey:string;markResultNotified:boolean;attachmentRefs?:unknown[]}}>;
   };
   const output = { exports: {} as Api };new Function("require","module","exports",bundle.outputFiles[0].text)(createRequire(import.meta.url),output,output.exports);return output.exports;
 }
@@ -110,4 +110,39 @@ test("structured template escapes all customer fields and refuses unsafe links",
   const api=await fixture();api.state.submission.title='<img src=x onerror=alert(1)>';api.state.submission.artist_name='<script>private</script>';api.state.stations[0].name='<svg onload=alert(1)>';
   const preview=await api.getReviewSummaryEmailPreviewById(previewInput);assert.doesNotMatch(preview.html,/<script>|<img src=x|<svg onload/);assert.match(preview.html,/&lt;img/);
   assert.throws(()=>api.renderReviewSummaryEmail({title:'fixture',kind:'ALBUM',updatedAt:preview.updatedAt,link:'javascript:alert(1)',rows:[],completedCount:0,attachmentCount:0}),/valid review-status link/);
+});
+
+test("a result mail that leaves a station open is a partial notice; the mail with every result decided is the final one", async () => {
+  // 2026-11-21 (owner): albums go to 결과 준비 once stations received them, and
+  // results are mailed as they come in. Such a mail must not read 결과 통보 완료.
+  const api = await fixture();
+  api.state.submission.status = "RESULT_READY";
+  let preview = await api.getReviewSummaryEmailPreviewById(previewInput);
+  assert.equal((await api.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision })).deliveredCount, 1);
+  const marked = api.calls.find(call => call.kind === "update");
+  assert.equal(marked?.table, "submissions");
+  assert.match(String(marked?.values?.partial_result_notified_at), /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(api.calls.find(call => call.kind === "send")!.mail!.markResultNotified, true);
+  assert.ok(api.calls.findIndex(call => call.kind === "update") < api.calls.findIndex(call => call.kind === "send"), "marked before the mail can be accepted");
+
+  // Every station decided: the final notice clears the mark.
+  api.calls.length = 0; api.state.receipt = null;
+  api.state.stations[1].review = { status: "APPROVED", track_results: [{ track_id: "track1", status: "APPROVED" }], updated_at: "2026-10-26T03:00:00Z", age_rating: null };
+  api.state.stations[2].review = { status: "REJECTED", track_results: [{ track_id: "track1", status: "REJECTED" }], updated_at: "2026-10-26T03:00:00Z", age_rating: null };
+  preview = await api.getReviewSummaryEmailPreviewById(previewInput);
+  assert.equal((await api.sendReviewSummaryNotificationById({ ...previewInput, requestId: "33333333-3333-4333-8333-333333333333", expectedRevision: preview.revision })).deliveredCount, 1);
+  assert.deepEqual(api.calls.find(call => call.kind === "update")?.values, { partial_result_notified_at: null });
+
+  // A progress mail during review records nothing, as before.
+  const review = await fixture();
+  const progress = await review.getReviewSummaryEmailPreviewById(previewInput);
+  await review.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: progress.revision });
+  assert.equal(review.calls.some(call => call.kind === "update"), false);
+
+  // If the mark cannot be written, nothing is sent.
+  const failing = await fixture(); failing.state.submission.status = "RESULT_READY"; failing.state.updateError = true;
+  const failingPreview = await failing.getReviewSummaryEmailPreviewById(previewInput);
+  const outcome = await failing.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: failingPreview.revision });
+  assert.equal(outcome.deliveredCount, 0);
+  assert.equal(failing.calls.some(call => call.kind === "send"), false);
 });

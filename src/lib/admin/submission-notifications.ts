@@ -222,11 +222,23 @@ export async function sendReviewSummaryNotificationById(input: {
     // results, recipient, access link or rendered content invalidate this preview.
     const latest = await loadPreparedReviewSummary(input.submissionId);
     if (latest.preview.revision !== preview.revision || !latest.preview.canSend) return fail("CONFLICT", "이메일을 준비하는 동안 심의 내용이나 수신 정보가 변경되었습니다. 새 미리보기를 확인한 뒤 보내주세요.");
+    // An aggregate progress notice must not manufacture a published final result.
+    const announcesResult = Boolean(snapshot.submission.result_status || ["RESULT_READY", "COMPLETED"].includes(snapshot.submission.status));
+    if (announcesResult) {
+      // Owner decision 2026-11-21: a result mail that leaves a station open is a
+      // partial notice (결과 통보 완료 · 일부 대기); the final mail, with every
+      // result decided, clears the mark. Written before queueing, so the
+      // acceptance that records the notice always finds the right mark.
+      const allResultsFinal = content.rows.length > 0 && content.completedCount === content.rows.length;
+      const marked = allResultsFinal
+        ? await context.db.from("submissions").update({ partial_result_notified_at: null }).eq("id", input.submissionId).not("partial_result_notified_at", "is", null)
+        : await context.db.from("submissions").update({ partial_result_notified_at: new Date().toISOString() }).eq("id", input.submissionId);
+      if (marked.error) return fail("LOAD_FAILED", "결과 통보 상태를 저장하지 못해 메일을 보내지 않았습니다. 잠시 후 다시 시도해주세요.", { failedCount: 1 });
+    }
     const result = await sendReviewSummaryEmail({
       email: context.recipient, submissionId: input.submissionId, content,
       idempotencyKey: reviewRequestKey(input.submissionId, input.requestId),
-      // An aggregate progress notice must not manufacture a published final result.
-      markResultNotified: Boolean(snapshot.submission.result_status || ["RESULT_READY", "COMPLETED"].includes(snapshot.submission.status)),
+      markResultNotified: announcesResult,
       ...(refs ? { attachmentRefs: refs } : {}),
     });
     return summaryDeliveryOutcome(result);

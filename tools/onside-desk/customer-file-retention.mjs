@@ -13,10 +13,13 @@ const RECEIPT_NOTE = '파일 수신 현황.txt';
  * When the customer's files stop being kept: 7 days after the result notice of
  * a paid review that is fully finished. Null otherwise — including an album
  * sent on to 결과 통보 완료 while a station is still pending, which stays
- * IN_PROGRESS until its last result is saved and the result notice goes out.
+ * IN_PROGRESS until its last result is saved and the result notice goes out,
+ * and a result mail sent while a station result was open (결과 통보 완료 ·
+ * 일부 대기, 2026-11-21): the 7 days count from the final notice.
  */
 export function customerFilesExpireAt(submission) {
   if (submission?.payment_status !== 'PAID' || !FINISHED_STATUSES.has(submission.status)) return null;
+  if (submission.partial_result_notified_at) return null;
   const notified = Date.parse(submission.result_notified_at ?? '');
   return Number.isFinite(notified) ? new Date(notified + CUSTOMER_FILE_RETENTION_DAYS * DAY_MS).toISOString() : null;
 }
