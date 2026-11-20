@@ -11,6 +11,7 @@ import { loginAction, type ActionState } from "./actions";
 import { useAuthQuery } from "./auth-query";
 import { getAuthPageHref, getAuthReturnPath } from "./navigation";
 import { PasswordInput } from "./password-input";
+import { requiresSocialSignupCompletion } from "./social-contract";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { hasBrowserAuthCookie, loadBrowserSupabase } from "@/lib/supabase/browser-session";
 
@@ -36,7 +37,9 @@ export function LoginForm({ nextPath, socialSlot }: { nextPath?: string | null; 
       try {
         const supabase = await loadBrowserSupabase();
         const { data, error } = await supabase.auth.getUser();
-        if (!active || error || !data.user) return;
+        // An unfinished social signup came here from /complete-signup to use
+        // another account; sending it on would only return it there.
+        if (!active || error || !data.user || requiresSocialSignupCompletion(data.user)) return;
         window.location.replace(effectiveNextPath ?? (isEnglishRoute ? "/en/mypage" : "/mypage"));
       } catch {
         // Stay on the form.

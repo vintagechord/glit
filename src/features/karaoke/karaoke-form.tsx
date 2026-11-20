@@ -10,7 +10,7 @@ import { brandStatusTones } from "@/lib/brand-status-tones";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { safeRandomUUID } from "@/lib/uuid";
-import { openInicisCardPopup } from "@/lib/inicis/popup";
+import { cleanupInicisPaymentLayer, openInicisCardPopup } from "@/lib/inicis/popup";
 import {
   isAllowedKaraokeUpload,
   karaokeUploadAccept,
@@ -42,6 +42,7 @@ export function KaraokeForm({
 }) {
   const router = useRouter();
   const isGuest = !userId;
+  const fieldId = React.useId();
   const [title, setTitle] = React.useState("");
   const [artist, setArtist] = React.useState("");
   const [contact, setContact] = React.useState("");
@@ -69,6 +70,23 @@ export function KaraokeForm({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const submissionInFlight = React.useRef(false);
   const pendingCardRequest = React.useRef<{ signature: string; requestId: string } | null>(null);
+  const resetForm = React.useCallback(() => {
+    setTitle("");
+    setArtist("");
+    setContact("");
+    setGuestName("");
+    setGuestEmail("");
+    setNotes("");
+    setPaymentMethod("BANK");
+    setBankDepositorName("");
+    setTjRequested(true);
+    setKyRequested(true);
+    // 크레딧 운영 보류: 추천 공개/예치 상태 초기화 숨김
+    // setRecommendationPublic(false);
+    // setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
+    setFile(null);
+    setUpload({ name: "", progress: 0, status: "idle" });
+  }, []);
   const guestTokenRef = React.useRef<string | null>(null);
   const uploadIdRef = React.useRef<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -290,21 +308,7 @@ export function KaraokeForm({
 
       pendingCardRequest.current = null;
       setNotice({ message: result.message, requestId: result.requestId });
-      setTitle("");
-      setArtist("");
-      setContact("");
-      setGuestName("");
-      setGuestEmail("");
-      setNotes("");
-      setPaymentMethod("BANK");
-      setBankDepositorName("");
-      setTjRequested(true);
-      setKyRequested(true);
-      // 크레딧 운영 보류: 추천 공개/예치 상태 초기화 숨김
-      // setRecommendationPublic(false);
-      // setPromotionCredits(Math.min(10, Math.max(0, creditBalance)));
-      setFile(null);
-      setUpload({ name: "", progress: 0, status: "idle" });
+      resetForm();
     } catch (error) {
       setUpload(previous => previous.status === "uploading" ? { ...previous, status: "error" } : previous);
       setNotice({ error: error instanceof Error ? error.message : "요청 처리 중 오류가 발생했습니다." });
@@ -323,9 +327,12 @@ export function KaraokeForm({
       const type = (data as { type?: string }).type;
       const payload = (data as { payload?: Record<string, unknown> }).payload ?? {};
       if (!type || !String(type).startsWith("INICIS:")) return;
+      cleanupInicisPaymentLayer();
       const status = String(type).replace("INICIS:", "");
       if (status === "SUCCESS") {
         pendingCardRequest.current = null;
+        resetForm();
+        setNotice({ message: "결제가 완료되었습니다. 진행상황 탭에서 접수 내역을 확인할 수 있습니다." });
         router.push("/karaoke-request?payment=success");
         return;
       }
@@ -335,7 +342,7 @@ export function KaraokeForm({
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [router]);
+  }, [router, resetForm]);
 
   return (
     <div className="space-y-8">
@@ -367,20 +374,22 @@ export function KaraokeForm({
           {isGuest && (
             <>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <label htmlFor={`${fieldId}-guest-name`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   담당자명
                 </label>
                 <input
+                  id={`${fieldId}-guest-name`}
                   value={guestName}
                   onChange={(event) => setGuestName(event.target.value)}
                   className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <label htmlFor={`${fieldId}-guest-email`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   이메일
                 </label>
                 <input
+                  id={`${fieldId}-guest-email`}
                   type="email"
                   value={guestEmail}
                   onChange={(event) => setGuestEmail(event.target.value)}
@@ -391,40 +400,44 @@ export function KaraokeForm({
             </>
           )}
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor={`${fieldId}-title`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               곡명
             </label>
             <input
+              id={`${fieldId}-title`}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor={`${fieldId}-artist`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               아티스트
             </label>
             <input
+              id={`${fieldId}-artist`}
               value={artist}
               onChange={(event) => setArtist(event.target.value)}
               className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor={`${fieldId}-contact`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               연락처
             </label>
             <input
+              id={`${fieldId}-contact`}
               value={contact}
               onChange={(event) => setContact(event.target.value)}
               className="w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <label htmlFor={`${fieldId}-notes`} className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
               요청 사항
             </label>
             <textarea
+              id={`${fieldId}-notes`}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="h-24 w-full rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground"
@@ -717,10 +730,11 @@ export function KaraokeForm({
                 </div>
               </div>
               <div className="mt-4 space-y-2">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.2em]">
+                <label htmlFor={`${fieldId}-depositor`} className="text-[11px] font-semibold uppercase tracking-[0.2em]">
                   입금자명
                 </label>
                 <input
+                  id={`${fieldId}-depositor`}
                   value={bankDepositorName}
                   onChange={(event) =>
                     setBankDepositorName(event.target.value)

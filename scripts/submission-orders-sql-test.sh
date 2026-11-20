@@ -31,6 +31,8 @@ order_psql --single-transaction < "$order_sql_root/supabase/migrations/202610311
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261109120000_order_items_official_artist.sql"
 # Albums ordered together: the suites below run against these definitions too.
 order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261114120000_album_additional_half_price.sql"
+# An administrator deleting only the full-price album of a paid order (2026-11-21).
+order_psql --single-transaction < "$order_sql_root/supabase/migrations/20261121091000_album_discount_survives_base_deletion.sql"
 order_psql < "$order_sql_root/tests/sql/album-additional-half-price.sql"
 # Order items keep the album tier and list price: the migration runs inside the
 # test's transaction (to check its backfill of earlier orders), then for real.

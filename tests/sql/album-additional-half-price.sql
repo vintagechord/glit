@@ -46,6 +46,31 @@ begin
     or (select status from public.submission_orders where id=oid)<>'PAID' then raise exception 'Discounted bank order was not confirmed as a whole'; end if;
 end $$;
 
+-- 2026-11-21: an administrator may delete only the full-price album of a paid
+-- order (the order keeps the money record). The foreign key then clears the
+-- half-price album's base pointer, which alone must not fail the deletion at
+-- commit. Clearing the pointer while the full-price album exists still fails.
+-- The bootstrap table lacks production's foreign key (0076); add it here.
+alter table public.submissions drop constraint if exists submissions_album_discount_base_submission_fkey;
+alter table public.submissions add constraint submissions_album_discount_base_submission_fkey
+  foreign key (album_discount_base_submission_id) references public.submissions(id) on delete set null;
+select pg_temp.expect_error($q$do $x$ begin
+  update public.submissions set album_discount_base_submission_id=null where id='a0000000-0000-4000-8000-000000000001';
+  set constraints all immediate;
+end $x$$q$,'55000','ALBUM_DISCOUNT_NOT_ELIGIBLE');
+set constraints all deferred;
+-- The same steps as admin_delete_submissions for a settled order.
+select set_config('onside.checkout_order_write',(select current_order_id::text from public.submissions where id='a0000000-0000-4000-8000-000000000002'),true);
+update public.submissions set current_order_id=null where id='a0000000-0000-4000-8000-000000000002';
+delete from public.submissions where id='a0000000-0000-4000-8000-000000000002';
+set constraints all immediate;
+set constraints all deferred;
+do $$ begin
+  if pg_temp.priced('a0000000-0000-4000-8000-000000000001')<>'ADDITIONAL:50000:-'
+    or (select payment_status from public.submissions where id='a0000000-0000-4000-8000-000000000001')<>'PAID' then
+    raise exception 'Deleting the full-price album changed the paid half-price album: % %',pg_temp.priced('a0000000-0000-4000-8000-000000000001'),(select payment_status from public.submissions where id='a0000000-0000-4000-8000-000000000001'); end if;
+end $$;
+
 -- Three albums cost 100,000 + 50,000 + 50,000; a music video in the same order keeps its price.
 select pg_temp.album('a0000000-0000-4000-8000-000000000011',100000);
 select pg_temp.album('a0000000-0000-4000-8000-000000000012',100000);
