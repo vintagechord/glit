@@ -1082,10 +1082,20 @@ export default async function AdminSubmissionDetailPage({
       {adminStage === "drafting" ? (
         <div className={`mt-6 rounded-2xl border-2 p-5 text-sm ${adminStageInfo?.tone ?? ""}`}>
           <p className="text-base font-black">신청서 작성 중 · 아직 접수되지 않은 신청입니다</p>
-          <p className="mt-2 leading-6">
-            고객이 파일 업로드 단계에서 멈춘 상태입니다. 결제 수단에 무통장이 선택되어 있어도 주문(입금 요청)이 만들어지지 않았기 때문에
-            접수 완료·무통장 입금 안내 메일은 발송되지 않습니다. 고객이 파일을 올리고 신청을 마치면 안내 메일이 자동 발송됩니다.
-          </p>
+          {submission.status === "DRAFT" ? (
+            <p className="mt-2 leading-6">
+              고객이 신청서를 작성하다 제출 전에 멈춘 상태입니다. 미결제는 기본값이며 주문·안내 메일은 없습니다.
+              같은 브라우저로 돌아오면 이어서 작성할 수 있습니다.
+            </p>
+          ) : (
+            <p className="mt-2 leading-6">
+              고객이 파일 업로드 단계에서 멈춘 상태입니다. 결제 수단에 무통장이 선택되어 있어도 주문(입금 요청)이 만들어지지 않았기 때문에
+              접수 완료·무통장 입금 안내 메일은 발송되지 않습니다. 고객이 파일을 올리고 신청을 마치면 안내 메일이 자동 발송됩니다.
+            </p>
+          )}
+          {recipientState && !recipientState.recipient ? (
+            <p className="mt-2 font-bold">고객 연락처: 입력 전에 멈춰 이메일이 없습니다. 신청서 내용(소속사·유통사 등)으로 연락처를 확인해주세요.</p>
+          ) : null}
           <p className="mt-2 font-bold">
             업로드 시도: {uploadRecord.error ? "기록을 불러오지 못했습니다." : uploadRecord.attempts === 0 ? "서버에 도착한 업로드 요청이 없습니다." : `${uploadRecord.attempts}건 (완료 ${uploadRecord.completed}건, 미완료·실패 ${uploadRecord.unfinished}건)`}
           </p>
