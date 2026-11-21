@@ -31,7 +31,7 @@ export const adminSubmissionStages: Record<AdminSubmissionStage, AdminSubmission
   drafting: {
     key: "drafting",
     label: "신청서 작성 중",
-    description: "업로드·결제 전에 멈춘 신청서. 안내 메일 없음",
+    description: "작성·업로드 중에 멈춘 제출 전 신청서. 안내 메일 없음",
     tone: brandStatusTones.neutral,
   },
   unpaid: {
@@ -109,9 +109,28 @@ export type AdminStageRow = {
   current_order_id?: string | null;
   result_notified_at?: string | null;
   partial_result_notified_at?: string | null;
+  title?: string | null;
+  artist_name?: string | null;
+  melon_url?: string | null;
 };
 
 const resultStatuses = new Set(["RESULT_READY", "COMPLETED"]);
+
+/**
+ * A DRAFT the customer typed into. Opening a wizard saves a row at once, with
+ * defaults (package, price, a member's profile contact) and nothing typed;
+ * the hourly purge removes those after a day. A title, an artist name or a
+ * pasted Melon link only comes from the customer, so the row is an
+ * application left in the wizard. Production case 2026-11-20: a guest filled
+ * most of an MV form, left before the contact fields, and no admin count or
+ * list showed it because every DRAFT was treated as a background autosave.
+ * Only null counts as empty, the same test the stage filter can express.
+ */
+export const isStartedDraft = (row: AdminStageRow) =>
+  row.status === "DRAFT" && (row.title != null || row.artist_name != null || row.melon_url != null);
+
+const startedDraft = "and(status.eq.DRAFT,or(title.not.is.null,artist_name.not.is.null,melon_url.not.is.null))";
+const leftAtUpload = "and(status.eq.PRE_REVIEW,or(payment_status.is.null,payment_status.eq.UNPAID),current_order_id.is.null)";
 
 /** The button's mark: it only counts during a paid review in progress. */
 export const isPartialResultNotice = (row: AdminStageRow) =>
@@ -127,11 +146,12 @@ export const isPartialResultMail = (row: AdminStageRow) =>
 export const hasPartialResultNotice = (row: AdminStageRow) =>
   isPartialResultNotice(row) || isPartialResultMail(row);
 
-/** DRAFT rows are background autosaves and have no stage. */
+/** An empty DRAFT is the page-open autosave and has no stage; one the
+ * customer typed into is drafting (see isStartedDraft). */
 export function adminSubmissionStageOf(row: AdminStageRow): AdminSubmissionStage | null {
   const status = row.status ?? "";
   const payment = row.payment_status ?? "UNPAID";
-  if (status === "DRAFT") return null;
+  if (status === "DRAFT") return isStartedDraft(row) ? "drafting" : null;
   if (payment === "REFUNDED") return "refunded";
   if (resultStatuses.has(status)) return row.result_notified_at ? "notified" : "result_pending";
   if (payment === "PAID") {
@@ -199,7 +219,7 @@ export function applyAdminSubmissionStageFilter<T extends StageFilterable<T>>(
         .or("payment_status.is.null,payment_status.eq.UNPAID,payment_status.eq.PAYMENT_PENDING")
         .or("payment_status.eq.PAYMENT_PENDING,status.eq.WAITING_PAYMENT");
     case "drafting":
-      return query.eq("status", "PRE_REVIEW").or(unpaid).is("current_order_id", null);
+      return query.or(`${startedDraft},${leftAtUpload}`);
     case "unpaid":
       return query
         .not("status", "in", "(DRAFT,RESULT_READY,COMPLETED,WAITING_PAYMENT)")

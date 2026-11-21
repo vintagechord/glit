@@ -53,7 +53,7 @@ export type AdminDashboard = {
 };
 
 const submissionColumns =
-  "id, title, artist_name, artist_name_kr, type, status, payment_status, payment_method, current_order_id, result_notified_at, partial_result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone";
+  "id, title, artist_name, artist_name_kr, type, status, payment_status, payment_method, current_order_id, result_notified_at, partial_result_notified_at, user_id, guest_name, applicant_name, amount_krw, updated_at, created_at, is_oneclick, guest_email, guest_phone, applicant_email, applicant_phone, melon_url";
 
 type SubmissionRow = {
   id: string; title: string | null; artist_name: string | null; artist_name_kr: string | null; type: string; status: string;
@@ -62,6 +62,7 @@ type SubmissionRow = {
   user_id: string | null; guest_name: string | null; applicant_name: string | null;
   amount_krw: number | null; updated_at: string | null; created_at: string; is_oneclick: boolean | null;
   guest_email: string | null; guest_phone: string | null; applicant_email: string | null; applicant_phone: string | null;
+  melon_url: string | null;
 };
 
 const toDashboardSubmission = (row: SubmissionRow): DashboardSubmission => ({
@@ -113,7 +114,10 @@ export async function loadAdminDashboard(db: SupabaseClient, now = new Date()): 
       return [stage, error ? null : count ?? 0] as const;
     })),
     countQuery(),
-    db.from("submissions").select(submissionColumns).neq("status", "DRAFT")
+    // Submitted rows plus the drafts a customer typed into (isStartedDraft),
+    // so an application left in the wizard shows up as 신청서 작성 중.
+    db.from("submissions").select(submissionColumns)
+      .or("status.neq.DRAFT,title.not.is.null,artist_name.not.is.null,melon_url.not.is.null")
       .order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(8),
     db.from("submission_orders").select("id, depositor_name, deposit_due_at, amount_krw, created_at")
       .eq("status", "BANK_PENDING").order("created_at", { ascending: true }).limit(10),

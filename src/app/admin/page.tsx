@@ -144,7 +144,7 @@ export default async function AdminPage() {
         <div>
           <h1 className="font-display text-3xl font-black text-foreground">대시보드</h1>
           <p className="mt-1 text-sm font-semibold text-muted-foreground">
-            접수·결제·결과 상황을 단계별로 확인합니다. 임시 저장(자동 저장)은 집계에서 제외합니다.
+            접수·결제·결과 상황을 단계별로 확인합니다. 고객이 아무것도 입력하지 않은 임시 저장만 집계에서 제외합니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -182,7 +182,7 @@ export default async function AdminPage() {
           {adminSubmissionStageKeys.map((stage) => {
             const info = adminSubmissionStages[stage];
             const count = counts[stage];
-            const highlight = Boolean(count) && ["bank_pending", "paid", "result_pending"].includes(stage);
+            const highlight = Boolean(count) && ["drafting", "bank_pending", "paid", "result_pending"].includes(stage);
             return (
               <li key={stage}>
                 <Link
@@ -296,7 +296,7 @@ export default async function AdminPage() {
             </li>
             <li>
               <Link href={stageHref("drafting")} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
-                <span>업로드·결제 전에 멈춘 신청서 (안내 메일 없음)</span>
+                <span>제출 전에 멈춘 신청서 (안내 메일 없음)</span>
                 <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${draftingCount ? brandStatusTones.warning : brandStatusTones.neutral}`}>
                   {counts.drafting === null ? "–" : draftingCount}건
                 </span>

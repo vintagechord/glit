@@ -10,6 +10,7 @@ import {
   hasPartialResultNotice,
   isPartialResultMail,
   isPartialResultNotice,
+  isStartedDraft,
   partialNoticeStage,
   type AdminStageRow,
   type StageFilterable,
@@ -75,19 +76,49 @@ class FakeQuery implements StageFilterable<FakeQuery> {
 const statuses = ["DRAFT", "SUBMITTED", "PRE_REVIEW", "WAITING_PAYMENT", "IN_PROGRESS", "RESULT_READY", "COMPLETED"];
 const payments = ["UNPAID", "PAYMENT_PENDING", "PAID", "REFUNDED", null];
 
+// What the customer typed: nothing (the page-open autosave), or one of the
+// fields that only the customer fills in.
+const typed = [
+  { title: null, artist_name: null, melon_url: null },
+  { title: "Better With You", artist_name: null, melon_url: null },
+  { title: null, artist_name: "DayOtherWhere", melon_url: null },
+  { title: null, artist_name: null, melon_url: "https://www.melon.com/album/detail.htm?albumId=1" },
+];
+
 const allRows: Row[] = statuses.flatMap((status) => payments.flatMap((payment_status) =>
   [null, "order-1"].flatMap((current_order_id) => [null, "2026-11-05T00:00:00Z"].flatMap((result_notified_at) =>
-    [null, "2026-11-16T00:00:00Z"].map((partial_result_notified_at) => ({
-      status, payment_status, current_order_id, result_notified_at, partial_result_notified_at,
-    }))))));
+    [null, "2026-11-16T00:00:00Z"].flatMap((partial_result_notified_at) => typed.map((fields) => ({
+      status, payment_status, current_order_id, result_notified_at, partial_result_notified_at, ...fields,
+    })))))));
 
-test("every non-draft row matches exactly the stage filter of its own stage", () => {
+test("every row matches exactly the stage filter of its own stage", () => {
   for (const row of allRows) {
     const stage = adminSubmissionStageOf(row);
     const matching = adminSubmissionStageKeys.filter((key) => applyAdminSubmissionStageFilter(new FakeQuery(), key).matches(row));
     if (stage === null) assert.deepEqual(matching, [], `draft row ${JSON.stringify(row)} must not match a stage`);
     else assert.deepEqual(matching, [stage], `row ${JSON.stringify(row)}`);
   }
+});
+
+test("an application the customer typed into and left in the wizard is drafting, never hidden", () => {
+  // Production case 2026-11-20: a guest filled most of the MV form
+  // (DayOtherWhere "Better With You"), stopped before the director, lyrics and
+  // contact fields and left. Only the background autosave reached the server,
+  // so the row stayed DRAFT and no dashboard count or stage list showed it.
+  const left = { status: "DRAFT", payment_status: "UNPAID", current_order_id: null, title: "Better With You", artist_name: "데이아더웨어 / DayOtherWhere" };
+  assert.equal(adminSubmissionStageOf(left), "drafting");
+  assert.deepEqual(adminSubmissionStageBadge(left), { label: adminSubmissionStages.drafting.label, tone: adminSubmissionStages.drafting.tone });
+  assert.equal(isStartedDraft(left), true);
+  // A pasted Melon link is the customer's own input too.
+  assert.equal(adminSubmissionStageOf({ status: "DRAFT", payment_status: "UNPAID", melon_url: "https://www.melon.com/album/detail.htm?albumId=1" }), "drafting");
+  // Opening the page saves a row with defaults (package, price, the member's
+  // profile contact) but nothing the customer typed: still not an application.
+  const opened = { status: "DRAFT", payment_status: "UNPAID", current_order_id: null, title: null, artist_name: null, melon_url: null };
+  assert.equal(adminSubmissionStageOf(opened), null);
+  assert.equal(adminSubmissionStageBadge(opened), null);
+  assert.equal(isStartedDraft(opened), false);
+  // A submitted row is never a started draft, whatever it holds.
+  assert.equal(isStartedDraft({ ...left, status: "SUBMITTED" }), false);
 });
 
 test("an application left at the upload step is drafting, not a paid or bank order", () => {

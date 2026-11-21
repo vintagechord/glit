@@ -171,6 +171,7 @@ type SubmissionRow = {
   current_order_id?: string | null;
   result_notified_at?: string | null;
   partial_result_notified_at?: string | null;
+  melon_url?: string | null;
   package?:
     | Array<{ name?: string | null }>
     | { name?: string | null }
@@ -216,9 +217,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, package:packages ( name )";
   const globalSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -237,7 +238,9 @@ export default async function AdminSubmissionsPage({
 
     if (filters.status) {
       query = query.eq("status", filters.status);
-    } else {
+    } else if (!isAdminSubmissionStageFilter(filters.stage)) {
+      // A stage filter decides about DRAFT rows itself: only 신청서 작성 중
+      // lists the drafts a customer typed into.
       query = query.neq("status", "DRAFT");
     }
     if (filters.payment) {
