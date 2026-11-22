@@ -715,6 +715,7 @@ const mvSubmissionSchema = z.object({
   applicantEmail: contactTextSchema.optional(),
   applicantPhone: z.string().max(64).optional(),
   director: shortTextSchema.optional(),
+  directorNationality: shortTextSchema.optional(),
   leadActor: metadataTextSchema.optional(),
   storyline: narrativeTextSchema.optional(),
   productionCompany: shortTextSchema.optional(),
@@ -1945,6 +1946,7 @@ export async function saveMvSubmissionAction(
       artistNameOfficial: parsed.data.artistNameOfficial,
       releaseDate: parsed.data.releaseDate,
       director: parsed.data.director,
+      directorNationality: parsed.data.directorNationality,
       leadActor: parsed.data.leadActor,
       agency: parsed.data.agency,
       albumTitle: parsed.data.albumTitle,
@@ -1984,6 +1986,11 @@ export async function saveMvSubmissionAction(
     // Retired inputs are omitted by new clients; preserve any stored value.
     ...retiredMvFieldUpdate(parsed.data),
     mv_director: parsed.data.director?.trim() || null,
+    // Only the online (영등위) form asks for the director's nationality.
+    mv_director_nationality:
+      parsed.data.mvType === "MV_DISTRIBUTION"
+        ? parsed.data.directorNationality?.trim() || null
+        : null,
     mv_lead_actor: parsed.data.leadActor?.trim() || null,
     mv_storyline: parsed.data.storyline?.trim() || null,
     ...resolveMvProductionCompanyUpdate({

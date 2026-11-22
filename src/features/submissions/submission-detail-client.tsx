@@ -85,6 +85,7 @@ type Submission = {
   mv_runtime?: string | null;
   mv_format?: string | null;
   mv_director?: string | null;
+  mv_director_nationality?: string | null;
   mv_lead_actor?: string | null;
   mv_storyline?: string | null;
   mv_production_company?: string | null;
@@ -1764,6 +1765,12 @@ export function SubmissionDetailClient({
                       <p className="text-xs text-muted-foreground">감독</p>
                       <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_director || "-"}</span></p>
                     </div>
+                    {submission.mv_director_nationality ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">감독 국적</p>
+                        <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_director_nationality}</span></p>
+                      </div>
+                    ) : null}
                     <div>
                       <p className="text-xs text-muted-foreground">주연</p>
                       <p className="mt-1 font-semibold"><span data-no-translate>{submission.mv_lead_actor || "-"}</span></p>

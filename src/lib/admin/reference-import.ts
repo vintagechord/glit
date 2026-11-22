@@ -34,7 +34,7 @@ export type IntakeDraft = {
   tracks: IntakeTrackDraft[];
   mv: {
     title: string; artistName: string; releaseDate: string; genre: string; runtime: string;
-    director: string; leadActor: string; storyline: string; productionCompany: string; agency: string;
+    director: string; directorNationality: string; leadActor: string; storyline: string; productionCompany: string; agency: string;
     albumTitle: string; productionDate: string; distributionCompany: string; businessRegNo: string;
     usage: string; desiredRating: string; memo: string; songTitleKr: string; songTitleEn: string;
     composer: string; lyricist: string; arranger: string; lyrics: string;
@@ -205,7 +205,9 @@ export async function analyzeReferenceFile(input: { body: Buffer; fileName: stri
     tracks,
     mv: {
       title: songTitle, artistName: field("artist_name"), releaseDate, genre: field("genre"), runtime: field("mv_runtime"),
-      director: field("mv_director"), leadActor: field("mv_lead_actor"), storyline: field("mv_storyline", { long: true }),
+      // Reference forms put the nationality inside 감독(국적); it stays there
+      // for the administrator to copy into its own field.
+      director: field("mv_director"), directorNationality: "", leadActor: field("mv_lead_actor"), storyline: field("mv_storyline", { long: true }),
       productionCompany: field("mv_production_company"), agency: field("mv_agency"), albumTitle: field("mv_album_title"),
       productionDate, distributionCompany: field("mv_distribution_company"), businessRegNo: field("mv_business_reg_no"),
       usage: field("mv_usage"), desiredRating, memo: field("mv_memo", { long: true }), songTitleKr: field("mv_song_title_kr"),

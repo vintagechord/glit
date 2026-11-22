@@ -93,6 +93,7 @@ type SubmissionRow = {
   mv_runtime?: string | null;
   mv_format?: string | null;
   mv_director?: string | null;
+  mv_director_nationality?: string | null;
   mv_lead_actor?: string | null;
   mv_storyline?: string | null;
   mv_agency?: string | null;
@@ -1969,6 +1970,9 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="러닝타임" value={submission.mv_runtime || "-"} />
                 <DetailRow label="포맷" value={submission.mv_format || "-"} />
                 <DetailRow label="감독" value={submission.mv_director || "-"} />
+                {isMvDistribution || submission.mv_director_nationality ? (
+                  <DetailRow label="감독 국적" value={submission.mv_director_nationality || "-"} />
+                ) : null}
                 <DetailRow label="주연" value={submission.mv_lead_actor || "-"} />
                 {/* One field on the MV form: the 소속사 is filed as 제작사. */}
                 <DetailRow label="소속사(제작사)" value={submission.mv_agency || submission.mv_production_company || "-"} />
@@ -1990,6 +1994,12 @@ export default async function AdminSubmissionDetailPage({
                 <DetailRow label="작곡" value={submission.mv_composer || "-"} />
                 <DetailRow label="작사" value={submission.mv_lyricist || "-"} />
                 <DetailRow label="편곡" value={submission.mv_arranger || "-"} />
+                <div className="md:col-span-2">
+                  <p className="text-xs text-muted-foreground">줄거리</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words font-semibold text-foreground">
+                    {submission.mv_storyline || "-"}
+                  </p>
+                </div>
               </>
             ) : (
               <>

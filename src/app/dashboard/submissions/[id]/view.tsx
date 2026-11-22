@@ -62,6 +62,7 @@ type SubmissionRow = {
   mv_runtime?: string | null;
   mv_format?: string | null;
   mv_director?: string | null;
+  mv_director_nationality?: string | null;
   mv_lead_actor?: string | null;
   mv_storyline?: string | null;
   mv_production_company?: string | null;

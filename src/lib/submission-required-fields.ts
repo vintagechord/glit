@@ -128,6 +128,7 @@ export const validateMvSubmittedFields = (input: {
   artistNameOfficial?: string | null;
   releaseDate?: string | null;
   director?: string | null;
+  directorNationality?: string | null;
   leadActor?: string | null;
   productionCompany?: string | null;
   agency?: string | null;
@@ -165,6 +166,10 @@ export const validateMvSubmittedFields = (input: {
     [input.artistNameOfficial, "아티스트명 공식 표기를 입력해주세요."],
     [input.releaseDate, "영상 공개일자를 입력해주세요."],
     [input.director, "감독 정보를 입력해주세요."],
+    // The 영등위 online form lists the director with their nationality.
+    ...(input.mvType === "MV_DISTRIBUTION"
+      ? [[input.directorNationality, "감독 국적을 입력해주세요."] satisfies [string | null | undefined, string]]
+      : []),
     [input.leadActor, "주연 정보를 입력해주세요."],
     [input.agency, "소속사를 입력해주세요."],
     [input.albumTitle, "앨범명을 입력해주세요."],

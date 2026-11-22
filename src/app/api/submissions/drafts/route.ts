@@ -98,6 +98,7 @@ const selectMvColumns = [
   "mv_runtime",
   "mv_format",
   "mv_director",
+  "mv_director_nationality",
   "mv_lead_actor",
   "mv_storyline",
   "mv_production_company",

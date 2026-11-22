@@ -45,6 +45,7 @@ export const mvIntakeSchema = z.object({
     genre: optionalText(100),
     runtime: optionalText(40),
     director: optionalText(200),
+    directorNationality: optionalText(100),
     leadActor: optionalText(300),
     storyline: optionalText(5000),
     productionCompany: optionalText(200),
@@ -93,6 +94,7 @@ export function buildGuestMvIntakeParent(input: MvIntake, artistId: string | nul
   return {
     title: mv.title, artist_name: mv.artistName, artist_id: artistId, release_date: mv.releaseDate, genre: mv.genre,
     mv_runtime: mv.runtime, mv_director: mv.director, mv_lead_actor: mv.leadActor, mv_storyline: mv.storyline,
+    mv_director_nationality: input.kind === "MV_DISTRIBUTION" ? mv.directorNationality : null,
     mv_production_company: mv.productionCompany, mv_agency: mv.agency, mv_album_title: mv.albumTitle,
     mv_production_date: mv.productionDate, mv_distribution_company: mv.distributionCompany,
     mv_business_reg_no: mv.businessRegNo, mv_usage: mv.usage,
