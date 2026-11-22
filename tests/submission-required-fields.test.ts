@@ -207,6 +207,7 @@ const validMv = {
   artistNameOfficial: "Artist",
   releaseDate: "2026-08-15",
   director: "Director",
+  directorNationality: "대한민국",
   leadActor: "Actor",
   agency: "Agency",
   albumTitle: "Album",
@@ -246,6 +247,26 @@ test("normal MV submission enforces every wizard-required field", () => {
     );
   }
   assert.ok(validateMvSubmittedFields({ ...validMv, aiUsed: undefined }));
+});
+
+test("only the online (영등위) MV requires the director's nationality", () => {
+  assert.equal(
+    validateMvSubmittedFields({ ...validMv, mvType: "MV_DISTRIBUTION", directorNationality: " " }),
+    "감독 국적을 입력해주세요.",
+  );
+  assert.equal(
+    validateMvSubmittedFields({ ...validMv, mvType: "MV_BROADCAST", directorNationality: "" }),
+    null,
+  );
+  assert.equal(
+    validateMvSubmittedFields({
+      ...validMv,
+      mvType: "MV_DISTRIBUTION",
+      directorNationality: "",
+      externalApplicationForm: true,
+    }),
+    null,
+  );
 });
 
 test("MV takes one 소속사 field (filed as 제작사): it is required, a separate production company is not", () => {

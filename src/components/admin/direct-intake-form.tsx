@@ -29,7 +29,7 @@ const emptyDraft = (kind: IntakeKind): IntakeDraft => ({
   album: { title: "", artistName: "", artistNameEn: "", releaseDate: "", genre: "", distributor: "", productionCompany: "", previousRelease: "", artistType: "", artistMembers: "" },
   tracks: kind === "ALBUM" ? [emptyTrack()] : [],
   mv: {
-    title: "", artistName: "", releaseDate: "", genre: "", runtime: "", director: "", leadActor: "", storyline: "",
+    title: "", artistName: "", releaseDate: "", genre: "", runtime: "", director: "", directorNationality: "", leadActor: "", storyline: "",
     productionCompany: "", agency: "", albumTitle: "", productionDate: "", distributionCompany: "", businessRegNo: "",
     usage: "", desiredRating: "", memo: "", songTitleKr: "", songTitleEn: "", composer: "", lyricist: "", arranger: "", lyrics: "",
   },
@@ -397,6 +397,9 @@ export function DirectIntakeForm() {
                 <Field label="영상 공개일"><input type="date" className={inputClass} value={draft.mv.releaseDate} onChange={(e) => updateMv({ releaseDate: e.target.value })} /></Field>
                 <Field label="제작일"><input type="date" className={inputClass} value={draft.mv.productionDate} onChange={(e) => updateMv({ productionDate: e.target.value })} /></Field>
                 <Field label="감독"><input className={inputClass} value={draft.mv.director} onChange={(e) => updateMv({ director: e.target.value })} maxLength={200} /></Field>
+                {kind === "MV_DISTRIBUTION" ? (
+                  <Field label="감독 국적"><input className={inputClass} value={draft.mv.directorNationality} onChange={(e) => updateMv({ directorNationality: e.target.value })} maxLength={100} placeholder="예: 대한민국" /></Field>
+                ) : null}
                 <Field label="주연"><input className={inputClass} value={draft.mv.leadActor} onChange={(e) => updateMv({ leadActor: e.target.value })} maxLength={300} /></Field>
                 <Field label="러닝타임"><input className={inputClass} value={draft.mv.runtime} onChange={(e) => updateMv({ runtime: e.target.value })} maxLength={40} /></Field>
                 <Field label="뮤비 제작사"><input className={inputClass} value={draft.mv.productionCompany} onChange={(e) => updateMv({ productionCompany: e.target.value })} maxLength={200} /></Field>

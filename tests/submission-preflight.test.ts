@@ -339,6 +339,7 @@ const validMvInput = (
   artistNameOfficial: "TEST ARTIST",
   releaseDate: "2026-08-15",
   director: "감독",
+  directorNationality: "대한민국",
   leadActor: "주연",
   agency: "소속사",
   albumTitle: "테스트 앨범",
@@ -358,6 +359,18 @@ const validMvInput = (
   uploads: [{ name: "music-video.mp4", status: "done" }],
   filesSubmittedByEmail: false,
   ...overrides,
+});
+
+test("only the online (영등위) MV form requires the director's nationality", () => {
+  const online = buildMvSubmissionPreflight(validMvInput({ directorNationality: "" }));
+  assert.ok(online.issues.some((issue) => issue.id === "mv.director-nationality"));
+  const broadcast = buildMvSubmissionPreflight(
+    validMvInput({ mvType: "MV_BROADCAST", directorNationality: "" }),
+  );
+  assert.equal(
+    broadcast.issues.some((issue) => issue.id === "mv.director-nationality"),
+    false,
+  );
 });
 
 test("a complete online MV passes preflight", () => {

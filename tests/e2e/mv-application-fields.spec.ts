@@ -102,6 +102,9 @@ async function fillRequiredApplication(page: Page) {
   for (const [field, value] of Object.entries(values)) {
     await page.locator(`[data-mv-field="${field}"]`).fill(value);
   }
+  // Only the online (영등위) form asks for the director's nationality.
+  const nationality = page.locator('[data-mv-field="directorNationality"]');
+  if (await nationality.count()) await nationality.fill("대한민국");
   await page.getByRole("button", { name: "사용 안 함", exact: true }).click();
 }
 
@@ -119,6 +122,8 @@ for (const width of [390, 1440]) {
     await expect(page.getByText("영상에 표시된 소속사·기획사명과 동일하게 입력해주세요.")).toHaveCount(0);
     await expect(page.getByPlaceholder("예: MP4 (H.264)")).toHaveCount(0);
     await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
+    // The 영등위 form lists the director with their nationality.
+    await expect(page.getByLabel("감독 국적 *", { exact: true })).toHaveAttribute("placeholder", "예: 대한민국");
 
     const rating = page.getByRole("combobox", { name: "희망등급 (선택)", exact: true });
     await expect(rating).toHaveValue("");
@@ -139,6 +144,7 @@ for (const width of [390, 1440]) {
     await page.getByRole("button", { name: "다음 단계", exact: true }).click();
     await expectSectionAtTop(page.getByRole("heading", { name: "파일 첨부", exact: true }));
     await expect.poll(() => result.saves.some(body => body.includes('"agency":"ONSIDE Music"'))).toBe(true);
+    await expect.poll(() => result.saves.some(body => body.includes('"directorNationality":"대한민국"'))).toBe(true);
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "이전 단계", exact: true }).click();
@@ -216,6 +222,7 @@ test("TV review does not display the online rating or KMRB-only credit notice", 
   await expect(page.locator("#mv-agency-help")).toHaveCount(0);
   await expect(page.locator('[data-mv-field="productionCompany"]')).toHaveCount(0);
   await expect(page.getByText("파일 포맷", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-mv-field="directorNationality"]')).toHaveCount(0);
   expect(result.errors).toEqual([]);
   expect(result.unexpectedMutations).toEqual([]);
 });
@@ -308,7 +315,7 @@ test("members confirm their contact email on the MV application; the phone stays
   await expect(page.getByText("연락처 (선택)", { exact: true })).toBeVisible();
   for (const [field, value] of Object.entries({
     title: "Our Way (Official MV)", artistName: "온사이드 아티스트", artistNameOfficial: "ONSIDE Artist",
-    releaseDate: "2026-10-20", director: "Director Kim", leadActor: "Artist Kim", agency: "ONSIDE Music",
+    releaseDate: "2026-10-20", director: "Director Kim", directorNationality: "대한민국", leadActor: "Artist Kim", agency: "ONSIDE Music",
     albumTitle: "Our Way", distributionCompany: "Fixture Distribution", usage: "온라인 음악사이트 공개",
     songTitleKr: "우리의 길", songTitleEn: "Our Way", songTitleOfficial: "Our Way (우리의 길)",
     composer: "Composer Kim", storyline: "주인공이 새로운 길을 찾아 떠나고 마지막에 목적지에 도착합니다.",

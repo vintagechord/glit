@@ -152,6 +152,7 @@ export type MvSubmissionPreflightInput = {
   artistNameOfficial?: string | null;
   releaseDate?: string | null;
   director?: string | null;
+  directorNationality?: string | null;
   leadActor?: string | null;
   productionCompany?: string | null;
   agency?: string | null;
@@ -903,6 +904,16 @@ export const buildMvSubmissionPreflight = (
       },
       { value: input.releaseDate, id: "mv.release-date", title: "영상 공개일자", field: "releaseDate" },
       { value: input.director, id: "mv.director", title: "감독", field: "director" },
+      ...(input.mvType === "MV_DISTRIBUTION"
+        ? [
+            {
+              value: input.directorNationality,
+              id: "mv.director-nationality",
+              title: "감독 국적",
+              field: "directorNationality",
+            },
+          ]
+        : []),
       { value: input.leadActor, id: "mv.lead-actor", title: "주연", field: "leadActor" },
       { value: input.agency, id: "mv.agency", title: "소속사", field: "agency" },
       { value: input.albumTitle, id: "mv.album-title", title: "앨범명", field: "albumTitle" },

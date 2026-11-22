@@ -150,6 +150,7 @@ type MvCheckpointSnapshot = {
   artistName: string;
   artistNameOfficial: string;
   director: string;
+  directorNationality: string;
   leadActor: string;
   storyline: string;
   productionCompany: string;
@@ -205,6 +206,7 @@ type MvValidationField =
   | "artistNameOfficial"
   | "releaseDate"
   | "director"
+  | "directorNationality"
   | "leadActor"
   | "agency"
   | "albumTitle"
@@ -404,6 +406,7 @@ export function MvWizard({
   const [artistName, setArtistName] = React.useState("");
   const [artistNameOfficial, setArtistNameOfficial] = React.useState("");
   const [director, setDirector] = React.useState("");
+  const [directorNationality, setDirectorNationality] = React.useState("");
   const [leadActor, setLeadActor] = React.useState("");
   const [storyline, setStoryline] = React.useState("");
   const [productionCompany, setProductionCompany] = React.useState("");
@@ -1150,6 +1153,7 @@ export function MvWizard({
         artistNameOfficial,
         releaseDate,
         director,
+        directorNationality,
         leadActor,
         agency,
         albumTitle,
@@ -1183,6 +1187,7 @@ export function MvWizard({
       composer,
       currentSubmissionId,
       director,
+      directorNationality,
       distributionCompany,
       emailSubmitConfirmed,
       existingCartSubmission,
@@ -2055,6 +2060,7 @@ export function MvWizard({
     setArtistName(String(draft.artist_name ?? ""));
     setArtistNameOfficial(String(draft.artist_name_kr ?? ""));
     setDirector(String(draft.mv_director ?? ""));
+    setDirectorNationality(String(draft.mv_director_nationality ?? ""));
     setLeadActor(String(draft.mv_lead_actor ?? ""));
     setStoryline(String(draft.mv_storyline ?? ""));
     setProductionCompany(String(draft.mv_production_company ?? ""));
@@ -2718,6 +2724,9 @@ export function MvWizard({
     if (!director.trim()) {
       return markInvalidField("director", "감독 정보를 입력해주세요.");
     }
+    if (mvType === "MV_DISTRIBUTION" && !directorNationality.trim()) {
+      return markInvalidField("directorNationality", "감독 국적을 입력해주세요.");
+    }
     if (!leadActor.trim()) {
       return markInvalidField("leadActor", "주연 정보를 입력해주세요.");
     }
@@ -2832,6 +2841,7 @@ export function MvWizard({
     artistName,
     artistNameOfficial,
     director,
+    directorNationality,
     leadActor,
     storyline,
     productionCompany,
@@ -2981,6 +2991,10 @@ export function MvWizard({
           title: titleValue || undefined,
           artistName: artistNameValue || undefined,
           director: source.director.trim() || undefined,
+          directorNationality:
+            source.mvType === "MV_DISTRIBUTION"
+              ? source.directorNationality.trim() || undefined
+              : undefined,
           leadActor: source.leadActor.trim() || undefined,
           storyline: source.storyline.trim() || undefined,
           agency: source.agency.trim() || undefined,
@@ -3159,6 +3173,8 @@ export function MvWizard({
         title: titleValue || undefined,
         artistName: artistNameValue || undefined,
         director: director.trim() || undefined,
+        directorNationality:
+          mvType === "MV_DISTRIBUTION" ? directorNationality.trim() || undefined : undefined,
         leadActor: leadActor.trim() || undefined,
         storyline: storyline.trim() || undefined,
         agency: agency.trim() || undefined,
@@ -3389,6 +3405,7 @@ export function MvWizard({
       setArtistName(snapshot.artistName);
       setArtistNameOfficial(snapshot.artistNameOfficial);
       setDirector(snapshot.director);
+      setDirectorNationality(snapshot.directorNationality ?? "");
       setLeadActor(snapshot.leadActor);
       setStoryline(snapshot.storyline);
       setProductionCompany(snapshot.productionCompany);
@@ -4304,6 +4321,27 @@ export function MvWizard({
                       className={requiredFieldClass("director")}
                     />
                   </div>
+                  {mvType === "MV_DISTRIBUTION" ? (
+                    <div className="space-y-2">
+                      <label htmlFor="mv-directorNationality" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        감독 국적 *
+                      </label>
+                      <input
+                        id="mv-directorNationality"
+                        data-mv-field="directorNationality"
+                        data-preflight-field="directorNationality"
+                        aria-invalid={invalidField === "directorNationality"}
+                        aria-describedby={invalidField === "directorNationality" ? "mv-basic-error" : undefined}
+                        placeholder="예: 대한민국"
+                        value={directorNationality}
+                        onChange={(event) => {
+                          setDirectorNationality(event.target.value);
+                          clearInvalidField("directorNationality");
+                        }}
+                        className={requiredFieldClass("directorNationality")}
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-2">
                     <label htmlFor="mv-leadActor" className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       주연 *
