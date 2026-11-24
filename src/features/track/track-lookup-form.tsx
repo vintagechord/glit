@@ -24,6 +24,8 @@ export function TrackLookupForm({
   const [lookupEmail, setLookupEmail] = React.useState("");
   const [lookupError, setLookupError] = React.useState("");
   const [lookupMessage, setLookupMessage] = React.useState("");
+  // "warning" = nothing was sent (no match, or the application belongs to an account).
+  const [lookupMessageTone, setLookupMessageTone] = React.useState<"success" | "warning">("success");
   const [lookupBusy, setLookupBusy] = React.useState(false);
   const emailAvailable = getEmailDeliveryMode() === "transactional";
 
@@ -92,10 +94,17 @@ export function TrackLookupForm({
       const payload = (await response.json().catch(() => null)) as
         | {
             ok?: boolean;
+            result?: string;
             error?: string;
             message?: string;
           }
         | null;
+
+      if (payload?.error && (payload.result === "no_match" || payload.result === "member_account")) {
+        setLookupMessageTone("warning");
+        setLookupMessage(payload.error);
+        return;
+      }
 
       if (!response.ok || !payload?.ok) {
         setLookupError(
@@ -106,9 +115,10 @@ export function TrackLookupForm({
       }
 
       setLookupError("");
+      setLookupMessageTone("success");
       setLookupMessage(
         payload.message ??
-          "입력한 정보와 일치하는 접수가 있으면 해당 이메일로 조회 코드를 보내드립니다.",
+          "입력한 이메일로 조회 코드를 발송했습니다. 메일이 보이지 않으면 스팸함을 확인해주세요.",
       );
     } catch {
       setLookupMessage("");
@@ -207,8 +217,8 @@ export function TrackLookupForm({
         ) : null}
         {lookupMessage ? (
           <p
-            className={`mt-3 rounded-[8px] border-2 px-3 py-3 text-xs font-semibold leading-5 ${brandStatusTones.progress}`}
-            role="status"
+            className={`mt-3 rounded-[8px] border-2 px-3 py-3 text-xs font-semibold leading-5 ${brandStatusTones[lookupMessageTone]}`}
+            role={lookupMessageTone === "warning" ? "alert" : "status"}
           >
             {lookupMessage}
           </p>
