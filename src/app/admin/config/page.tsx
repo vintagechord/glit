@@ -12,6 +12,8 @@ import { AdminSaveToast } from "@/components/admin/save-toast";
 import { AdminActionForm } from "@/components/admin/action-form";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { loadStationResultNotices, STATION_RESULT_NOTICE_MAX } from "@/lib/station-result-notices";
+import { saveStationResultNoticeFormAction } from "./station-notice-actions";
 
 export const metadata = {
   title: "패키지/방송국 설정",
@@ -98,6 +100,9 @@ export default async function AdminConfigPage({
     .from("stations")
     .select("id, name, code, is_active")
     .order("name", { ascending: true });
+
+  const stationNotices = await loadStationResultNotices(supabase);
+  const stationNameByCode = new Map((stations ?? []).map((station) => [station.code, station.name]));
 
   const { data: profanityTerms } = await supabase
     .from("profanity_terms")
@@ -279,6 +284,89 @@ export default async function AdminConfigPage({
                 className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-background md:col-span-1"
               >
                 추가
+              </button>
+            </AdminActionForm>
+          </div>
+        </section>
+
+        {/* 2026-11-25 (owner): TBS only accepts applications while its result
+            announcements are stopped. The note shows on the station's row of
+            the customer status page and the 심의 현황 mail while that station
+            has no result; 안내 끄기 removes it once results resume. */}
+        <section id="station-result-notices" className="space-y-4 rounded-[32px] border border-border/60 bg-card/80 p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">방송국 결과 안내</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              결과가 아직 없는 방송국 행에만 고객 화면과 심의 현황 메일에 표시됩니다. 방송국이 정상화되면 안내 끄기를 눌러주세요.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {Object.entries(stationNotices).map(([code, text]) => (
+              <AdminActionForm
+                key={code}
+                action={saveStationResultNoticeFormAction}
+                className="grid gap-3 rounded-2xl border-2 border-[#111111] bg-background/70 p-4 md:grid-cols-[8rem_1fr_auto]"
+              >
+                <input type="hidden" name="stationCode" value={code} />
+                <p className="text-sm font-black text-foreground">
+                  {stationNameByCode.get(code) ?? code}
+                  <span className="ml-1 text-xs font-semibold text-muted-foreground">{code}</span>
+                </p>
+                <textarea
+                  name="text"
+                  defaultValue={text}
+                  rows={2}
+                  maxLength={STATION_RESULT_NOTICE_MAX}
+                  aria-label={`${code} 결과 안내 문구`}
+                  className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+                />
+                <div className="flex flex-wrap items-start gap-2">
+                  <button type="submit" className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">
+                    저장
+                  </button>
+                  <button
+                    type="submit"
+                    name="intent"
+                    value="remove"
+                    className="rounded-full border-2 border-[#111111] bg-[#d9362c] px-4 py-2 text-xs font-black text-white"
+                  >
+                    안내 끄기
+                  </button>
+                </div>
+              </AdminActionForm>
+            ))}
+            {Object.keys(stationNotices).length === 0 ? (
+              <p className="text-sm text-muted-foreground">표시 중인 안내가 없습니다.</p>
+            ) : null}
+          </div>
+          <div className="rounded-2xl border border-dashed border-border/60 bg-background/70 p-4">
+            <h3 className="text-sm font-semibold text-foreground">안내 추가</h3>
+            <AdminActionForm
+              action={saveStationResultNoticeFormAction}
+              className="mt-3 grid gap-3 md:grid-cols-[10rem_1fr_auto]"
+            >
+              <select
+                name="stationCode"
+                defaultValue=""
+                required
+                aria-label="방송국"
+                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-xs"
+              >
+                <option value="" disabled>방송국 선택</option>
+                {(stations ?? []).map((station) => (
+                  <option key={station.id} value={station.code}>{station.name} ({station.code})</option>
+                ))}
+              </select>
+              <textarea
+                name="text"
+                rows={2}
+                required
+                maxLength={STATION_RESULT_NOTICE_MAX}
+                placeholder="고객에게 보여줄 안내 문구"
+                className="rounded-2xl border border-border/70 bg-background px-3 py-2 text-sm"
+              />
+              <button type="submit" className="self-start rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">
+                저장
               </button>
             </AdminActionForm>
           </div>

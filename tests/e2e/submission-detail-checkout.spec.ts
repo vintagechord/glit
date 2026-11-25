@@ -63,7 +63,8 @@ const navigation = (page: Page) => page.evaluate(() => (window as unknown as { _
 
 test("linked guest application payment prepares its entire order once and opens the payment-method step", async ({ page }) => {
   const fixture = await mount(page, { hold: true });
-  const pay = page.getByRole("button", { name: "결제하기", exact: true });
+  // An order whose payment window closed continues it (2026-11-25).
+  const pay = page.getByRole("button", { name: "결제 이어하기", exact: true });
   await expect(pay).toBeVisible();
   expect(fixture.calls).toEqual([]);
   await pay.click();
@@ -80,9 +81,9 @@ test("linked guest application payment prepares its entire order once and opens 
 
 test("changed or uncertain payment status shows an error and never opens a new checkout", async ({ page }) => {
   const fixture = await mount(page, { status: 409 });
-  await page.getByRole("button", { name: "결제하기", exact: true }).click();
+  await page.getByRole("button", { name: "결제 이어하기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("승인 확인 중");
-  await expect(page.getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "결제 이어하기", exact: true })).toBeEnabled();
   expect(await navigation(page)).toEqual([]);
   expect(fixture.calls).toHaveLength(1);
   expect(fixture.unexpected).toEqual([]);
@@ -115,7 +116,7 @@ test("existing bank payment instructions stay outside automatic order cancellati
 
 for (const status of [200, 409]) test(`English detail checkout preserves locale and translates its ${status === 200 ? "success path" : "error guidance"}`, async ({ page }) => {
   const fixture = await mount(page, { english: true, ...(status === 409 ? { status } : {}) });
-  await page.getByRole("button", { name: "Payment", exact: true }).click();
+  await page.getByRole("button", { name: "Continue Payment", exact: true }).click();
   if (status === 200) {
     await expect.poll(() => navigation(page)).toEqual([`/en/mypage/cart?step=payment&items=${encodeURIComponent(`${first},${second}`)}`]);
   } else {

@@ -553,6 +553,23 @@ export function SubmissionCartCheckout({
     }
   };
 
+  // ?edit=<id> (2026-11-25): the orders page returned an unpaid order to the
+  // cart so the customer can edit one of its applications at once; this opens
+  // the form exactly as the item's 수정 button does.
+  const editSubmissionId = searchParams.get("edit");
+  const handledEditId = React.useRef<string | null>(null);
+  const editTarget = editSubmissionId && !isLoadingGuestCart
+    ? items.find((item) => item.id === editSubmissionId) ?? null
+    : null;
+  React.useEffect(() => {
+    if (!editTarget || handledEditId.current === editTarget.id) return;
+    handledEditId.current = editTarget.id;
+    prepareEditStorage(editTarget);
+    router.replace(getEditHref(editTarget));
+    // The helpers read this render's cart; the ref keeps it to one redirect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTarget]);
+
   const handleDeleteItems = (ids: string[]) => {
     if (isDeleting || isOpening) return;
     const targetIds = expandSubmissionCartGroupIds(

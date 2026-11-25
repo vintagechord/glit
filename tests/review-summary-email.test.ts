@@ -146,3 +146,16 @@ test("a result mail that leaves a station open is a partial notice; the mail wit
   assert.equal(outcome.deliveredCount, 0);
   assert.equal(failing.calls.some(call => call.kind === "send"), false);
 });
+
+test("a station's result note shows under that station's row, escaped", async () => {
+  // 2026-11-25 (owner): TBS only accepts applications while its results are on
+  // hold (방송국 결과 안내, src/lib/station-result-notices.ts).
+  const api = await fixture();
+  const preview = await api.getReviewSummaryEmailPreviewById(previewInput);
+  const html = api.renderReviewSummaryEmail({ title: "fixture", kind: "ALBUM", updatedAt: preview.updatedAt, link: "https://iamonside.com/track/x", completedCount: 0, attachmentCount: 0, rows: [
+    { name: "TBS", status: "결과 대기", tone: "waiting", detail: "심의 대상 1곡", notice: "서울시 예산 문제로 <TBS> 결과 안내가 멈춰 있습니다." },
+    { name: "KBS", status: "결과 대기", tone: "waiting", detail: null },
+  ] }).html;
+  assert.match(html, /border-left:4px solid #d9362c;[^>]*>서울시 예산 문제로 &lt;TBS&gt; 결과 안내가 멈춰 있습니다\.<\/div>/);
+  assert.equal(html.match(/border-left:4px solid #d9362c/g)?.length, 1);
+});

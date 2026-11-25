@@ -213,14 +213,38 @@ test("bank and paid mails label each half-price album and the order's album disc
   assert.doesNotMatch(loaded.exports.messages[2].html, /할인|line-through/);
 });
 
-test("bank requests send social members' payment instructions to the saved profile contact", async () => {
-  const h = await fixture(); h.state.rows = [row()];
+// 2026-11-25: every Naver login has no account email, so these members got
+// "계좌는 로그인 후 주문 내역에서 확인" instead of the account (from PR #104).
+test("bank requests send email-less social members the account and whole order at their saved profile contact", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.rows = [row(), { ...row(), id: otherId, title: "Second title", applicant_email: "other-contact@example.invalid", amount_krw: 2500 }];
   h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };
   h.state.notificationEmail = "saved@example.invalid";
-  assert.equal((await h.POST(bankRequest(false, [submissionId]))).status, 200);
-  const notices = h.calls.filter(call => call.method === "payment-email");
-  assert.equal(notices.length, 1); assert.equal(notices[0].input?.email, "saved@example.invalid");
-  assert.equal(notices[0].input?.items, undefined);
+  assert.equal((await h.POST(bankRequest(false, [submissionId, otherId]))).status, 200);
+  assert.equal(h.calls.some(call => call.method === "payment-email"), false);
+  const emails = h.calls.filter(call => call.method === "bank-email");
+  assert.equal(emails.length, 1);
+  const email = emails[0].input!;
+  assert.equal(email.email, "saved@example.invalid");
+  assert.equal(email.idempotencyKey, `bank-request:${h.state.nextOrderId}:saved@example.invalid`);
+  assert.equal(email.totalAmountKrw, 3500);
+  assert.equal(email.depositorName, "홍길동");
+  assert.equal((email.items as unknown[]).length, 2);
+  assert.doesNotMatch(String(email.link), /track|legacy-private/);
+});
+
+test("bank requests send the whole order to an email-less member's one application contact", async () => {
+  const otherId = "20000000-0000-4000-8000-000000000003";
+  const h = await fixture();
+  h.state.user = { id: memberId, identities: [{ provider: "custom:naver" }] };
+  h.state.rows = [row(), { ...row(), id: otherId, title: "Second title", amount_krw: 2500 }];
+  assert.equal((await h.POST(bankRequest(false, [submissionId, otherId]))).status, 200);
+  const emails = h.calls.filter(call => call.method === "bank-email");
+  assert.equal(emails.length, 1);
+  assert.equal(emails[0].input?.email, "third-party@example.invalid");
+  assert.equal(emails[0].input?.totalAmountKrw, 3500);
+  assert.equal(h.calls.some(call => call.method === "payment-email"), false);
 });
 
 test("bank requests keep no-email social application contacts separate and direct totals behind login", async () => {

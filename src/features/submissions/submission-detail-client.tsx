@@ -51,6 +51,8 @@ import { buildSubmissionCheckoutHref, prepareOrderCheckout } from "@/lib/submiss
 import { getPaidReviewProgress } from "@/lib/paid-review-progress";
 import { isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 import { artistReferenceNames, officialArtistName } from "@/lib/submissions/artist-display";
+import { hasStationResultSchedule, REVIEW_RECEIPT_SCHEDULE, REVIEW_RESULT_SCHEDULE } from "@/lib/customer-progress-notice";
+import { stationResultNoticeFor, type StationResultNotices } from "@/lib/station-result-notices";
 
 type Submission = {
   id: string;
@@ -374,7 +376,9 @@ const buildSubmissionDisplayStatus = ({
           ? ("retry-payment" as DetailPrimaryAction)
           : ("payment-info" as DetailPrimaryAction),
       primaryActionLabel:
-        paymentMethod && paymentMethod !== "BANK" ? "결제하기" : "입금 안내 보기",
+        paymentMethod && paymentMethod !== "BANK"
+          ? hasOrder ? "결제 이어하기" : "결제하기"
+          : "입금 안내 보기",
     };
   }
 
@@ -479,6 +483,7 @@ export function SubmissionDetailClient({
   paymentState,
   refreshIntervalMs,
   resultsOnly = false,
+  stationResultNotices,
 }: {
   submissionId: string;
   initialSubmission: Submission;
@@ -490,6 +495,8 @@ export function SubmissionDetailClient({
   paymentState?: string;
   refreshIntervalMs?: number;
   resultsOnly?: boolean;
+  /** Station code → note shown on that station's row while it has no result. */
+  stationResultNotices?: StationResultNotices;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1027,6 +1034,31 @@ export function SubmissionDetailClient({
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1) ?? null;
+  // 2026-11-25 (owner): how long the review takes, from payment until the
+  // last result. The receipt line goes once the stations have it.
+  const showReceiptSchedule = submission.status !== "IN_PROGRESS" && stationSummary.submitted === 0;
+  const showResultSchedule = hasStationResultSchedule(submission.type);
+  const showReviewSchedule = isPaymentDone && !hasFinalResultDone && (showReceiptSchedule || showResultSchedule);
+  const renderReviewSchedule = (className = "") => (
+    <div className={`rounded-[8px] border-2 border-[#111111] bg-background p-3 text-sm dark:border-[#f2cf27] ${className}`}>
+      <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">예상 일정</p>
+      <dl className="mt-2 grid gap-1.5">
+        {showReceiptSchedule ? (
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-black text-foreground">접수</dt>
+            <dd className="break-keep font-semibold text-foreground/82">{REVIEW_RECEIPT_SCHEDULE}</dd>
+          </div>
+        ) : null}
+        {showResultSchedule ? (
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-black text-foreground">결과</dt>
+            <dd className="break-keep font-semibold text-foreground/82">{REVIEW_RESULT_SCHEDULE}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </div>
+  );
+
   const renderStationReviewSection = () => (
     <div id="station-review-section" className={detailPanelClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1044,6 +1076,7 @@ export function SubmissionDetailClient({
           </p>
         ) : null}
       </div>
+      {showReviewSchedule ? renderReviewSchedule("mt-4 sm:hidden") : null}
       {submission.result_status || submission.result_memo ? (
         <div className="mt-4 rounded-[8px] border border-border bg-background p-4">
           <p className="text-sm font-semibold">
@@ -1152,6 +1185,11 @@ export function SubmissionDetailClient({
                 }
               };
               const stationName = review.station?.name?.trim() || stationCode?.trim() || "방송국";
+              const stationNotice = stationResultNoticeFor(
+                stationResultNotices,
+                stationCode,
+                currentStatus.isComplete || trackInfo.counts.approved + trackInfo.counts.rejected > 0,
+              );
 
               return (
                 <div
@@ -1195,6 +1233,11 @@ export function SubmissionDetailClient({
                       aria-label={[stationName, resultDisplayStatus.label, trackSummaryLine].filter(Boolean).join(" · ")}
                     />
                   </div>
+                  {stationNotice ? (
+                    <p className="mt-3 break-keep border-l-4 border-[#d9362c] pl-2.5 text-xs font-semibold leading-5 text-foreground">
+                      {stationNotice}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
@@ -1532,6 +1575,7 @@ export function SubmissionDetailClient({
               {!isMvSubmission && isPaymentDone && !hasFinalResultDone
                 ? renderProcessTimeline()
                 : null}
+              {showReviewSchedule ? renderReviewSchedule("mt-5") : null}
             </div>
           </div>
         </div>

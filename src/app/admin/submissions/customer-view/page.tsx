@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import { loadStationResultNotices } from "@/lib/station-result-notices";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -69,6 +70,7 @@ export default async function AdminCustomerViewPage({
         initialFiles={detail.files}
         enableRealtime={false}
         guestToken={isGuest ? detail.guestToken ?? undefined : undefined}
+        stationResultNotices={await loadStationResultNotices(createAdminClient())}
       />
     </div>
   );

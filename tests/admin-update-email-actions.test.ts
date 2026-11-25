@@ -64,16 +64,26 @@ test("admin status/basic actions notify once for actual changes, preserve saved 
   assert.equal(api.calls.filter(call => call.name === "notice").length, 2);
 });
 
-test("main admin form distinguishes saved changes from delivery failure and sends nothing for private notes", async () => {
+// 2026-11-25 (owner): the customer hears of a new stage by its own subject;
+// a tidied title is recorded without a mail (one customer got 5 in 70 min).
+test("main admin form mails only a new stage, reports delivery failure, and sends nothing for private notes or a tidied title", async () => {
   const api = await fixture();
   const form = new FormData();
   for (const [key, value] of Object.entries({ submissionId, status: "PRE_REVIEW", paymentStatus: "PAID", title: "Original", artistName: "Artist", adminMemo: "private staff note" })) form.set(key, value);
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
-  form.set("title", "Updated"); api.state.warning = "이메일 발송 실패";
-  await assert.rejects(api.saveSubmissionAdminFormAction(form), error => error instanceof Error && error.message.includes("saved=status_warning") && decodeURIComponent(error.message.replace(/\+/g, " ")).includes(api.state.warning!));
+  form.set("title", "Updated");
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.state.submission.title, "Updated");
-  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
+  form.set("status", "IN_PROGRESS"); api.state.warning = "이메일 발송 실패";
+  await assert.rejects(api.saveSubmissionAdminFormAction(form), error => error instanceof Error && error.message.includes("saved=status_warning") && decodeURIComponent(error.message.replace(/\+/g, " ")).includes(api.state.warning!));
+  const notices = api.calls.filter(call => call.name === "notice");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].input.subject, "[onside] 방송국 접수 시작 안내 — Updated");
+  assert.equal(notices[0].input.headline, "방송국 심의 접수를 시작했습니다.");
+  assert.equal(notices[0].input.changeKey, "stage-notice:IN_PROGRESS");
+  assert.doesNotMatch(JSON.stringify(notices[0].input), /운영 단계|private staff note/);
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
 });
@@ -139,8 +149,8 @@ test("manual progress resend validates current state, reports audit and enqueue 
   const notices = api.calls.filter(call => call.name === "notice");
   assert.equal(notices.length, 2);
   assert.notEqual(notices[0].input.changeKey, notices[1].input.changeKey);
-  assert.match(String(notices[0].input.summary), /심의 진행/);
-  assert.match(String(notices[1].input.summary), /결과 준비/);
+  assert.equal(notices[0].input.subject, "[onside] 방송국 접수 시작 안내 — Original");
+  assert.equal(notices[1].input.subject, "[onside] 심의 결과 안내 — Original");
   assert.doesNotMatch(JSON.stringify(notices), /private staff|private result/);
   assert.equal(api.calls.filter(call => call.name === "write").length, 0);
 });
@@ -241,13 +251,17 @@ test("main admin form corrects the MV 아티스트명 공식 표기 and ignores 
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.state.submission.artist_name_kr, "SOLE (쏠)");
   assert.equal(api.state.submission.artist_name, "쏠(SOLE) / SOLE");
-  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+  // The correction is recorded for staff; the customer is not mailed for it.
+  const events = () => api.calls.filter(call => call.name === "event" && /아티스트명이 정리되었습니다/.test(String(call.input.message)));
+  assert.equal(events().length, 1);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
-  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+  assert.equal(events().length, 1);
 
   Object.assign(api.state.submission, { type: "ALBUM", artist_name: "Artist", artist_name_kr: "아티스트" });
   form.set("artistName", "Artist"); form.set("artistNameOfficial", "Ignored");
   await assert.rejects(api.saveSubmissionAdminFormAction(form), /redirect:/);
   assert.equal(api.state.submission.artist_name_kr, "아티스트");
-  assert.equal(api.calls.filter(call => call.name === "notice").length, 1);
+  assert.equal(events().length, 1);
+  assert.equal(api.calls.filter(call => call.name === "notice").length, 0);
 });
