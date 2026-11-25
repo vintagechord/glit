@@ -40,6 +40,7 @@ import { setPartialResultNotice } from "@/lib/admin/partial-result-notice";
 import { hydrateReleasedAlbumSubmission } from "@/lib/admin/released-album-hydration";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "@/lib/admin/order-payment";
 import { adminOperationalStageLabelMap, adminOperationalStageValues, mapAdminOperationalStage } from "@/lib/admin/operational-stage";
+import { customerProgressNotice, stageChangeNotice } from "@/lib/customer-progress-notice";
 import { loadSubmissionAdminMemo, normalizeAdminMemo, saveSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
 import { autoIssueRequestedCashReceipt } from "@/lib/cash-receipts-server";
 import { sendPaidSubmissionNotificationsById } from "@/lib/payments/notifications";
@@ -350,7 +351,7 @@ export async function updateSubmissionStatusAction(
 
   const supabase = createAdminClient();
   const [{ data: previous, error: previousError }, previousMemo] = await Promise.all([
-    supabase.from("submissions").select("status").eq("id", parsed.data.submissionId).maybeSingle(),
+    supabase.from("submissions").select("status, payment_status, type, title").eq("id", parsed.data.submissionId).maybeSingle(),
     loadSubmissionAdminMemo(supabase, parsed.data.submissionId),
   ]);
   if (previousError || !previous || previousMemo.error) return { error: "접수 정보를 확인하지 못했습니다." };
@@ -384,13 +385,13 @@ export async function updateSubmissionStatusAction(
     `관리자 상태 변경: ${parsed.data.status}`,
     "ADMIN_STATUS",
   ).then(() => undefined, () => auditWarning);
-  const notification = statusChanged && !["RESULT_READY", "COMPLETED"].includes(previous.status) && !["RESULT_READY", "COMPLETED"].includes(parsed.data.status) ? await sendSubmissionUpdateNotificationById({
-    submissionId: parsed.data.submissionId,
-    headline: "심의 진행 상태가 업데이트되었습니다.",
-    summary: `현재 상태: ${
-      reviewStatusLabelMap[parsed.data.status] ?? parsed.data.status
-    }`,
-    subject: "[onside] 심의 진행 상태 업데이트",
+  // The same stage mail as the detail page's 상태 저장 (customer-progress-notice).
+  const stageNotice = statusChanged ? stageChangeNotice({
+    type: previous.type, currentStatus: previous.status, nextStatus: parsed.data.status,
+    currentPaymentStatus: previous.payment_status, nextPaymentStatus: previous.payment_status, title: previous.title,
+  }) : null;
+  const notification = stageNotice ? await sendSubmissionUpdateNotificationById({
+    submissionId: parsed.data.submissionId, ...stageNotice, changeKey: `stage-notice:${parsed.data.status}`,
   }) : null;
 
   return { message: "상태가 업데이트되었습니다.", warning: combineWarnings(eventWarning, notification?.warning) };
@@ -1299,7 +1300,7 @@ export async function notifySubmissionProgressAction(submissionId: string): Prom
   await requireAdminAction();
   if (!z.string().uuid().safeParse(submissionId).success) return { error: "접수 ID를 확인해주세요." };
   const { data, error } = await createAdminClient().from("submissions")
-    .select("status, payment_status").eq("id", submissionId).maybeSingle();
+    .select("status, payment_status, type, title").eq("id", submissionId).maybeSingle();
   const status = reviewStatusEnum.safeParse(data?.status);
   const payment = paymentStatusEnum.safeParse(data?.payment_status);
   if (error || !data || !status.success || status.data === "DRAFT" || !payment.success) {
@@ -1307,11 +1308,14 @@ export async function notifySubmissionProgressAction(submissionId: string): Prom
   }
   const eventWarning = await insertEvent(submissionId, "관리자가 현재 진행상황 안내 이메일 재발송을 요청했습니다.", "PROGRESS_NOTIFICATION_RETRY")
     .then(() => undefined, () => "안내 재발송 요청 기록을 저장하지 못했습니다. 이메일 발송 내역을 확인해주세요.");
+  const notice = customerProgressNotice({ type: data.type, status: status.data, paymentStatus: payment.data, title: data.title });
   const notification = await sendSubmissionUpdateNotificationById({
     submissionId, changeKey: `manual-progress-${randomUUID()}`,
-    headline: "현재 접수 진행상황을 안내드립니다.",
-    summary: `현재 상태: ${reviewStatusLabelMap[status.data]}\n결제 상태: ${paymentStatusLabelMap[payment.data]}\n신청 내역에서 방송국·트랙·보완 요청과 공개된 심의 결과를 확인해주세요.`,
-    subject: "[onside] 현재 접수 진행상황 안내",
+    ...(notice ?? {
+      headline: "현재 접수 진행상황을 안내드립니다.",
+      summary: "진행상황 바로 보기에서 현재 진행 상황을 확인해주세요.",
+      subject: "[onside] 현재 접수 진행상황 안내",
+    }),
   });
   return { message: "현재 진행상황 안내 재발송을 요청했습니다.", warning: combineWarnings(eventWarning, notification.warning) };
 }
@@ -2285,6 +2289,12 @@ export async function saveSubmissionAdminFormAction(
       savedWarning = "상태는 저장됐지만 처리 기록 저장은 실패했습니다.";
     }
 
+    // The customer hears only of a new stage, in their own words: the change
+    // summary above stays in the staff history.
+    const stageNotice = stageChangeNotice({
+      type: currentSubmissionRow.type, currentStatus, nextStatus, currentPaymentStatus, nextPaymentStatus,
+      title: title || currentSubmissionRow.title,
+    });
     try {
       const notification = currentPaymentStatus !== "PAID" && nextPaymentStatus === "PAID"
         ? await sendPaidSubmissionNotificationsById({
@@ -2294,13 +2304,12 @@ export async function saveSubmissionAdminFormAction(
           submissionId, headline: "결제가 환불 처리되었습니다.",
           summary: "결제가 환불로 기록되어 심의 진행이 중단되었습니다. 환불 입금은 결제 수단에 따라 수일이 걸릴 수 있으며, 문의는 고객센터로 연락해주세요.",
           subject: "[onside] 환불 처리 안내",
-        }) : (currentStatus !== nextStatus && (["RESULT_READY", "COMPLETED"].includes(currentStatus) || ["RESULT_READY", "COMPLETED"].includes(nextStatus)))
-        ? null : await sendSubmissionUpdateNotificationById({
-        submissionId,
-        headline: "접수 정보가 업데이트되었습니다.",
-        summary: changeSummary,
-        subject: "[onside] 접수 정보 업데이트 안내",
-      });
+        }) : stageNotice
+        ? await sendSubmissionUpdateNotificationById({
+          submissionId, ...stageNotice,
+          // Once per stage: moving back and forth does not mail it again.
+          changeKey: `stage-notice:${nextStatus}`,
+        }) : null;
       savedWarning = [savedWarning, notification?.warning].filter(Boolean).join(" / ");
     } catch (error) {
       console.warn("[admin save] notification failed", {

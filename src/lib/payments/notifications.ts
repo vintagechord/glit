@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/format";
 import { officialArtistName } from "@/lib/submissions/artist-display";
 import { sendKakaoOfficialNotification } from "@/lib/kakao";
 import { buildUrl, getBaseUrl } from "@/lib/url";
+import { reviewScheduleSentences } from "@/lib/customer-progress-notice";
 
 type OrderSummary = {
   id: string;
@@ -16,6 +17,7 @@ type OrderSummary = {
   paidAt: string | null;
   items: OrderEmailItem[];
   awaitingEmailMaterials: boolean;
+  scheduleLines: string[];
 };
 
 /** The order snapshot taken at checkout; a missing or unreadable order only
@@ -49,6 +51,8 @@ async function loadOrderSummary(db: ReturnType<typeof createAdminClient>, orderI
       }) : null,
     })),
     awaitingEmailMaterials: (flags ?? []).some((row: { files_submitted_by_email?: boolean | null }) => row.files_submitted_by_email === true),
+    // Station result times apply when the order has an album or a broadcast MV.
+    scheduleLines: reviewScheduleSentences(items.some((item: { type: string | null }) => item.type !== "MV_DISTRIBUTION") ? "ALBUM" : "MV_DISTRIBUTION"),
   };
 }
 
@@ -140,6 +144,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
         return sendPaymentCompletedEmail({
           email: recipient, orderId: order.id, paymentMethod: order.paymentMethod, paidAt: order.paidAt,
           amountLabel: order.amountLabel, items: order.items, awaitingEmailMaterials: order.awaitingEmailMaterials,
+          scheduleLines: order.scheduleLines,
           link, ordersLink: guestAccess ? undefined : buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
           idempotencyKey: `payment-approved:${paymentKey}:${order.id}:${recipient}`,
           submissionId: submission.id,
@@ -149,7 +154,7 @@ export async function sendPaidSubmissionNotificationsById(input: {
       return sendSubmissionUpdateEmail({
         email: recipient, title: submission.title ?? "제목 미입력", artist: officialArtistName(submission),
         kind, headline: "결제가 완료되었습니다.",
-        summary: "결제 완료로 처리되었습니다. 심의는 접수예정 단계에서 자료 확인 후 방송사·기관 접수를 진행합니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.",
+        summary: ["결제 완료로 처리되었습니다. 미제출 자료가 있으면 신청 내역의 안내에 따라 제출해주세요.", ...reviewScheduleSentences(submission.type)].join("\n"),
         link, subject: "[onside] 결제 완료 및 심의 접수 안내",
         // Preserve the pre-existing card receipt key on callback replays.
         idempotencyKey: `payment-approved:${paymentKey}:${submission.id}:${recipient}`,

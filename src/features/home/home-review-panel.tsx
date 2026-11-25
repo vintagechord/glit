@@ -23,6 +23,7 @@ import { downloadEndpointFile } from "@/lib/browser-download";
 import { isMvRatingChipTone, isMvRatingMarkCode, mvRatingChipTone } from "@/lib/mv-rating-colors";
 import { brandStatusTones } from "@/lib/brand-status-tones";
 import { officialArtistName } from "@/lib/submissions/artist-display";
+import { prepareOrderCheckout } from "@/lib/submission-checkout";
 
 type StationItem = {
   id: string;
@@ -857,6 +858,30 @@ export function HomeReviewPanel({
       // Ignore storage failures; the detail/cart paths remain available.
     }
   }, [activeSubmission, activeSubmissionType, viewerId]);
+  // 2026-11-25 (owner): a closed payment window leaves the application on an
+  // unpaid order (UNPAID with current_order_id). Two members re-created the
+  // whole application instead of finding 주문 내역 → 결제하기, so the panel
+  // continues the payment or opens the form here; either returns the order
+  // to the cart first.
+  const hasClosedPayment =
+    Boolean(activeSubmission?.current_order_id) && activeSubmission?.payment_status === "UNPAID";
+  const [closedOrderAction, setClosedOrderAction] = React.useState<"pay" | "edit" | null>(null);
+  const [closedOrderError, setClosedOrderError] = React.useState<string | null>(null);
+  const continueClosedOrder = async (target: "pay" | "edit") => {
+    const orderId = activeSubmission?.current_order_id;
+    if (!activeSubmission || !orderId || closedOrderAction) return;
+    setClosedOrderAction(target);
+    setClosedOrderError(null);
+    try {
+      const { href } = await prepareOrderCheckout({ orderId, guestTokensBySubmissionId: {}, localePrefix });
+      router.push(target === "pay" ? href : `${localePrefix}/mypage/cart?edit=${encodeURIComponent(activeSubmission.id)}`);
+      router.refresh();
+    } catch (error) {
+      setClosedOrderError(error instanceof Error ? error.message : "결제 화면을 준비하지 못했습니다. 주문 내역에서 다시 시도해주세요.");
+    } finally {
+      setClosedOrderAction(null);
+    }
+  };
   const paymentActions = activeSubmission ? (
     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
       {showDetailLink ? (
@@ -872,6 +897,17 @@ export function HomeReviewPanel({
           {localePrefix ? "This submission was refunded." : "환불 처리된 접수입니다."}
         </p>
       ) : null}
+      {!isRefunded && hasClosedPayment ? (
+        <button
+          type="button"
+          onClick={() => void continueClosedOrder("edit")}
+          disabled={Boolean(closedOrderAction)}
+          aria-busy={closedOrderAction === "edit"}
+          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-white px-5 py-3 text-sm font-black tracking-normal text-[#111111] shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#f2cf27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] sm:w-auto sm:min-w-[8.5rem]"
+        >
+          {closedOrderAction === "edit" ? "준비 중..." : "수정하기"}
+        </button>
+      ) : null}
       {!isRefunded && !activeSubmission.current_order_id ? <Link
         href={editHref}
         onClick={prepareActiveSubmissionEdit}
@@ -879,7 +915,20 @@ export function HomeReviewPanel({
       >
         수정하기
       </Link> : null}
-      {!isRefunded ? <Link
+      {!isRefunded && hasClosedPayment ? (
+        <button
+          type="button"
+          onClick={() => void continueClosedOrder("pay")}
+          disabled={Boolean(closedOrderAction)}
+          aria-busy={closedOrderAction === "pay"}
+          className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:bg-[#d9362c] dark:text-white dark:hover:bg-[#b92d25] sm:w-auto sm:min-w-[10.5rem]"
+        >
+          <CreditCard aria-hidden="true" className="h-4 w-4" />
+          {closedOrderAction === "pay" ? "결제 준비 중..." : "결제 이어하기"}
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
+        </button>
+      ) : null}
+      {!isRefunded && !hasClosedPayment ? <Link
         href={`${localePrefix}/mypage/${activeSubmission.current_order_id ? "orders" : "cart"}?focus=${activeSubmission.id}`}
         className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[8px] border-2 border-[#111111] bg-[var(--bauhaus-red)] px-5 py-3 text-sm font-black tracking-normal text-white shadow-[3px_3px_0_rgba(17,17,17,0.34)] transition hover:-translate-y-0.5 hover:bg-[#b92d25] hover:shadow-[5px_5px_0_rgba(17,17,17,0.38)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f2cf27] dark:bg-[#d9362c] dark:text-white dark:hover:bg-[#b92d25] sm:w-auto sm:min-w-[10.5rem]"
       >
@@ -1257,9 +1306,16 @@ export function HomeReviewPanel({
           <p className="sr-only">접수 현황</p>
           {activeSubmission ? (
             needsPayment ? (
-              <div className="flex justify-center">
-                {paymentActions}
-              </div>
+              <>
+                <div className="flex justify-center">
+                  {paymentActions}
+                </div>
+                {closedOrderError ? (
+                  <p role="alert" className={`mt-3 rounded-[8px] border-2 p-3 text-sm font-semibold ${brandStatusTones.danger}`}>
+                    {closedOrderError}
+                  </p>
+                ) : null}
+              </>
             ) : (
               <div className={progressBodyClass}>
                 <div className={`rounded-xl border border-border/60 bg-background/80 ${innerCardPaddingClass}`}>

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import { loadStationResultNotices } from "@/lib/station-result-notices";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
@@ -67,6 +68,7 @@ export default async function TrackDetailPage({
       guestToken={token}
       paymentState={paymentState}
       refreshIntervalMs={60000}
+      stationResultNotices={await loadStationResultNotices(createAdminClient())}
     />
   );
 }

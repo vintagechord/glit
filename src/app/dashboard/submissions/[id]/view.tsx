@@ -4,6 +4,7 @@ import Link from "next/link";
 import type React from "react";
 
 import { SubmissionDetailClient } from "@/features/submissions/submission-detail-client";
+import { loadStationResultNotices } from "@/lib/station-result-notices";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { classifyActivityClient, recordCustomerResultViewAfterResponse } from "@/lib/customer-result-tracking";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -497,6 +498,7 @@ export async function SubmissionDetailPageView({
       refreshIntervalMs={hasGuestPaymentResultGrant ? 60000 : undefined}
       paymentState={paymentState}
       resultsOnly={resolvedSearchParams.view === "archive-result"}
+      stationResultNotices={await loadStationResultNotices(createAdminClient())}
     />
   );
 }

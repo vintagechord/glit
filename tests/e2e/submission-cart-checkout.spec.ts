@@ -44,7 +44,9 @@ const row = (page: Page, id: string) => page.locator(`#cart-item-${id}`);
 const select = (page: Page, id: string) => row(page, id).locator("button[aria-pressed]");
 const orderRow = (page: Page, id: string) => page.locator(`#order-${id}`);
 const payment = (page: Page) => page.getByRole("button", { name: "결제하기", exact: true });
-const returnButton = (page: Page, id = orderIds[0]) => orderRow(page, id).getByRole("button", { name: "결제하기", exact: true });
+// A bank order re-selects its method (결제하기); a card order whose window was
+// opened or closed continues its payment (결제 이어하기, 2026-11-25).
+const returnButton = (page: Page, id = orderIds[0]) => orderRow(page, id).getByRole("button", { name: /^결제(하기| 이어하기)$/ });
 const checkoutHref = (refs: string[], english = false) => `${english ? "/en" : ""}/mypage/cart?step=payment&items=${encodeURIComponent(refs.join(","))}`;
 type Body = { submissionIds?: string[]; guestTokensBySubmissionId?: Record<string, string>; orderId?: string; offset?: number };
 type Harness = {
@@ -63,7 +65,7 @@ async function buildIsolatedDocument() {
       plugins: [{ name: "test-navigation-only", setup(builder) {
         builder.onResolve({ filter: /^next\/(navigation|link)$/ }, args => ({ path: args.path, namespace: "test-next" }));
         builder.onLoad({ filter: /.*/, namespace: "test-next" }, args => ({ resolveDir: process.cwd(), loader: "js", contents: args.path === "next/navigation"
-          ? `import {useSyncExternalStore,useMemo} from 'react';const subscribe=listener=>{window.addEventListener('popstate',listener);return()=>window.removeEventListener('popstate',listener)};const router={push(href){(window.__commerceNavigation??=[]).push(href);history.pushState({},'',href);window.dispatchEvent(new Event('popstate'))},refresh(){window.__commerceRefreshes=(window.__commerceRefreshes||0)+1}};export const useRouter=()=>router;export const usePathname=()=>useSyncExternalStore(subscribe,()=>window.location.pathname);export const useSearchParams=()=>{const search=useSyncExternalStore(subscribe,()=>window.location.search);return useMemo(()=>new URLSearchParams(search),[search])};`
+          ? `import {useSyncExternalStore,useMemo} from 'react';const subscribe=listener=>{window.addEventListener('popstate',listener);return()=>window.removeEventListener('popstate',listener)};const router={push(href){(window.__commerceNavigation??=[]).push(href);history.pushState({},'',href);window.dispatchEvent(new Event('popstate'))},replace(href){(window.__commerceNavigation??=[]).push(href);history.replaceState({},'',href);window.dispatchEvent(new Event('popstate'))},refresh(){window.__commerceRefreshes=(window.__commerceRefreshes||0)+1}};export const useRouter=()=>router;export const usePathname=()=>useSyncExternalStore(subscribe,()=>window.location.pathname);export const useSearchParams=()=>{const search=useSyncExternalStore(subscribe,()=>window.location.search);return useMemo(()=>new URLSearchParams(search),[search])};`
           : `import React from "react";export default function Link({children,prefetch,...props}){return React.createElement("a",props,children)}` }));
       } }],
     }),
@@ -337,7 +339,8 @@ test.describe("isolated commerce account fixtures", () => {
     await expect.poll(() => navigation(page)).toEqual([checkoutHref([ids[0]], true), `/en/mypage/orders?focus=${ids[0]}`]);
     await expect(orderRow(page, orderIds[0])).toContainText("결제 대기");
     await expect(orderRow(page, orderIds[0])).not.toContainText("주문 취소");
-    await expect(orderRow(page, orderIds[0]).getByRole("button", { name: "결제하기", exact: true })).toBeEnabled();
+    await expect(orderRow(page, orderIds[0]).getByRole("button", { name: "결제 이어하기", exact: true })).toBeEnabled();
+    await expect(orderRow(page, orderIds[0]).getByRole("button", { name: "신청서 수정", exact: true })).toBeEnabled();
     await page.evaluate(() => window.postMessage({ type: "INICIS:CANCEL" }, window.location.origin));
     expect(await navigation(page)).toHaveLength(2); expect(harness.writes.filter(write => write.path === "/api/inicis/submission/order")).toHaveLength(2); expectClean(harness);
   });
@@ -356,7 +359,8 @@ test.describe("isolated commerce account fixtures", () => {
     await expect(orderRow(page, orderIds[2])).toContainText("25 USD");
     await expect(orderRow(page, orderIds[5])).toContainText("기존 주문 이력은 보관됩니다."); await expect(orderRow(page, orderIds[5]).getByRole("link")).toHaveCount(0);
     for (const index of [3, 5, 6, 7]) await expect(returnButton(page, orderIds[index])).toHaveCount(0);
-    await expect(payment(page)).toHaveCount(BANK_ORDER_REPAY_ENABLED ? 4 : 3); await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "결제 이어하기", exact: true })).toHaveCount(3);
+    await expect(payment(page)).toHaveCount(BANK_ORDER_REPAY_ENABLED ? 1 : 0); await expect(page.getByRole("button", { name: "입금 신청", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "진행", exact: true })).toHaveCount(0);
     for (const [label, count] of [["대기", 4], ["완료", 1], ["실패·취소", 3], ["전체", 8]] as const) {
       await page.getByRole("button", { name: label, exact: true }).click(); await expect(page.getByRole("article")).toHaveCount(count);
@@ -390,6 +394,17 @@ test.describe("isolated commerce account fixtures", () => {
     expect(harness.writes.at(-1)).toEqual({ path: "/api/orders/return", body: { orderId: orderIds[0], guestTokensBySubmissionId: identity ? {} : Object.fromEntries(ids.slice(0, 2).map(id => [id, tokens[id]])) } });
     if (!identity) { expect(await stored(page, GUEST_SUBMISSION_CART_STORAGE_KEY)).toHaveLength(3); expect(await stored(page, GUEST_SUBMISSION_ORDERS_STORAGE_KEY)).toHaveLength(3); }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width); expectClean(harness);
+  });
+  // 2026-11-25 (owner): after closing the card window the customer edits the
+  // application at once: the order returns to the cart, which opens the form.
+  for (const identity of ["member-a", null]) test(`${identity ?? "guest"}: a closed card window's application opens its form from the orders page`, async ({ page }) => {
+    const harness = await mount(page, { view: "orders", orders: [order(0, "CANCELED")], identity });
+    await expect(orderRow(page, orderIds[0])).toContainText("결제 대기");
+    await orderRow(page, orderIds[0]).getByRole("button", { name: "신청서 수정", exact: true }).click();
+    await expect.poll(() => navigation(page)).toEqual([`/mypage/cart?edit=${ids[0]}`, "/dashboard/new/album?from=drafts"]);
+    expect(harness.writes).toEqual([{ path: "/api/orders/return", body: { orderId: orderIds[0], guestTokensBySubmissionId: identity ? {} : { [ids[0]]: tokens[ids[0]] } } }]);
+    const pointer = await page.evaluate((key) => JSON.parse(window.localStorage.getItem(key) ?? "null"), `onside:draft:album:${identity ?? "guest"}`);
+    expect(pointer?.ids).toEqual([ids[0]]);
   });
   for (const identity of ["member-a", null]) test(`${identity ?? "guest"}: retry opens only that failed order while unrelated cart entries remain`, async ({ page }) => {
     const harness = await mount(page, { view: "orders", orders: [order(0, "FAILED")], items: [item(2)], identity });

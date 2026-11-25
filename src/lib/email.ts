@@ -6,6 +6,9 @@ import { MV_RATING_MARK_COLORS, type MvRatingMarkCode } from "@/lib/mv-rating-co
 import type { EmailAttachmentRef } from "@/lib/email-attachments";
 import { formatDateTime } from "@/lib/format";
 
+// The current site, for a mail built without a configured site address.
+const DEFAULT_SITE_LINK = "https://iamonside.com/";
+
 type EmailDeliveryOptions = { idempotencyKey?: string; expiresAt?: string };
 
 /** Operations notices (review receipts, chat inquiries) go to one designated mailbox. */
@@ -85,6 +88,8 @@ type PaymentCompletedEmailPayload = EmailDeliveryOptions & {
   items: OrderEmailItem[];
   /** At least one application in the order chose to email its files later. */
   awaitingEmailMaterials: boolean;
+  /** When the stations receive it and when results arrive (customer-progress-notice). */
+  scheduleLines?: string[];
   link: string;
   ordersLink?: string;
   submissionId?: string;
@@ -276,7 +281,7 @@ export async function sendSubmissionReceiptEmail(
     normalizeAbsoluteUrl(payload.siteLink) ||
     normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
     normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
-    "https://onside17.com/";
+    DEFAULT_SITE_LINK;
   const progressLink = normalizeAbsoluteUrl(payload.link) || siteLink;
 
   const guestCodeSection =
@@ -367,7 +372,7 @@ const resolveSiteLink = (value?: string) =>
   normalizeAbsoluteUrl(value) ||
   normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
   normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
-  "https://onside17.com/";
+  DEFAULT_SITE_LINK;
 
 const isKrwAmount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 const discountedListKrw = (item: OrderEmailItem) =>
@@ -509,6 +514,10 @@ export async function sendPaymentCompletedEmail(
             ${renderOrderDiscount(payload.items)}
             <p style="margin:${orderDiscountKrw(payload.items) > 0 ? "4px" : "12px"} 0 0;text-align:right;font-size:14px;font-weight:800;color:#0f172a;">합계 ${escapeHtml(payload.amountLabel)}</p>
           </div>
+          ${payload.scheduleLines?.length ? `<div style="margin-top:16px;border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
+            <p style="margin:0;font-size:12px;color:#475569;">예상 일정</p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.7;color:#0f172a;">${payload.scheduleLines.map(escapeHtml).join("<br />")}</p>
+          </div>` : ""}
           ${payload.submissionId ? `<p style="margin-top:16px;font-size:12px;color:#334155;">접수 번호: ${escapeHtml(payload.submissionId)}</p>` : ""}
           ${payload.guestToken ? `<p style="margin:6px 0 0;font-size:13px;word-break:break-all;">비회원 조회 코드: <strong>${escapeHtml(payload.guestToken)}</strong></p>` : ""}
           ${payload.awaitingEmailMaterials ? `<div style="margin-top:16px;border-radius:14px;border:1px solid #fde68a;background:#fffbeb;padding:16px;">
@@ -541,7 +550,7 @@ export async function sendSubmissionUpdateEmail(
     normalizeAbsoluteUrl(payload.link) ||
     normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
     normalizeAbsoluteUrl(process.env.NEXT_PUBLIC_APP_URL) ||
-    "https://onside17.com/";
+    DEFAULT_SITE_LINK;
 
   const html = `
     <div style="margin:0;padding:28px 12px;background:#eef2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#0f172a;">
@@ -549,7 +558,7 @@ export async function sendSubmissionUpdateEmail(
         <div style="background:linear-gradient(135deg,#0f172a,#1f2937);padding:24px 24px 20px;color:#f8fafc;">
           <p style="margin:0;font-size:12px;letter-spacing:0.18em;font-weight:700;text-transform:uppercase;color:#cbd5e1;">Onside Update</p>
           <h2 style="margin:10px 0 0;font-size:24px;line-height:1.35;font-weight:800;">${safeHeadline}</h2>
-          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">관리자 업데이트가 반영되어 진행상황을 다시 확인하실 수 있습니다.</p>
+          <p style="margin:10px 0 0;font-size:13px;color:#cbd5e1;">자세한 내용은 아래 진행상황 바로 보기에서 확인할 수 있습니다.</p>
         </div>
         <div style="padding:22px 24px 24px;">
           <div style="border-radius:14px;border:1px solid #dbe3ec;background:#f8fafc;padding:16px;">
@@ -563,7 +572,7 @@ export async function sendSubmissionUpdateEmail(
           ${payload.submissionId ? `<p style="margin-top:16px;font-size:12px;">접수 번호: ${escapeHtml(payload.submissionId)}</p>` : ""}
           ${payload.guestToken ? `<p style="font-size:13px;word-break:break-all;">비회원 조회 코드: <strong>${escapeHtml(payload.guestToken)}</strong></p>` : ""}
           <div style="margin-top:16px;border-radius:14px;border:1px solid #d6e8fb;background:#f4f9ff;padding:16px;">
-            <p style="margin:0;font-size:12px;color:#475569;">업데이트 내용</p>
+            <p style="margin:0;font-size:12px;color:#475569;">안내 내용</p>
             <p style="margin:8px 0 0;font-size:14px;line-height:1.7;color:#0f172a;">${safeSummary}</p>
           </div>
           <div style="margin:18px 0 0;display:flex;flex-wrap:wrap;gap:10px;">
@@ -639,6 +648,8 @@ export type ReviewSummaryEmailRow = {
   status: string;
   tone: "waiting" | "progress" | "approved" | "attention" | "rejected";
   detail?: string | null;
+  /** A station-wide note from 방송국 결과 안내, e.g. why TBS has no result yet. */
+  notice?: string | null;
   /** Age rating drawn in the colors of its rating mark: the online result
    * itself, or the broadcast rating shown in `detail`. */
   rating?: ReviewSummaryRatingCode | null;
@@ -690,8 +701,11 @@ export function renderReviewSummaryEmail(content: ReviewSummaryEmailContent) {
     const detail = !row.detail ? ""
       : ratingColor ? `<div style="margin-top:8px;">${badge(row.detail, ratingColor)}</div>`
         : `<div style="margin-top:6px;font-size:12px;line-height:1.6;color:#625e54;">${escapeHtml(row.detail)}</div>`;
+    const notice = row.notice
+      ? `<div style="margin-top:8px;padding-left:8px;border-left:4px solid #d9362c;font-size:12px;font-weight:700;line-height:1.6;color:#111111;">${escapeHtml(row.notice)}</div>`
+      : "";
     return `<tr>
-      <td style="padding:17px 18px;border-top:${border};vertical-align:top;">${name}${detail}</td>
+      <td style="padding:17px 18px;border-top:${border};vertical-align:top;">${name}${detail}${notice}</td>
       <td style="padding:17px 18px;border-top:${border};vertical-align:top;text-align:right;white-space:nowrap;">${badge(row.status, colors[row.tone] ?? colors.waiting)}</td>
     </tr>`;
   }).join("");

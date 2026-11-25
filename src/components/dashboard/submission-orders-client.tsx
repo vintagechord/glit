@@ -3,7 +3,7 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpRight, CreditCard, Landmark, RefreshCw, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, CreditCard, Landmark, PencilLine, RefreshCw, ShoppingCart } from "lucide-react";
 import * as React from "react";
 import { CommerceConfirmDialog } from "./commerce-confirm-dialog";
 import { APP_CONFIG } from "@/lib/config";
@@ -171,7 +171,10 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
     requestAnimationFrame(() => document.getElementById(`order-${focusedOrder.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }, [focusedOrder]);
 
-  const returnToCheckout = async (order: SubmissionOrder) => {
+  // 2026-11-25 (owner): a customer whose payment window closed edits the
+  // application straight away. The unpaid order goes back to the cart and the
+  // cart opens that application's form (edit=<id>).
+  const returnToCheckout = async (order: SubmissionOrder, editSubmissionId?: string) => {
     if (checkoutInFlight.current || !order.canReturnToCart) return;
     checkoutInFlight.current = true;
     setReturningId(order.id); setError(null);
@@ -183,7 +186,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
         localePrefix: prefix,
         guestTokensBySubmissionId: userId ? {} : toGuestTokensBySubmissionId(entries.filter((entry) => itemIds.has(entry.submissionId))),
       });
-      router.push(href);
+      router.push(editSubmissionId ? `${cartHref}?edit=${encodeURIComponent(editSubmissionId)}` : href);
       router.refresh();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "결제 화면을 준비하지 못했습니다. 다시 시도해주세요.");
@@ -229,7 +232,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
               <span className={`inline-flex rounded-[6px] border-2 px-2.5 py-1 text-xs font-black ${orderTone(order)}`}>{orderStatusLabel(order)}</span>
             </div>
             {isPaymentChecking(order) ? <PaymentCheckingNotice className="mt-3" />
-              : isAwaitingPayment(order) && <p className="mt-3 text-xs leading-5 text-muted-foreground">결제가 완료되지 않았습니다. 결제하기를 눌러 다시 진행할 수 있습니다.</p>}
+              : isAwaitingPayment(order) && <p className="mt-3 text-xs leading-5 text-muted-foreground">결제가 완료되지 않았습니다. 결제 이어하기로 바로 결제하거나, 신청서를 수정한 뒤 결제할 수 있습니다.</p>}
             {userId && order.guestOrder && <p className="mt-3 text-xs leading-5 text-muted-foreground">로그인 전에 비회원으로 주문한 내역입니다. 이 브라우저에 저장된 비회원 주문 정보로 표시됩니다.</p>}
             <ul className="mt-4 divide-y divide-border rounded-[8px] border-2 border-border bg-background/70">
               {order.items.map((item) => {
@@ -246,6 +249,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
                       <span>{displayAmount(item.amountKrw, item.amount, order.currency)}</span>
                     </span> : <span className="min-w-0 text-xs font-semibold tabular-nums [overflow-wrap:anywhere]">{displayAmount(item.amountKrw, item.amount, order.currency)}</span>}
                     {detailHref && <Link href={detailHref} className={buttonClass}><ArrowUpRight size={14} aria-hidden />{order.status === "PAID" ? "심의 내역 보기" : "신청서 확인"}</Link>}
+                    {isAwaitingPayment(order) && item.submissionId && <button type="button" disabled={Boolean(returningId)} onClick={() => void returnToCheckout(order, item.submissionId ?? undefined)} className={buttonClass}><PencilLine size={14} aria-hidden />신청서 수정</button>}
                   </div>
                 </li>;
               })}
@@ -253,7 +257,7 @@ export function SubmissionOrdersClient({ userId, initialPage, initialError = nul
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-xs text-muted-foreground">주문 금액</p><p className="mt-1 text-xl font-black tabular-nums [overflow-wrap:anywhere]">{displayAmount(order.amountKrw, order.amount, order.currency)}</p>
                 {orderAlbumDiscountKrw(order) > 0 && <p className="mt-1 flex flex-wrap gap-x-2 text-xs font-black text-[var(--bauhaus-red)]"><span>음반 2번째부터 50% 할인</span><span className="tabular-nums">-{formatCurrency(orderAlbumDiscountKrw(order))}원</span></p>}</div>
-              {order.canReturnToCart && (BANK_ORDER_REPAY_ENABLED || order.status !== "BANK_PENDING") && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : "결제하기"}</button>}
+              {order.canReturnToCart && (BANK_ORDER_REPAY_ENABLED || order.status !== "BANK_PENDING") && <button type="button" disabled={Boolean(returningId)} onClick={() => order.status === "BANK_PENDING" ? setReturnOrder(order) : void returnToCheckout(order)} className={cn(buttonClass, "w-full bg-[var(--bauhaus-yellow)] text-[#111111] sm:w-auto")}><CreditCard size={15} aria-hidden />{returningId === order.id ? "결제 준비 중" : order.status === "BANK_PENDING" ? "결제하기" : "결제 이어하기"}</button>}
             </div>
             {order.status === "BANK_PENDING" && <div className="mt-4 rounded-[8px] border-2 border-[var(--bauhaus-blue)] bg-background p-4">
               <p className="flex items-center gap-2 text-xs font-black"><Landmark size={15} aria-hidden />입금 계좌</p>

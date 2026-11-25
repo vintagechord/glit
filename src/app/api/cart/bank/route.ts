@@ -368,35 +368,45 @@ export async function POST(req: NextRequest) {
     const orderId = submission.current_order_id as string;
     submissionsByOrder.set(orderId, [...(submissionsByOrder.get(orderId) ?? []), submission]);
   }
-  // Send after the stored order's response. Application contacts receive only
-  // their own details; account and guest recipients retain the order summary.
+  // Send after the stored order's response. The bank notice lists the whole
+  // order: account and guest mailboxes always get it, and so does an
+  // email-less social member (every Naver login) when the order's applications
+  // all resolve to one address. Differing application contacts receive only
+  // their own application's notice.
   // Unsent rows stay in the durable outbox for the scheduled worker.
   await runAfterResponse(async () => {
     await Promise.all(Array.from(submissionsByOrder, async ([orderId, orderSubmissions]) => {
+      let recipients: string[];
       if (user && !user.email?.trim()) {
-        await Promise.all(orderSubmissions.map(async (submission) => {
-          const email = await resolveMemberNotificationEmail(admin, user, submission.applicant_email);
-          if (!email) return;
-          const result = await sendSubmissionUpdateEmail({
-            email,
-            title: submission.title ?? "제목 미입력",
-            artist: officialArtistName(submission),
-            kind: getKind(submission.type),
-            headline: "입금 요청이 접수되었습니다.",
-            summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
-            subject: "[onside] 무통장 입금 요청 접수 안내",
-            link: buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
-            idempotencyKey: `bank-request:${orderId}:${email}:${submission.id}`,
-            submissionId: submission.id,
-          });
-          if (!result.ok && !result.skipped) {
-            console.warn("[CartBank] bank email failed", { orderId, submissionId: submission.id, message: result.message });
-          }
-        }));
-        return;
+        const resolved = await Promise.all(orderSubmissions.map((submission) =>
+          resolveMemberNotificationEmail(admin, user, submission.applicant_email)));
+        recipients = collectEmails(...resolved);
+        if (recipients.length !== 1 || resolved.some((email) => !email)) {
+          await Promise.all(orderSubmissions.map(async (submission, index) => {
+            const email = resolved[index];
+            if (!email) return;
+            const result = await sendSubmissionUpdateEmail({
+              email,
+              title: submission.title ?? "제목 미입력",
+              artist: officialArtistName(submission),
+              kind: getKind(submission.type),
+              headline: "입금 요청이 접수되었습니다.",
+              summary: "입금 계좌와 주문 전체 금액은 로그인 후 마이페이지의 주문 내역에서 확인해주세요.",
+              subject: "[onside] 무통장 입금 요청 접수 안내",
+              link: buildUrl(`/mypage/orders?focus=${submission.id}`, baseUrl),
+              idempotencyKey: `bank-request:${orderId}:${email}:${submission.id}`,
+              submissionId: submission.id,
+            });
+            if (!result.ok && !result.skipped) {
+              console.warn("[CartBank] bank email failed", { orderId, submissionId: submission.id, message: result.message });
+            }
+          }));
+          return;
+        }
+      } else {
+        recipients = collectEmails(...await Promise.all(orderSubmissions.map((submission) =>
+          submission.user_id ? resolveMemberNotificationEmail(admin, user, submission.applicant_email) : submission.guest_email || submission.applicant_email)));
       }
-      const recipients = collectEmails(...await Promise.all(orderSubmissions.map((submission) =>
-        submission.user_id ? resolveMemberNotificationEmail(admin, user, submission.applicant_email) : submission.guest_email || submission.applicant_email)));
       if (recipients.length === 0) return;
       const first = orderSubmissions[0];
       const link = buildUrl(
