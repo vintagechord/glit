@@ -139,6 +139,7 @@ test("bank instructions use one owner mailbox, stable keys, owner-appropriate li
     assert.equal(email?.email, guest ? "guest@example.invalid" : "member@example.invalid");
     assert.equal(email?.idempotencyKey, `bank-request:${h.state.nextOrderId}:${email?.email}`);
     assert.equal(email?.orderId, h.state.nextOrderId);
+    assert.equal(email?.submissionId, submissionId, "the notice appears in the application's mail history");
     assert.equal(email?.totalAmountKrw, 3500);
     assert.deepEqual((email?.items as Array<{ title: string; amountKrw: number }>).map(item => [item.title, item.amountKrw]), [["Fixture title", 1000], ["Second title", 2500]]);
     if (guest) assert.ok(String(email?.link).endsWith("/track/legacy-private-guest-token"));

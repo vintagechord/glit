@@ -437,6 +437,9 @@ export async function POST(req: NextRequest) {
           depositDueAt: depositDueAt.toISOString(),
           link,
           siteLink: buildUrl("/", baseUrl),
+          // Lists the notice on the application's mail history, where its
+          // opens are tracked (메일 미확인 고객).
+          submissionId: first.id,
         });
         if (!result.ok && !result.skipped) {
           console.warn("[CartBank] bank email failed", { orderId, message: result.message });
