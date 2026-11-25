@@ -158,4 +158,7 @@ test("a station's result note shows under that station's row, escaped", async ()
   ] }).html;
   assert.match(html, /border-left:4px solid #d9362c;[^>]*>서울시 예산 문제로 &lt;TBS&gt; 결과 안내가 멈춰 있습니다\.<\/div>/);
   assert.equal(html.match(/border-left:4px solid #d9362c/g)?.length, 1);
+  // 2026-11-25 (owner): "기존" read as the old onside17.com site.
+  assert.match(html, />온사이드 결과 페이지로 연결됩니다\./);
+  assert.doesNotMatch(html, /기존 온사이드/);
 });

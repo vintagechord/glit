@@ -77,6 +77,8 @@ type OrderBankTransferEmailPayload = EmailDeliveryOptions & {
   depositDueAt?: string | null;
   link?: string;
   siteLink?: string;
+  /** An application in the order: lists the notice in its mail history. */
+  submissionId?: string;
 };
 
 type PaymentCompletedEmailPayload = EmailDeliveryOptions & {
@@ -480,7 +482,7 @@ export async function sendOrderBankTransferEmail(
     </div>
   `;
 
-  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 무통장 입금 계좌 및 주문 내역 안내", html, operation: "bank payment request" });
+  return sendTransactionalEmail({ to: payload.email, idempotencyKey: payload.idempotencyKey, expiresAt: payload.expiresAt, subject: "[onside] 무통장 입금 계좌 및 주문 내역 안내", html, operation: "bank payment request", submissionId: payload.submissionId });
 }
 
 /** Payment confirmation with the order summary; one message per order and recipient. */
@@ -748,7 +750,7 @@ export function renderReviewSummaryEmail(content: ReviewSummaryEmailContent) {
   ${attachments}
   <tr><td style="padding:0 28px 28px;text-align:center;">
     <a href="${escapeHtml(link)}" style="display:block;padding:15px 18px;border:2px solid #111111;background:#f2cf27;color:#111111;text-decoration:none;font-size:14px;line-height:1.5;font-weight:800;text-align:center;">전체 심의 현황 확인&nbsp; →</a>
-    <p style="margin:12px 0 0;font-size:11px;line-height:1.7;color:#777166;">기존 온사이드 결과 페이지로 연결됩니다.<br>회원은 로그인 후, 비회원은 전용 조회 링크로 확인하실 수 있습니다.</p>
+    <p style="margin:12px 0 0;font-size:11px;line-height:1.7;color:#777166;">온사이드 결과 페이지로 연결됩니다.<br>회원은 로그인 후, 비회원은 전용 조회 링크로 확인하실 수 있습니다.</p>
   </td></tr>
   <tr><td style="padding:20px 28px;border-top:1px solid #ded9cd;background:#f7f5ef;"><p style="margin:0;font-size:11px;line-height:1.8;color:#777166;">온사이드 · 음반과 뮤직비디오의 심의 진행을 함께합니다.<br>버튼이 열리지 않으면 아래 주소를 브라우저에서 열어주세요.</p><p style="margin:7px 0 0;font-size:10px;line-height:1.6;word-break:break-all;color:#625e54;">${escapeHtml(link)}</p></td></tr>
 </table></td></tr></table></body></html>`;

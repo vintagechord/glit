@@ -9,6 +9,7 @@ import {
   FilePlus2,
   type LucideIcon,
   MailWarning,
+  PhoneCall,
   Wallet,
   SendHorizontal,
 } from "lucide-react";
@@ -22,6 +23,8 @@ import { loadAdminDashboard, type DashboardSubmission } from "@/lib/admin/dashbo
 import { adminMenuAttentionKeys, loadAdminMenuAttention } from "@/lib/admin/menu-attention";
 import { adminSubmissionStageKeys, adminSubmissionStages, partialNoticeStage, type AdminSubmissionStageFilter } from "@/lib/admin/submission-stages";
 import { buildAdminSubmissionDetailPath } from "@/lib/admin/submission-navigation";
+import { loadUnreadCustomerMails, UNREAD_MAIL_AFTER_DAYS, type UnreadCustomerMail } from "@/lib/admin/unread-customer-mail";
+import { UnreadMailList } from "@/components/admin/unread-mail-list";
 
 export const dynamic = "force-dynamic";
 
@@ -87,11 +90,11 @@ function StageChip({ badge }: { badge: DashboardSubmission["stageBadge"] }) {
   );
 }
 
-function Panel({ title, icon: Icon, accent, children, action }: {
-  title: string; icon: LucideIcon; accent: string; children: React.ReactNode; action?: React.ReactNode;
+function Panel({ title, icon: Icon, accent, children, action, id, className = "" }: {
+  title: string; icon: LucideIcon; accent: string; children: React.ReactNode; action?: React.ReactNode; id?: string; className?: string;
 }) {
   return (
-    <section className="rounded-[14px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]" style={{ boxShadow: `4px 4px 0 ${accent}` }}>
+    <section id={id} className={`scroll-mt-24 rounded-[14px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27] ${className}`} style={{ boxShadow: `4px 4px 0 ${accent}` }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-base font-black text-foreground">
           <Icon className="h-5 w-5" aria-hidden="true" />
@@ -128,13 +131,16 @@ function SubmissionLine({ item, hash = "", extra }: { item: DashboardSubmission;
   );
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ contact?: string | string[] }> }) {
   const admin = await requireAdminPage();
   const db = createAdminClient();
-  const [dashboard, menuAttention] = await Promise.all([
+  const [dashboard, menuAttention, unread, params] = await Promise.all([
     loadAdminDashboard(db),
     loadAdminMenuAttention(db, admin.id),
+    loadUnreadCustomerMails(db).catch(() => ({ items: [] as UnreadCustomerMail[], error: true })),
+    searchParams ?? Promise.resolve(undefined),
   ]);
+  const contactNotice = Array.isArray(params?.contact) ? params?.contact[0] : params?.contact;
   const { counts } = dashboard;
   const draftingCount = counts.drafting ?? 0;
 
@@ -165,9 +171,15 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {dashboard.failedSections.length ? (
+      {contactNotice === "saved" || contactNotice === "error" ? (
+        <p role={contactNotice === "error" ? "alert" : "status"} className={`mt-5 rounded-[10px] border-2 px-4 py-3 text-sm font-bold ${contactNotice === "error" ? brandStatusTones.danger : brandStatusTones.success}`}>
+          {contactNotice === "error" ? "연락 완료를 기록하지 못했습니다. 다시 시도해주세요." : "연락 완료를 기록했습니다. 새 메일이 다시 3일 넘게 확인되지 않으면 목록에 다시 표시됩니다."}
+        </p>
+      ) : null}
+
+      {dashboard.failedSections.length || unread.error ? (
         <p role="alert" className={`mt-5 rounded-[10px] border-2 px-4 py-3 text-sm font-bold ${brandStatusTones.danger}`}>
-          일부 집계를 불러오지 못했습니다: {dashboard.failedSections.join(", ")}. 새로고침하거나 접수 관리에서 직접 확인해주세요.
+          일부 집계를 불러오지 못했습니다: {[...dashboard.failedSections, ...(unread.error ? ["메일 미확인 고객"] : [])].join(", ")}. 새로고침하거나 접수 관리에서 직접 확인해주세요.
         </p>
       ) : null}
 
@@ -210,6 +222,17 @@ export default async function AdminPage() {
       </section>
 
       <div className="mt-8 grid gap-5 lg:grid-cols-2">
+        {unread.items.length ? (
+          <Panel
+            id="unread-mail"
+            title={`메일 미확인 고객 · ${unread.items.length}건`}
+            icon={PhoneCall}
+            accent="#f2cf27"
+            className="lg:col-span-2"
+          >
+            <UnreadMailList items={unread.items} />
+          </Panel>
+        ) : null}
         <Panel
           title="입금 확인 대기"
           icon={Wallet}
@@ -293,6 +316,14 @@ export default async function AdminPage() {
                   {dashboard.mailIssues === null ? "–" : dashboard.mailIssues}건
                 </span>
               </Link>
+            </li>
+            <li>
+              <a href="#unread-mail" className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
+                <span className="flex items-center gap-2"><PhoneCall className="h-4 w-4" aria-hidden="true" />메일 미확인 고객 ({UNREAD_MAIL_AFTER_DAYS}일 넘게 열람·방문 없음)</span>
+                <span className={`rounded-[6px] border-2 px-2 py-0.5 text-[11px] font-black ${unread.items.length ? brandStatusTones.warning : brandStatusTones.neutral}`}>
+                  {unread.error ? "–" : unread.items.length}건
+                </span>
+              </a>
             </li>
             <li>
               <Link href={stageHref("drafting")} className="flex items-center justify-between gap-2 rounded-[8px] border-2 border-border bg-background px-3 py-2 font-bold transition hover:border-[#111111] dark:hover:border-[#f2cf27]">
