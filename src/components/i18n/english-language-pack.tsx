@@ -1681,6 +1681,7 @@ const exactTranslations: Record<string, string> = {
   "사업자등록번호:": "Business Registration No.:",
   "통신판매업신고번호:": "Mail-order Business No.:",
   "개인정보 보호책임자:": "Privacy Officer:",
+  "호스팅서비스 제공자:": "Hosting Provider:",
   "(주)빈티지하우스": "Vintage House Co., Ltd.",
   "(주)Vintage House": "Vintage House Co., Ltd.",
   "주식회사 빈티지하우스": "Vintage House Co., Ltd.",
@@ -1688,7 +1689,6 @@ const exactTranslations: Record<string, string> = {
   "정준영": "Jung Junyoung",
   "경기도 김포시 사우중로74번길 29, 시그마프라자 7층 빈티지하우스 (Music Studio)":
     "Vintage House (Music Studio), 7F Sigma Plaza, 29 Saujung-ro 74beon-gil, Gimpo-si, Gyeonggi-do, Korea",
-  "(주)가비아인터넷서비스": "Gabia Internet Service Co., Ltd.",
   "Copyright © (주)빈티지하우스. All Rights Reserved.":
     "Copyright © Vintage House Co., Ltd. All Rights Reserved.",
   "Copyright © (주)Vintage House. All Rights Reserved.":
@@ -2849,7 +2849,6 @@ const phraseTranslations: Array<[RegExp, string]> = [
   [/Copyright © \(주\)Vintage House\. All Rights Reserved\./g, "Copyright © Vintage House Co., Ltd. All Rights Reserved."],
   [/\(주\)Vintage House/g, "Vintage House Co., Ltd."],
   [/\(주\)빈티지하우스/g, "Vintage House Co., Ltd."],
-  [/\(주\)가비아인터넷서비스/g, "Gabia Internet Service Co., Ltd."],
   [/정준영/g, "Jung Junyoung"],
   [/Album Review 신청/g, "Album Review Application"],
   [/Music Video Review 신청/g, "Music Video Review Application"],
