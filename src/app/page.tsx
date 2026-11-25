@@ -118,12 +118,15 @@ function ServiceCardVisual({ tone }: { tone: string }) {
         ? "border-white bg-[#111111] text-white"
         : "border-[#111111] bg-white text-[#111111]";
 
+  // Beside the title in the phone and tablet row; in the card's top-right
+  // corner from lg.
   return (
-    <div
-      className={`absolute right-4 top-5 flex h-16 w-16 items-center justify-center rounded-[10px] border-2 shadow-[4px_4px_0_#111111] sm:right-5 sm:top-6 sm:h-20 sm:w-20 ${palette}`}
+    <span
+      aria-hidden="true"
+      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-2 shadow-[3px_3px_0_#111111] transition-transform duration-300 group-hover:scale-[1.04] lg:absolute lg:right-5 lg:top-5 lg:h-16 lg:w-16 lg:rounded-[10px] lg:shadow-[4px_4px_0_#111111] ${palette}`}
     >
-      <Icon className="h-8 w-8 sm:h-10 sm:w-10" strokeWidth={2.4} />
-    </div>
+      <Icon className="h-6 w-6 lg:h-8 lg:w-8" strokeWidth={2.4} />
+    </span>
   );
 }
 
@@ -200,7 +203,10 @@ export default async function Home() {
           </ReliableLink>
         </div>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        {/* 2026-11-25 (owner): three 224px cards filled a phone screen, so below
+            lg (phones and tablets) each service is one row (icon · name · 신청);
+            from lg the three cards stay side by side, a little shorter. */}
+        <div className="mt-8 grid gap-4 lg:grid-cols-3 lg:gap-6">
           {serviceCards.map((card, index) => (
             <ReliableLink
               key={card.title}
@@ -208,7 +214,7 @@ export default async function Home() {
               data-scroll-reveal
               data-reveal-state="hidden"
               style={{ transitionDelay: `${120 + index * 120}ms` }}
-              className={`group relative min-h-[220px] rounded-[10px] border-2 p-5 tracking-normal shadow-[8px_8px_0_#111111] transition duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[8px_8px_0_#f2cf27] dark:hover:shadow-[12px_12px_0_#f2cf27] sm:min-h-[236px] sm:p-6 ${scrollRevealBaseClass} ${card.cardClass}`}
+              className={`group relative flex min-h-[80px] items-center gap-3.5 rounded-[10px] border-2 px-4 py-3.5 tracking-normal shadow-[4px_4px_0_#111111] transition duration-200 hover:-translate-y-0.5 hover:shadow-[6px_6px_0_#111111] focus-visible:ring-2 focus-visible:ring-[#111111]/60 dark:shadow-[4px_4px_0_#f2cf27] dark:hover:shadow-[6px_6px_0_#f2cf27] lg:min-h-[192px] lg:flex-col lg:items-stretch lg:gap-0 lg:p-6 lg:shadow-[8px_8px_0_#111111] lg:hover:-translate-y-1 lg:hover:shadow-[12px_12px_0_#111111] lg:dark:shadow-[8px_8px_0_#f2cf27] lg:dark:hover:shadow-[12px_12px_0_#f2cf27] ${scrollRevealBaseClass} ${card.cardClass}`}
             >
               {"badge" in card && card.badge ? (
                 // On the top edge by the right corner, as on the application
@@ -217,22 +223,17 @@ export default async function Home() {
                   {card.badge}
                 </span>
               ) : null}
-              {/* The card itself no longer clips, so the badge can sit on its edge. */}
-              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[8px]">
-                <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.02]">
-                  <ServiceCardVisual tone={card.tone} />
-                </div>
-              </div>
-              <div className="relative z-10 flex min-h-[180px] flex-col pr-16 sm:min-h-[188px] sm:pr-20">
-                <p className={`max-w-[10rem] text-[11px] font-black uppercase leading-4 tracking-normal ${card.labelClass}`}>
+              <ServiceCardVisual tone={card.tone} />
+              <div className="min-w-0 flex-1 lg:flex-none lg:pb-4 lg:pr-20">
+                <p className={`text-[11px] font-black uppercase leading-4 tracking-normal ${card.labelClass}`}>
                   {card.label}
                 </p>
-                <h3 className="mt-7 max-w-[13rem] break-keep text-3xl font-black leading-none tracking-normal sm:text-4xl">
+                <h3 className="mt-1 break-keep text-xl font-black leading-tight tracking-normal lg:mt-5 lg:text-3xl lg:leading-none xl:text-4xl">
                   {card.title}
                 </h3>
-                <div className={`mt-auto inline-flex w-fit items-center gap-2 px-4 py-3 text-sm font-black tracking-normal transition group-hover:translate-x-1 ${card.actionClass}`}>
-                  신청 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </div>
+              </div>
+              <div className={`inline-flex w-fit shrink-0 items-center gap-1.5 px-3 py-2 text-sm font-black tracking-normal transition group-hover:translate-x-1 lg:mt-auto lg:gap-2 lg:px-4 lg:py-3 ${card.actionClass}`}>
+                신청 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </div>
             </ReliableLink>
           ))}
