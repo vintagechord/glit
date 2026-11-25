@@ -32,7 +32,9 @@ import {
   isAdminSubmissionStageFilter,
   partialNoticeStage,
 } from "@/lib/admin/submission-stages";
+import { loadAlbumStationProgress } from "@/lib/admin/album-station-progress";
 import { AdminDeleteButton } from "@/components/admin/delete-button";
+import { PendingStationStrip } from "@/components/admin/pending-station-strip";
 import {
   ReviewDocsBulkToolbar,
   ReviewDocsRowCheckbox,
@@ -173,8 +175,8 @@ type SubmissionRow = {
   partial_result_notified_at?: string | null;
   melon_url?: string | null;
   package?:
-    | Array<{ name?: string | null }>
-    | { name?: string | null }
+    | Array<{ name?: string | null; station_count?: number | null }>
+    | { name?: string | null; station_count?: number | null }
     | null;
   guest_name?: string | null;
 };
@@ -217,9 +219,9 @@ export default async function AdminSubmissionsPage({
       : 1;
   const offset = (page - 1) * PAGE_SIZE;
   const baseSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, package:packages ( name, station_count )";
   const globalSelect =
-    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name )";
+    "id, title, artist_name, artist_name_kr, status, payment_status, payment_method, type, created_at, updated_at, amount_krw, is_oneclick, current_order_id, result_notified_at, partial_result_notified_at, melon_url, locale, applicant_country, payment_provider, payment_currency, payment_amount, created_from, package:packages ( name, station_count )";
   const globalGuestSelect = `${globalSelect}, guest_name`;
 
   const buildQuery = (
@@ -307,6 +309,9 @@ export default async function AdminSubmissionsPage({
     submissionsError = fallback.error ?? null;
     totalCount = fallback.count ?? totalCount;
   }
+
+  // Stations still without a result, per paid album on this page.
+  const stationProgress = await loadAlbumStationProgress(supabase, submissions);
 
   const totalPages =
     totalCount > 0 ? Math.max(1, Math.ceil(totalCount / PAGE_SIZE)) : 1;
@@ -726,6 +731,10 @@ export default async function AdminSubmissionsPage({
                     </div>
                   </div>
                 </div>
+                <PendingStationStrip
+                  progress={stationProgress.get(submission.id)}
+                  detailHref={buildDetailHref(submission.id)}
+                />
               </article>
             );
           })

@@ -67,6 +67,21 @@ export const stationNameByCode: Record<string, string> = {
   GUGAK: "국악방송(Only 국악)",
 };
 
+/** Chip labels where a whole row of stations has to read at a glance. */
+export const stationShortNameByCode: Record<string, string> = {
+  CBS: "CBS",
+  WBS: "WBS",
+  TBS: "TBS",
+  PBC: "PBC",
+  BBS: "BBS",
+  ARIRANG: "Arirang",
+  GYEONGIN_IFM: "경인 iFM",
+  TBN: "TBN",
+  KISS: "KISS",
+  FEBC: "극동방송",
+  GUGAK: "국악방송",
+};
+
 const shouldSuppressError = (message?: string | null) => {
   if (!message) return false;
   const lowered = message.toLowerCase();
