@@ -25,6 +25,7 @@ import { getStationReviewTracks, isWbsReview, resolveStationTrackResults, sortBy
 import { isRatingCode, RATING_LABELS, type RatingCode } from "@/lib/mv-assets";
 import { requireAdminPage } from "@/lib/admin/page-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { stationResultsAnchor, stationReviewAnchor } from "@/lib/admin/station-anchors";
 import { SUBMISSION_ADMIN_DETAIL_SELECT } from "@/lib/submissions/select-columns";
 import { officialArtistName } from "@/lib/submissions/artist-display";
 import { loadSubmissionAdminMemo } from "@/lib/admin/submission-admin-memo";
@@ -1640,7 +1641,7 @@ export default async function AdminSubmissionDetailPage({
                 </div>
             </div>
           ) : (
-          <div className="rounded-[28px] border border-border/60 bg-card/80 p-6">
+          <div id={stationResultsAnchor} className="scroll-mt-28 rounded-[28px] border border-border/60 bg-card/80 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                 3. 심의진행 / 4. 결과 저장
@@ -1754,6 +1755,7 @@ export default async function AdminSubmissionDetailPage({
                       stationId={review.station_id ?? null}
                       stationCode={stationInfo?.code ?? undefined}
                       stationName={stationInfo?.name ?? undefined}
+                      anchorId={stationReviewAnchor(stationInfo?.code, review.station_id)}
                       initialStatus={normalizeStationReviewStatus(review.status)}
                       initialMemo={review.result_note ?? ""}
                       expectedUpdatedAt={typeof review.id === "string" && uuidPattern.test(review.id) ? review.updated_at : null}

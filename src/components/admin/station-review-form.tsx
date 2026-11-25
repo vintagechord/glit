@@ -19,6 +19,8 @@ type StationReviewFormProps = {
   stationId: string | null;
   stationCode?: string | null;
   stationName?: string | null;
+  /** In-page anchor the 접수 관리 list links to. */
+  anchorId?: string;
   initialStatus: string;
   initialMemo: string;
   expectedUpdatedAt: string | null;
@@ -37,6 +39,7 @@ export function StationReviewForm({
   stationId,
   stationCode,
   stationName,
+  anchorId,
   initialStatus,
   initialMemo,
   expectedUpdatedAt,
@@ -78,9 +81,10 @@ export function StationReviewForm({
 
   return (
     <form
+      id={anchorId}
       action={action}
       method="post"
-      className="grid min-w-0 gap-4 rounded-2xl border border-border/60 bg-background/80 p-3 [overflow-wrap:anywhere] sm:p-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)]"
+      className="grid min-w-0 scroll-mt-28 gap-4 rounded-2xl border border-border/60 bg-background/80 p-3 [overflow-wrap:anywhere] sm:p-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)]"
     >
       <input type="hidden" name="submission_id" value={submissionId} />
       <input type="hidden" name="station_id" value={stationId ?? ""} />
