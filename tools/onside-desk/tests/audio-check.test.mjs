@@ -419,15 +419,16 @@ test('a replace is dropped when the lyric-prompted re-decode agrees with the lyr
   assert.equal(finalizeSuggestions(d, scores)[0].confidence, 'medium');
 });
 
-test('minor spelling regions of a proposal carry no evidence in the re-decode support', () => {
-  // 다시 받아쓴 글이 '내→나의'는 지지하고 작은 차이 '켜졌어→켜져서'만 가사 쪽으로 돌아갔다.
-  // 줄 전체 유사도로는 −0.04지만, 작은 차이 구간을 빼고 보면 제안을 지지한다.
+test('minor spelling regions of a proposal are written in the lyric spelling and carry no evidence', () => {
+  // 작은 차이 '켜졌어→켜져서'는 가사 표기로 쓰고(판정 R27) 점수도 그 줄로 매긴다. 다시 받아쓴 글이 '내→나의'를 지지하면 남긴다.
   const d = draft('내 꿈에 파란불이 켜져서', [seg('나의 꿈에 파란불이 켜졌어', 0, 4)], frames(4, -5));
-  assert.equal(d.suggestions[0].op.to, '나의 꿈에 파란불이 켜졌어');
+  assert.equal(d.suggestions[0].op.to, '나의 꿈에 파란불이 켜져서');
+  assert.equal(d.suggestions[0].hint, '나의 꿈에 파란불이 켜졌어');
   const [req] = d.scoreRequests;
+  assert.deepEqual(req.candidates, ['내 꿈에 파란불이 켜져서', '나의 꿈에 파란불이 켜져서']);
   const kept = finalizeSuggestions(d, { [req.id]: [-20, -15] }, { [req.id]: '나의 꿈에 파란불이 켜져서' });
   assert.equal(kept.length, 1);
-  assert.equal(kept[0].op.to, '나의 꿈에 파란불이 켜졌어');
+  assert.equal(kept[0].op.to, '나의 꿈에 파란불이 켜져서');
   assert.equal(kept[0].confidence, 'medium');
   // 실질 차이까지 가사로 돌아가면 버린다.
   assert.deepEqual(finalizeSuggestions(d, { [req.id]: [-20, -15] }, { [req.id]: '내 꿈에 파란불이 켜졌어' }), []);
@@ -507,17 +508,38 @@ test('spelling or pronunciation-only differences are not drafted (both direction
 
 test('a line with any real wording difference is still drafted', () => {
   const cases = [
-    // 내→나의는 자모 거리 3이다(켜져서→켜졌어는 작은 차이지만 줄 전체를 거르지는 않는다).
-    ['내 꿈에 파란불이 켜져서', '나의 꿈에 파란불이 켜졌어'],
-    ['구름 따라 가요 가요', '구름 따라 달려가요'],
-    ['괜찮나요 이제는', '괜찮나요 괜찮나요 이제는'],
+    // 내→나의는 자모 거리 3이다(켜져서→켜졌어는 작은 차이라 가사 표기로 남지만 줄 전체를 거르지는 않는다).
+    ['내 꿈에 파란불이 켜져서', '나의 꿈에 파란불이 켜졌어', '나의 꿈에 파란불이 켜져서'],
+    ['구름 따라 가요 가요', '구름 따라 달려가요', '구름 따라 달려가요'],
+    ['괜찮나요 이제는', '괜찮나요 괜찮나요 이제는', '괜찮나요 괜찮나요 이제는'],
   ];
-  for (const [lyric, heard] of cases) {
+  for (const [lyric, heard, to] of cases) {
     const d = draft(lyric, [seg(heard, 0, 4)], frames(4, -5));
     assert.equal(d.suggestions.length, 1, `${lyric} → ${heard}`);
     assert.equal(d.suggestions[0].kind, 'replace');
-    assert.equal(normalizeText(d.suggestions[0].op.to).norm, normalizeText(heard).norm);
+    assert.equal(normalizeText(d.suggestions[0].op.to).norm, normalizeText(to).norm);
   }
+});
+
+test('a strong replace writes the re-decode-unverified spelling regions in the lyric spelling', () => {
+  // 받아쓰기 '올꺼야'는 작은 차이(꺼/거)다. 다시 받아쓰기는 '했어'만 확인해 주므로 강함 제안은 '올 거야'로 쓴다(판정 R27).
+  // 띄어쓰기가 다른 두 벌도 같은 제안으로 묶인다.
+  const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라', '너를 사랑해 내일도 올 거야', '', '작은 별이 반짝여요', '', '바다 멀리 가거라', '너를 사랑해 내일도 올 거야'].join('\n');
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 4, 7), seg('너를 사랑했어 내일도 올꺼야', 7, 11),
+    seg('작은 별이 반짝여요', 12, 15), seg('바다 멀리 가거라', 16, 19), seg('너를 사랑했어 내일도 올 꺼야', 19, 23),
+  ];
+  const d = draft(lyrics, segments, frames(25, -5));
+  assert.deepEqual(d.suggestions.map((s) => [s.kind, s.op.lines, s.op.to]), [['replace', [3, 8], '너를 사랑했어 내일도 올 거야']]);
+  assert.deepEqual(d.scoreRequests.map((r) => r.candidates), [
+    ['너를 사랑해 내일도 올 거야', '너를 사랑했어 내일도 올 거야'],
+    ['너를 사랑해 내일도 올 거야', '너를 사랑했어 내일도 올 거야'],
+  ]);
+  const scores = Object.fromEntries(d.scoreRequests.map((r) => [r.id, [-20, -8]]));
+  const redecodes = Object.fromEntries(d.scoreRequests.map((r) => [r.id, '너를 사랑했어 내일도 올 거야']));
+  const [s] = finalizeSuggestions(d, scores, redecodes);
+  assert.equal(s.confidence, 'high');
+  assert.equal(s.op.to, '너를 사랑했어 내일도 올 거야');
 });
 
 test('a heard line clearly closer to another lyric line is remapped to it even below repeatSimilarity', () => {

@@ -1069,9 +1069,34 @@ function minorVariant(a, b) {
   return diffs.length > 0 && diffs.every((p) => p.minor);
 }
 
+// 제안 줄의 작은 차이 구간(표기·발음, minorVariant와 같은 기준)을 가사 표기로 되돌린다(판정 R27): 다시 받아쓰기가 그런 구간을
+// 가려 주지 못하므로 확인되지 않은 표기가 제안에 남지 않게 한다. 구간 앞뒤의 같은 글자 사이 원문을 통째로 바꿔 띄어쓰기도
+// 가사를 따른다('올꺼야' → '올 거야').
+function lyricSpelling(lyricText, toText) {
+  const A = normalizeText(lyricText);
+  const B = normalizeText(toText);
+  let out = '';
+  let cut = 0;
+  let ia = 0;
+  let ib = 0;
+  for (const p of diffParts(A.norm, B.norm)) {
+    if (!p.same && p.minor) {
+      const toFrom = ib > 0 ? B.map[ib - 1] + 1 : 0;
+      const toEnd = ib + p.b.length < B.norm.length ? B.map[ib + p.b.length] : toText.length;
+      const lyFrom = ia > 0 ? A.map[ia - 1] + 1 : 0;
+      const lyEnd = ia + p.a.length < A.norm.length ? A.map[ia + p.a.length] : lyricText.length;
+      out += toText.slice(cut, toFrom) + lyricText.slice(lyFrom, lyEnd);
+      cut = toEnd;
+    }
+    ia += p.a.length;
+    ib += p.b.length;
+  }
+  return collapse(out + toText.slice(cut));
+}
+
 // 다르게 불린 줄: (원래 줄, 제안 줄)이 같으면 한 제안으로 묶고, 줄마다 점수 요청을 만든다.
-// 표기·발음만 다른 줄은 내지 않는다. 받아쓴 줄이 다른 가사 줄에 자기 줄보다 REMAP_MARGIN 넘게 가깝고
-// remapSimilarity 이상이면 그 줄의 표기로 바꾼다(remap).
+// 표기·발음만 다른 줄은 내지 않고, 다른 줄도 표기·발음만 다른 구간은 가사 표기로 쓴다(lyricSpelling, 묶기와 점수 모두 그 줄로).
+// 받아쓴 줄이 다른 가사 줄에 자기 줄보다 REMAP_MARGIN 넘게 가깝고 remapSimilarity 이상이면 그 줄의 표기로 바꾼다(remap).
 function replaceSuggestions(ctx, edits, out, requests) {
   const { L, T, pairs, lines, sung, total, trackId } = ctx;
   const times = new Map();
@@ -1101,6 +1126,10 @@ function replaceSuggestions(ctx, edits, out, requests) {
       remap = true;
     }
     if (minorVariant(line.norm, toNorm)) continue;
+    if (!remap) {
+      to = lyricSpelling(line.text, to);
+      toNorm = normalizeText(to).norm;
+    }
     let [start, end] = times.get(index) ?? [Infinity, -Infinity];
     for (const e of list) {
       for (const j of e.tr) { start = Math.min(start, T.s[j]); end = Math.max(end, T.e[j]); }
