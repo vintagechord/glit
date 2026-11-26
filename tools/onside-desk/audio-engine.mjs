@@ -102,6 +102,7 @@ export async function installEngine({
   onProgress('분석 도구 환경을 만드는 중');
   await run(uv, ['venv', '--allow-existing', '--python', '3.12', p.venv], { signal, env });
 
+  await fs.rm(p.engineJson, { force: true });
   onProgress('패키지를 설치하는 중');
   await run(uv, ['pip', 'install', '--python', p.python, ...ENGINE_PACKAGES], { signal, env });
 
@@ -153,7 +154,9 @@ export function startWorker({ command, dataRoot, onProgress, signal } = {}) {
     let msg;
     try { msg = JSON.parse(line); } catch { return; }
     if (msg.event === 'progress') {
-      if (onProgress) onProgress({ id: msg.id, stage: msg.stage });
+      if (onProgress) {
+        try { onProgress({ id: msg.id, stage: msg.stage }); } catch { /* callback errors must not crash the worker client */ }
+      }
       return;
     }
     const entry = pending.get(msg.id);

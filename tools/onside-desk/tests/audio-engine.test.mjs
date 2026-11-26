@@ -126,3 +126,27 @@ test('startWorker close ends a healthy worker', async () => {
   await worker.request('ping', {});
   await worker.close();
 });
+
+test('startWorker survives an onProgress callback that throws', async () => {
+  const worker = startWorker({ command: fakeCommand, onProgress: () => { throw new Error('cb boom'); } });
+  assert.deepEqual(await worker.request('analyze', { file: 'a.wav' }), { echoed: 'a.wav' });
+  await worker.close();
+});
+
+test('installEngine removes a stale engine.json before reinstalling', async () => {
+  const dataRoot = await tmpRoot();
+  const ej = path.join(dataRoot, '음원분석', 'engine.json');
+  await fs.mkdir(path.dirname(ej), { recursive: true });
+  await fs.writeFile(ej, JSON.stringify({ version: ENGINE_VERSION, installedAt: 'old' }));
+  let n = 0;
+  await assert.rejects(
+    installEngine({
+      dataRoot,
+      uv: '/bin/uv',
+      run: async () => { n += 1; if (n === 2) throw new Error('pip failed'); },
+    }),
+    /pip failed/,
+  );
+  await assert.rejects(fs.access(ej));
+  assert.equal((await engineStatus({ dataRoot, env: { PATH: '' }, exists: () => false })).installed, false);
+});
