@@ -338,3 +338,43 @@ test('spacing-only difference yields nothing', () => {
   assert.deepEqual(d.suggestions, []);
   assert.deepEqual(d.scoreRequests, []);
 });
+
+test('insertion and substitution at the same spot keep the heard text intact', () => {
+  const d = draft('가나다라마바사아자차카타', [seg('가나다라마바하늘높이날아고아자차카타', 0, 6)], frames(6, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.equal(d.suggestions[0].op.to, '가나다라마바하늘높이날아고아자차카타');
+  assert.deepEqual(d.scoreRequests[0].candidates, ['가나다라마바사아자차카타', '가나다라마바하늘높이날아고아자차카타']);
+});
+
+test('omitted chorus sung twice with different typos in each copy is still a high repeat', () => {
+  // 2번째 부른 후렴의 오타가 1번째 것보다 앞쪽에 있다.
+  const copies = [
+    [['바다 멀리 가거라', '함께 노래하지'], ['바다 머리 가거라', '함께 노래하자']],
+    [['바다 멀리 가거나', '함께 노래하자'], ['바다 머리 가거라', '함께 노래하자']],
+  ];
+  for (const [[a1, b1], [a2, b2]] of copies) {
+    const segments = [
+      seg('하늘 높이 날아라', 0, 3),
+      seg(a1, 4, 7),
+      seg(b1, 7, 10),
+      seg(a2, 11, 14),
+      seg(b2, 14, 17),
+    ];
+    const { suggestions } = draft(CHORUS, segments, frames(18, -5));
+    assert.equal(suggestions.length, 1, `${a1}/${b1} → ${a2}/${b2}`);
+    const [s] = suggestions;
+    assert.equal(s.kind, 'repeat');
+    assert.equal(s.confidence, 'high');
+    assert.deepEqual(s.op, { type: 'insertLines', afterLine: 3, lines: ['', '바다 멀리 가거라', '함께 노래하자'] });
+    assert.ok(near(s.start, 11) && near(s.end, 17));
+  }
+});
+
+test('a heard line closer to its own line is not remapped to a similar other line', () => {
+  const lyrics = '내 사랑 노을 아래\n나의 사랑 노을 위에';
+  const segments = [seg('나의 사랑 노을 아래', 0, 3), seg('나의 사랑 노을 위에', 3, 6)];
+  const d = draft(lyrics, segments, frames(6, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.equal(d.suggestions[0].op.to, '나의 사랑 노을 아래');
+  assert.deepEqual(d.scoreRequests[0].candidates, ['내 사랑 노을 아래', '나의 사랑 노을 아래']);
+});

@@ -559,12 +559,52 @@ function addEdit(edits, line, edit) {
   edits.get(line).push(edit);
 }
 
+// 받아쓰기의 연속된 두 벌 중 어느 쪽을 삽입으로 볼지: 오타 때문에 갭이 후렴 안쪽에서 갈렸으면,
+// 갭 길이를 그대로 두고 받아쓰기 창을 옮겨 줄 경계에 맞춘 뒤 반복 구절을 찾는다.
+// 옮긴 만큼의 가사 조각이 반대편 받아쓰기 조각과 repeatSimilarity 이상 같아야 한다. 확신 높은 것, 그다음 가장 오른쪽.
+function reanchor(ctx, q, tj) {
+  const { L, T, pairs, at } = ctx;
+  const n = L.norm.length;
+  const g = tj.length;
+  const j0 = tj[0];
+  const j1 = tj.at(-1);
+  let best = null;
+  for (let b = Math.max(0, q - g); b <= Math.min(n, q + g); b += 1) {
+    if (!(b <= 0 || b >= n || L.line[b - 1] !== L.line[b])) continue;
+    let d = 0;
+    if (b > q) {
+      d = neighbor(pairs, at[b - 1], 1, -1) - j1;
+      if (d <= 0 || d > g || similarity(L.norm.slice(q, b), T.norm.slice(j0, j0 + d)) < THRESHOLDS.repeatSimilarity) continue;
+    } else if (b < q) {
+      d = neighbor(pairs, at[b], 1, 1) - j0;
+      if (d >= 0 || -d > g || similarity(L.norm.slice(b, q), T.norm.slice(j1 + d + 1, j1 + 1)) < THRESHOLDS.repeatSimilarity) continue;
+    }
+    const match = findRepeat(ctx, T.norm.slice(j0 + d, j1 + d + 1), b);
+    const rank = match?.confidence === 'high' ? 2 : 1;
+    if (match && (!best || rank >= best.rank)) best = { rank, match, b, tj: tj.map((j) => j + d) };
+  }
+  return best;
+}
+
 function insertion(ctx, p0, tj, edits) {
   const { L, T, pairs, lines } = ctx;
   const n = L.norm.length;
   const q = neighbor(pairs, p0, 0, -1) + 1;
   const edge = q <= 0 || q >= n || L.line[q - 1] !== L.line[q];
   const long = tj.length >= THRESHOLDS.minGapChars;
+  const moved = long ? reanchor(ctx, q, tj) : null;
+  if (moved) {
+    const afterLine = moved.b === 0 ? -1 : lineAfter(lines, L.line[moved.b - 1]);
+    return {
+      kind: 'repeat',
+      confidence: moved.match.confidence,
+      start: T.s[moved.tj[0]],
+      end: T.e[moved.tj.at(-1)],
+      op: { type: 'insertLines', afterLine, lines: moved.match.lines },
+      hint: heardLines(T, moved.tj).join(' '),
+      lines: [afterLine],
+    };
+  }
   let afterLine;
   if (edge) {
     if (!long) return null;
@@ -647,10 +687,12 @@ function attachEdits(ctx, p0, p1, edits) {
 function proposeLine(ctx, line, list) {
   const { L, T } = ctx;
   const at = (e) => (e.lyr.length ? L.off[e.lyr[0]] : L.off[e.anchor] + 1);
+  const to = (e) => (e.lyr.length ? L.off[e.lyr.at(-1)] + 1 : at(e));
   let text = line.text;
-  for (const e of [...list].sort((x, y) => at(y) - at(x))) {
+  // 오른쪽부터 고친다. 같은 위치면 범위 바꿈을 먼저 하고 그 앞에 삽입을 넣는다.
+  for (const e of [...list].sort((x, y) => at(y) - at(x) || to(y) - to(x))) {
     const a = at(e);
-    const b = e.lyr.length ? L.off[e.lyr.at(-1)] + 1 : a;
+    const b = to(e);
     let mid = '';
     if (e.tr.length) {
       const c = T.off[e.tr[0]];
@@ -705,7 +747,7 @@ function replaceSuggestions(ctx, edits, out, requests) {
       const sim = similarity(toNorm, other.norm);
       if (sim > bestSim) { bestSim = sim; best = other; }
     }
-    if (best && bestSim >= THRESHOLDS.repeatSimilarity) {
+    if (best && bestSim >= THRESHOLDS.repeatSimilarity && bestSim > similarity(toNorm, line.norm)) {
       to = best.text.trim();
       toNorm = best.norm;
     }
@@ -784,7 +826,9 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, duration, 
   const L = lyricChars(lines);
   const pairs = alignChars(L.norm, T.norm);
   slideGaps(pairs, L, T);
-  const ctx = { trackId, lines, sung, L, T, pairs, vocal, total };
+  const at = new Int32Array(L.norm.length);
+  pairs.forEach(([i], p) => { if (i !== null) at[i] = p; });
+  const ctx = { trackId, lines, sung, L, T, pairs, at, vocal, total };
   const edits = new Map();
   for (const { p0, p1 } of diffRegions(pairs, L.norm, T.norm)) {
     const li = [];
