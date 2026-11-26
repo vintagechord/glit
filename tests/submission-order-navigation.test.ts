@@ -3,6 +3,7 @@ import test from "node:test";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
 import { confirmLinkedOrderPayment, resolveUncertainCardPayment, statusAfterPaymentConfirmation } from "../src/lib/admin/order-payment";
+import type { InicisInquiryResult, InicisTransaction } from "../src/lib/inicis/transaction-inquiry";
 
 const ID = "20000000-0000-4000-8000-000000000001";
 const OTHER = "20000000-0000-4000-8000-000000000002";
@@ -157,12 +158,65 @@ test("linked admin payments confirm the entire order (bank deposit or an unfinis
 test("uncertain card approvals are resolved through the reconciliation RPC with readable failures", async () => {
   const calls: { method: string; args: unknown }[] = [];
   let failure: { code?: string; message?: string } | null = null;
+  let payment: Record<string, unknown> | null = { order_id: ORDER, amount_krw: 50000, status: "REQUESTED", result_code: "APPROVAL_UNCERTAIN" };
   const db = {
     async rpc(method: string, args: unknown) { calls.push({ method, args }); return failure ? { data: null, error: failure } : { data: [{ submission_id: ID }], error: null }; },
+    from(table: string) {
+      assert.equal(table, "submission_payments");
+      return { select: () => ({ eq: (column: string, value: string) => {
+        assert.deepEqual([column, value], ["order_id", ORDER]);
+        return { maybeSingle: async () => ({ data: payment, error: null }) };
+      } }) };
+    },
   } as unknown as Parameters<typeof resolveUncertainCardPayment>[0];
-  assert.deepEqual(await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "APPROVED", pgTid: " tid-123 ", adminMemo: "" }), { submissionIds: [ID] });
-  assert.deepEqual(calls, [{ method: "resolve_uncertain_submission_payment", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_outcome: "APPROVED", p_pg_tid: "tid-123", p_admin_memo: null } }]);
-  for (const [message, expected] of [["PG_TID_REQUIRED", /TID/], ["PAYMENT_NOT_UNCERTAIN", /새로고침/], ["ORDER_NOT_REVIEW_REQUIRED", /새로고침/], ["PAYMENT_NOT_FOUND", /찾을 수 없습니다/], ["boom", /저장하지 못했습니다/]] as const) {
+  const inquiries: string[] = [];
+  const tx: InicisTransaction = { tid: "tid-123", oid: ORDER, mid: "MID", priceKrw: 50000, status: "APPROVED", rawStatus: "APPROVAL", payMethod: "Card", approvedNumber: "30012345", approvedAt: "2026-11-26T01:10:10.000Z" };
+  let gateway: InicisInquiryResult = { ok: true, transaction: tx };
+  const deps = { inquire: async (tid: string) => { inquiries.push(tid); return gateway; }, now: () => new Date("2026-11-26T01:20:00Z") };
+  const approve = () => resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "APPROVED", pgTid: " tid-123 ", adminMemo: "" }, deps);
+
+  // The entered TID is looked up at Inicis; the RPC receives what Inicis answered.
+  assert.deepEqual(await approve(), { submissionIds: [ID] });
+  assert.deepEqual(inquiries, ["tid-123"]);
+  assert.deepEqual(calls, [{ method: "resolve_uncertain_submission_payment", args: {
+    p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_outcome: "APPROVED", p_pg_tid: "tid-123", p_admin_memo: null,
+    p_gateway_evidence: {
+      source: "INIAPI_V2_INQUIRY", tid: "tid-123", oid: ORDER, mid: "MID", priceKrw: 50000, status: "APPROVED", transactionStatus: "APPROVAL",
+      payMethod: "Card", approvedNumber: "30012345", approvedAt: "2026-11-26T01:10:10.000Z", checkedAt: "2026-11-26T01:20:00.000Z",
+    },
+  } }]);
+
+  // Nothing is recorded when Inicis does not confirm this order's approval.
+  const refused: [InicisInquiryResult, RegExp][] = [
+    [{ ok: false, code: "NOT_FOUND", message: "이니시스에 이 TID의 거래가 없습니다." }, /거래가 없습니다/],
+    [{ ok: false, code: "NETWORK_ERROR", message: "이니시스 거래 조회에 응답이 없습니다." }, /응답이 없습니다/],
+    [{ ok: true, transaction: { ...tx, oid: "other-order" } }, /다른 주문번호/],
+    [{ ok: true, transaction: { ...tx, priceKrw: 1000 } }, /금액/],
+    [{ ok: true, transaction: { ...tx, status: "CANCELED", rawStatus: "CANCEL" } }, /취소/],
+  ];
+  for (const [answer, expected] of refused) {
+    calls.length = 0;
+    gateway = answer;
+    assert.match((await approve()).error ?? "", expected);
+    assert.equal(calls.length, 0);
+  }
+  gateway = { ok: true, transaction: tx };
+
+  // A settled or unknown attempt is refused before Inicis is asked.
+  inquiries.length = 0;
+  payment = { order_id: ORDER, amount_krw: 50000, status: "APPROVED", result_code: "0000" };
+  assert.match((await approve()).error ?? "", /새로고침/);
+  payment = null;
+  assert.match((await approve()).error ?? "", /찾을 수 없습니다/);
+  assert.match((await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "APPROVED", pgTid: "  " }, deps)).error ?? "", /TID/);
+  assert.deepEqual(inquiries, []);
+  assert.equal(calls.length, 0);
+
+  // A failure confirmation reopens the order without an Inicis lookup.
+  assert.deepEqual(await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "FAILED" }, deps), { submissionIds: [ID] });
+  assert.deepEqual(calls, [{ method: "resolve_uncertain_submission_payment", args: { p_order_id: ORDER, p_actor_user_id: "admin-fixture", p_outcome: "FAILED", p_pg_tid: null, p_admin_memo: null } }]);
+  assert.deepEqual(inquiries, []);
+  for (const [message, expected] of [["PG_TID_REQUIRED", /TID/], ["GATEWAY_EVIDENCE_MISMATCH", /이니시스 조회 결과/], ["PAYMENT_NOT_UNCERTAIN", /새로고침/], ["ORDER_NOT_REVIEW_REQUIRED", /새로고침/], ["PAYMENT_NOT_FOUND", /찾을 수 없습니다/], ["boom", /저장하지 못했습니다/]] as const) {
     failure = { message };
     assert.match((await resolveUncertainCardPayment(db, { orderId: ORDER, actorUserId: "admin-fixture", outcome: "FAILED" })).error ?? "", expected);
   }
