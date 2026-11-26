@@ -1290,9 +1290,14 @@ export function finalizeSuggestions(draft, scores, redecodes = {}) {
 
 const OVERLAP_ERROR = '같은 줄을 고치는 제안이 겹칩니다. 제안을 하나만 선택하세요.';
 
+const EMPTY_TEXT_ERROR = '새 구절 내용이 비어 있습니다. 내용을 쓰거나 선택을 해제하세요.';
+
+// 관리자가 고친 새 구절. 앞뒤 빈 줄은 버리고, 남는 내용이 없으면(지운 칸) 빈 줄을 넣지 않고 거절한다.
 function editedLines(text) {
   const lines = String(text).split('\n').map((l) => l.replace(/\r$/, ''));
-  if (lines.length > 1 && lines.at(-1) === '') lines.pop();
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines.at(-1).trim()) lines.pop();
+  if (!lines.length) throw new Error(EMPTY_TEXT_ERROR);
   return lines;
 }
 

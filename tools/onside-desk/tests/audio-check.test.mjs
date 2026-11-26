@@ -1065,6 +1065,15 @@ test('applySuggestions uses edited text for new lines', () => {
   assert.equal(out, '가\n고친 줄 하나\n고친 줄 둘\n나');
 });
 
+test('applySuggestions never inserts a blank line for a cleared new-text box', () => {
+  const s = sug('n', { type: 'insertLines', afterLine: 0, lines: ['원래 줄'] }, 'new');
+  for (const text of ['', '   ', '\n', ' \r\n \n']) {
+    assert.throws(() => applySuggestions('가\n나', [s], [{ suggestionId: 'n', text }]), /새 구절 내용이 비어 있습니다/, JSON.stringify(text));
+  }
+  // 앞뒤 빈 줄은 버리고 가운데 빈 줄(연 나눔)은 둔다.
+  assert.equal(applySuggestions('가\n나', [s], [{ suggestionId: 'n', text: '\n고친 줄\n\n둘째 연\n\n' }]), '가\n고친 줄\n\n둘째 연\n나');
+});
+
 test('applySuggestions rejects suggestions without an operation', () => {
   assert.throws(() => applySuggestions('가', [sug('x', null)], [{ suggestionId: 'x' }]), /반영할 수 없는 제안/);
   assert.throws(() => applySuggestions('가', [], [{ suggestionId: 'nope' }]), /반영할 수 없는 제안/);

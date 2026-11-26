@@ -133,7 +133,10 @@ try {
   const text=await section.innerText();assert.match(text,/반복 구절 누락/);assert.match(text,/새 구절/);assert.match(text,/다르게 불림/);assert.match(text,/알아듣지 못한 보컬 구간/);assert.match(text,/강함/);assert.match(text,/보통/);assert.match(text,/확인 필요/);assert.match(text,/2:54/);assert.match(text,/외국어 비중이 높아 정확도가 낮을 수 있음/);assert.match(text,/가사가 바뀌어 다시 대조가 필요합니다/);assert.match(text,/세 번째 줄.*→.*세 번째 바뀐 줄/s);assert.match(text,/\+ 반복되는/);
   assert.equal(await page.locator('#screen script').count(),0);assert.equal(await section.locator('del').count()>=2,true);
   assert.equal(await page.locator('[data-audio-text=s2]').inputValue(),'처음 듣는 구절');
-  await page.locator('[data-audio-pick=s2]').check();assert.match(await applyBtn.innerText(),/\(2개\)/);await page.locator('[data-audio-text=s2]').fill('편집한 새 구절');
+  await page.locator('[data-audio-pick=s2]').check();assert.match(await applyBtn.innerText(),/\(2개\)/);
+  // a cleared new-text box is not counted or sent (it would insert a blank line)
+  await page.locator('[data-audio-text=s2]').fill('  \n ');assert.match(await applyBtn.innerText(),/\(1개\)/);
+  await page.locator('[data-audio-text=s2]').fill('편집한 새 구절');assert.match(await applyBtn.innerText(),/\(2개\)/);
   await page.locator('[data-audio-pick=s2]').uncheck();await page.locator('[data-audio-pick=s2]').check();
   assert.equal(await page.locator('[data-audio-text=s2]').inputValue(),'편집한 새 구절');
   // 4. play: audio element lives outside the detail panel

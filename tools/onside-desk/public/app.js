@@ -268,7 +268,9 @@ function audioPendingList(d) {
   if (!run || run.status === 'failed') return [];
   return run.tracks.filter(t => t.status === 'ok' && !stale.has(t.trackId)).flatMap(t => t.suggestions.filter(s => s.op && !(t.applied || []).includes(s.id)));
 }
-const audioSelected = d => audioPendingList(d).filter(audioPicked);
+// 새 구절 칸을 비우면(공백뿐) 반영하지 않는다: 빈 줄이 들어가지 않게 고른 수에서 빼고 보내지도 않는다.
+const audioText = s => ui.audioTexts[s.id] ?? (s.op?.lines || []).join('\n');
+const audioSelected = d => audioPendingList(d).filter(s => audioPicked(s) && !(s.kind === 'new' && !audioText(s).trim()));
 function audioApplyState(d) { const count = audioSelected(d).length; return { count, disabled: !count || ui.dirty || ui.audioApplying }; }
 function audioSuggestionBody(d, track, s) {
   const op = s.op, lines = String(d.tracks.find(t => t.id === track.trackId)?.lyrics ?? '').split('\n');
@@ -339,7 +341,7 @@ async function applyAudioSuggestions() {
   const items = audioSelected(effective()); if (!items.length) return;
   const caseId = ui.selected; ui.audioApplying = true; detailRender();
   try {
-    const result = await api(apiPath('/audio-check/apply'), { method: 'POST', body: { runId: run.id, items: items.map(s => s.kind === 'new' ? { suggestionId: s.id, text: ui.audioTexts[s.id] ?? (s.op.lines || []).join('\n') } : { suggestionId: s.id }) } });
+    const result = await api(apiPath('/audio-check/apply'), { method: 'POST', body: { runId: run.id, items: items.map(s => s.kind === 'new' ? { suggestionId: s.id, text: audioText(s) } : { suggestionId: s.id }) } });
     ui.audioPicks = {}; ui.audioTexts = {};
     toast(`제안 ${Number(result.applied || items.length)}개를 가사에 반영했습니다. 새 문서를 생성해 적용하세요.`);
     await loadDetail(caseId, false);
@@ -367,12 +369,16 @@ function playAudio(button) {
   else { player.addEventListener('loadedmetadata', begin, { once: true }); player.setAttribute('src', src); player.load(); }
 }
 document.getElementById('audio-player')?.addEventListener('timeupdate', event => { const player = event.target, stop = Number(player.dataset.stopAt); if (stop && player.currentTime >= stop) { player.pause(); delete player.dataset.stopAt; } });
+function refreshAudioApply() {
+  const button = document.querySelector('[data-action="audio-apply"]');
+  if (button && ui.detail) { const state = audioApplyState(effective()); button.textContent = `선택한 제안 반영 (${state.count}개)`; button.disabled = state.disabled; }
+}
 document.addEventListener('change', event => {
   const el = event.target;
-  if (el.dataset?.audioPick) { ui.audioPicks[el.dataset.audioPick] = el.checked; const button = document.querySelector('[data-action="audio-apply"]'); if (button && ui.detail) { const state = audioApplyState(effective()); button.textContent = `선택한 제안 반영 (${state.count}개)`; button.disabled = state.disabled; } }
+  if (el.dataset?.audioPick) { ui.audioPicks[el.dataset.audioPick] = el.checked; refreshAudioApply(); }
   else if (el.dataset?.audioMap) changeAudioMapping(el);
 });
-document.addEventListener('input', event => { const el = event.target; if (el.dataset?.audioText) ui.audioTexts[el.dataset.audioText] = el.value; });
+document.addEventListener('input', event => { const el = event.target; if (el.dataset?.audioText) { ui.audioTexts[el.dataset.audioText] = el.value; refreshAudioApply(); } });
 
 async function translateManualLyrics() {
   if (ui.translating || !isManual(ui.detail)) return;

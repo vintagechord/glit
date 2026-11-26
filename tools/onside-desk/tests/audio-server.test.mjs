@@ -242,6 +242,10 @@ test('apply writes lyrics through overrides, records applied ids, and returns 40
   response = await s.json(route, 'POST', {runId:run.id, items:[{suggestionId:changed.id}, {suggestionId:conflicting.id}]});
   assert.equal(response.status, 409); assert.match((await response.json()).error, /겹칩니다/);
   assert.equal((await s.desk.detail(id)).tracks[0].lyrics, FIRST);
+  // A cleared new-text box is refused instead of inserting a blank line.
+  response = await s.json(route, 'POST', {runId:run.id, items:[{suggestionId:changed.id}, {suggestionId:added.id, text:'  \n '}]});
+  assert.equal(response.status, 400); assert.match((await response.json()).error, /새 구절 내용이 비어 있습니다/);
+  assert.equal((await s.desk.detail(id)).tracks[0].lyrics, FIRST);
 
   response = await s.json(route, 'POST', {runId:run.id, items:[{suggestionId:changed.id}, {suggestionId:added.id, text:'바람 따라 춤을 춰요'}]});
   assert.equal(response.status, 200);
