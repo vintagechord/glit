@@ -12,7 +12,7 @@ const resources = path.join(bundle, 'Contents', 'Resources');
 const payload = path.join(resources, 'app');
 await fs.mkdir(payload, { recursive: true });
 await fs.mkdir(path.join(bundle, 'Contents', 'MacOS'), { recursive: true });
-for (const name of ['server.mjs', 'core.mjs', 'source.mjs', 'remote.mjs', 'monitor.mjs', 'documents.mjs', 'manual-upgrade.mjs', 'manual-import.mjs', 'manual-ole.mjs', 'manual-doc.mjs', 'integrated-merge.mjs', 'customer-file-retention.mjs', 'manual-document-parser.mjs', 'screening.mjs', 'screening-engine.mjs', 'manual-translation.mjs', 'reference-cleanup.mjs', 'ooxml-normalize.mjs', 'public', 'templates', 'README.md']) await fs.cp(path.join(here, name), path.join(payload, name), { recursive: true });
+for (const name of ['server.mjs', 'core.mjs', 'source.mjs', 'remote.mjs', 'monitor.mjs', 'documents.mjs', 'manual-upgrade.mjs', 'manual-import.mjs', 'manual-ole.mjs', 'manual-doc.mjs', 'integrated-merge.mjs', 'customer-file-retention.mjs', 'manual-document-parser.mjs', 'screening.mjs', 'screening-engine.mjs', 'manual-translation.mjs', 'reference-cleanup.mjs', 'ooxml-normalize.mjs', 'audio-check.mjs', 'audio-engine.mjs', 'audio-check-run.mjs', 'public', 'templates', 'README.md']) await fs.cp(path.join(here, name), path.join(payload, name), { recursive: true });
 await fs.writeFile(path.join(payload, 'package.json'), JSON.stringify({ name: 'onside-review-desk', version: '2.16.2', private: true, type: 'module' }, null, 2));
 const copied = new Set();
 async function copyPackage(name, from) {

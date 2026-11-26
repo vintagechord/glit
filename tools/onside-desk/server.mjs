@@ -15,6 +15,9 @@ import { needsLyricsTranslation } from './manual-translation.mjs';
 import { Store, now, safeName, childPath, atomicJSON, sha256, zipFiles, applyOverrides, caseWarnings, validateLocalPatch, validateSettings, windowsText, attachmentDisposition } from './core.mjs';
 import { IntegratedMergeError, MERGE_LIMITS, mergeIntegratedForms } from './integrated-merge.mjs';
 import { CUSTOMER_FILE_RETENTION_DAYS, customerFilesExpireAt, removeCustomerFiles } from './customer-file-retention.mjs';
+import { AUDIO_EXTENSIONS, applySuggestions, autoMapping, lyricsHash, validateMapping } from './audio-check.mjs';
+import { engineStatus, installEngine, startWorker } from './audio-engine.mjs';
+import { progressStageLabel, runAudioCheck } from './audio-check-run.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
@@ -32,8 +35,9 @@ async function sessionToken(dataRoot) {
   return token;
 }
 
-export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, openUrl, monitor, notify, timers = true, clock = Date.now } = {}) {
+export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DEFAULT_DATA, port = Number(process.env.ONSIDE_DESK_PORT || 43127), source, remote, generator, importer, reviewer, translator, openFolder, openUrl, monitor, notify, audio, timers = true, clock = Date.now } = {}) {
   process.umask(0o077);
+  audio = { engineStatus, installEngine, startWorker, runAudioCheck, ...audio };
   if (!source) {
     const envFile = path.join(dataRoot, 'connection.env');
     try { process.loadEnvFile(envFile); } catch (e) { if (e.code !== 'ENOENT') throw e; }
@@ -131,6 +135,9 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   await upgradeManualReferenceCleanup({ store, outputRoot, importer });
   const token = await sessionToken(dataRoot);
   let connected = false, syncPromise, queue = Promise.resolve(), closing = false;
+  // 음원 가사 대조: install and check jobs run on their own serial queue so generation never waits on them.
+  let audioQueue = Promise.resolve();
+  const audioControllers = new Map();
   const shutdown = new AbortController();
   const caseDir = id => childPath(outputRoot, id);
   const activeOperations = new Map();
@@ -169,7 +176,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const screening = item.source === 'manual' ? await reviewer(effective) : undefined;
     return { ...effective, sourceSubmission: item.detail.submission, local: item.local, generations: item.generations || [], localAttachments: item.attachments || [], downloads: item.downloads || [], history: item.history || [], fetchedAt: item.fetchedAt,
       ...(item.source === 'manual' ? {} : { customerFilesExpireAt: customerFilesExpireAt(item.submission), customerFilesExpiredAt: item.customerFilesExpiredAt || null }), warnings: [...caseWarnings(base, item.local), ...(offlineWarning ? [offlineWarning] : [])], sourceChanged: !!item.sourceChanged,
-      ...(item.source === 'manual' ? { online: item.online || null, importInfo: item.importInfo, screening: { ...screening, acknowledged: !!screening?.sourceHash && item.local.reviewAcknowledgedRevision === screening.sourceHash } } : {}) };
+      ...(item.source === 'manual' ? { online: item.online || null, importInfo: item.importInfo, screening: { ...screening, acknowledged: !!screening?.sourceHash && item.local.reviewAcknowledgedRevision === screening.sourceHash } } : {}),
+      ...(isManualAlbum(item) ? { audioCheck: audioCheckView(item, effective.tracks) } : {}) };
   }
   async function importManual(body, filename, type) {
     if (!['ALBUM', 'MV_DISTRIBUTION', 'MV_BROADCAST'].includes(type)) throw Object.assign(new Error('음반 또는 뮤비 작업 유형을 선택하세요.'), { status: 400 });
@@ -498,6 +506,166 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     });
     return job;
   }
+  const AUDIO_ALBUM_ONLY = '음원 가사 대조는 관리자 수동 작업의 음반에서만 사용할 수 있습니다.';
+  const AUDIO_CANCELLED = '음원 대조를 중지했습니다.';
+  const AUDIO_RESTARTED = '앱이 다시 시작되어 중단되었습니다.';
+  // audio-engine.mjs rejects every request with this once the worker process has died.
+  const WORKER_STOPPED = '분석 도구가 중단되었습니다.';
+  const AUDIO_TYPES = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac', aif: 'audio/aiff', aiff: 'audio/aiff', ogg: 'audio/ogg' };
+  const httpError = (status, message) => Object.assign(new Error(message), { status });
+  function isManualAlbum(item) { return item.source === 'manual' && item.detail?.submission?.type === 'ALBUM'; }
+  function audioCase(id) { const item = getCase(id); if (!isManualAlbum(item)) throw httpError(400, AUDIO_ALBUM_ONLY); return item; }
+  const albumTracks = item => applyOverrides(item.detail, item.local).tracks;
+  /** The admin's saved choices for tracks that still exist; a null value means "no audio" on purpose. */
+  function savedAudioMapping(item, tracks) {
+    const saved = item.audioCheck?.mapping || {};
+    return Object.fromEntries(tracks.filter(t => Object.hasOwn(saved, t.id)).map(t => [t.id, saved[t.id] ?? null]));
+  }
+  /** What a check uses: the saved choice, else the automatic one unless that file was chosen for another track. */
+  function effectiveAudioMapping(saved, auto, tracks) {
+    const taken = new Set(Object.values(saved).filter(Boolean));
+    return Object.fromEntries(tracks.map(t => [t.id, Object.hasOwn(saved, t.id) ? saved[t.id] : auto[t.id] && !taken.has(auto[t.id]) ? auto[t.id] : null]));
+  }
+  function audioCheckView(item, tracks) {
+    const mapping = savedAudioMapping(item, tracks), auto = autoMapping(tracks, item.attachments || []);
+    const latest = item.audioCheck?.runs?.at(-1) || null;
+    const hashes = new Map(tracks.map(t => [t.id, lyricsHash(t.lyrics ?? '')]));
+    const staleTracks = (latest?.tracks || []).filter(t => t.status !== 'skipped' && hashes.has(t.trackId) && hashes.get(t.trackId) !== t.lyricsHash).map(t => t.trackId);
+    return { mapping, auto, effective: effectiveAudioMapping(mapping, auto.mapping, tracks), latest, staleTracks };
+  }
+  const activeAudioJob = (kind, caseId) => store.data.jobs.find(j => j.kind === kind && j.caseId === caseId && ['queued', 'running'].includes(j.status));
+  function enqueueAudio(kind, caseId, work) {
+    const existing = activeAudioJob(kind, caseId);
+    if (existing) return existing;
+    const job = { id: randomUUID(), caseId, kind, status: 'queued', message: '대기 중', createdAt: now() };
+    const controller = new AbortController();
+    audioControllers.set(job.id, controller);
+    store.data.jobs.unshift(job); store.data.jobs = store.data.jobs.slice(0, 300); void store.save();
+    audioQueue = audioQueue.catch(() => {}).then(async () => {
+      if (closing || job.status !== 'queued') return;
+      job.status = 'running'; job.startedAt = now(); await store.save();
+      try {
+        Object.assign(job, await work(job, controller.signal));
+      } catch (error) {
+        if (controller.signal.aborted) Object.assign(job, closing ? { status: 'failed', message: AUDIO_RESTARTED } : { status: 'cancelled', message: AUDIO_CANCELLED });
+        else { job.status = 'failed'; job.message = safeError(error); if (caseId && Object.hasOwn(store.data.cases, caseId)) store.audit(caseId, 'error', job.message); }
+      } finally { audioControllers.delete(job.id); }
+      job.finishedAt = now(); await store.save();
+    });
+    return job;
+  }
+  async function installAudioEngine() {
+    const existing = activeAudioJob('audio-install', null);
+    if (existing) return existing;
+    const { uv } = await audio.engineStatus({ dataRoot });
+    if (!uv) throw httpError(400, 'uv를 찾을 수 없습니다. 터미널에서 Homebrew로 brew install uv를 실행한 뒤 다시 시도하세요.');
+    return enqueueAudio('audio-install', null, async (job, signal) => {
+      await audio.installEngine({ dataRoot, uv, signal, onProgress: message => { job.message = String(message); void store.save(); } });
+      return { status: 'completed', message: '분석 도구를 설치했습니다.' };
+    });
+  }
+  async function startAudioCheck(id, item) {
+    const existing = activeAudioJob('audio-check', id);
+    if (existing) return existing;
+    const engine = await audio.engineStatus({ dataRoot });
+    if (!engine.installed) throw httpError(400, '분석 도구를 먼저 설치하세요.');
+    if (engine.needsUpdate) throw httpError(400, '분석 도구를 다시 설치하세요.');
+    const tracks = albumTracks(item), mapping = audioCheckView(item, tracks).effective;
+    if (!tracks.some(t => mapping[t.id])) throw httpError(400, '연결된 음원이 없습니다.');
+    return enqueueAudio('audio-check', id, (job, signal) => runCaseAudioCheck(id, job, signal));
+  }
+  async function runCaseAudioCheck(id, job, signal) {
+    const item = audioCase(id);
+    const tracks = albumTracks(item), mapping = audioCheckView(item, tracks).effective;
+    // The worker reports finer stages than runAudioCheck; swap the stage words of its latest message.
+    let latest = '';
+    const progress = message => { latest = String(message); job.message = latest; void store.save(); };
+    const worker = audio.startWorker({ dataRoot, signal, onProgress: ({ stage } = {}) => {
+      if (!latest) return;
+      job.message = latest.replace(/^(\d+\/\d+) .+? · /, (_, count) => `${count} ${progressStageLabel(stage)} · `); void store.save();
+    } });
+    let run;
+    try {
+      run = await audio.runAudioCheck({ caseDir: caseDir(id), tracks, attachments: item.attachments || [], mapping, worker, signal, onProgress: progress });
+    } finally { await worker.close(); }
+    if (signal.aborted) throw new Error(AUDIO_CANCELLED);
+    // A dead worker fails every track after it; such a partial run is not kept.
+    const died = run.tracks.find(t => t.status === 'failed' && String(t.error || '').startsWith(WORKER_STOPPED));
+    if (died) throw new Error(died.error);
+    item.audioCheck = { mapping: item.audioCheck?.mapping || {}, runs: [...(item.audioCheck?.runs || []), run].slice(-3) };
+    const count = run.tracks.reduce((sum, t) => sum + (t.suggestions?.length || 0), 0);
+    const result = { runId: run.id, suggestions: count };
+    if (run.status === 'failed') return { status: 'failed', message: safeError(new Error(run.tracks.find(t => t.status === 'failed')?.error || '음원 대조에 실패했습니다.')), result };
+    return { status: 'completed', message: `음원 대조 완료 · 제안 ${count}개`, result };
+  }
+  function cancelAudioCheck(id) {
+    const job = activeAudioJob('audio-check', id);
+    if (!job) return false;
+    audioControllers.get(job.id)?.abort();
+    if (job.status === 'queued') { Object.assign(job, { status: 'cancelled', message: AUDIO_CANCELLED, finishedAt: now() }); audioControllers.delete(job.id); void store.save(); }
+    return true;
+  }
+  async function saveAudioMapping(item, input) {
+    const mapping = input?.mapping;
+    if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping) || Object.values(mapping).some(value => value !== null && typeof value !== 'string')) throw httpError(400, '음원 연결 정보를 확인하세요.');
+    const tracks = albumTracks(item);
+    const merged = { ...savedAudioMapping(item, tracks), ...mapping };
+    try { validateMapping(merged, tracks, item.attachments || []); } catch (error) { throw httpError(400, error.message); }
+    item.audioCheck = { runs: [], ...item.audioCheck, mapping: merged };
+    await store.save();
+    return { audioCheck: audioCheckView(item, tracks) };
+  }
+  /** 선택한 제안 반영: the same save path as a manual lyric edit (PATCH local), all tracks or none. */
+  async function applyAudioSuggestions(id, item, input) {
+    const latest = item.audioCheck?.runs?.at(-1);
+    if (!latest || typeof input?.runId !== 'string' || input.runId !== latest.id) throw httpError(409, '더 최신 대조 결과가 있습니다. 화면을 새로고침하세요.');
+    const items = Array.isArray(input.items) ? input.items : [];
+    if (!items.length || items.length > 1000 || new Set(items.map(x => x?.suggestionId)).size !== items.length
+      || items.some(x => typeof x?.suggestionId !== 'string' || (x.text !== undefined && (typeof x.text !== 'string' || x.text.length > 150000)))) throw httpError(400, '반영할 제안을 선택하세요.');
+    const owners = new Map();
+    for (const runTrack of latest.tracks) for (const suggestion of runTrack.suggestions || []) owners.set(suggestion.id, runTrack);
+    const groups = new Map();
+    for (const choice of items) {
+      const runTrack = owners.get(choice.suggestionId);
+      if (!runTrack) throw httpError(400, '반영할 수 없는 제안이 있습니다.');
+      groups.set(runTrack, [...(groups.get(runTrack) || []), choice]);
+    }
+    const tracks = albumTracks(item), updates = [];
+    for (const [runTrack, chosen] of groups) {
+      const track = tracks.find(t => t.id === runTrack.trackId);
+      if (!track || lyricsHash(track.lyrics ?? '') !== runTrack.lyricsHash) throw httpError(409, '가사가 바뀌었습니다. 다시 대조하세요.');
+      let lyrics;
+      try { lyrics = applySuggestions(track.lyrics ?? '', runTrack.suggestions, chosen); }
+      catch (error) { throw httpError(/겹칩니다/.test(error.message) ? 409 : 400, error.message); }
+      updates.push({ runTrack, id: track.id, lyrics, applied: chosen.map(x => x.suggestionId) });
+    }
+    item.local = validateLocalPatch({ overrides: { tracks: updates.map(({ id: trackId, lyrics }) => ({ id: trackId, lyrics })) }, reviewAcknowledgedRevision: '' }, item.local, tracks.map(t => t.id));
+    item.sourceChanged = !!item.generations?.length; item.submission.updated_at = now(); item.detail.submission.updated_at = item.submission.updated_at;
+    for (const { runTrack, applied } of updates) runTrack.applied = [...new Set([...(runTrack.applied || []), ...applied])];
+    store.audit(id, 'audio-check', `음원 대조 제안 ${items.length}개를 가사에 반영했습니다.`); await store.save();
+    const onlineSync = item.online?.submissionId
+      ? await syncOnline(id).then(result => ({ ok: true, changed: result.changed }), error => ({ ok: false, error: safeError(error) }))
+      : null;
+    return { detail: await detail(id), applied: items.length, onlineSync };
+  }
+  /** 음원 재생: the admin's audio element seeks with byte ranges. */
+  async function streamAudio(req, res, id, item, attachmentId) {
+    const attachment = (item.attachments || []).find(a => a.id === attachmentId);
+    if (!attachment) throw httpError(404, '음원 파일을 찾을 수 없습니다.');
+    const ext = path.extname(attachment.name || '').slice(1).toLowerCase();
+    if (!AUDIO_EXTENSIONS.has(ext)) throw httpError(400, '오디오 파일만 재생할 수 있습니다.');
+    const file = childPath(caseDir(id), '이메일 파일', attachment.storedName);
+    const stat = await fs.stat(file).catch(() => null);
+    if (!stat?.isFile()) throw httpError(404, '음원 파일을 찾을 수 없습니다.');
+    const size = stat.size, headers = { 'Content-Type': AUDIO_TYPES[ext] || 'application/octet-stream', 'Accept-Ranges': 'bytes' };
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || '').trim());
+    if (!range || (!range[1] && !range[2])) { res.writeHead(200, { ...headers, 'Content-Length': size }); return await pipeline(createReadStream(file), res); }
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start >= size || start > end || (!range[1] && Number(range[2]) === 0)) { res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` }); return res.end(); }
+    res.writeHead(206, { ...headers, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${size}` });
+    return await pipeline(createReadStream(file, { start, end }), res);
+  }
   async function backup() {
     await store.save();
     const backupDir = path.join(dataRoot, '백업'); await fs.mkdir(backupDir, { recursive: true, mode: 0o700 });
@@ -509,7 +677,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       for (const ent of await fs.readdir(dir, { withFileTypes: true })) {
         if (ent.isSymbolicLink()) continue;
         const rel = path.join(relative, ent.name);
-        if (ent.isDirectory()) { if (['원본 파일', '이메일 파일'].includes(ent.name)) continue; await walk(path.join(dir, ent.name), rel); }
+        if (ent.isDirectory()) { if (['원본 파일', '이메일 파일', '음원 대조 캐시'].includes(ent.name)) continue; await walk(path.join(dir, ent.name), rel); }
         else if (ent.isFile()) entries.push({ name: path.join('신청별 자료', rel), path: path.join(dir, ent.name) });
       }
     }
@@ -769,6 +937,21 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
         if (asset.contentLength && /^\d+$/.test(String(asset.contentLength))) res.setHeader('Content-Length', asset.contentLength);
         return await pipeline(Readable.fromWeb(asset.body), res);
       }
+      if (url.pathname === '/api/audio-engine' && req.method === 'GET') return sendJSON(res, 200, await audio.engineStatus({ dataRoot }));
+      if (url.pathname === '/api/audio-engine/install' && req.method === 'POST') return sendJSON(res, 202, { job: await installAudioEngine() });
+      // Matched before the generic case route, which would answer these paths with 404.
+      const audioRoute = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)\/(?:audio-check(?:\/(mapping|cancel|apply))?|attachments\/([a-zA-Z0-9-]+)\/stream)$/);
+      if (audioRoute) {
+        const [, id, step, attachmentId] = audioRoute;
+        const item = audioCase(id);
+        if (['POST', 'PATCH'].includes(req.method)) { activeCaseId = id; activeOperations.set(id, (activeOperations.get(id) || 0) + 1); }
+        if (attachmentId) { if (req.method === 'GET') return await streamAudio(req, res, id, item, attachmentId); }
+        else if (!step && req.method === 'POST') return sendJSON(res, 202, { job: await startAudioCheck(id, item) });
+        else if (step === 'mapping' && req.method === 'PATCH') return sendJSON(res, 200, await saveAudioMapping(item, await readJSON(req)));
+        else if (step === 'cancel' && req.method === 'POST') return sendJSON(res, 200, { cancelled: cancelAudioCheck(id) });
+        else if (step === 'apply' && req.method === 'POST') return sendJSON(res, 200, await applyAudioSuggestions(id, item, await readJSON(req)));
+        return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
+      }
       const route = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)(?:\/(local|generate|download|open|attachments|results|certificate|email-preview|reference|translate|restore|register-online|open-online|sync-online))?$/);
       if (!route) return sendJSON(res, 404, { error: '요청을 찾을 수 없습니다.' });
       const [, id, action] = route; const item = getCase(id, action === 'restore' || req.method === 'DELETE');
@@ -877,7 +1060,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     timer = setInterval(() => { if (store.data.settings.autoSync) void sync().catch(() => {}); }, 5 * 60 * 1000); timer.unref();
     if (store.data.settings.autoSync && source.sourceStatus().configured) void sync().catch(() => {});
   }
-  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, checkChats, expireCustomerFiles, async idle() { await queue; await expiryRun; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); clearInterval(chatTimer); shutdown.abort(); await queue.catch(() => {}); await expiryRun; await store.save(); await new Promise(resolve => server.close(resolve)); } };
+  return { server, store, sync, detail, enqueue, backup, publicState, outputRoot, token, checkChats, expireCustomerFiles, async idle() { await queue; await expiryRun; }, async audioIdle() { await audioQueue; }, async close() { closing = true; clearInterval(timer); clearInterval(monitorTimer); clearInterval(chatTimer); shutdown.abort(); for (const controller of audioControllers.values()) controller.abort(); await queue.catch(() => {}); await audioQueue.catch(() => {}); await expiryRun; await store.save(); await new Promise(resolve => server.close(resolve)); } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
