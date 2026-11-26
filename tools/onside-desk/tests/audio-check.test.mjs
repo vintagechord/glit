@@ -423,3 +423,14 @@ test('applySuggestions fills empty lyrics without blank lines', () => {
   const s = sug('n', { type: 'insertLines', afterLine: -1, lines: ['처음 줄', '다음 줄'] }, 'new');
   assert.equal(applySuggestions('', [s], [{ suggestionId: 'n' }]), '처음 줄\n다음 줄');
 });
+
+test('applySuggestions refuses an insert strictly inside a deleted range', () => {
+  const lyrics = '가가\n나나\n다다\n라라';
+  const ins = sug('i', { type: 'insertLines', afterLine: 0, lines: ['X'] }, 'new');
+  const del = sug('d', { type: 'deleteLines', from: 0, to: 2 }, 'unheard');
+  assert.throws(() => applySuggestions(lyrics, [ins, del], [{ suggestionId: 'i' }, { suggestionId: 'd' }]), OVERLAP);
+  // boundaries are fine: before the range and after its last line
+  const before = sug('b', { type: 'insertLines', afterLine: -1, lines: ['X'] }, 'new');
+  const after = sug('a', { type: 'insertLines', afterLine: 2, lines: ['Y'] }, 'new');
+  assert.equal(applySuggestions(lyrics, [before, after, del], [{ suggestionId: 'b' }, { suggestionId: 'a' }, { suggestionId: 'd' }]), 'X\nY\n라라');
+});

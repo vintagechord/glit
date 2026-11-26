@@ -917,6 +917,10 @@ export function applySuggestions(lyrics, suggestions, items) {
       throw new Error('반영할 수 없는 제안이 있습니다.');
     }
   });
+  const deletes = edits.filter((e) => e.lines.length === 0 && e.end > e.start);
+  for (const e of edits) {
+    if (e.start === e.end && deletes.some((d) => d.start < e.start && e.start < d.end)) throw new Error(OVERLAP_ERROR);
+  }
   edits.sort((a, b) => b.start - a.start || b.end - a.end || b.order - a.order);
   for (const e of edits) lines.splice(e.start, e.end - e.start, ...e.lines);
   return lines.join('\n');
