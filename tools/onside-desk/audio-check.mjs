@@ -889,28 +889,34 @@ function editDistance(x, y) {
   return prev[y.length];
 }
 
-// 정규화한 두 줄의 차이 구간(연속한 비일치 칸). 구간마다 [a 쪽 글자, b 쪽 글자, 작은 차이인지].
+// 정규화한 두 줄을 같은 글자 구간과 차이 구간으로 나눈다. 같은 글자 mergeGap개 이하로 떨어진 차이 구간은
+// 하나로 합친다(사이 글자 포함). 차이 구간마다 a 쪽 글자, b 쪽 글자, 작은 차이인지(minor).
 function diffParts(a, b) {
-  const parts = [];
-  let x = '';
-  let y = '';
-  const flush = () => {
-    if (!x && !y) return;
-    const minor = Math.abs(x.length - y.length) <= MINOR_SYLLABLES && editDistance(jamo(x), jamo(y)) <= MINOR_JAMO;
-    parts.push({ a: x, b: y, minor });
-    x = '';
-    y = '';
-  };
+  const runs = [];
   for (const [i, j] of alignChars(a, b)) {
-    if (i !== null && j !== null && a[i] === b[j]) {
-      flush();
-      parts.push({ a: a[i], b: b[j], same: true });
-      continue;
+    const same = i !== null && j !== null && a[i] === b[j];
+    let last = runs.at(-1);
+    if (!last || last.same !== same) {
+      last = { a: '', b: '', same };
+      runs.push(last);
     }
-    if (i !== null) x += a[i];
-    if (j !== null) y += b[j];
+    if (i !== null) last.a += a[i];
+    if (j !== null) last.b += b[j];
   }
-  flush();
+  const parts = [];
+  for (const run of runs) {
+    const [diff, between] = parts.slice(-2);
+    if (!run.same && between?.same && between.a.length <= THRESHOLDS.mergeGap && diff && !diff.same) {
+      parts.pop();
+      diff.a += between.a + run.a;
+      diff.b += between.b + run.b;
+    } else {
+      parts.push(run);
+    }
+  }
+  for (const p of parts) {
+    if (!p.same) p.minor = Math.abs(p.a.length - p.b.length) <= MINOR_SYLLABLES && editDistance(jamo(p.a), jamo(p.b)) <= MINOR_JAMO;
+  }
   return parts;
 }
 

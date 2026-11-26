@@ -635,6 +635,18 @@ test('an omitted chorus whose tail was misheard is still one high repeat of the 
   assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
 });
 
+test('differences one matching syllable apart are judged as one region', () => {
+  // '살/갈'과 '없/있'은 각각 작은 차이지만 사이에 같은 글자 '수' 하나뿐이다: 합치면 '살수없/갈수있'(자모 거리 3).
+  const d = draft('그대 없이 살 수 없어', [seg('그대 없이 갈 수 있어', 0, 4)], frames(4, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.equal(d.suggestions[0].op.to, '그대 없이 갈 수 있어');
+  // 다시 받아쓴 글의 지지도도 합친 구간으로 본다.
+  const [req] = d.scoreRequests;
+  const kept = finalizeSuggestions(d, { [req.id]: [-20, -15] }, { [req.id]: '그대 없이 갈 수 있어' });
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].confidence, 'medium');
+});
+
 const sug = (id, op, kind = 'replace') => ({ id, kind, op });
 const OVERLAP = /같은 줄을 고치는 제안이 겹칩니다/;
 
