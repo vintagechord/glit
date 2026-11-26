@@ -44,6 +44,9 @@ const dailyBatchBudget = () => {
   return Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_DAILY_BATCH_BUDGET;
 };
 
+const IP_DAILY_LIMITED_MESSAGE = "오늘 쓸 수 있는 자동번역을 모두 사용했습니다. 내일 다시 시도하거나 번역을 직접 입력해주세요.";
+const SITE_BUDGET_SPENT_MESSAGE = "오늘 자동번역 사용량이 한도에 도달했습니다. 내일 다시 시도하거나 번역을 직접 입력해주세요.";
+
 const limitedResponse = (error: string, retryAfterSeconds: number, status = 429) =>
   NextResponse.json({ error }, { status, headers: { "Retry-After": String(Math.max(1, retryAfterSeconds)) } });
 
@@ -128,7 +131,8 @@ export async function POST(request: Request) {
       for (const window of [IP_WINDOW_LIMIT, IP_DAILY_LIMIT]) {
         const byAddress = await consumePersistentRateLimit({ namespace: `translate-ip-${window.windowMs}`, identifier, ...window, cost });
         if (!byAddress.allowed) {
-          return limitedResponse("자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", byAddress.retryAfterSeconds);
+          // "잠시 후" is wrong once the day's allowance is spent.
+          return limitedResponse(window === IP_DAILY_LIMIT ? IP_DAILY_LIMITED_MESSAGE : "자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", byAddress.retryAfterSeconds);
         }
       }
       const budget = await consumePersistentRateLimit({
@@ -137,7 +141,7 @@ export async function POST(request: Request) {
       });
       if (!budget.allowed) {
         // 503 lets the wizard fall back to its free in-browser translation.
-        return limitedResponse("오늘 자동번역 사용량이 한도에 도달했습니다. 잠시 후 다시 시도하거나 번역을 직접 입력해주세요.", budget.retryAfterSeconds, 503);
+        return limitedResponse(SITE_BUDGET_SPENT_MESSAGE, budget.retryAfterSeconds, 503);
       }
     }
 

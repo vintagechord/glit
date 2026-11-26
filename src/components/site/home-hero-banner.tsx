@@ -91,21 +91,26 @@ function HeroJacket() {
 
 /**
  * The released-album banner's whole point, shown as it happens: an album
- * address lands in the field and the application is written. The address is
- * a real Melon album address shape; when the slide comes up it types in once,
- * then the confirmation appears.
+ * link lands in the field and the application is written. The field says
+ * what to paste in plain words rather than showing a raw address (owner
+ * request 2026-11-26: the URL structure read as hard). When the slide comes
+ * up the words type in once, then the confirmation appears.
  */
 function HeroUrlField() {
   return (
     <div className="onside-hero-url" aria-hidden="true" data-no-translate>
       <Link2 className="onside-hero-url-icon" strokeWidth={2.4} />
       <span className="onside-hero-url-type">
-        <span className="onside-hero-url-text">melon.com/album/detail.htm?albumId=12345678</span>
+        <span className="onside-hero-url-text">
+          <HeroWord ko="멜론이나 지니 앨범의 URL 붙여넣기" en="Paste a Melon or Genie album URL" />
+        </span>
       </span>
       <span className="onside-hero-url-caret" />
       <span className="onside-hero-url-done">
         <Check strokeWidth={3.2} />
-        <HeroWord ko="신청서 작성 끝" en="Form filled in" />
+        <span className="onside-hero-url-done-label">
+          <HeroWord ko="신청서 작성 끝" en="Form filled in" />
+        </span>
       </span>
     </div>
   );

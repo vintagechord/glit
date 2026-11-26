@@ -58,6 +58,7 @@ const reasonText: Record<string, string> = {
   dictionary: "욕설 사전의 표현 또는 우회 표기와 일치합니다.",
   phonetic: "욕설과 발음이 비슷한 표현입니다. 문맥을 확인해주세요.",
   ambiguous: "다른 뜻으로도 쓰이는 표현입니다. 문맥을 확인해주세요.",
+  spaced: "띄어 쓴 다른 낱말일 수 있습니다. 문맥을 확인해주세요.",
   initials: "욕설의 초성 표기로 쓰일 수 있습니다. 문맥을 확인해주세요.",
   masked: "일부 글자를 가린 욕설 표기와 일치합니다.",
   custom: "관리자가 등록한 확인 대상 표현과 일치합니다.",
@@ -263,14 +264,21 @@ export function analyzeLyricsProfanity(text: string, extraTerms: ProfanityTerm[]
           : rule.reason === "custom" || hasKoreanStart(source, channel, first);
         const start = channel.starts[first], end = channel.ends[last];
         if (boundary && (rule.reason === "custom" || !isSafe(start, end))) {
-          if (rule.category === "confident") hasProfanity = true;
+          // A Korean match joined across a space or line break that runs on
+          // into a longer word is more often two ordinary words ("나의 시
+          // 발표회", "존 나와라") than a spaced-out insult, so it is only a
+          // candidate to look at. "씨 발" standing alone stays definite.
+          const spacedIntoWord = korean && !needsBoundary && rule.reason !== "custom" && rule.category === "confident" &&
+            /\p{White_Space}/u.test(source.slice(start, end)) && word.test(boundaryCharacter(source, end, 1));
+          const category: LyricsProfanityCategory = spacedIntoWord ? "suspected" : rule.category;
+          if (category === "confident") hasProfanity = true;
           else hasSuspectedProfanity = true;
-          const key = `${start}:${end}:${rule.category}`;
+          const key = `${start}:${end}:${category}`;
           if (!seen.has(key)) {
             if (candidates.length >= LYRICS_PROFANITY_LIMITS.matches) { truncated = true; break; }
             seen.add(key);
             candidates.push({ start, end, matchedText: text.slice(start, end), term: rule.termsByNeedle.get(needle) ?? rule.term, ruleId: rule.id,
-              reason: reasonText[rule.reason ?? "dictionary"], category: rule.category, language: rule.language });
+              reason: reasonText[spacedIntoWord ? "spaced" : rule.reason ?? "dictionary"], category, language: rule.language });
           }
         }
         index = search.text.indexOf(needle, index + Math.max(1, needle.length));

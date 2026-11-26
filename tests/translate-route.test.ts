@@ -66,14 +66,15 @@ test('shared per-address limits and a daily site budget guard the provider, with
     const limited=await fixture();limited.state.deny=[namespace];
     response=await limited.POST(request({lines:['Source']}));
     assert.equal(response.status,429);assert.equal(response.headers.get('Retry-After'),'90');
-    assert.match((await response.json()).error,/자동번역 요청이 너무 많습니다/);
+    // The day's allowance does not come back "shortly".
+    assert.match((await response.json()).error,namespace==='translate-ip-86400000'?/오늘 쓸 수 있는 자동번역을 모두 사용했습니다\. 내일 다시 시도/:/자동번역 요청이 너무 많습니다/);
     assert.equal(limited.calls.length,0);
     assert.equal(limited.state.limits.some(limit=>limit.namespace==='translate-daily-budget'),false,'a limited address does not spend the site budget');
   }
   const exhausted=await fixture();exhausted.state.deny=['translate-daily-budget'];
   response=await exhausted.POST(request({lines:['Source']}));
   // 503 keeps the wizard's free in-browser fallback available to real users.
-  assert.equal(response.status,503);assert.match((await response.json()).error,/오늘 자동번역 사용량이 한도에 도달/);
+  assert.equal(response.status,503);assert.match((await response.json()).error,/오늘 자동번역 사용량이 한도에 도달했습니다\. 내일 다시 시도하거나 번역을 직접 입력해주세요/);
   assert.equal(exhausted.calls.length,0);
 });
 

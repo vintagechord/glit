@@ -57,14 +57,15 @@ test("a complete online album passes preflight and enables the cart CTA", () => 
   assert.equal(result.firstBlockingTarget, null);
 });
 
-test("preflight cannot be bypassed by skipping the optional lyrics-check button", () => {
+test("profanity shows in the preflight without the check button, as a warning that never blocks", () => {
+  // Owner decision 2026-11-26: the check only informs.
   const result = buildAlbumSubmissionPreflight(validOnlineInput({ tracks: [{
     trackTitle: "첫 번째 곡", performer: "가수", composer: "작곡가", isTitle: true,
     lyrics: "f.u.c.k", translatedLyrics: "말을 순화한 번역",
   }] }));
-  assert.equal(result.canSubmit, false);
-  assert.ok(result.blockingIssues.some(item => item.id === "track.0.lyrics"));
-  assert.deepEqual(result.firstBlockingTarget, { step: 4, field: "lyrics", trackIndex: 0 });
+  assert.equal(result.canSubmit, true);
+  assert.ok(result.warnings.some(item => item.id === "track.0.lyrics"));
+  assert.equal(result.blockingIssues.some(item => item.id === "track.0.lyrics"), false);
 });
 
 test("preflight identifies suspicious phonetics as a warning while an actual clean-version cue stays valid", () => {

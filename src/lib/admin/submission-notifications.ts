@@ -34,7 +34,7 @@ const emptyOutcome = (): SubmissionNotificationOutcome => ({
 async function loadContext(submissionId: string) {
   const db = createAdminClient();
   const { data: submission, error } = await db.from("submissions")
-    .select("id, title, artist_name, artist_name_kr, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at, status, result_status, result_notified_at, mv_desired_rating, mv_rating, certificate_b2_path, certificate_original_name")
+    .select("id, title, artist_name, artist_name_kr, type, user_id, guest_token, applicant_email, applicant_phone, guest_email, guest_phone, updated_at, status, result_status, result_notified_at, partial_result_notified_at, mv_desired_rating, mv_rating, certificate_b2_path, certificate_original_name")
     .eq("id", submissionId).maybeSingle();
   if (error || !submission) return null;
 
@@ -224,15 +224,22 @@ export async function sendReviewSummaryNotificationById(input: {
     if (latest.preview.revision !== preview.revision || !latest.preview.canSend) return fail("CONFLICT", "이메일을 준비하는 동안 심의 내용이나 수신 정보가 변경되었습니다. 새 미리보기를 확인한 뒤 보내주세요.");
     // An aggregate progress notice must not manufacture a published final result.
     const announcesResult = Boolean(snapshot.submission.result_status || ["RESULT_READY", "COMPLETED"].includes(snapshot.submission.status));
+    // Set only by this mail; taken back below if the mail cannot go out.
+    let newPartialMark: string | null = null;
     if (announcesResult) {
       // Owner decision 2026-11-21: a result mail that leaves a station open is a
       // partial notice (결과 통보 완료 · 일부 대기); the final mail, with every
       // result decided, clears the mark. Written before queueing, so the
-      // acceptance that records the notice always finds the right mark.
+      // acceptance that records the notice always finds the right mark. An
+      // album already marked (the button, an earlier mail) keeps its mark.
       const allResultsFinal = content.rows.length > 0 && content.completedCount === content.rows.length;
+      const alreadyMarked = Boolean((context.submission as { partial_result_notified_at?: string | null }).partial_result_notified_at);
+      if (!allResultsFinal && !alreadyMarked) newPartialMark = new Date().toISOString();
       const marked = allResultsFinal
         ? await context.db.from("submissions").update({ partial_result_notified_at: null }).eq("id", input.submissionId).not("partial_result_notified_at", "is", null)
-        : await context.db.from("submissions").update({ partial_result_notified_at: new Date().toISOString() }).eq("id", input.submissionId);
+        : newPartialMark
+          ? await context.db.from("submissions").update({ partial_result_notified_at: newPartialMark }).eq("id", input.submissionId)
+          : { error: null };
       if (marked.error) return fail("LOAD_FAILED", "결과 통보 상태를 저장하지 못해 메일을 보내지 않았습니다. 잠시 후 다시 시도해주세요.", { failedCount: 1 });
     }
     const result = await sendReviewSummaryEmail({
@@ -241,6 +248,12 @@ export async function sendReviewSummaryNotificationById(input: {
       markResultNotified: announcesResult,
       ...(refs ? { attachmentRefs: refs } : {}),
     });
+    // The mark alone reads 결과 통보 완료 · 일부 대기, so a mail that was
+    // neither accepted nor left to retry must not leave it behind.
+    if (newPartialMark && !result.ok && !result.queued && result.status !== "uncertain") {
+      await context.db.from("submissions").update({ partial_result_notified_at: null })
+        .eq("id", input.submissionId).eq("partial_result_notified_at", newPartialMark);
+    }
     return summaryDeliveryOutcome(result);
   } catch (error) {
     if (error instanceof EmailAttachmentError) return fail("NOT_READY", error.message, { failedCount: 1, pendingAssets: true });

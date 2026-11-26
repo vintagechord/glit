@@ -20,7 +20,6 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PendingOverlay } from "@/components/ui/pending-overlay";
-import { showCenteredConfirm } from "@/lib/centered-dialog";
 import { APP_CONFIG } from "@/lib/config";
 import { formatCurrency } from "@/lib/format";
 import { addGuestSubmissionCartEntries } from "@/lib/guest-submission-cart";
@@ -60,13 +59,9 @@ import {
   areSubmissionUploadMetadataEqual,
   mergeSubmissionUploadMetadata,
 } from "@/lib/submission-upload-metadata";
-import { runProfanityCheck } from "@/lib/profanity/check";
-import {
-  buildProfanityExtraRules,
-  buildLegacyProfanityMatchers,
-  extractProfanityWords,
-  type ProfanityTerm,
-} from "@/lib/profanity/legacy";
+import { analyzeLyricsProfanity } from "@/lib/profanity/check";
+import type { ProfanityTerm } from "@/lib/profanity/legacy";
+import { LyricsProfanityPanel, renderProfanityMarks } from "@/features/submissions/lyrics-profanity-panel";
 import { safeRandomUUID } from "@/lib/uuid";
 
 import {
@@ -372,7 +367,6 @@ export function MvWizard({
   userEmail,
   initialApplicant,
   profanityTerms = [],
-  profanityFilterV2Enabled = false,
 }: {
   stations: StationOption[];
   userId?: string | null;
@@ -380,6 +374,7 @@ export function MvWizard({
   /** A member's saved contact details, used to fill the applicant section. */
   initialApplicant?: MemberApplicant;
   profanityTerms?: ProfanityTerm[];
+  /** Ignored: MV uses the album's lyrics engine (2026-11-26). */
   profanityFilterV2Enabled?: boolean;
 }) {
   const router = useRouter();
@@ -573,8 +568,8 @@ export function MvWizard({
   const lyricsOverlayRef = React.useRef<HTMLDivElement | null>(null);
   const lyricsTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [lyricsToolApplied, setLyricsToolApplied] = React.useState(false);
-  const [profanityChecked, setProfanityChecked] = React.useState(false);
-  const [profanityHighlight, setProfanityHighlight] = React.useState(false);
+  /** The lyrics the applicant last pressed 욕설 체크 on, to show a clean result. */
+  const [profanityCheckedLyrics, setProfanityCheckedLyrics] = React.useState<string | null>(null);
   const [lyricsToolNotice, setLyricsToolNotice] = React.useState<{
     type: "error" | "info" | "success";
     message: string;
@@ -610,17 +605,16 @@ export function MvWizard({
     () => `onside:guest-token:mv:${userId ?? "guest"}`,
     [userId],
   );
-  const profanityMatchers = React.useMemo(
-    () => buildLegacyProfanityMatchers(loadedProfanityTerms),
-    [loadedProfanityTerms],
+  // The album's engine and presentation (owner decision 2026-11-26): it runs
+  // as the applicant types, marks each finding and never blocks submission.
+  const lyricsProfanity = React.useMemo(
+    () => analyzeLyricsProfanity(lyrics, loadedProfanityTerms),
+    [lyrics, loadedProfanityTerms],
   );
-  const isProfanityFilterV2Enabled = Boolean(profanityFilterV2Enabled);
-  const profanityPattern = profanityMatchers?.pattern ?? null;
-  const profanityTestPattern = profanityMatchers?.testPattern ?? null;
-  const profanityWords = extractProfanityWords(lyrics, profanityPattern);
   const showLyricsToolNotice = lyricsToolApplied;
-  const showProfanityOverlay =
-    profanityChecked && profanityHighlight && profanityWords.length > 0;
+  const showProfanityPanel = Boolean(lyrics.trim()) && (profanityCheckedLyrics === lyrics ||
+    lyricsProfanity.hasProfanity || lyricsProfanity.hasSuspectedProfanity || lyricsProfanity.truncated);
+  const showProfanityOverlay = showProfanityPanel && lyricsProfanity.matches.length > 0;
 
   React.useEffect(() => {
     const nextType =
@@ -677,6 +671,14 @@ export function MvWizard({
     profanityTermsRef.current = terms;
     return terms;
   }, [profanityTermsLoaded]);
+
+  // Terms an administrator added join the live check once lyrics are typed.
+  const profanityTermsPrefetchRef = React.useRef(false);
+  React.useEffect(() => {
+    if (profanityTermsPrefetchRef.current || profanityTermsLoaded || !lyrics.trim()) return;
+    profanityTermsPrefetchRef.current = true;
+    ensureProfanityTerms().catch(() => {});
+  }, [ensureProfanityTerms, lyrics, profanityTermsLoaded]);
   const clearInvalidField = React.useCallback((field: MvValidationField) => {
     setInvalidField((current) => (current === field ? null : current));
   }, []);
@@ -2454,29 +2456,6 @@ export function MvWizard({
     [],
   );
 
-  const renderProfanityPreview = (
-    value: string,
-    pattern?: RegExp | null,
-    testPattern?: RegExp | null,
-  ) => {
-    if (!value || !pattern || !testPattern) return value;
-    const parts = value.split(pattern);
-    return parts.map((part, index) => {
-      if (!part) return null;
-      if (testPattern.test(part)) {
-        return (
-          <mark
-            key={`${part}-${index}`}
-            className="rounded bg-[#d9362c] px-1 text-white"
-          >
-            {part}
-          </mark>
-        );
-      }
-      return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
-    });
-  };
-
   const handleProfanityCheck = async () => {
     const currentLyrics = lyricsTextareaRef.current?.value ?? lyrics;
     if (!currentLyrics.trim()) {
@@ -2489,47 +2468,18 @@ export function MvWizard({
     if (currentLyrics !== lyrics) {
       setLyrics(currentLyrics);
     }
-
     setIsCheckingProfanity(true);
     try {
-      const terms = await ensureProfanityTerms();
-      const matchers = buildLegacyProfanityMatchers(terms);
-      const extraRules = buildProfanityExtraRules(terms);
-      const currentTestPattern = matchers?.testPattern ?? null;
-      const v1HasProfanity = currentTestPattern
-        ? currentTestPattern.test(currentLyrics)
-        : false;
-      const { hasProfanity } = runProfanityCheck(currentLyrics, {
-        v1HasProfanity,
-        enableV2: isProfanityFilterV2Enabled,
-        preferV2: isProfanityFilterV2Enabled,
-        v2Options: { extraRules },
-      });
-      if (hasProfanity) {
-        const shouldProceed = await showCenteredConfirm(
-          "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다",
-        );
-        if (!shouldProceed) return;
-      }
-
-      setProfanityChecked(true);
-      setProfanityHighlight(hasProfanity);
-      markLyricsToolApplied();
-      setLyricsToolNotice({
-        type: hasProfanity ? "error" : "success",
-        message: hasProfanity
-          ? "욕설 또는 회피 패턴이 감지되었습니다."
-          : "욕설이 감지되지 않았습니다.",
-      });
+      // Terms an administrator added; the built-in dictionary runs without them.
+      await ensureProfanityTerms();
     } catch (error) {
       console.warn("[MvProfanity] failed to load terms", error);
-      setLyricsToolNotice({
-        type: "error",
-        message: "욕설 체크 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
-      });
     } finally {
       setIsCheckingProfanity(false);
     }
+    setProfanityCheckedLyrics(currentLyrics);
+    setLyricsToolNotice(null);
+    markLyricsToolApplied();
   };
 
   const handleTranslateLyrics = async () => {
@@ -2569,8 +2519,7 @@ export function MvWizard({
       );
 
       setLyrics(translatedLines.join("\n"));
-      setProfanityChecked(false);
-      setProfanityHighlight(false);
+      setProfanityCheckedLyrics(null);
       markLyricsToolApplied();
       setLyricsToolNotice({
         type: "success",
@@ -2578,6 +2527,22 @@ export function MvWizard({
       });
     } catch (error) {
       console.error(error);
+      // Keep what was translated, as the album wizard does; the rest stays
+      // in the original language for the applicant to see.
+      if (error instanceof LyricsTranslationError && error.translations.some((text) => text.trim())) {
+        try {
+          setLyrics(buildInlineTranslatedLyrics(lines, segmentMap, error.translations, { allowPartial: true }).join("\n"));
+          setProfanityCheckedLyrics(null);
+          markLyricsToolApplied();
+          setLyricsToolNotice({
+            type: "error",
+            message: error.userMessage ?? "일부 구간만 번역했습니다. 번역이 붙지 않은 줄은 다시 시도하거나 직접 입력해주세요.",
+          });
+          return;
+        } catch {
+          // The lyrics changed meanwhile; fall through to the plain message.
+        }
+      }
       setLyricsToolNotice({
         type: "error",
         message:
@@ -4706,11 +4671,7 @@ export function MvWizard({
                       className="pointer-events-none absolute inset-0 z-10 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-foreground"
                     >
                       <div className="whitespace-pre-wrap">
-                        {renderProfanityPreview(
-                          lyrics,
-                          profanityPattern,
-                          profanityTestPattern,
-                        )}
+                        {renderProfanityMarks(lyrics, lyricsProfanity.matches)}
                       </div>
                     </div>
                   )}
@@ -4732,30 +4693,9 @@ export function MvWizard({
                       }`}
                   />
                 </div>
-                {profanityChecked && (
-                  <div className="mt-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3 text-xs text-foreground">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      감지된 단어
-                    </p>
-                    <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
-                      {profanityHighlight && profanityWords.length > 0 ? (
-                        profanityWords.map((word) => (
-                          <div
-                            key={word}
-                            data-no-translate
-                            className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 text-[11px] font-semibold text-red-600"
-                          >
-                            {word}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-border/60 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground">
-                          {profanityHighlight
-                            ? "회피 패턴이 감지되었습니다."
-                            : "욕설이 감지되지 않았습니다."}
-                        </div>
-                      )}
-                    </div>
+                {showProfanityPanel && (
+                  <div className="mt-3">
+                    <LyricsProfanityPanel items={[{ label: "가사", text: lyrics, analysis: lyricsProfanity }]} />
                   </div>
                 )}
                 <p className="mt-2 text-xs text-muted-foreground">

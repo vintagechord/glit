@@ -162,3 +162,34 @@ test("a station's result note shows under that station's row, escaped", async ()
   assert.match(html, />온사이드 결과 페이지로 연결됩니다\./);
   assert.doesNotMatch(html, /기존 온사이드/);
 });
+
+test("a partial result mail keeps an earlier mark, and takes back its own when the mail cannot go out", async () => {
+  // 2026-11-26: the mark alone reads 결과 통보 완료 · 일부 대기, whatever the
+  // status, so a mail that never left must not leave one behind.
+  const failed = await fixture();
+  failed.state.submission.status = "RESULT_READY";
+  failed.state.result = { ok: false, status: "failed" };
+  let preview = await failed.getReviewSummaryEmailPreviewById(previewInput);
+  assert.equal((await failed.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision })).failedCount, 1);
+  const writes = failed.calls.filter(call => call.kind === "update").map(call => call.values);
+  assert.equal(writes.length, 2);
+  assert.match(String(writes[0]?.partial_result_notified_at), /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(writes[1], { partial_result_notified_at: null });
+
+  // Left to retry: the mark stays for the acceptance to find.
+  const queued = await fixture();
+  queued.state.submission.status = "RESULT_READY";
+  queued.state.result = { ok: false, status: "retry", queued: true };
+  preview = await queued.getReviewSummaryEmailPreviewById(previewInput);
+  await queued.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision });
+  assert.equal(queued.calls.filter(call => call.kind === "update").length, 1);
+
+  // Already sent on (the button or an earlier mail): nothing to write, nothing to take back.
+  const marked = await fixture();
+  Object.assign(marked.state.submission, { status: "RESULT_READY", partial_result_notified_at: "2026-11-24T03:48:00Z" });
+  marked.state.result = { ok: false, status: "failed" };
+  preview = await marked.getReviewSummaryEmailPreviewById(previewInput);
+  await marked.sendReviewSummaryNotificationById({ ...previewInput, requestId, expectedRevision: preview.revision });
+  assert.equal(marked.calls.some(call => call.kind === "update"), false);
+  assert.equal(marked.calls.filter(call => call.kind === "send").length, 1);
+});

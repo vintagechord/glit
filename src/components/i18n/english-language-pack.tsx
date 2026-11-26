@@ -533,11 +533,11 @@ const exactTranslations: Record<string, string> = {
   "자동번역": "Automatic Translation",
   "자동번역 중...": "Translating...",
   "가사 욕설 검사 결과": "Lyrics Profanity Check Results",
-  "명확한 욕설 표현 감지": "Explicit Profanity Detected",
-  "확인 필요 표현 감지": "Expressions Need Review",
-  "가사 검사 미완료": "Lyrics Check Incomplete",
+  "욕설 표현 있음": "Explicit Profanity Detected",
+  "확인 필요 표현 있음": "Expressions Need Review",
+  "가사 일부만 검사": "Lyrics Partly Checked",
   "가사 텍스트 검사 결과": "Lyrics Text Check Results",
-  "명확한 욕설": "Explicit Profanity",
+  "욕설": "Explicit Profanity",
   "욕설 사전의 표현 또는 우회 표기와 일치합니다.":
     "Matches a profanity dictionary entry or an altered spelling.",
   "욕설과 발음이 비슷한 표현입니다. 문맥을 확인해주세요.":
@@ -550,17 +550,19 @@ const exactTranslations: Record<string, string> = {
     "Matches profanity with some letters obscured.",
   "관리자가 등록한 확인 대상 표현과 일치합니다.":
     "Matches an expression added by the administrator for review.",
-  "욕설이 들리는 음원은 심의 접수가 불가합니다. 해당 곡을 제외하거나 욕설 구간을 마스킹한 음원과 가사를 제출해주세요.":
-    "Audio with audible profanity cannot be submitted for review. Remove the track or submit audio and lyrics with the profanity masked.",
-  "무음·삐처리 등으로 실제 음원의 욕설을 마스킹한 경우에는 접수할 수 있습니다. 가사에도 해당 구간을 [무음] 또는 [삐처리]로 표시해주세요.":
-    "You may submit audio with profanity silenced or bleeped. Mark the corresponding lyrics with [silenced] or [bleeped] as well.",
-  "욕설로 들릴 수 있는 우회 표기가 있습니다. 실제 발음과 가사를 확인해주세요.":
-    "Some spellings may sound like profanity. Check the actual pronunciation and lyrics.",
-  "가사가 길어 전체 검사를 완료하지 못했습니다. 가사를 확인하거나 고객센터에 문의해주세요.":
-    "The full check could not be completed because the lyrics exceed the check limit. Review the lyrics or contact support.",
-  "입력한 가사에서 명확한 욕설·확인 필요 표현이 감지되지 않았습니다.":
-    "No explicit profanity or expressions requiring review were detected in the entered lyrics.",
-  "입력한 가사를 기준으로 검사합니다. 실제 제출 음원과 가사를 동일하게 맞춰주세요.":
+  "띄어 쓴 다른 낱말일 수 있습니다. 문맥을 확인해주세요.":
+    "May be separate ordinary words. Review the context.",
+  "욕설로 보이는 표현이 있습니다. 방송 심의에서 부적격이 될 수 있으니 표시된 부분을 확인해주세요.":
+    "Some expressions look like profanity. Broadcasters may reject them, so check the marked passages.",
+  "실제 음원에서 무음·삐처리했다면 가사에도 [무음] 또는 [삐처리]로 표시해주세요.":
+    "If the audio is silenced or bleeped, mark the same spots in the lyrics with [silenced] or [bleeped].",
+  "욕설로 들릴 수 있는 표현이 있습니다. 실제 발음과 가사를 확인해주세요.":
+    "Some expressions may sound like profanity. Check the actual pronunciation and lyrics.",
+  "가사가 길어 일부만 검사했습니다. 나머지는 직접 확인해주세요.":
+    "The lyrics are long, so only part of them was checked. Review the rest yourself.",
+  "욕설·확인 필요 표현이 없습니다.":
+    "No profanity or expressions needing review were found.",
+  "입력한 가사를 기준으로 검사합니다. 제출할 음원과 가사를 똑같이 맞춰주세요.":
     "This check uses the lyrics you entered. Make sure they match the audio you submit.",
   "가사는 실제 제출 음원과 일치하도록 작성하고, 들리는 구간을 임의로 누락하지 마세요.":
     "Write lyrics that match the submitted audio, including every audible passage.",
@@ -569,8 +571,11 @@ const exactTranslations: Record<string, string> = {
   "자동번역 결과 미리보기": "Automatic Translation Result Preview",
   "완료된 번역은 아래에 보관했습니다. 미완료 구간은 원문으로 남아 있으며 번역본에 자동 반영하지 않았습니다. 자동번역을 다시 시도해주세요.":
     "Completed translations are preserved below. Unfinished passages retain the original text and were not added to your translated lyrics. Retry automatic translation.",
-  "직접 입력한 번역본은 유지했습니다. 아래 결과를 확인한 뒤 필요한 부분을 번역본에 직접 반영해주세요.":
-    "Your existing translation was kept. Review the result below and copy any needed passages into your translated lyrics.",
+  "직접 입력한 번역본은 그대로 두었습니다. 결과가 맞으면 번역본에 적용해주세요.":
+    "Your existing translation was kept. If the result looks right, apply it to your translated lyrics.",
+  "번역본에 적용": "Apply to Translated Lyrics",
+  "일부 구간만 번역했습니다. 번역이 붙지 않은 줄은 다시 시도하거나 직접 입력해주세요.":
+    "Only some passages were translated. Retry or enter the translation for lines without one.",
   "자동번역 다시 시도": "Retry Automatic Translation",
   "자동 번역 안내": "Automatic Translation Guidance",
   "직접 번역이 어려운 경우 자동 번역으로 심의 진행 가능합니다.":
@@ -2087,6 +2092,8 @@ Object.assign(exactTranslations, {
   "한국어 외 언어 가사를 찾지 못했습니다. 번역 대상을 확인해주세요.": "No non-Korean lyrics were found. Check the text to translate.",
   "자동번역 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.": "Automatic translation failed. Please try again shortly.",
   "자동번역 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.": "Too many automatic translation requests. Please try again shortly.",
+  "오늘 쓸 수 있는 자동번역을 모두 사용했습니다. 내일 다시 시도하거나 번역을 직접 입력해주세요.": "You have used today's automatic translations. Try again tomorrow or enter the translation yourself.",
+  "오늘 자동번역 사용량이 한도에 도달했습니다. 내일 다시 시도하거나 번역을 직접 입력해주세요.": "Today's automatic translation limit has been reached. Try again tomorrow or enter the translation yourself.",
   "가사가 한 번에 번역 가능한 범위를 넘었습니다. 가사를 나누어 번역해주세요.": "The lyrics exceed what can be translated at once. Translate them in parts.",
   "원음방송 심의는 3곡까지만 선택할 수 있습니다.": "Select no more than three tracks for WBS review.",
   "현재 파일 업로드가 끝난 뒤 추가해주세요.": "Wait for the current upload to finish before adding another file.",
@@ -2276,10 +2283,6 @@ Object.assign(exactTranslations, {
   "멀티파트 업로드를 시작할 수 없습니다.": "We could not start the large-file upload.",
   "현재 상태에서는 삭제할 수 없는 신청서입니다.": "This application cannot be deleted in its current state.",
   "가사를 입력한 뒤 욕설 체크를 실행해주세요.": "Enter lyrics before checking for profanity.",
-  "욕설이 감지되었습니다. 욕설이 있는 경우 심의 부적격 가능성이 높습니다": "Profanity was detected. Lyrics containing profanity are more likely to be rejected.",
-  "욕설 또는 회피 패턴이 감지되었습니다.": "Profanity or an obfuscated expression was detected.",
-  "욕설이 감지되지 않았습니다.": "No profanity was detected.",
-  "욕설 체크 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.": "We could not load the profanity check. Please try again shortly.",
   "자동번역을 적용하는 중입니다.": "Applying the translation...",
   "가사 입력란에 자동번역 결과를 적용했습니다.": "The translation has been applied to the lyrics field.",
   "TV 송출 심의를 원하는 방송국을 선택해주세요.": "Select the broadcasters for TV broadcast review.",
@@ -2342,8 +2345,6 @@ Object.assign(exactTranslations, {
   "줄거리 / 작품내용 *": "Synopsis / work description *",
   "줄거리는 결말까지 작성하셔야 합니다.": "Include the ending in your synopsis.",
   "위 기능은 최소한의 보조수단입니다. 하단 유의사항을 꼭 체크해주세요.": "These tools provide basic assistance only. Be sure to read the notes below.",
-  "감지된 단어": "Detected words",
-  "회피 패턴이 감지되었습니다.": "An obfuscated expression was detected.",
   "가사의 외국어는 반드시 번역이 있어야 합니다.": "A Korean translation is required for non-Korean lyrics.",
   "신청자 정보": "Applicant information",
   "담당자명 *": "Contact name *",

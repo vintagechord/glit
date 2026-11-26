@@ -47,7 +47,7 @@ import { hydrateReleasedAlbumInfoFormAction, saveWbsTrackSelectionFormAction, se
 import { WbsTrackSelectionForm } from "@/components/admin/wbs-track-selection-form";
 import { PartialResultNoticeForm } from "@/components/admin/partial-result-notice-form";
 import { describeSubmissionRecipient, recipientSourceLabels, type SubmissionRecipientState } from "@/lib/admin/notification-recipient-edit";
-import { adminSubmissionStageBadge, adminSubmissionStageOf, adminSubmissionStages, isPartialResultNotice } from "@/lib/admin/submission-stages";
+import { adminSubmissionStageBadge, adminSubmissionStageOf, adminSubmissionStages, hasPartialResultNotice } from "@/lib/admin/submission-stages";
 import { loadSubmissionUploadRecord } from "@/lib/admin/submission-upload-record";
 import { loadCustomerActivityEvents } from "@/lib/admin/customer-activity";
 import { loadCustomerViewRecords } from "@/lib/admin/customer-view-record";
@@ -316,7 +316,7 @@ export default async function AdminSubmissionDetailPage({
       case "partial_notice":
         return "결과 통보 완료로 옮겼습니다. 남은 방송사 결과는 나중에 저장할 수 있습니다.";
       case "partial_notice_reopened":
-        return "심의 진행 중으로 되돌렸습니다.";
+        return "결과 통보 완료 처리를 취소했습니다.";
       case "error":
         return "저장 중 오류가 발생했습니다. 다시 시도해주세요.";
       default:
@@ -837,10 +837,12 @@ export default async function AdminSubmissionDetailPage({
     getStationReviewDisplayStatus({ ...review, station: Array.isArray(review.station) ? review.station[0] : review.station }, { albumTracks }).isComplete;
   const completedReviewCount = reviews.filter(isReviewComplete).length;
   // An album can be sent on to 결과 통보 완료 while a station (one that cannot
-  // announce results for now) is still open; see partialNoticeStage.
-  const isPartialNotice = isPartialResultNotice(submission);
+  // announce results for now) is still open, from 심의 진행 중 or from
+  // 결과 안내 대기 (owner request 2026-11-26); see partialNoticeStage.
+  const isPartialNotice = hasPartialResultNotice(submission);
   const canSendOnPartially =
-    submission.type === "ALBUM" && adminStage === "in_review" && completedReviewCount > 0;
+    submission.type === "ALBUM" && completedReviewCount > 0 &&
+    (adminStage === "in_review" || (adminStage === "result_pending" && completedReviewCount < reviews.length));
   const pendingStationNames = reviews.filter((review) => !isReviewComplete(review)).map((review) => {
     const station = Array.isArray(review.station) ? review.station[0] : review.station;
     return station?.name ?? station?.code ?? "방송사";
@@ -1656,6 +1658,7 @@ export default async function AdminSubmissionDetailPage({
                   submissionId={submission.id}
                   returnTo={adminSubmissionListHref}
                   movedAt={isPartialNotice ? submission.partial_result_notified_at ?? null : null}
+                  inResults={submission.status === "RESULT_READY" || submission.status === "COMPLETED"}
                   pendingStations={pendingStationNames}
                   action={setPartialResultNoticeFormAction}
                 />

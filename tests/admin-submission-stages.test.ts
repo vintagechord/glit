@@ -8,8 +8,6 @@ import {
   adminSubmissionStages,
   applyAdminSubmissionStageFilter,
   hasPartialResultNotice,
-  isPartialResultMail,
-  isPartialResultNotice,
   isStartedDraft,
   partialNoticeStage,
   type AdminStageRow,
@@ -141,43 +139,57 @@ test("an album sent on while one station still has no result is notified, withou
   // the operator moves the album on, and the application itself stays in review.
   const moved = { status: "IN_PROGRESS", payment_status: "PAID", partial_result_notified_at: "2026-11-16T03:00:00Z" };
   assert.equal(adminSubmissionStageOf(moved), "notified");
-  assert.equal(isPartialResultNotice(moved), true);
+  assert.equal(hasPartialResultNotice(moved), true);
   assert.deepEqual(adminSubmissionStageBadge(moved), { label: partialNoticeStage.label, tone: partialNoticeStage.tone });
   assert.notEqual(partialNoticeStage.label, adminSubmissionStages.notified.label);
 
   assert.equal(adminSubmissionStageOf({ ...moved, partial_result_notified_at: null }), "in_review");
 });
 
-test("once every station has a result the album waits for its result mail like any other", () => {
-  const complete = { status: "RESULT_READY", payment_status: "PAID", result_notified_at: null, partial_result_notified_at: "2026-11-16T03:00:00Z" };
-  assert.equal(adminSubmissionStageOf(complete), "result_pending");
-  assert.equal(isPartialResultNotice(complete), false);
-  assert.equal(hasPartialResultNotice(complete), false, "no notice has gone out for this result yet");
-
-  // The final result mail clears the mark when it is sent (owner decision 2026-11-21).
-  const mailed = { ...complete, result_notified_at: "2026-12-01T00:00:00Z", partial_result_notified_at: null };
-  assert.equal(adminSubmissionStageOf(mailed), "notified");
-  assert.deepEqual(adminSubmissionStageBadge(mailed), { label: adminSubmissionStages.notified.label, tone: adminSubmissionStages.notified.tone });
+test("a sent-on album stays 결과 통보 완료 · 일부 대기 when the operator moves it to 결과 준비", () => {
+  // Production 2026-11-26: albums moved to 결과 준비 with only TBS open fell
+  // back to 결과 안내 대기 and lost the button.
+  const moved = { status: "IN_PROGRESS", payment_status: "PAID", result_notified_at: null, partial_result_notified_at: "2026-11-16T03:00:00Z" };
+  for (const status of ["RESULT_READY", "COMPLETED"]) {
+    const row = { ...moved, status };
+    assert.equal(adminSubmissionStageOf(row), "notified", status);
+    assert.equal(hasPartialResultNotice(row), true, status);
+    assert.deepEqual(adminSubmissionStageBadge(row), { label: partialNoticeStage.label, tone: partialNoticeStage.tone }, status);
+  }
+  // Without the mark it waits for its result mail, as before.
+  assert.equal(adminSubmissionStageOf({ ...moved, status: "RESULT_READY", partial_result_notified_at: null }), "result_pending");
 });
 
-test("a result mail sent while a station result is still open reads 결과 통보 완료 · 일부 대기 until the final mail", () => {
+test("a result mail sent while a station result is still open reads 결과 통보 완료 · 일부 대기 until the last result", () => {
   // 2026-11-21 (owner): the operator moves albums to 결과 준비 once stations
   // have received them and mails results as they come in. A mail that leaves a
   // station open is a partial notice, like an album moved on with the button.
   const partialMail = { status: "RESULT_READY", payment_status: "PAID", result_notified_at: "2026-11-21T01:00:00Z", partial_result_notified_at: "2026-11-21T00:59:00Z" };
   assert.equal(adminSubmissionStageOf(partialMail), "notified");
-  assert.equal(isPartialResultMail(partialMail), true);
-  assert.equal(isPartialResultNotice(partialMail), false, "the button's reopen form stays for albums still in review");
   assert.deepEqual(adminSubmissionStageBadge(partialMail), { label: partialNoticeStage.label, tone: partialNoticeStage.tone });
-  // A later station save clears result_notified_at: the album asks for its next result mail.
-  assert.equal(adminSubmissionStageOf({ ...partialMail, result_notified_at: null }), "result_pending");
-  assert.deepEqual(adminSubmissionStageBadge({ ...partialMail, result_notified_at: null }), { label: adminSubmissionStages.result_pending.label, tone: adminSubmissionStages.result_pending.tone });
-  assert.equal(isPartialResultMail({ ...partialMail, payment_status: "REFUNDED" }), false);
+  // Correcting another station clears result_notified_at; the album stays put
+  // (owner request 2026-11-26). The save that decides the last station clears
+  // the mark too (20261126150000), which is the case below.
+  assert.equal(adminSubmissionStageOf({ ...partialMail, result_notified_at: null }), "notified");
+  assert.deepEqual(adminSubmissionStageBadge({ ...partialMail, result_notified_at: null }), { label: partialNoticeStage.label, tone: partialNoticeStage.tone });
+  assert.equal(hasPartialResultNotice({ ...partialMail, payment_status: "REFUNDED" }), false);
 });
 
-test("the mark means nothing outside a paid review in progress", () => {
-  for (const row of allRows.filter((item) => item.partial_result_notified_at && !(item.status === "IN_PROGRESS" && item.payment_status === "PAID"))) {
-    assert.equal(isPartialResultNotice(row), false, JSON.stringify(row));
+test("once every station has a result the album waits for its result mail like any other", () => {
+  // The last station save clears both marks.
+  const complete = { status: "RESULT_READY", payment_status: "PAID", result_notified_at: null, partial_result_notified_at: null };
+  assert.equal(adminSubmissionStageOf(complete), "result_pending");
+  assert.equal(hasPartialResultNotice(complete), false);
+
+  const mailed = { ...complete, result_notified_at: "2026-12-01T00:00:00Z" };
+  assert.equal(adminSubmissionStageOf(mailed), "notified");
+  assert.deepEqual(adminSubmissionStageBadge(mailed), { label: adminSubmissionStages.notified.label, tone: adminSubmissionStages.notified.tone });
+});
+
+test("the mark means nothing outside a paid album in review or with results", () => {
+  const counted = (item: Row) => item.payment_status === "PAID" && ["IN_PROGRESS", "RESULT_READY", "COMPLETED"].includes(item.status ?? "");
+  for (const row of allRows.filter((item) => item.partial_result_notified_at && !counted(item))) {
+    assert.equal(hasPartialResultNotice(row), false, JSON.stringify(row));
     assert.equal(adminSubmissionStageOf(row), adminSubmissionStageOf({ ...row, partial_result_notified_at: null }), JSON.stringify(row));
   }
   assert.equal(adminSubmissionStageBadge({ status: "DRAFT", payment_status: "UNPAID" }), null);
