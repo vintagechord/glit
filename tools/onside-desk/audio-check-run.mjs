@@ -1,4 +1,4 @@
-// 음원 ↔ 가사 대조 실행: 트랙마다 분석(캐시 또는 worker) → 정리 → 제안 → 점수 → 결과 저장.
+// 음원 ↔ 가사 대조 실행: 트랙마다 분석(캐시 또는 worker) → 정리 → 제안 → 점수·다시 받아쓰기 → 결과 저장.
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -91,17 +91,21 @@ export async function runAudioCheck({
     return result;
   };
 
+  // 바꿈 후보마다 강제 점수를 매기고, 같은 창을 가사 줄을 프롬프트로 다시 받아써 받아쓰기 착오를 가려낸다.
   const score = async (analysis, draft, n, track) => {
     const scores = {};
+    const redecodes = {};
     if (draft.scoreRequests.length) onProgress?.(label(n, '점수 비교 중', track));
     for (const req of draft.scoreRequests) {
       checkAbort(signal);
-      const r = await worker.request('score', {
-        vocals: analysis.vocals, start: req.start, end: req.end, candidates: req.candidates,
-      });
+      const window = { vocals: analysis.vocals, start: req.start, end: req.end };
+      const r = await worker.request('score', { ...window, candidates: req.candidates });
       scores[req.id] = r?.scores;
+      checkAbort(signal);
+      const d = await worker.request('redecode', { ...window, prompt: req.candidates[0] });
+      if (typeof d?.text === 'string') redecodes[req.id] = d.text;
     }
-    return finalizeSuggestions(draft, scores);
+    return finalizeSuggestions(draft, scores, redecodes);
   };
 
   const detail = new Map(); // trackId -> { segments, energy } (result.json 전용)

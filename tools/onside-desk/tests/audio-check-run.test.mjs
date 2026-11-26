@@ -21,7 +21,8 @@ function analysis(over = {}) {
   };
 }
 
-function fakeWorker(handler = () => analysis()) {
+// redecode: 가사 줄 프롬프트로 다시 받아쓴 글을 돌려주는 함수. 없으면 글을 돌려주지 않는다(점수만으로 판정).
+function fakeWorker(handler = () => analysis(), { redecode } = {}) {
   const calls = [];
   return {
     calls,
@@ -29,6 +30,7 @@ function fakeWorker(handler = () => analysis()) {
     async request(cmd, payload) {
       calls.push({ cmd, payload });
       if (cmd === 'score') return { scores: [-10, -5] };
+      if (cmd === 'redecode') return { text: redecode?.(payload) };
       return handler(payload, calls.filter((c) => c.cmd === 'analyze').length);
     },
   };
@@ -46,7 +48,7 @@ test('runAudioCheck analyzes each mapped track once, reuses cache on rerun, and 
   const t2 = { id: 't2', track_no: 2, track_title: '둘', lyrics: LYRICS };
   const a2 = att('a2', '02 둘.wav', 'sha-a2');
   const wrong = analysis({
-    segments: [{ s: 1, e: 5, t: '별빛이 내려와요', words: [] }, { s: 6, e: 10, t: '우리 함께 걸어서', words: [] }],
+    segments: [{ s: 1, e: 5, t: '별빛이 내려와요', words: [] }, { s: 6, e: 10, t: '우리 함께 춤을 춰요', words: [] }],
   });
   const worker = fakeWorker(() => wrong);
   const args = { caseDir, tracks: [t1, t2, { id: 't3', track_no: 3, track_title: '셋', lyrics: '' }], attachments: [a1, a2], mapping: { t1: 'a1', t2: 'a2', t3: null }, worker };
@@ -69,6 +71,32 @@ test('runAudioCheck analyzes each mapped track once, reuses cache on rerun, and 
   await runAudioCheck({ ...args, runId: 'r2' });
   assert.equal(worker.count('analyze'), 2);
   assert.ok(worker.count('score') > before);
+});
+
+test('runAudioCheck re-decodes every score window with the lyric line as prompt and uses it to judge', async () => {
+  const heard = analysis({
+    segments: [{ s: 1, e: 5, t: '별빛이 내려와요', words: [] }, { s: 6, e: 10, t: '우리 함께 춤을 춰요', words: [] }],
+  });
+  const args = { tracks: [t1], attachments: [a1], mapping: { t1: 'a1' } };
+  const agree = fakeWorker(() => heard, { redecode: () => '우리 함께 춤을 춰요' });
+  const run = await runAudioCheck({ ...args, caseDir: await tmp(), worker: agree });
+  const scores = agree.calls.filter((c) => c.cmd === 'score');
+  const redecodes = agree.calls.filter((c) => c.cmd === 'redecode');
+  assert.ok(scores.length >= 1);
+  assert.equal(redecodes.length, scores.length);
+  redecodes.forEach((r, k) => {
+    const s = scores[k].payload;
+    assert.deepEqual(r.payload, { vocals: s.vocals, start: s.start, end: s.end, prompt: s.candidates[0] });
+  });
+  assert.equal(redecodes[0].payload.prompt, '우리 함께 걸어요');
+  const replace = run.tracks[0].suggestions.filter((s) => s.kind === 'replace');
+  assert.equal(replace.length, 1);
+  assert.equal(replace[0].confidence, 'medium');
+  // 다시 받아쓴 글이 가사 줄과 같으면 받아쓰기 착오로 보고 버린다.
+  const veto = fakeWorker(() => heard, { redecode: (p) => p.prompt });
+  const vetoed = await runAudioCheck({ ...args, caseDir: await tmp(), worker: veto });
+  assert.equal(veto.count('redecode'), veto.count('score'));
+  assert.deepEqual(vetoed.tracks[0].suggestions.filter((s) => s.kind === 'replace'), []);
 });
 
 test('runAudioCheck marks a failing track and continues with the rest', async () => {

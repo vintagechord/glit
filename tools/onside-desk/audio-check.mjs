@@ -5,6 +5,7 @@ export const THRESHOLDS = {
   strongDelta: 8,
   mediumDelta: 2,
   repeatSimilarity: 0.75,
+  remapSimilarity: 0.55,
   minGapChars: 6,
   mergeGap: 2,
   vocalDb: -15,
@@ -819,7 +820,72 @@ function suggestion(trackId, f) {
   };
 }
 
+// ── 표기·발음만 다른 차이 ──
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ';
+const JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const MINOR_JAMO = 2;
+const MINOR_SYLLABLES = 1;
+const REMAP_MARGIN = 0.1;
+
+// 한글 음절을 호환 자모(초성·중성·종성 각 한 글자)로 푼다. 다른 글자는 그대로 둔다.
+function jamo(text) {
+  const out = [];
+  for (const ch of text) {
+    const c = ch.charCodeAt(0) - 0xac00;
+    if (c < 0 || c > 11171) { out.push(ch); continue; }
+    out.push(CHO[Math.floor(c / 588)], JUNG[Math.floor((c % 588) / 28)]);
+    if (c % 28) out.push(JONG[c % 28]);
+  }
+  return out;
+}
+
+function editDistance(x, y) {
+  let prev = Array.from({ length: y.length + 1 }, (_, k) => k);
+  for (let i = 1; i <= x.length; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= y.length; j += 1) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[y.length];
+}
+
+// 정규화한 두 줄의 차이 구간(연속한 비일치 칸). 구간마다 [a 쪽 글자, b 쪽 글자, 작은 차이인지].
+function diffParts(a, b) {
+  const parts = [];
+  let x = '';
+  let y = '';
+  const flush = () => {
+    if (!x && !y) return;
+    const minor = Math.abs(x.length - y.length) <= MINOR_SYLLABLES && editDistance(jamo(x), jamo(y)) <= MINOR_JAMO;
+    parts.push({ a: x, b: y, minor });
+    x = '';
+    y = '';
+  };
+  for (const [i, j] of alignChars(a, b)) {
+    if (i !== null && j !== null && a[i] === b[j]) {
+      flush();
+      parts.push({ a: a[i], b: b[j], same: true });
+      continue;
+    }
+    if (i !== null) x += a[i];
+    if (j !== null) y += b[j];
+  }
+  flush();
+  return parts;
+}
+
+// 모든 차이 구간이 작은 차이(자모 편집 거리 ≤ 2, 글자 수 차이 ≤ 1)면 표기·발음만 다른 것으로 본다.
+function minorVariant(a, b) {
+  const diffs = diffParts(a, b).filter((p) => !p.same);
+  return diffs.length > 0 && diffs.every((p) => p.minor);
+}
+
 // 다르게 불린 줄: (원래 줄, 제안 줄)이 같으면 한 제안으로 묶고, 줄마다 점수 요청을 만든다.
+// 표기·발음만 다른 줄은 내지 않는다. 받아쓴 줄이 다른 가사 줄에 자기 줄보다 REMAP_MARGIN 넘게 가깝고
+// remapSimilarity 이상이면 그 줄의 표기로 바꾼다(remap).
 function replaceSuggestions(ctx, edits, out, requests) {
   const { L, T, pairs, lines, sung, total, trackId } = ctx;
   const times = new Map();
@@ -842,10 +908,13 @@ function replaceSuggestions(ctx, edits, out, requests) {
       const sim = similarity(toNorm, other.norm);
       if (sim > bestSim) { bestSim = sim; best = other; }
     }
-    if (best && bestSim >= THRESHOLDS.repeatSimilarity && bestSim > similarity(toNorm, line.norm)) {
+    let remap = false;
+    if (best && bestSim >= THRESHOLDS.remapSimilarity && bestSim >= similarity(toNorm, line.norm) + REMAP_MARGIN) {
       to = best.text.trim();
       toNorm = best.norm;
+      remap = true;
     }
+    if (minorVariant(line.norm, toNorm)) continue;
     let [start, end] = times.get(index) ?? [Infinity, -Infinity];
     for (const e of list) {
       for (const j of e.tr) { start = Math.min(start, T.s[j]); end = Math.max(end, T.e[j]); }
@@ -853,7 +922,7 @@ function replaceSuggestions(ctx, edits, out, requests) {
     if (!Number.isFinite(start)) continue;
     const key = `${line.norm}\n${toNorm}`;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ index, from: line.text, to, start, end, heard });
+    groups.get(key).push({ index, from: line.text, to, start, end, heard, remap });
   }
   for (const occ of groups.values()) {
     const [first] = occ;
@@ -866,7 +935,7 @@ function replaceSuggestions(ctx, edits, out, requests) {
     occ.forEach((o, k) => {
       const ws = Math.max(0, o.start - SCORE_PAD_SEC);
       const we = Math.min(total, o.end + SCORE_PAD_SEC, ws + SCORE_MAX_SEC);
-      requests.push({ id: `${s.id}:${k}`, suggestionId: s.id, start: round(ws), end: round(we), candidates: [o.from, o.to] });
+      requests.push({ id: `${s.id}:${k}`, suggestionId: s.id, start: round(ws), end: round(we), candidates: [o.from, o.to], remap: o.remap });
     });
   }
 }
@@ -944,23 +1013,46 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, duration, 
   return { suggestions: out, scoreRequests };
 }
 
-// 바꿈 제안만 점수로 판정한다. Δ = 제안 점수 − 가사 점수(묶인 줄은 평균). 점수가 없으면 확인 필요로 남긴다.
-export function finalizeSuggestions(draft, scores) {
+// 가사 줄을 프롬프트로 다시 받아쓴 글이 제안 줄을 얼마나 더 지지하는지(−1…1). 0 이하면 가사 쪽이다.
+// 제안 줄의 작은 차이 구간(표기·발음, minorVariant와 같은 기준)은 가사 표기로 되돌려 비교한다:
+// 프롬프트가 그런 구간을 쉽게 가사 쪽으로 돌려 놓으므로 증거가 되지 않는다.
+function redecodeSupport(text, [lyric, proposed]) {
+  const heard = normalizeText(text).norm;
+  const from = normalizeText(lyric).norm;
+  const core = diffParts(from, normalizeText(proposed).norm).map((p) => (p.minor ? p.a : p.b)).join('');
+  return similarity(heard, core) - similarity(heard, from);
+}
+
+const mean = (xs) => xs.reduce((sum, x) => sum + x, 0) / xs.length;
+
+// 바꿈 제안만 판정한다. Δ = 제안 점수 − 가사 점수(묶인 줄은 평균). 점수가 없으면 확인 필요로 남긴다.
+// 강제 점수는 Whisper가 자기 받아쓰기를 편드므로, 다시 받아쓴 글(redecodes[요청 id])이 있으면
+// 지지도(묶인 줄은 평균)가 0 이하인 제안은 버리고, 강함은 다른 가사 줄로 바꾼 제안이거나 두 번 이상 지지받은 것만 준다.
+// 다시 받아쓴 글이 없는 요청은 Δ만으로 판정한다.
+export function finalizeSuggestions(draft, scores, redecodes = {}) {
   const byId = new Map();
   for (const req of draft?.scoreRequests ?? []) {
     const v = scores?.[req.id];
     if (!Array.isArray(v) || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) continue;
+    const text = redecodes?.[req.id];
+    const support = typeof text === 'string' ? redecodeSupport(text, req.candidates) : null;
     if (!byId.has(req.suggestionId)) byId.set(req.suggestionId, []);
-    byId.get(req.suggestionId).push(v[1] - v[0]);
+    byId.get(req.suggestionId).push({ delta: v[1] - v[0], support, remap: req.remap === true });
   }
   const out = [];
   for (const s of draft?.suggestions ?? []) {
     if (s.kind !== 'replace') { out.push(s); continue; }
-    const deltas = byId.get(s.id);
-    if (!deltas?.length) { out.push({ ...s, confidence: 'check', score: null }); continue; }
-    const delta = deltas.reduce((sum, d) => sum + d, 0) / deltas.length;
+    const members = byId.get(s.id);
+    if (!members?.length) { out.push({ ...s, confidence: 'check', score: null }); continue; }
+    const delta = mean(members.map((m) => m.delta));
+    const checked = members.filter((m) => m.support !== null);
+    let strong = true;
+    if (checked.length) {
+      if (mean(checked.map((m) => m.support)) <= 0) continue;
+      strong = members.some((m) => m.remap) || checked.filter((m) => m.support > 0).length >= 2;
+    }
     if (delta < THRESHOLDS.mediumDelta) continue;
-    out.push({ ...s, confidence: delta >= THRESHOLDS.strongDelta ? 'high' : 'medium', score: round(delta) });
+    out.push({ ...s, confidence: delta >= THRESHOLDS.strongDelta && strong ? 'high' : 'medium', score: round(delta) });
   }
   return out;
 }

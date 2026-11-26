@@ -67,6 +67,8 @@ test('lyricsHash is sha256 hex', () => {
 
 test('constants', () => {
   assert.equal(THRESHOLDS.strongDelta, 8);
+  assert.equal(THRESHOLDS.repeatSimilarity, 0.75);
+  assert.equal(THRESHOLDS.remapSimilarity, 0.55);
   assert.equal(THRESHOLDS.mrResidualDb, -12);
   assert.ok(AUDIO_EXTENSIONS.has('wav') && !AUDIO_EXTENSIONS.has('pdf'));
 });
@@ -393,6 +395,140 @@ test('a heard line closer to its own line is not remapped to a similar other lin
   assert.equal(d.suggestions.length, 1);
   assert.equal(d.suggestions[0].op.to, '나의 사랑 노을 아래');
   assert.deepEqual(d.scoreRequests[0].candidates, ['내 사랑 노을 아래', '나의 사랑 노을 아래']);
+});
+
+// ── '다르게 불림' 검증: 가사 줄을 프롬프트로 다시 받아쓴 결과(redecode)가 받아쓴 줄을 지지해야 남는다 ──
+const ONE_LINE = '하늘 높이 날아라\n푸른 들판 지나서';
+const oneLineSegs = () => [seg('하늘 높이 날아라', 0, 3), seg('푸른 바다 건너서', 3, 6)];
+
+test('a replace is dropped when the lyric-prompted re-decode agrees with the lyric and kept when it agrees with the hearing', () => {
+  const d = draft(ONE_LINE, oneLineSegs(), frames(6, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.deepEqual(d.suggestions[0].op.to, '푸른 바다 건너서');
+  const [req] = d.scoreRequests;
+  const scores = { [req.id]: [-20, -15] };
+  const kept = finalizeSuggestions(d, scores, { [req.id]: '푸른 바다 건너서' });
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].confidence, 'medium');
+  assert.equal(kept[0].score, 5);
+  assert.deepEqual(finalizeSuggestions(d, scores, { [req.id]: '푸른 들판 지나서' }), []);
+  // 다시 받아쓴 글이 어느 쪽도 지지하지 않으면(support 0) 버린다.
+  assert.deepEqual(finalizeSuggestions(d, scores, { [req.id]: '' }), []);
+  // 다시 받아쓴 결과가 없으면 지금까지처럼 점수만으로 판정한다.
+  assert.equal(finalizeSuggestions(d, scores, {})[0].confidence, 'medium');
+  assert.equal(finalizeSuggestions(d, scores)[0].confidence, 'medium');
+});
+
+test('minor spelling regions of a proposal carry no evidence in the re-decode support', () => {
+  // 다시 받아쓴 글이 '내→나의'는 지지하고 작은 차이 '켜졌어→켜져서'만 가사 쪽으로 돌아갔다.
+  // 줄 전체 유사도로는 −0.04지만, 작은 차이 구간을 빼고 보면 제안을 지지한다.
+  const d = draft('내 꿈에 파란불이 켜져서', [seg('나의 꿈에 파란불이 켜졌어', 0, 4)], frames(4, -5));
+  assert.equal(d.suggestions[0].op.to, '나의 꿈에 파란불이 켜졌어');
+  const [req] = d.scoreRequests;
+  const kept = finalizeSuggestions(d, { [req.id]: [-20, -15] }, { [req.id]: '나의 꿈에 파란불이 켜져서' });
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].op.to, '나의 꿈에 파란불이 켜졌어');
+  assert.equal(kept[0].confidence, 'medium');
+  // 실질 차이까지 가사로 돌아가면 버린다.
+  assert.deepEqual(finalizeSuggestions(d, { [req.id]: [-20, -15] }, { [req.id]: '내 꿈에 파란불이 켜졌어' }), []);
+});
+
+test('grouped occurrences average their re-decode support', () => {
+  const lyrics = '내 사랑 노을 아래\n작은 길을 걸어요\n\n내 사랑 노을 아래\n작은 길을 걸어요';
+  const segments = [
+    seg('나의 사랑 노을 아래', 0, 3),
+    seg('작은 길을 걸어요', 3, 6),
+    seg('나의 사랑 노을 아래', 8, 11),
+    seg('작은 길을 걸어요', 11, 14),
+  ];
+  const d = draft(lyrics, segments, frames(14, -5));
+  const [r0, r1] = d.scoreRequests;
+  const scores = { [r0.id]: [-10, -6], [r1.id]: [-10, -6] };
+  // +0.2와 −0.06의 평균은 0보다 크다.
+  const kept = finalizeSuggestions(d, scores, { [r0.id]: '나의 사랑 노을 아래', [r1.id]: '노을 아래' });
+  assert.equal(kept.length, 1);
+  assert.deepEqual(kept[0].lines, [0, 3]);
+  assert.equal(kept[0].confidence, 'medium');
+  // +0.2와 −0.2의 평균은 0이므로 버린다.
+  assert.deepEqual(finalizeSuggestions(d, scores, { [r0.id]: '나의 사랑 노을 아래', [r1.id]: '내 사랑 노을 아래' }), []);
+});
+
+test("'high' needs a remap to another lyric line or two supported occurrences", () => {
+  const strong = (d) => Object.fromEntries(d.scoreRequests.map((r) => [r.id, [-40, -10]]));
+  // 한 번만, 다른 줄로 바꾼 것도 아니면 Δ가 커도 보통이다.
+  const single = draft(ONE_LINE, oneLineSegs(), frames(6, -5));
+  const [sr] = single.scoreRequests;
+  assert.equal(finalizeSuggestions(single, strong(single), { [sr.id]: '푸른 바다 건너서' })[0].confidence, 'medium');
+  assert.equal(finalizeSuggestions(single, strong(single))[0].confidence, 'high');
+  // 두 번 모두 지지하면 강함, 한 번만 지지하면 보통이다.
+  const lyrics = '내 사랑 노을 아래\n작은 길을 걸어요\n\n내 사랑 노을 아래\n작은 길을 걸어요';
+  const segments = [
+    seg('나의 사랑 노을 아래', 0, 3),
+    seg('작은 길을 걸어요', 3, 6),
+    seg('나의 사랑 노을 아래', 8, 11),
+    seg('작은 길을 걸어요', 11, 14),
+  ];
+  const twice = draft(lyrics, segments, frames(14, -5));
+  const [t0, t1] = twice.scoreRequests;
+  const both = finalizeSuggestions(twice, strong(twice), { [t0.id]: '나의 사랑 노을 아래', [t1.id]: '나의 사랑 노을 아래' });
+  assert.equal(both[0].confidence, 'high');
+  const once = finalizeSuggestions(twice, strong(twice), { [t0.id]: '나의 사랑 노을 아래', [t1.id]: '노을 아래' });
+  assert.equal(once[0].confidence, 'medium');
+  // 다른 가사 줄로 바꾼 제안은 한 번이어도 강함이 될 수 있다.
+  const remap = draft(
+    '하늘 높이 날아라\n푸른 들판 지나서\n\n구름 위로 올라라\n푸른 들판 지나서',
+    [seg('하늘 높이 날아라', 0, 3), seg('푸른 들판 지나서', 3, 6), seg('하늘 높이 날아라', 8, 11), seg('푸른 들판 지나서', 11, 14)],
+    frames(14, -5),
+  );
+  const [rr] = remap.scoreRequests;
+  assert.equal(remap.suggestions[0].op.to, '하늘 높이 날아라');
+  assert.equal(finalizeSuggestions(remap, strong(remap), { [rr.id]: '하늘 높이 날아라' })[0].confidence, 'high');
+});
+
+test('spelling or pronunciation-only differences are not drafted (both directions)', () => {
+  const pairs = [
+    ['눈 위에 발자욱 남기고', '눈 위에 발자국 남기고'],
+    ['봄은 다시 올꺼야', '봄은 다시 올 거야'],
+    ['꽃을 꺽지 말아요', '꽃을 꺾지 말아요'],
+    ['내마음 너에게 줄게', '내 맘 너에게 줄게'],
+    ['가슴이 뛴답니다 오늘도', '가슴이 찐답니다 오늘도'],
+    ['작은 사랑도 소중해', '작은 사람도 소중해'],
+    ['하루가 또 지나니', '하루가 또 지났니'],
+    ['바람이 멈쳐도 걸어요', '바람이 멈춰도 걸어요'],
+  ];
+  for (const [a, b] of pairs) {
+    for (const [lyric, heard] of [[a, b], [b, a]]) {
+      const d = draft(lyric, [seg(heard, 0, 4)], frames(4, -5));
+      assert.deepEqual(d.suggestions, [], `${lyric} → ${heard}`);
+      assert.deepEqual(d.scoreRequests, [], `${lyric} → ${heard}`);
+    }
+  }
+});
+
+test('a line with any real wording difference is still drafted', () => {
+  const cases = [
+    // 내→나의는 자모 거리 3이다(켜져서→켜졌어는 작은 차이지만 줄 전체를 거르지는 않는다).
+    ['내 꿈에 파란불이 켜져서', '나의 꿈에 파란불이 켜졌어'],
+    ['구름 따라 가요 가요', '구름 따라 달려가요'],
+    ['괜찮나요 이제는', '괜찮나요 괜찮나요 이제는'],
+  ];
+  for (const [lyric, heard] of cases) {
+    const d = draft(lyric, [seg(heard, 0, 4)], frames(4, -5));
+    assert.equal(d.suggestions.length, 1, `${lyric} → ${heard}`);
+    assert.equal(d.suggestions[0].kind, 'replace');
+    assert.equal(normalizeText(d.suggestions[0].op.to).norm, normalizeText(heard).norm);
+  }
+});
+
+test('a heard line clearly closer to another lyric line is remapped to it even below repeatSimilarity', () => {
+  // 받아쓴 줄 '하늘멀리날아봐요': 다른 줄과 0.62, 자기 줄과 0.44 → 다른 줄 표기로 바꾼다.
+  const far = draft('하늘 높이 날아가요\n바다 멀리 노래하며 봐요', [seg('하늘 높이 날아가요', 0, 3), seg('하늘 멀리 날아봐요', 3, 6)], frames(6, -5));
+  assert.equal(far.suggestions.length, 1);
+  assert.deepEqual(far.suggestions[0].op, { type: 'replaceLine', lines: [1], from: '바다 멀리 노래하며 봐요', to: '하늘 높이 날아가요' });
+  // 다른 줄 0.62, 자기 줄 0.58이면 0.1 넘게 가깝지 않으므로 받아쓴 글 그대로 둔다.
+  const close = draft('하늘 높이 날아가요\n하늘 멀리 노래해 봐라', [seg('하늘 높이 날아가요', 0, 3), seg('하늘 멀리 날아봐요', 3, 6)], frames(6, -5));
+  assert.equal(close.suggestions.length, 1);
+  assert.equal(normalizeText(close.suggestions[0].op.to).norm, '하늘멀리날아봐요');
 });
 
 // ── 삽입 구간의 남은 앞·뒤 ──
