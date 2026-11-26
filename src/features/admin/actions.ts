@@ -2368,7 +2368,8 @@ export async function saveSubmissionAdminFormAction(
 const uncertainPaymentOrderIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** Operator reconciliation of a card approval the gateway callback could not
- * confirm. The decision comes from the Inicis console; this only records it. */
+ * confirm. A failure is recorded as the operator read it in the Inicis
+ * console; an approval only after the Inicis inquiry confirms the entered TID. */
 export async function resolveUncertainPaymentFormAction(formData: FormData): Promise<void> {
   const actor = await requireAdminAction();
   const orderId = String(formData.get("orderId") ?? "").trim();

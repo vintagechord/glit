@@ -1,5 +1,11 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ReviewStatus } from "@/constants/review-status";
+import {
+  inicisApprovalEvidence,
+  inquireInicisTransaction,
+  verifyInicisApprovalForOrder,
+  type InicisInquiryResult,
+} from "@/lib/inicis/transaction-inquiry";
 
 /** Payment confirms funds; the review team still has to check the materials.
  * Reconfirming payment must never reset an existing review or result. */
@@ -89,25 +95,51 @@ export async function confirmLinkedOrderPayment(
 
 export type UncertainPaymentOutcome = "APPROVED" | "FAILED";
 
-/** Records what the Inicis console shows for an approval the callback could
- * not confirm. APPROVED needs the console TID; FAILED reopens the order so the
- * customer can pay again. No gateway request is made here. */
+const uncertainPaymentSettledError = "이미 처리됐거나 승인 확인이 필요한 상태가 아닙니다. 목록을 새로고침해주세요.";
+
+/** Settles an approval the callback could not confirm. APPROVED is recorded
+ * only after the Inicis transaction inquiry shows the entered TID approved, not
+ * cancelled, for this attempt's order number and amount; what Inicis answered
+ * goes to the RPC, which checks it again. FAILED reopens the order so the
+ * customer can pay again. No payment or cancellation request is made here. */
 export async function resolveUncertainCardPayment(
-  db: Pick<ReturnType<typeof createAdminClient>, "rpc">,
+  db: Pick<ReturnType<typeof createAdminClient>, "from" | "rpc">,
   input: { orderId: string; actorUserId: string; outcome: UncertainPaymentOutcome; pgTid?: string | null; adminMemo?: string | null },
+  deps: { inquire?: (tid: string) => Promise<InicisInquiryResult>; now?: () => Date } = {},
 ): Promise<{ error?: string; submissionIds?: string[] }> {
+  const pgTid = input.pgTid?.trim() || null;
+  let gatewayEvidence: ReturnType<typeof inicisApprovalEvidence> | null = null;
+  if (input.outcome === "APPROVED") {
+    if (!pgTid) return { error: "승인 확인에는 이니시스 관리자 화면의 승인 TID가 필요합니다." };
+    const { data: payment, error: paymentError } = await db.from("submission_payments")
+      .select("order_id, amount_krw, status, result_code")
+      .eq("order_id", input.orderId)
+      .maybeSingle();
+    if (paymentError) return { error: "결제 요청을 불러오지 못했습니다. 잠시 후 다시 시도해주세요." };
+    if (!payment) return { error: "결제 요청을 찾을 수 없습니다." };
+    if (payment.status !== "REQUESTED" || payment.result_code !== "APPROVAL_UNCERTAIN") return { error: uncertainPaymentSettledError };
+    const inquiry = await (deps.inquire ?? inquireInicisTransaction)(pgTid);
+    if (!inquiry.ok) return { error: inquiry.message };
+    const mismatch = verifyInicisApprovalForOrder(inquiry.transaction, {
+      tid: pgTid, orderId: payment.order_id, amountKrw: Number(payment.amount_krw),
+    });
+    if (mismatch) return { error: mismatch };
+    gatewayEvidence = inicisApprovalEvidence(inquiry.transaction, (deps.now ?? (() => new Date()))());
+  }
   const { data, error } = await db.rpc("resolve_uncertain_submission_payment", {
     p_order_id: input.orderId,
     p_actor_user_id: input.actorUserId,
     p_outcome: input.outcome,
-    p_pg_tid: input.pgTid?.trim() || null,
+    p_pg_tid: pgTid,
     p_admin_memo: input.adminMemo?.trim() || null,
+    ...(gatewayEvidence ? { p_gateway_evidence: gatewayEvidence } : {}),
   });
   if (error) {
     const message = error.message ?? "";
     if (message.includes("PG_TID_REQUIRED")) return { error: "승인 확인에는 이니시스 관리자 화면의 승인 TID가 필요합니다." };
+    if (message.includes("GATEWAY_EVIDENCE")) return { error: "이니시스 조회 결과가 이 주문과 맞지 않아 저장하지 않았습니다. 목록을 새로고침한 뒤 다시 확인해주세요." };
     if (message.includes("PAYMENT_NOT_UNCERTAIN") || message.includes("ORDER_NOT_REVIEW_REQUIRED")) {
-      return { error: "이미 처리됐거나 승인 확인이 필요한 상태가 아닙니다. 목록을 새로고침해주세요." };
+      return { error: uncertainPaymentSettledError };
     }
     if (error.code === "42501") return { error: "관리자 권한이 필요합니다." };
     if (message.includes("PAYMENT_NOT_FOUND")) return { error: "결제 요청을 찾을 수 없습니다." };

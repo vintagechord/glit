@@ -10,7 +10,8 @@ const fieldClass =
   "min-h-10 w-full rounded-lg border border-border bg-background px-3 text-xs text-foreground";
 
 /** Inline reconciliation for one uncertain card approval. The operator reads
- * the outcome in the Inicis console first; the app records it and notifies. */
+ * the outcome in the Inicis console first; an approval is saved only after the
+ * server's Inicis inquiry confirms the TID for this order and amount. */
 export function UncertainPaymentResolver({ orderId }: { orderId: string }) {
   const [outcome, setOutcome] = React.useState<"APPROVED" | "FAILED">("APPROVED");
   return (
@@ -18,7 +19,7 @@ export function UncertainPaymentResolver({ orderId }: { orderId: string }) {
       action={resolveUncertainPaymentFormAction}
       message={
         outcome === "APPROVED"
-          ? "이니시스 관리자 화면에서 이 주문번호의 승인(TID)을 확인했습니까? 결제 완료로 처리하고 고객에게 결제 완료 안내를 보냅니다."
+          ? "입력한 TID를 이니시스에 조회합니다. 이 주문번호·금액의 승인 거래로 확인될 때만 결제 완료로 처리하고 고객에게 결제 완료 안내를 보냅니다."
           : "이니시스 관리자 화면에서 이 주문번호가 승인되지 않았음을 확인했습니까? 주문을 실패로 처리하고 고객이 다시 결제할 수 있게 됩니다."
       }
       className={`mt-2 grid gap-2 rounded-lg border-2 p-2 ${brandStatusTones.warning}`}
