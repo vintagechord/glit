@@ -105,3 +105,12 @@ test('validateMapping rejects bad input', () => {
   assert.throws(() => validateMapping({ t1: 'zz' }, tracks, attachments), /음원/);
   assert.throws(() => validateMapping({ t1: 'a5' }, tracks, attachments), /오디오/);
 });
+
+test('autoMapping matches NFD (macOS) filenames by title', () => {
+  const r = autoMapping(
+    [{ id: 't1', track_no: 1, track_title: '첫 노래'.normalize('NFD') }],
+    [att('a', '첫 노래.wav'.normalize('NFD'))],
+  );
+  assert.equal(r.mapping.t1, 'a');
+  assert.deepEqual(r.unmapped, []);
+});

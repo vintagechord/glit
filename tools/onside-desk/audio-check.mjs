@@ -187,7 +187,7 @@ export function autoMapping(tracks, attachments) {
   const trackList = Array.isArray(tracks) ? tracks : [];
   const audio = (Array.isArray(attachments) ? attachments : []).filter(isAudio);
   const candidates = new Map(trackList.map((t) => [t.id, []]));
-  const titleNorm = new Map(trackList.map((t) => [t.id, normalizeText(t.track_title).norm]));
+  const titleNorm = new Map(trackList.map((t) => [t.id, normalizeText(String(t.track_title ?? '').normalize('NFC')).norm]));
 
   for (const file of audio) {
     const number = leadingNumber(file.name);
@@ -196,7 +196,7 @@ export function autoMapping(tracks, attachments) {
       owner = trackList.find((t) => Number(t.track_no) === number) ?? null;
     }
     if (!owner) {
-      const fileNorm = normalizeText(baseName(file.name)).norm;
+      const fileNorm = normalizeText(baseName(file.name).normalize('NFC')).norm;
       let bestLen = 0;
       for (const t of trackList) {
         const tn = titleNorm.get(t.id);
@@ -228,9 +228,9 @@ export function autoMapping(tracks, attachments) {
 
   const mrPairs = {};
   for (const t of trackList) {
-    const title = String(t.track_title ?? '');
+    const title = String(t.track_title ?? '').normalize('NFC');
     if (!MR_SUFFIX.test(title)) continue;
-    const base = normalizeText(title.replace(MR_SUFFIX, '')).norm;
+    const base = normalizeText(title.normalize('NFC').replace(MR_SUFFIX, '')).norm;
     if (!base) continue;
     const vocal = trackList.find(
       (v) => v.id !== t.id && !MR_SUFFIX.test(String(v.track_title ?? '')) && titleNorm.get(v.id) === base,
