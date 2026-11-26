@@ -107,7 +107,7 @@ export async function installEngine({
   await run(uv, ['pip', 'install', '--python', p.python, ...ENGINE_PACKAGES], { signal, env });
 
   onProgress('모델을 내려받는 중');
-  const worker = start({ command: [p.python, p.worker], signal });
+  const worker = start({ command: [p.python, p.worker], signal, offline: false });
   try {
     await worker.request('warmup', {});
   } finally {
@@ -122,11 +122,20 @@ export async function installEngine({
   return info;
 }
 
-export function startWorker({ command, dataRoot, onProgress, signal } = {}) {
+// 분석용 worker는 네트워크를 쓰지 않는다(offline, 기본값): mlx_whisper가 시작할 때마다 부르는 snapshot_download가
+// 내려받은 모델만 쓰게 HF_HUB_OFFLINE을 켠다. 모델을 내려받는 설치 warmup만 offline: false로 띄운다.
+export function workerEnv({ offline = true, env = process.env } = {}) {
+  const out = { ...env, PYTHONUNBUFFERED: '1' };
+  if (offline) out.HF_HUB_OFFLINE = '1';
+  else delete out.HF_HUB_OFFLINE;
+  return out;
+}
+
+export function startWorker({ command, dataRoot, onProgress, signal, offline = true } = {}) {
   const cmd = command || defaultWorkerCommand(dataRoot);
   const child = spawn(cmd[0], cmd.slice(1), {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    env: workerEnv({ offline }),
   });
   const pending = new Map();
   let nextId = 1;

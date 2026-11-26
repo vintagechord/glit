@@ -10,6 +10,10 @@ rl.on('line', (line) => {
     process.exit(1);
   }
   if (msg.cmd === 'hang') return;
+  if (msg.cmd === 'env') {
+    send({ id: msg.id, ok: true, result: { HF_HUB_OFFLINE: process.env.HF_HUB_OFFLINE ?? null } });
+    return;
+  }
   if (msg.cmd === 'fail') {
     send({ id: msg.id, ok: false, error: 'ValueError: bad input' });
     return;

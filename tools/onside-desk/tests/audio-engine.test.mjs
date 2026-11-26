@@ -11,6 +11,7 @@ import {
   findUv,
   installEngine,
   startWorker,
+  workerEnv,
 } from '../audio-engine.mjs';
 
 const fakeWorker = fileURLToPath(new URL('./fixtures/fake-audio-worker.mjs', import.meta.url));
@@ -57,8 +58,8 @@ test('installEngine runs venv, pinned install, warmup in order and writes engine
     dataRoot,
     uv: '/bin/uv',
     run: async (cmd, args) => { calls.push([cmd, args]); },
-    startWorker: ({ command }) => ({
-      request: async (c) => { warm.push([command, c]); return {}; },
+    startWorker: ({ command, offline }) => ({
+      request: async (c) => { warm.push([command, c, offline]); return {}; },
       close: async () => { events.push('closed'); },
     }),
     onProgress: (m) => events.push(m),
@@ -72,6 +73,7 @@ test('installEngine runs venv, pinned install, warmup in order and writes engine
   assert.ok(calls[1][1].includes('demucs==4.1.0'));
   assert.equal(warm[0][1], 'warmup');
   assert.equal(warm[0][0][0], path.join(venv, 'bin', 'python'));
+  assert.equal(warm[0][2], false); // 설치 warmup만 모델을 내려받는다
   assert.ok(events.includes('closed'));
   const saved = JSON.parse(await fs.readFile(path.join(dataRoot, '음원분석', 'engine.json'), 'utf8'));
   assert.equal(saved.version, ENGINE_VERSION);
@@ -110,6 +112,19 @@ test('startWorker correlates responses, streams progress and rejects pending req
   await assert.rejects(crash, /분석 도구가 중단되었습니다\./);
   await assert.rejects(worker.request('analyze', {}), /분석 도구가 중단되었습니다\./);
   await worker.close();
+});
+
+test('startWorker runs analysis offline and only the install warmup online', async () => {
+  // mlx_whisper는 시작할 때마다 snapshot_download를 부른다: 분석 worker는 HF_HUB_OFFLINE으로 네트워크를 쓰지 않는다.
+  assert.equal(workerEnv({ env: { PATH: '/x' } }).HF_HUB_OFFLINE, '1');
+  assert.equal(workerEnv({ env: { PATH: '/x' } }).PYTHONUNBUFFERED, '1');
+  assert.equal('HF_HUB_OFFLINE' in workerEnv({ offline: false, env: { HF_HUB_OFFLINE: '1' } }), false);
+  const analysis = startWorker({ command: fakeCommand });
+  assert.deepEqual(await analysis.request('env', {}), { HF_HUB_OFFLINE: '1' });
+  await analysis.close();
+  const install = startWorker({ command: fakeCommand, offline: false });
+  assert.deepEqual(await install.request('env', {}), { HF_HUB_OFFLINE: null });
+  await install.close();
 });
 
 test('startWorker kills the process on abort', async () => {
