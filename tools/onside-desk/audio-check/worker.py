@@ -2,10 +2,11 @@
 """Onside 심의 데스크 음원 분석 워커.
 
 stdin으로 JSON 한 줄씩 명령을 받고, stdout으로 JSON 한 줄씩 응답한다.
-모델 작업(디코드, 보컬 분리, 에너지, Whisper 받아쓰기, 강제 점수)만 하고 판단은 Node가 한다.
+모델 작업(디코드, 보컬 분리, 에너지, Whisper 받아쓰기, 강제 점수, 가사 프롬프트 재받아쓰기)만 하고 판단은 Node가 한다.
 라이브러리가 stdout에 찍는 것은 모두 stderr로 보낸다.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -16,6 +17,7 @@ WHISPER_REPO = 'mlx-community/whisper-large-v3-turbo'
 MR_RESIDUAL_LIMIT_DB = -12.0
 SR_HI = 44100
 SR_LO = 16000
+REDECODE_MAX_SEC = 30.0
 
 _out = None  # 프로토콜 출력 핸들. main()에서만 설정한다.
 _models = {}
@@ -169,20 +171,24 @@ def _tokenizer(model):
     return _models['tok']
 
 
-def score(vocals_path, start, end, candidates):
-    """후보 문장별 log P(후보 토큰 + EOT | 창 오디오). 창은 30초로 패딩/자른다."""
-    import mlx.core as mx
+def _vocals_window(vocals_path, start, end):
     import soundfile as sf
-    from mlx_whisper.audio import N_FRAMES, log_mel_spectrogram, pad_or_trim
-    model = _whisper_model()
-    tok = _tokenizer(model)
-    sot = list(tok.sot_sequence_including_notimestamps)
     x, sr = sf.read(vocals_path, dtype='float32')
     if x.ndim > 1:
         x = x.mean(axis=1)
     if sr != SR_LO:
         raise RuntimeError('vocals.wav는 16kHz여야 합니다')
-    seg = np.ascontiguousarray(x[int(start * SR_LO):int(end * SR_LO)])
+    return np.ascontiguousarray(x[int(start * SR_LO):int(end * SR_LO)])
+
+
+def score(vocals_path, start, end, candidates):
+    """후보 문장별 log P(후보 토큰 + EOT | 창 오디오). 창은 30초로 패딩/자른다."""
+    import mlx.core as mx
+    from mlx_whisper.audio import N_FRAMES, log_mel_spectrogram, pad_or_trim
+    model = _whisper_model()
+    tok = _tokenizer(model)
+    sot = list(tok.sot_sequence_including_notimestamps)
+    seg = _vocals_window(vocals_path, start, end)
     mel = log_mel_spectrogram(seg, n_mels=model.dims.n_mels)
     mel = pad_or_trim(mel, N_FRAMES, axis=-2).astype(mx.float16)
     feat = model.embed_audio(mel[None])
@@ -195,6 +201,36 @@ def score(vocals_path, start, end, candidates):
         tgt = toks[len(sot):]
         out.append(float(sum(lp[len(sot) - 1 + i, t].item() for i, t in enumerate(tgt))))
     return out
+
+
+def redecode_args(msg):
+    """redecode 인자 검사(모델을 읽기 전에). 창은 REDECODE_MAX_SEC로 자른다."""
+    vocals = msg.get('vocals')
+    if not isinstance(vocals, str) or not vocals:
+        raise ValueError('vocals 경로가 없습니다')
+    try:
+        start = float(msg.get('start'))
+        end = float(msg.get('end'))
+    except (TypeError, ValueError):
+        raise ValueError('구간 시각이 숫자가 아닙니다') from None
+    if not (math.isfinite(start) and math.isfinite(end)) or start < 0 or end <= start:
+        raise ValueError('구간이 올바르지 않습니다')
+    prompt = msg.get('prompt')
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError('prompt가 없습니다')
+    return vocals, start, min(end, start + REDECODE_MAX_SEC), prompt
+
+
+def redecode(vocals_path, start, end, prompt):
+    """가사 줄을 initial_prompt로 주고 창을 다시 받아쓴다(온도 0, 낱말 시각 없음)."""
+    import mlx_whisper
+    seg = _vocals_window(vocals_path, start, end)
+    _whisper_model()
+    r = mlx_whisper.transcribe(
+        seg, path_or_hf_repo=WHISPER_REPO, language='ko', initial_prompt=prompt,
+        condition_on_previous_text=False, temperature=0.0, no_speech_threshold=0.9,
+        word_timestamps=False, verbose=None)
+    return ' '.join(t for t in (s['text'].strip() for s in r['segments']) if t)
 
 
 # ---------- 명령 ----------
@@ -240,6 +276,10 @@ def handle(msg):
             progress(msg_id, 'score')
             result = {'scores': score(msg['vocals'], float(msg['start']), float(msg['end']),
                                       list(msg['candidates']))}
+        elif cmd == 'redecode':
+            args = redecode_args(msg)
+            progress(msg_id, 'score')
+            result = {'text': redecode(*args)}
         else:
             return {'id': msg_id, 'ok': False, 'error': f'알 수 없는 명령: {cmd}'}
         return {'id': msg_id, 'ok': True, 'result': result}

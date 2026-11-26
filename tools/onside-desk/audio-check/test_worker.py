@@ -64,6 +64,36 @@ class WorkerTest(unittest.TestCase):
         self.assertFalse(res['ok'])
         self.assertIn('error', res)
 
+    def test_redecode_rejects_bad_arguments_without_loading_the_model(self):
+        loaded = 'whisper' in worker._models
+        good = {'vocals': '/없는/vocals.wav', 'start': 3, 'end': 9, 'prompt': '바람 따라 걸어가요'}
+        bad = [
+            {},
+            {**good, 'vocals': ''},
+            {**good, 'vocals': None},
+            {**good, 'start': 'x'},
+            {**good, 'start': -1},
+            {**good, 'end': 3},
+            {**good, 'end': float('nan')},
+            {**good, 'prompt': ''},
+            {**good, 'prompt': '   '},
+            {**good, 'prompt': None},
+        ]
+        for args in bad:
+            res = worker.handle({'id': 7, 'cmd': 'redecode', **args})
+            self.assertEqual(res['id'], 7)
+            self.assertFalse(res['ok'], args)
+            self.assertIn('ValueError', res['error'], args)
+        self.assertEqual('whisper' in worker._models, loaded)
+
+    def test_redecode_window_is_clamped_to_30_seconds(self):
+        self.assertEqual(
+            worker.redecode_args({'vocals': '/v.wav', 'start': 10, 'end': 55.5, 'prompt': '가사 한 줄'}),
+            ('/v.wav', 10.0, 40.0, '가사 한 줄'))
+        self.assertEqual(
+            worker.redecode_args({'vocals': '/v.wav', 'start': '1.5', 'end': 4, 'prompt': '가사'}),
+            ('/v.wav', 1.5, 4.0, '가사'))
+
 
 if __name__ == '__main__':
     unittest.main()
