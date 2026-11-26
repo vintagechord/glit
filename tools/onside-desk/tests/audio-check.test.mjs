@@ -747,6 +747,130 @@ test('a block edge line heard below half is left out and its fragment is never m
   ]);
 });
 
+// 맞춘 구간(core)은 블록 안쪽이 뭉개진 곳만 넘어 넓힌다(판정 R23). 후렴 끝에서 이어 부른 다른 노래는 첫 낱말이 우연히
+// 몇 글자 맞아도(일치와 나머지가 같은 수여도) 반복 구절에 들어가지 않는다.
+test('an unrelated line right after a chorus heard partway never lends its first words to the high repeat', () => {
+  const cases = [
+    ['함께 노래하자', ['사랑이 오나요', '봄이 오면 만나', '눈이 오는 밤에', '그 일은 잊어요', '매일 밤 너를 그려', '나일 강의 노을', '어제 일이 생각나']],
+    ['함께 노래하자 내일이', ['네가 오니 좋아', '비가 오니 슬퍼', '또 오네 그 사람', '이리 오너라 얘야', '모레 오니 기다려']],
+  ];
+  for (const [stop, lines] of cases) {
+    for (const line of lines) {
+      for (const [label, tail] of [
+        [`${stop} ${line}`, [seg(`${stop} ${line}`, 27, 34)]],
+        [`${stop} | ${line}`, [seg(stop, 27, 30), seg(line, 31, 34)]],
+      ]) {
+        const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorusHead(), ...tail]), frames(35, -5));
+        assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high'], ['new', 'check']], label);
+        const [repeat, extra] = suggestions;
+        assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, label);
+        assert.equal(N(repeat.hint), N(`오 그대여 바다 멀리 가거라 저 하늘 끝까지 ${stop}`), label);
+        assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [line] }, label);
+      }
+    }
+  }
+  // 마지막 줄이 절반도 안 들렸을 때도 이어 부른 노래의 가운데 글자('일이')로 그 줄을 채워 강함으로 만들지 않는다.
+  for (const tail of [[seg('함께 노래하 어제 일이 생각나', 27, 34)], [seg('함께 노래하', 27, 30), seg('어제 일이 생각나', 31, 34)]]) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorusHead(), ...tail]), frames(35, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'medium'], ['new', 'check']]);
+    assert.deepEqual(suggestions[0].op.lines, ['오 그대여', '바다 멀리 가거라 저 하늘 끝까지']);
+    assert.equal(N(suggestions[1].op.lines.join(' ')), N('함께 노래하 어제 일이 생각나'));
+  }
+});
+
+test('a line garbled in its middle at the start of a block is still one high repeat', () => {
+  // 첫 줄의 처음('바다 멀리')은 맞고 가운데가 뭉개졌다. 맞춘 구간이 그 줄의 처음까지 닿아 줄을 절반 넘게 덮으면 넓힌다.
+  const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까', '', '작은 별이 반짝여요'].join('\n');
+  const first = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라 저 하늘 끝까지', 4, 9), seg('함께 노래하자 내일이 오니까', 9, 13), seg('작은 별이 반짝여요', 14, 17)];
+  for (const head of ['바다 멀리 까꺼나 처 하늘 끝까지', '바다 멀리 파타 뭘니 하늘 끝까지']) {
+    const { suggestions } = draft(lyrics, [...first, seg(head, 18, 23), seg('함께 노래하자 내일이 오니까', 23, 27)], frames(28, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], head);
+    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 5, lines: ['', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까'] }, head);
+    assert.equal(N(suggestions[0].hint), N(`${head} 함께 노래하자 내일이 오니까`), head);
+  }
+});
+
+// 앞뒤 애드리브가 이웃 연(빈 줄로 나뉜 블록)의 한두 글자에 맞아도, 그 줄은 반복 구절의 블록 밖이므로 빠진 줄로 치지 않는다.
+test('a fully heard repeat stays high when an ad-lib touches a line of the neighbouring stanza', () => {
+  const full = () => [...chorusHead(), seg('함께 노래하자 내일이 오니까', 27, 31)];
+  const cases = [
+    ...['라라', '랄라라', '아이', '날아라', '예 날아라', '그래 날아라'].map((a) => [`앞 «${a}»`, [seg(a, 18, 19.5), ...full()]]),
+    ...['작아', '작은', '오오'].map((a) => [`뒤 «${a}»`, [...full(), seg(a, 31.5, 33)]]),
+  ];
+  for (const [label, segs] of cases) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs(segs), frames(34, -5));
+    // 애드리브는 6자가 안 되므로 버리고, 블록 앞 빈 줄까지 그대로 둔 강함 하나만 남는다.
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], label);
+    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, label);
+    assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31), label);
+  }
+  // 블록 뒤 줄이 '오'로 시작하거나 앞 줄이 '요'로 끝나는 경우도 같다.
+  const lyrics = ['하늘 높이 날아가요', '', '오 그대여', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까', '', '오 나의 사랑 작은 별이여'].join('\n');
+  const first = [seg('하늘 높이 날아가요', 0, 3), seg('오 그대여', 4, 6), seg('바다 멀리 가거라 저 하늘 끝까지', 6, 11), seg('함께 노래하자 내일이 오니까', 11, 15), seg('오 나의 사랑 작은 별이여', 16, 19)];
+  for (const [label, segs] of [['뒤 «오 예»', [...full(), seg('오 예', 31.5, 33)]], ['앞 «그래요»', [seg('그래요', 18, 19.5), ...full()]]]) {
+    const { suggestions } = draft(lyrics, [...first, ...segs], frames(34, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence, s.op.afterLine, s.op.lines]), [['repeat', 'high', 6, EDGE_BLOCK]], label);
+  }
+});
+
+// 제자리 창에서 반복 구절을 찾았으면 창을 옮기지 않는다(판정 R23). 옮긴 창이 첫 번째로 부른 쪽을 반복으로 잡으면
+// '오 그대여'가 빠지고 한 번만 부른 줄이 두 번 들어간다.
+test('a window shift never replaces a repeat found in place, so the high suggestion applies to the right lyrics', () => {
+  const full = () => [...chorusHead(), seg('함께 노래하자 내일이 오니까', 27, 31)];
+  const want = [...EDGE_LYRICS.split('\n'), ...EDGE_BLOCK].join('\n');
+  const cases = [
+    ...['예 날아라', '우 날아라', '오 날아라', '날아라 날아라'].map((a) => [`앞 «${a}»`, [seg(a, 18, 19.5), ...full()]]),
+    ...['예예 작은', '작은 별'].map((a) => [`뒤 «${a}»`, [...full(), seg(a, 31.5, 33)]]),
+    // 남은 글자가 많아 창을 옮겨 보더라도, 두 벌 사이에 한 번만 부른 연('작은 별이 반짝여요')을 건너뛰지 않는다.
+    ['끝자락 + 애드리브', [...chorusHead(), seg('함께 노래하자 내일이 오닉가요', 27, 31), seg('예 예 예 예 예 예 예', 32, 34)]],
+  ];
+  for (const [label, segs] of cases) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs(segs), frames(35, -5));
+    const highs = suggestions.filter((s) => s.confidence === 'high');
+    assert.equal(highs.length, 1, label);
+    assert.deepEqual(highs[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, label);
+    assert.ok(near(highs[0].start, 20), label);
+    assert.equal(applySuggestions(EDGE_LYRICS, suggestions, highs.map((s) => ({ suggestionId: s.id }))), want, label);
+  }
+});
+
+test('a chorus sung twice in a row in lyrics without blank lines is one high repeat', () => {
+  // 빈 줄 없이 쓴 가사는 연을 가릴 수 없으므로, 옮긴 창은 줄마다 덮였으면(강함) 받아들인다.
+  const lyrics = ['하늘 높이 날아라', '바다 멀리 가거라', '함께 노래하자 내일이 오니까', '저 하늘 끝까지 날아가요', '작은 별이 반짝여요'].join('\n');
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3),
+    seg('바다 멀리 가거라', 4, 7), seg('함께 노래하지 내일이 오니까', 7, 11), seg('저 하늘 끝까지 날아가요', 11, 14),
+    seg('바다 머리 가거라', 15, 18), seg('함께 노래하자 내일이 오니까', 18, 22), seg('저 하늘 끝까지 날아가요', 22, 25),
+    seg('작은 별이 반짝여요', 26, 29),
+  ];
+  const { suggestions } = draft(lyrics, segments, frames(30, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 3, lines: ['바다 멀리 가거라', '함께 노래하자 내일이 오니까', '저 하늘 끝까지 날아가요'] });
+  assert.ok(near(suggestions[0].start, 15) && near(suggestions[0].end, 25));
+});
+
+test('a repeat starting mid-word snaps to the word boundary inside the repeat', () => {
+  // core가 '뭘리'의 '리'에서 시작한다. 앞뒤 경계가 한 글자씩 같은 거리면 반복 구절 안쪽('가거라' 앞)으로 자른다.
+  const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까', '', '작은 별이 반짝여요'].join('\n');
+  const first = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라 저 하늘 끝까지', 4, 9), seg('함께 노래하자 내일이 오니까', 9, 13), seg('작은 별이 반짝여요', 14, 17)];
+  const { suggestions } = draft(lyrics, [...first, seg('바타 뭘리 가거라 저 하늘 끝까지', 18, 23), seg('함께 노래하자 내일이 오니까', 23, 27)], frames(28, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.equal(suggestions[0].hint, '가거라 저 하늘 끝까지 함께 노래하자 내일이 오니까');
+});
+
+test('a lyric phrase that opens a new verse after the chorus is not merged into the high repeat', () => {
+  // '저 하늘 끝까지'는 블록 안 줄의 일부지만 뒤에 다른 노래가 이어 붙었다: 메아리로 보고 강함에 붙이지 않는다.
+  const segments = edgeSegs([...chorusHead(), seg('함께 노래하자 내일이 오니까', 27, 31), seg('저 하늘 끝까지 너와 함께라면 좋아', 32, 37)]);
+  const { suggestions } = draft(EDGE_LYRICS, segments, frames(38, -5));
+  wholeLinesOnly(suggestions, EDGE_LYRICS, '새 절');
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence, s.op.lines]), [
+    ['repeat', 'high', EDGE_BLOCK],
+    ['repeat', 'medium', ['저 하늘 끝까지']],
+    ['new', 'check', ['너와 함께라면 좋아']],
+  ]);
+  assert.equal(heardNorm(suggestions), N(`${CHORUS_HEARD} 내일이 오니까 저 하늘 끝까지 너와 함께라면 좋아`));
+});
+
 test('differences one matching syllable apart are judged as one region', () => {
   // '살/갈'과 '없/있'은 각각 작은 차이지만 사이에 같은 글자 '수' 하나뿐이다: 합치면 '살수없/갈수있'(자모 거리 3).
   const d = draft('그대 없이 살 수 없어', [seg('그대 없이 갈 수 있어', 0, 4)], frames(4, -5));

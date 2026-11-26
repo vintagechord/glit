@@ -540,10 +540,22 @@ function alignPath(G, P, near) {
   return path.reverse();
 }
 
+const LINE_COVERAGE = 0.5;
+const CHAR_JAMO = 0.5;
+
+const jamoSimilarity = (a, b) => similarity(jamo(a).join(''), jamo(b).join(''));
+
+// 정렬 경로 칸이 덮은 가사 글자인지(정확히 맞았거나 자모가 비슷한 글자)
+const coversChar = (G, P, [kind, j, i]) => kind === 'm' || (kind === 'x' && jamoSimilarity(G[i], P[j]) >= CHAR_JAMO);
+
 // 정렬 경로에서 점수가 가장 높은 연속 구간(core, 일치 +1·나머지 −1). [첫 칸, 끝 칸](둘 다 일치) 또는 null.
-// 양끝 밖으로 일치와 나머지가 같은 수인 구간이 이어지면 거기까지 넓힌다(블록 안쪽이 뭉개져 core가 둘로 갈린 경우).
-// 일치가 나머지보다 적은 구간은 넣지 않는다.
-function bestRun(path) {
+// core 밖의 뭉개진 구간은 블록(빈 줄로 나뉜 연) 안쪽일 때만 넘는다: 그 너머의 정확히 맞은 글자가 일치와 나머지를 같은 수로
+// 갚고, 새로 닿은 같은 연의 다른 줄을 모두 절반 이상 덮거나('오 그대여 | 파타 뭘니 가거라…'), 다른 줄에 닿지 않으면
+// core만으로는 절반이 안 덮이던 가장자리 줄을 절반 이상 덮으면서 그 줄의 처음(끝)까지 맞아야 한다('바다 멀리 까꺼나 처
+// 하늘 끝까지'). 블록 안쪽이 뭉개져 core가 둘로 갈린 경우다. 이미 들어갈 줄에 글자만 더하거나 줄 가운데에서 우연히 맞은
+// 글자, 다른 연의 글자로는 넓히지 않는다(후렴을 끝까지 부르지 않고 이어 부른 다른 노래의 첫 낱말, 앞뒤 애드리브).
+function bestRun(path, G, ctx) {
+  const { L, stanza } = ctx;
   let best = 0;
   let from = 0;
   let to = -1;
@@ -555,35 +567,50 @@ function bestRun(path) {
     if (run > best) { best = run; from = runFrom; to = k; }
   });
   if (to < 0) return null;
-  const even = (edge, step) => {
+  const lineOf = (k) => (path[k][1] >= 0 ? L.line[path[k][1]] : -1);
+  const half = (x) => LINE_COVERAGE * (L.span.get(x)[1] - L.span.get(x)[0] + 1);
+  const inCore = new Map();
+  for (let k = from; k <= to; k += 1) {
+    if (lineOf(k) >= 0 && coversChar(G, L.norm, path[k])) inCore.set(lineOf(k), (inCore.get(lineOf(k)) ?? 0) + 1);
+  }
+  const reach = (edge, step) => {
+    const own = lineOf(edge);
+    const ownBefore = inCore.get(own) ?? 0;
+    const hits = new Map();
     let last = edge;
     let sum = 0;
     for (let k = edge + step; k >= 0 && k < path.length; k += step) {
+      const x = lineOf(k);
+      if (x >= 0 && stanza[x] !== stanza[own]) break;
       sum += path[k][0] === 'm' ? 1 : -1;
-      if (sum === 0 && path[k][0] === 'm') last = k;
+      if (x >= 0) hits.set(x, (hits.get(x) ?? 0) + (coversChar(G, L.norm, path[k]) ? 1 : 0));
+      if (sum !== 0 || path[k][0] !== 'm') continue;
+      const others = [...hits].filter(([y]) => y !== own);
+      const ownNow = ownBefore + (hits.get(own) ?? 0);
+      const lineEdge = path[k][1] === L.span.get(own)[step < 0 ? 0 : 1];
+      const completes = others.length > 0 || (lineEdge && ownBefore < half(own) && ownNow >= half(own));
+      if (completes && others.every(([y, c]) => c >= half(y))) last = k;
     }
     return last;
   };
-  return [even(from, -1), even(to, 1)];
+  return [reach(from, -1), reach(to, 1)];
 }
-
-const LINE_COVERAGE = 0.5;
-const CHAR_JAMO = 0.5;
-
-const jamoSimilarity = (a, b) => similarity(jamo(a).join(''), jamo(b).join(''));
 
 // 받아쓴 구간 tj에서 가사의 반복 블록을 찾는다. 맞춘 구간은 정렬 경로의 core(점수가 가장 높은 연속 구간, 양끝이 정확히 맞은
 // 글자)뿐이다: 그 밖의 받아쓴 글자는 뭉개진 끝자락이든 다른 노래든 글로는 가릴 수 없으므로 반복 구절에 넣지 않는다.
 // 맞춘 구간으로 유사도를 보고, 줄마다 덮인 비율(정확히 맞은 글자 + 자모가 비슷한 글자)이 LINE_COVERAGE 이상인 줄만
-// 블록에 넣는다(줄 중간에서 자르지 않는다). 맞춘 구간이 걸친 줄이 모두 들어가면 강함, 하나라도 빠지면(가장자리 줄 포함)
-// 덮인 줄만 보통. 한 줄 안의 일부만 다시 부른 메아리는 가사 표기 조각으로 보통.
-// 돌려주는 g0, g1은 반복 구절에 해당하는 tj 안의 받아쓴 범위다(나머지는 gapFindings가 따로 본다).
+// 블록에 넣는다(줄 중간에서 자르지 않는다). 덮인 줄이 하나도 없는 블록(빈 줄로 나뉜 연)의 줄은 core가 걸쳤어도 반복 구절 밖이고
+// 거기 맞춘 받아쓴 글자는 남은 앞·뒤로 본다(앞뒤 애드리브가 이웃 연의 한두 글자에 맞은 경우). 반복 구절의 블록 안에서 core가
+// 걸친 줄이 모두 들어가면 강함, 하나라도 빠지면(가장자리 줄 포함) 덮인 줄만 보통. 한 줄 안의 일부만 다시 부른 메아리는
+// 가사 표기 조각으로 보통.
+// 돌려주는 g0, g1은 반복 구절에 해당하는 tj 안의 받아쓴 범위다(나머지는 gapFindings가 따로 본다). full은 강함 블록이 연을
+// 처음부터 끝까지 덮었는지다(reanchor가 옮긴 창을 받아들이는 조건). 빈 줄 없이 쓴 가사는 연을 가릴 수 없으므로 강함이면 full이다.
 function findRepeat(ctx, tj, near) {
-  const { L, T, lines } = ctx;
+  const { L, T, lines, stanza } = ctx;
   const G = tj.map((j) => T.norm[j]).join('');
   if (!G.length || !L.norm.length) return null;
   const path = alignPath(G, L.norm, near);
-  const core = bestRun(path);
+  const core = bestRun(path, G, ctx);
   if (!core) return null;
   const [lo, hi] = core;
   const s = path[lo][1];
@@ -591,10 +618,7 @@ function findRepeat(ctx, tj, near) {
   const gs = path[lo][2];
   const ge = path[hi][2] + 1;
   const covered = new Uint8Array(L.norm.length);
-  for (let k = lo; k <= hi; k += 1) {
-    const [kind, j, i] = path[k];
-    if (kind === 'm' || (kind === 'x' && jamoSimilarity(G[i], L.norm[j]) >= CHAR_JAMO)) covered[j] = 1;
-  }
+  for (let k = lo; k <= hi; k += 1) if (coversChar(G, L.norm, path[k])) covered[path[k][1]] = 1;
   if (ge - gs < THRESHOLDS.minGapChars) return null;
   if (similarity(G.slice(gs, ge), L.norm.slice(s, e)) < THRESHOLDS.repeatSimilarity) return null;
   const touched = [];
@@ -606,9 +630,10 @@ function findRepeat(ctx, tj, near) {
     return c / (b - a + 1);
   };
   const kept = touched.filter((x) => coverage(x) >= LINE_COVERAGE);
-  // 맞춘 구간이 걸친 줄을 하나라도 뺐으면(가장자리 포함) 블록이 어디까지인지 확실하지 않으므로 강함으로 두지 않는다.
-  const whole = kept.length === touched.length;
-  // 블록 가장자리 줄을 뺐으면 받아쓴 범위도 남은 줄까지로 줄인다.
+  const inside = kept.length ? touched.filter((x) => stanza[x] >= stanza[kept[0]] && stanza[x] <= stanza[kept.at(-1)]) : touched;
+  // 블록 안에서 core가 걸친 줄을 하나라도 뺐으면(가장자리 포함) 블록이 어디까지인지 확실하지 않으므로 강함으로 두지 않는다.
+  const whole = kept.length === inside.length;
+  // 줄을 뺐거나 블록 밖 줄에 걸쳤으면 받아쓴 범위도 남은 줄까지로 줄인다.
   const heardIn = (a, b) => {
     let i0 = Infinity;
     let i1 = -Infinity;
@@ -618,16 +643,22 @@ function findRepeat(ctx, tj, near) {
     }
     return [i0, i1];
   };
-  if (touched.length === 1 || kept.length === 1) {
-    const x = kept[0] ?? touched[0];
+  // 연의 첫 줄(step −1) 또는 끝 줄(step +1)인지
+  const blockEdge = (x, step) => {
+    for (let y = x + step; y >= 0 && y < lines.length && stanza[y] === stanza[x]; y += step) if (L.span.has(y)) return false;
+    return true;
+  };
+  const highBlock = (first, last, g0, g1) => {
+    const block = lines.slice(first, lineAfter(lines, last) + 1).map((line) => line.text);
+    if (first > 0 && lines[first - 1].text.trim() === '') block.unshift('');
+    return { confidence: 'high', lines: block, la: first, lb: last, g0, g1, full: ctx.stanzas < 2 || (blockEdge(first, -1) && blockEdge(last, 1)) };
+  };
+  if (inside.length === 1 || kept.length === 1) {
+    const x = kept[0] ?? inside[0];
     const [a, b] = L.span.get(x);
     const g0 = x === L.line[s] ? gs : heardIn(a, b)[0];
     const g1 = x === L.line[e - 1] ? ge : heardIn(a, b)[1];
-    if (whole && coverage(x) >= WHOLE_LINE) {
-      const block = lines.slice(x, lineAfter(lines, x) + 1).map((line) => line.text);
-      if (x > 0 && lines[x - 1].text.trim() === '') block.unshift('');
-      return { confidence: 'high', lines: block, la: x, lb: x, g0, g1 };
-    }
+    if (whole && coverage(x) >= WHOLE_LINE) return highBlock(x, x, g0, g1);
     const p0 = Math.max(s, a);
     const p1 = Math.min(e, b + 1);
     return { confidence: 'medium', lines: lyricPieces(ctx, p0, p1 - 1), la: x, lb: x, g0, g1 };
@@ -637,11 +668,7 @@ function findRepeat(ctx, tj, near) {
   const last = kept.at(-1);
   const g0 = first === L.line[s] ? gs : heardIn(L.span.get(first)[0], Infinity)[0];
   const g1 = last === L.line[e - 1] ? ge : heardIn(-Infinity, L.span.get(last)[1])[1];
-  if (whole) {
-    const block = lines.slice(first, lineAfter(lines, last) + 1).map((line) => line.text);
-    if (first > 0 && lines[first - 1].text.trim() === '') block.unshift('');
-    return { confidence: 'high', lines: block, la: first, lb: last, g0, g1 };
-  }
+  if (whole) return highBlock(first, last, g0, g1);
   const pieces = kept.flatMap((x) => lines.slice(x, lineAfter(lines, x) + 1).map((line) => line.text));
   return { confidence: 'medium', lines: pieces, la: first, lb: last, g0, g1 };
 }
@@ -651,18 +678,24 @@ function addEdit(edits, line, edit) {
   edits.get(line).push(edit);
 }
 
+// 반복 구절 밖에 남는 받아쓴 글자 수(반복 구절이 없으면 구간 전체)
+const leftover = (match, count) => (match ? match.g0 + count - match.g1 : count);
+
 // 받아쓰기의 연속된 두 벌 중 어느 쪽을 삽입으로 볼지: 오타 때문에 갭이 후렴 안쪽에서 갈렸으면,
-// 갭 길이를 그대로 두고 받아쓰기 창을 옮겨 줄 경계에 맞춘 뒤 반복 구절을 찾는다.
-// 옮긴 만큼의 가사 조각이 반대편 받아쓰기 조각과 repeatSimilarity 이상 같아야 한다. 확신 높은 것, 그다음 가장 오른쪽.
-function reanchor(ctx, q, tj) {
-  const { L, T, pairs, at } = ctx;
+// 갭 길이를 그대로 두고 받아쓰기 창을 옮겨 줄 경계에 맞춘 뒤 반복 구절을 찾는다. 제자리 창의 반복 구절이 구간을 설명하지
+// 못할 때만 부른다(rest: 제자리에서 반복 구절 밖에 남은 글자 수, minGapChars 이상). 옮긴 만큼의 가사 조각이 한 연 안에 있고
+// 반대편 받아쓰기 조각과 repeatSimilarity 이상 같아야 하며(두 벌 사이에 한 번만 부른 다른 연을 건너뛰지 않게), 옮긴 창의
+// 반복 구절은 연을 처음부터 끝까지 덮은 강함이고 제자리보다 남는 글자가 적어야 한다(옮긴 창이 이웃 줄을 끌어들여 다른 블록을
+// 만들지 않게, 보통을 강함으로 올리려고 옮기지 않게). 그런 창이 여럿이면 가장 오른쪽.
+function reanchor(ctx, q, tj, rest) {
+  const { L, T, pairs, at, stanza } = ctx;
   const n = L.norm.length;
   const g = tj.length;
   const j0 = tj[0];
   const j1 = tj.at(-1);
   let best = null;
   for (let b = Math.max(0, q - g); b <= Math.min(n, q + g); b += 1) {
-    if (!(b <= 0 || b >= n || L.line[b - 1] !== L.line[b])) continue;
+    if (b === q || !(b <= 0 || b >= n || L.line[b - 1] !== L.line[b])) continue;
     let d = 0;
     if (b > q) {
       d = neighbor(pairs, at[b - 1], 1, -1) - j1;
@@ -671,9 +704,9 @@ function reanchor(ctx, q, tj) {
       d = neighbor(pairs, at[b], 1, 1) - j0;
       if (d >= 0 || -d > g || similarity(L.norm.slice(b, q), T.norm.slice(j1 + d + 1, j1 + 1)) < THRESHOLDS.repeatSimilarity) continue;
     }
+    if (stanza[L.line[Math.min(b, q)]] !== stanza[L.line[Math.max(b, q) - 1]]) continue;
     const match = findRepeat(ctx, tj.map((j) => j + d), b);
-    const rank = match?.confidence === 'high' ? 2 : 1;
-    if (match && (!best || rank >= best.rank)) best = { rank, match, b, tj: tj.map((j) => j + d) };
+    if (match?.confidence === 'high' && match.full && leftover(match, g) < rest) best = { match, b, tj: tj.map((j) => j + d) };
   }
   return best;
 }
@@ -687,10 +720,10 @@ function wordBreak(T, tj, k) {
 }
 
 // 나누는 자리를 가장 가까운 낱말 경계로 옮긴다(heardLines가 낱말 끝까지 넓혀도 글자가 겹치지 않게).
-function snapBreak(T, tj, k) {
+// 거리가 같으면 반복 구절 안쪽으로: 시작(inward +1)은 뒤로, 끝(inward −1)은 앞으로.
+function snapBreak(T, tj, k, inward) {
   for (let d = 0; d <= tj.length; d += 1) {
-    if (k - d >= 0 && wordBreak(T, tj, k - d)) return k - d;
-    if (k + d <= tj.length && wordBreak(T, tj, k + d)) return k + d;
+    for (const c of [k + inward * d, k - inward * d]) if (c >= 0 && c <= tj.length && wordBreak(T, tj, c)) return c;
   }
   return k;
 }
@@ -710,28 +743,29 @@ function gapFinding(ctx, f, afterLine, tj) {
 
 // 삽입 구간을 반복 구절·새 구절로 나눈다. 반복 구절이 구간의 일부만 덮으면 남은 앞·뒤를 다시 본다:
 // minGapChars 이상이면 맞는 가사가 있을 때 반복 구절, 없으면 새 구절, 그보다 짧으면 버린다. 받아쓴 글자는 한 제안에만 들어간다.
-// 남은 쪽의 반복이 덮은 블록 안의 줄을 다시 부른 메아리이거나 블록 바로 앞·뒤 줄을 온전히(강함) 덮었으면 같은 삽입에 붙인다.
+// 남은 쪽의 반복이 덮은 블록 안의 줄을 다시 부른 메아리이고 그쪽에서 받아쓴 글자 전부이거나(메아리 앞뒤에 다른 노래가
+// 붙었으면 그 노래의 일부일 수 있다), 블록 바로 앞·뒤 줄을 온전히(강함) 덮었으면 같은 삽입에 붙인다.
 // 블록 바로 앞·뒤 줄의 일부만 맞은 조각(보통)은 붙이면 줄 중간에서 끊긴 블록이 되므로 따로 둔다.
 function gapFindings(ctx, afterLine, tj, near, match = findRepeat(ctx, tj, near)) {
   const { T } = ctx;
   if (!match) return [gapFinding(ctx, { kind: 'new', confidence: 'check', insert: heardLines(T, tj) }, afterLine, tj)];
-  let g0 = snapBreak(T, tj, match.g0);
-  let g1 = snapBreak(T, tj, match.g1);
+  let g0 = snapBreak(T, tj, match.g0, 1);
+  let g1 = snapBreak(T, tj, match.g1, -1);
   if (g1 <= g0) { g0 = match.g0; g1 = match.g1; }
   const lead = g0 >= THRESHOLDS.minGapChars ? gapFindings(ctx, afterLine, tj.slice(0, g0), near) : [];
   const trail = tj.length - g1 >= THRESHOLDS.minGapChars ? gapFindings(ctx, afterLine, tj.slice(g1), near) : [];
-  const joins = (f, line, outside) => f?.kind === 'repeat'
-    && ((line >= match.la && line <= match.lb) || (line === outside && f.confidence === 'high'));
+  const joins = (f, line, outside, alone) => f?.kind === 'repeat'
+    && ((alone && line >= match.la && line <= match.lb) || (line === outside && f.confidence === 'high'));
   let insert = match.lines;
   let body = tj.slice(g0, g1);
   const prev = lead.at(-1);
-  if (joins(prev, prev?.lb, match.la - 1)) {
+  if (joins(prev, prev?.lb, match.la - 1, prev?.tj.length === g0)) {
     lead.pop();
     insert = [...prev.op.lines, ...insert];
     body = [...prev.tj, ...body];
   }
   const next = trail[0];
-  if (joins(next, next?.la, match.lb + 1)) {
+  if (joins(next, next?.la, match.lb + 1, next?.tj.length === tj.length - g1)) {
     trail.shift();
     insert = [...insert, ...next.op.lines];
     body = [...body, ...next.tj];
@@ -746,27 +780,31 @@ function insertion(ctx, p0, tj, edits) {
   const q = neighbor(pairs, p0, 0, -1) + 1;
   const edge = q <= 0 || q >= n || L.line[q - 1] !== L.line[q];
   const long = tj.length >= THRESHOLDS.minGapChars;
-  const moved = long ? reanchor(ctx, q, tj) : null;
-  if (moved) {
-    const afterLine = moved.b === 0 ? -1 : lineAfter(lines, L.line[moved.b - 1]);
-    return gapFindings(ctx, afterLine, moved.tj, moved.b, moved.match);
-  }
-  let afterLine;
+  // 제자리 창: 줄 경계(또는 줄 끝에서 SNAP_CHARS자 안)에 걸친 긴 구간만 삽입으로 본다.
+  let afterLine = null;
   if (edge) {
-    if (!long) return null;
-    afterLine = q === 0 ? -1 : lineAfter(lines, L.line[q - 1]);
-  } else {
+    if (long) afterLine = q === 0 ? -1 : lineAfter(lines, L.line[q - 1]);
+  } else if (long) {
     const line = L.line[q];
     const [first, last] = L.span.get(line);
     const head = q - first;
     const tail = last + 1 - q;
-    if (!long || Math.min(head, tail) > SNAP_CHARS) {
-      addEdit(edits, line, { lyr: [], tr: tj, anchor: q - 1 });
-      return null;
-    }
-    afterLine = tail <= head ? lineAfter(lines, line) : first === 0 ? -1 : lineAfter(lines, L.line[first - 1]);
+    if (Math.min(head, tail) <= SNAP_CHARS) afterLine = tail <= head ? lineAfter(lines, line) : first === 0 ? -1 : lineAfter(lines, L.line[first - 1]);
   }
-  return gapFindings(ctx, afterLine, tj, q);
+  const match = afterLine === null ? null : findRepeat(ctx, tj, q);
+  // 창을 옮겨 보는 것은 제자리 창에 반복 구절이 없거나, 있어도 그 밖에 minGapChars자 이상 남을 때뿐이다(갭 경계가 블록 안에서
+  // 갈려 두 벌에 걸친 창). 제자리 반복 구절이 구간을 설명하면(보통이어도) 옮기지 않는다.
+  const rest = leftover(match, tj.length);
+  const moved = long && rest >= THRESHOLDS.minGapChars ? reanchor(ctx, q, tj, rest) : null;
+  if (moved) {
+    const movedAfter = moved.b === 0 ? -1 : lineAfter(lines, L.line[moved.b - 1]);
+    return gapFindings(ctx, movedAfter, moved.tj, moved.b, moved.match);
+  }
+  if (afterLine === null) {
+    if (!edge) addEdit(edits, L.line[q], { lyr: [], tr: tj, anchor: q - 1 });
+    return null;
+  }
+  return gapFindings(ctx, afterLine, tj, q, match);
 }
 
 function deletion(ctx, p0, p1, li) {
@@ -1073,7 +1111,11 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, duration, 
   slideGaps(pairs, L, T);
   const at = new Int32Array(L.norm.length);
   pairs.forEach(([i], p) => { if (i !== null) at[i] = p; });
-  const ctx = { trackId, lines, sung, L, T, pairs, at, vocal, total };
+  // 줄마다 연(빈 줄로 나뉜 블록) 번호
+  const stanza = new Int32Array(lines.length);
+  lines.reduce((block, line, x) => { stanza[x] = line.text.trim() === '' ? block + 1 : block; return stanza[x]; }, 0);
+  const stanzas = new Set([...L.span.keys()].map((x) => stanza[x])).size;
+  const ctx = { trackId, lines, sung, L, T, pairs, at, vocal, total, stanza, stanzas };
   const edits = new Map();
   for (const { p0, p1 } of diffRegions(pairs, L.norm, T.norm)) {
     const li = [];
