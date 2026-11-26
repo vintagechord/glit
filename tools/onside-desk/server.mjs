@@ -526,12 +526,15 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     const taken = new Set(Object.values(saved).filter(Boolean));
     return Object.fromEntries(tracks.map(t => [t.id, Object.hasOwn(saved, t.id) ? saved[t.id] : auto[t.id] && !taken.has(auto[t.id]) ? auto[t.id] : null]));
   }
+  /** The newest run whose suggestions can be shown and applied: a run where every track failed never replaces it. */
+  const latestAudioRun = item => (item.audioCheck?.runs || []).findLast(r => r.status !== 'failed') || null;
   function audioCheckView(item, tracks) {
     const mapping = savedAudioMapping(item, tracks), auto = autoMapping(tracks, item.attachments || []);
-    const latest = item.audioCheck?.runs?.at(-1) || null;
+    const latest = latestAudioRun(item), newest = item.audioCheck?.runs?.at(-1) || null;
     const hashes = new Map(tracks.map(t => [t.id, lyricsHash(t.lyrics ?? '')]));
     const staleTracks = (latest?.tracks || []).filter(t => t.status !== 'skipped' && hashes.has(t.trackId) && hashes.get(t.trackId) !== t.lyricsHash).map(t => t.trackId);
-    return { mapping, auto, effective: effectiveAudioMapping(mapping, auto.mapping, tracks), latest, staleTracks };
+    // failed: the newest run when it failed outright, so the review tab can say so above the last good results.
+    return { mapping, auto, effective: effectiveAudioMapping(mapping, auto.mapping, tracks), latest, failed: newest?.status === 'failed' ? newest : null, staleTracks };
   }
   const activeAudioJob = (kind, caseId) => store.data.jobs.find(j => j.kind === kind && j.caseId === caseId && ['queued', 'running'].includes(j.status));
   function enqueueAudio(kind, caseId, work) {
@@ -592,10 +595,17 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     // A dead worker fails every track after it; such a partial run is not kept.
     const died = run.tracks.find(t => t.status === 'failed' && String(t.error || '').startsWith(WORKER_STOPPED));
     if (died) throw new Error(died.error);
-    item.audioCheck = { mapping: item.audioCheck?.mapping || {}, runs: [...(item.audioCheck?.runs || []), run].slice(-3) };
+    // Keep the last three runs, but never drop the newest good run for failed ones.
+    const runs = [...(item.audioCheck?.runs || []), run], good = runs.findLast(r => r.status !== 'failed');
+    const kept = runs.slice(-3);
+    item.audioCheck = { mapping: item.audioCheck?.mapping || {}, runs: good && !kept.includes(good) ? [good, ...runs.slice(-2)] : kept };
     const count = run.tracks.reduce((sum, t) => sum + (t.suggestions?.length || 0), 0);
     const result = { runId: run.id, suggestions: count };
-    if (run.status === 'failed') return { status: 'failed', message: safeError(new Error(run.tracks.find(t => t.status === 'failed')?.error || '음원 대조에 실패했습니다.')), result };
+    if (run.status === 'failed') {
+      const message = safeError(new Error(run.tracks.find(t => t.status === 'failed')?.error || '음원 대조에 실패했습니다.'));
+      store.audit(id, 'error', `음원 대조 실패: ${message}`);
+      return { status: 'failed', message, result };
+    }
     return { status: 'completed', message: `음원 대조 완료 · 제안 ${count}개`, result };
   }
   function cancelAudioCheck(id) {
@@ -617,7 +627,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   }
   /** 선택한 제안 반영: the same save path as a manual lyric edit (PATCH local), all tracks or none. */
   async function applyAudioSuggestions(id, item, input) {
-    const latest = item.audioCheck?.runs?.at(-1);
+    const latest = latestAudioRun(item);
     if (!latest || typeof input?.runId !== 'string' || input.runId !== latest.id) throw httpError(409, '더 최신 대조 결과가 있습니다. 화면을 새로고침하세요.');
     const items = Array.isArray(input.items) ? input.items : [];
     if (!items.length || items.length > 1000 || new Set(items.map(x => x?.suggestionId)).size !== items.length

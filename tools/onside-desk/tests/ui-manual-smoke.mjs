@@ -158,6 +158,11 @@ try {
   // 8. failed run: red notice with track errors and the re-run button
   d.audioCheck={...clone(base),latest:{...makeRun(),status:'failed',tracks:[{trackId:T1,attachmentId:'a1',lyricsHash:'h1',separation:'demucs',duration:0,foreign:false,status:'failed',error:'음원을 읽지 못했습니다.',suggestions:[],applied:[]}]}};
   await openReview();await section.locator('.notice.error').waitFor();assert.match(await section.locator('.notice.error').innerText(),/음원을 읽지 못했습니다\./);assert.equal(await section.getByRole('button',{name:'음원 대조 시작'}).isEnabled(),true);
+  // a failed run after a good one: the failure notice sits above the previous results, which can still be applied
+  const failedRun={...makeRun(),id:'run-2',status:'failed',tracks:[{trackId:T1,attachmentId:'a1',lyricsHash:'h1',separation:null,duration:null,foreign:false,status:'failed',error:'음원을 읽지 못했습니다.',suggestions:[],applied:[]}]};
+  d.audioCheck={...clone(base),latest:makeRun(),failed:failedRun,staleTracks:[]};
+  await openReview();await section.locator('.notice.error').waitFor();assert.match(await section.locator('.notice.error').innerText(),/음원 대조를 완료하지 못했습니다 · 아래는 이전 결과입니다/);assert.match(await section.locator('.notice.error').innerText(),/1번: 음원을 읽지 못했습니다\./);
+  await section.locator('[data-audio-pick=s1]').waitFor();assert.match(await section.locator('[data-action=audio-apply]').innerText(),/선택한 제안 반영 \(1개\)/);
   // 9. no audio attachment: disabled with the reason
   d.localAttachments=[{id:'doc1',name:'메모.pdf',bytes:5}];d.audioCheck={...clone(base),effective:{[T1]:null,[T2]:null},auto:{mapping:{[T1]:null,[T2]:null},duplicates:[],mrPairs:{},unmapped:[]}};
   await page.locator('[data-case]').filter({hasText:'수동 음반 예시'}).click();await page.getByRole('tab',{name:'검토사항',exact:true}).click();await section.getByText('연결된 음원이 없습니다.').waitFor();assert.equal(await section.getByRole('button',{name:'음원 대조 시작'}).isDisabled(),true);

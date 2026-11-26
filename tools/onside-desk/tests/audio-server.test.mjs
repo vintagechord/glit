@@ -78,7 +78,7 @@ test('mapping patch validates and persists, detail exposes auto mapping and late
   const s = await setup(t);
   const {id, detail} = await s.create();
   const [first, second] = detail.tracks;
-  assert.deepEqual(detail.audioCheck, {mapping:{}, auto:{mapping:{[first.id]:null,[second.id]:null}, duplicates:[], mrPairs:{}, unmapped:[]}, effective:{[first.id]:null,[second.id]:null}, latest:null, staleTracks:[]});
+  assert.deepEqual(detail.audioCheck, {mapping:{}, auto:{mapping:{[first.id]:null,[second.id]:null}, duplicates:[], mrPairs:{}, unmapped:[]}, effective:{[first.id]:null,[second.id]:null}, latest:null, failed:null, staleTracks:[]});
   assert.equal((await s.json(`/api/cases/${id}/audio-check`, 'POST')).status, 400);
   const wav = await s.attach(id, '01_첫 곡.wav'), mp3 = await s.attach(id, '01_첫 곡.mp3'), two = await s.attach(id, '02 둘째 곡.flac'), pdf = await s.attach(id, '안내.pdf');
   let view = (await s.desk.detail(id)).audioCheck;
@@ -215,6 +215,52 @@ test('a worker that dies fails the job and keeps no partial run', async t => {
   const job = s.audioJob(id);
   assert.equal(job.status, 'failed'); assert.match(job.message, /^분석 도구가 중단되었습니다/);
   assert.equal((await s.desk.detail(id)).audioCheck.latest, null);
+});
+
+test('a run where every track failed never replaces the last good run', async t => {
+  let fail = false;
+  const s = await setup(t, {
+    suggest: track => track.track_no === 1 ? [insertLines(track, 2, ['바람 따라 춤을 춰'])] : [],
+    runAudioCheck: input => {
+      const run = fakeRun(input, track => track.track_no === 1 ? [insertLines(track, 2, ['바람 따라 춤을 춰'])] : []);
+      if (!fail) return run;
+      return {...run, status:'failed', tracks:run.tracks.map(tr => tr.status === 'ok' ? {...tr, status:'failed', error:'음원을 읽지 못했습니다.', suggestions:[]} : tr)};
+    },
+  });
+  const {id} = await s.create();
+  await s.attach(id, '01_첫 곡.wav');
+  await s.json(`/api/cases/${id}/audio-check`, 'POST'); await s.desk.audioIdle();
+  const good = (await s.desk.detail(id)).audioCheck.latest;
+  assert.equal(good.status, 'completed');
+
+  fail = true;
+  await s.json(`/api/cases/${id}/audio-check`, 'POST'); await s.desk.audioIdle();
+  const job = s.audioJob(id);
+  assert.equal(job.status, 'failed'); assert.equal(job.message, '음원을 읽지 못했습니다.');
+  const item = s.desk.store.data.cases[id];
+  assert.deepEqual(item.audioCheck.runs.map(r => r.status), ['completed', 'failed']);
+  assert.equal(item.history.find(h => h.action === 'error').message, '음원 대조 실패: 음원을 읽지 못했습니다.');
+  let view = (await s.desk.detail(id)).audioCheck;
+  assert.equal(view.latest.id, good.id);
+  assert.equal(view.failed.id, job.result.runId); assert.equal(view.failed.status, 'failed');
+
+  // The good run's suggestions still apply.
+  const response = await s.json(`/api/cases/${id}/audio-check/apply`, 'POST', {runId:good.id, items:[{suggestionId:good.tracks[0].suggestions[0].id, text:'바람 따라 춤을 춰'}]});
+  assert.equal(response.status, 200);
+
+  // More failed runs never push the last good run out of the kept three.
+  for (let i = 0; i < 3; i++) { await s.json(`/api/cases/${id}/audio-check`, 'POST'); await s.desk.audioIdle(); }
+  const runs = s.desk.store.data.cases[id].audioCheck.runs;
+  assert.equal(runs.length, 3);
+  assert.equal(runs[0].id, good.id); assert.deepEqual(runs.slice(1).map(r => r.status), ['failed', 'failed']);
+  view = (await s.desk.detail(id)).audioCheck;
+  assert.equal(view.latest.id, good.id); assert.equal(view.failed.id, runs.at(-1).id);
+
+  // A later good run becomes the latest again and clears the failure notice.
+  fail = false;
+  await s.json(`/api/cases/${id}/audio-check`, 'POST'); await s.desk.audioIdle();
+  view = (await s.desk.detail(id)).audioCheck;
+  assert.equal(view.latest.id, s.audioJob(id).result.runId); assert.equal(view.failed, null);
 });
 
 test('apply writes lyrics through overrides, records applied ids, and returns 409 after a lyric edit', async t => {
