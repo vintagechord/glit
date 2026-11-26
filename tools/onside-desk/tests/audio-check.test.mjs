@@ -685,6 +685,46 @@ test("a misheard chorus tail stays in the repeat and only the ad-lib after it be
   assert.equal(heardNorm(suggestions), normalizeText('오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 냬닐니 우닛가 우우우 예예예').norm);
 });
 
+test('an ad-lib after a tail with no exact match never sinks or joins the chorus repeat', () => {
+  const chorus = [seg('오 그대여', 20, 22), seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27), seg('함께 노래하자 냬닐리 우닉가', 27, 31)];
+  const full = '오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 냬닐리 우닉가';
+  for (const adlib of ['우우우 예예예 라라라', '우우우 예예예 라라라 랄랄라']) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorus, seg(adlib, 32, 36)]), frames(37, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high'], ['new', 'check']], adlib);
+    const [repeat, extra] = suggestions;
+    assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, adlib);
+    assert.ok(near(repeat.start, 20) && near(repeat.end, 31), adlib);
+    assert.equal(normalizeText(repeat.hint).norm, normalizeText(full).norm, adlib);
+    assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [adlib] }, adlib);
+    assert.ok(near(extra.start, 32) && near(extra.end, 36), adlib);
+  }
+  // 5자 애드리브는 minGapChars(6자)보다 짧아 새 구절이 되지 않고 버린다. 반복 구절에 끼지도 않는다.
+  const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorus, seg('우우 예예예', 32, 34)]), frames(35, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
+  assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
+  assert.equal(normalizeText(suggestions[0].hint).norm, normalizeText(full).norm);
+});
+
+test('unrelated sung text after a chorus whose last syllables were not heard is never folded into the repeat', () => {
+  const head = [seg('오 그대여', 20, 22), seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27)];
+  const cases = [
+    ['우리가 함께 춤춰요', [seg('함께 노래하자 내일이 우리가 함께 춤춰요', 27, 34)]],
+    ['우리가 함께 춤춰요', [seg('함께 노래하자 내일이', 27, 30), seg('우리가 함께 춤춰요', 31, 34)]],
+    ['어디가 예예예 예', [seg('함께 노래하자 내일이', 27, 30), seg('어디가 예예예 예', 31, 34)]],
+  ];
+  for (const [line, tail] of cases) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...head, ...tail]), frames(35, -5));
+    const label = tail.map((s) => s.t).join(' | ');
+    assert.deepEqual(suggestions.map((s) => s.kind), ['repeat', 'new'], label);
+    const [repeat, extra] = suggestions;
+    assert.ok(['high', 'medium'].includes(repeat.confidence), label);
+    assert.ok(!normalizeText(repeat.hint).norm.includes(normalizeText(line).norm.slice(0, 3)), label);
+    assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [line] }, label);
+    assert.equal(heardNorm(suggestions), normalizeText(`오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 내일이 ${line}`).norm, label);
+  }
+});
+
 test('differences one matching syllable apart are judged as one region', () => {
   // '살/갈'과 '없/있'은 각각 작은 차이지만 사이에 같은 글자 '수' 하나뿐이다: 합치면 '살수없/갈수있'(자모 거리 3).
   const d = draft('그대 없이 살 수 없어', [seg('그대 없이 갈 수 있어', 0, 4)], frames(4, -5));
