@@ -57,6 +57,30 @@ const amountLabel = (n, unit, base) => unit === 'bytes' ? bytesLabel(n, base) : 
 const kstDay = value => { const day = new Date(new Date(value).getTime() + 9 * 3_600_000); return `${day.getUTCMonth() + 1}월 ${day.getUTCDate()}일`; };
 const kst = value => value ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—';
 const isTimeout = error => error?.name === 'TimeoutError' || /aborted due to timeout/i.test(String(error?.message || ''));
+
+// pg_net error text is libcurl's; name the common ones in words the owner can act on.
+function netFailureReason(failure) {
+  if (failure.status) return `앱 응답 ${failure.status}`;
+  const message = String(failure.error || '');
+  if (failure.timedOut || /timeout|timed out/i.test(message)) return '응답 시간 초과';
+  if (/resolve host/i.test(message)) return '주소(DNS) 조회 실패';
+  if (/HTTP2|HTTP\/2/i.test(message)) return '연결 끊김(HTTP/2)';
+  if (/SSL|TLS|certificate/i.test(message)) return '보안 연결(TLS) 실패';
+  if (/connect/i.test(message)) return '연결 실패';
+  return message.slice(0, 80) || '원인 미상';
+}
+
+// Every wake-up call the database sends the app (mail, background jobs, storage cleanup, chat alerts)
+// is re-sent by the next cron tick while its work is still pending, so one dropped call heals itself.
+// A dead endpoint or a wrong token fails on every tick, so only repeated failures need attention.
+function netCallItem(net) {
+  const failed = Number(net.failedLast6h || 0), total = Number(net.totalLast6h || 0);
+  const repeated = failed >= 2 && failed / total > 0.2;
+  const latest = Array.isArray(net.recentFailures) ? net.recentFailures[0] : null;
+  const item = { label: '앱 호출 실패(6시간)', value: `${countLabel(failed)} / ${countLabel(total)}건${failed && net.latestFailed === false ? ' · 이후 정상' : ''}`, status: repeated ? 'warning' : 'ok' };
+  if (latest) item.hint = `최근 실패 ${kst(latest.at)} · ${netFailureReason(latest)}${repeated ? '' : ' · 다음 예약 실행이 다시 보냅니다.'}`;
+  return item;
+}
 const safeMessage = error => isTimeout(error) ? '응답 시간이 초과되었습니다.' : String(error?.message || error || '확인하지 못했습니다.').replace(/(?:eyJ[A-Za-z0-9_-]{10,}|Bearer\s+\S+|[A-Za-z0-9_-]{32,})/g, '***').slice(0, 200);
 const usage = (label, used, limit, unit, note, base = 1000) => ({
   label, used, limit, unit, percent: limit ? Math.min(999, Math.round((used / limit) * 1000) / 10) : null,
@@ -426,7 +450,7 @@ export function createSiteMonitor(options = {}) {
         const outbox = body.emailOutbox || {}; const stuck = Number(outbox.failed || 0) + Number(outbox.uncertain || 0);
         items.push({ label: '메일 실패·확인 필요(30일)', value: `${countLabel(stuck)}건`, status: stuck ? 'warning' : 'ok', ...(stuck ? { hint: '관리자 > 메일 발송 화면에서 확인하세요.' } : {}) });
         if (body.cron) items.push({ label: '예약 작업(pg_cron) 실패(24시간)', value: `${countLabel(body.cron.failedLast24h)}건`, status: body.cron.failedLast24h ? 'warning' : 'ok' });
-        if (body.net && body.net.totalLast6h) items.push({ label: '앱 호출 실패(6시간)', value: `${countLabel(body.net.failedLast6h)} / ${countLabel(body.net.totalLast6h)}건`, status: body.net.failedLast6h / body.net.totalLast6h > 0.2 ? 'warning' : 'ok' });
+        if (body.net && body.net.totalLast6h) items.push(netCallItem(body.net));
         const receipts = body.cashReceipts || {};
         items.push({ label: '현금영수증 대기', value: `발급 대기 ${countLabel(receipts.REQUESTED)}건 · 확인 필요 ${countLabel(receipts.FAILED)}건`, status: receipts.FAILED ? 'warning' : 'ok' });
         items.push({ label: '입금 대기 주문', value: `${countLabel(body.pendingBankOrders)}건`, status: 'ok' });
