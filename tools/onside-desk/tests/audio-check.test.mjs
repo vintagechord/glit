@@ -871,6 +871,113 @@ test('a lyric phrase that opens a new verse after the chorus is not merged into 
   assert.equal(heardNorm(suggestions), N(`${CHORUS_HEARD} 내일이 오니까 저 하늘 끝까지 너와 함께라면 좋아`));
 });
 
+// ── 창 옮기기(reanchor)는 줄마다 확인한 회전만 받는다(판정 R26) ──
+const SIX = { A: '하늘 높이 날아라', B: '바다 멀리 가거라', C: '함께 노래하자 내일이 오니까', D: '저 하늘 끝까지 날아가요', E: '작은 별이 반짝여요', F: '오 나의 사랑 그대여' };
+// layout: 연을 빈칸으로 가른 줄 글자('ABCD EF'), order: 부른 차례('ABCDCDCDEF'). 받아쓰기는 부른 그대로다.
+function sungSix(layout, order) {
+  const lines = [];
+  for (const block of layout.split(' ')) {
+    if (lines.length) lines.push('');
+    for (const c of block) lines.push(SIX[c]);
+  }
+  let t = 0;
+  const segments = [...order].map((c) => { const d = 2.5 + SIX[c].length * 0.06; const s = seg(SIX[c], t, t + d); t += d + 0.5; return s; });
+  return { lyrics: lines.join('\n'), segments, sec: Math.ceil(t + 2), sung: [...order].map((c) => SIX[c]) };
+}
+const appliedLines = (lyrics, list, picked) => applySuggestions(lyrics, list, picked.map((s) => ({ suggestionId: s.id }))).split('\n').filter((l) => l.trim());
+
+test('a block sung three times but listed once is one high repeat of its two extra copies after the block', () => {
+  // 제자리 창이 'C D' 한 벌만 설명해도 남은 'C D'가 같은 블록의 메아리로 붙는다. 창을 옮기면 'A B C D'와 끝말만 같은
+  // 받아쓰기 조각이 0.75로 맞아 'A B C D + 함께 노래하자 내일'(조각)을 맨 앞에 넣던 경우다.
+  for (const layout of ['ABCD EF', 'ABCDEF']) {
+    const { lyrics, segments, sec, sung } = sungSix(layout, 'ABCDCDCDEF');
+    const { suggestions } = draft(lyrics, segments, frames(sec, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], layout);
+    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 3, lines: [SIX.C, SIX.D, SIX.C, SIX.D] }, layout);
+    assert.deepEqual(appliedLines(lyrics, suggestions, suggestions), sung, layout);
+  }
+});
+
+test('a sub-block sung three times inside a stanza is one high repeat placed after its first singing', () => {
+  for (const layout of ['ABCD EF', 'ABCDEF']) {
+    for (const [order, block] of [['ABCBCBCDEF', 'BC'], ['ABCDBCDBCDEF', 'BCD']]) {
+      const { lyrics, segments, sec, sung } = sungSix(layout, order);
+      const { suggestions } = draft(lyrics, segments, frames(sec, -5));
+      const label = `${layout} ${order}`;
+      const highs = suggestions.filter((s) => s.confidence === 'high');
+      assert.equal(highs.length, 1, label);
+      assert.deepEqual(highs[0].op, { type: 'insertLines', afterLine: block.length, lines: [...block, ...block].map((c) => SIX[c]) }, label);
+      assert.deepEqual(appliedLines(lyrics, suggestions, highs), sung, label);
+    }
+  }
+});
+
+test('a chorus sung twice inside a stanza with a once-sung line is one high repeat even when the gap splits a line', () => {
+  // 첫 벌 끝 글자를 잘못 듣고('가거나') 둘째 벌에 오타('머리')가 있으면 가사 '라'가 둘째 벌의 '라'와 맞아 갭이 줄 안에서 갈린다.
+  // 제자리 창은 'B C' 강함 + 'A' 조각이 되고, 줄마다 확인한 회전으로 창을 옮겨 둘째 벌 전체를 하나의 강함으로 넣는다.
+  const A = '바다 멀리 가거라';
+  const B = '함께 노래하자 내일이 오니까';
+  const C = '저 하늘 끝까지 날아가요';
+  const D = '우리 모두 다 같이 손을 잡고';
+  for (const layout of ['D-after', 'D-before']) {
+    const stanza = layout === 'D-after' ? [A, B, C, D] : [D, A, B, C];
+    const lyrics = ['하늘 높이 날아라', '', ...stanza, '', '작은 별이 반짝여요'].join('\n');
+    for (const [b1, c2] of [[B, C], ['함께 노래하지 내일이 오니까', '저 하늘 끝까지 날아가유']]) {
+      const segments = [seg('하늘 높이 날아라', 0, 3)];
+      let t = 4;
+      const push = (text, d) => { segments.push(seg(text, t, t + d)); t += d; };
+      if (layout === 'D-before') push(D, 4);
+      push('바다 멀리 가거나', 3); push(b1, 4); push(C, 3); push('바다 머리 가거라', 3); push(B, 4); push(c2, 3);
+      if (layout === 'D-after') push(D, 4);
+      t += 1; push('작은 별이 반짝여요', 3);
+      const { suggestions } = draft(lyrics, segments, frames(Math.ceil(t + 1), -5));
+      const label = `${layout} ${b1}`;
+      const highs = suggestions.filter((s) => s.confidence === 'high');
+      assert.equal(highs.length, 1, label);
+      // 블록이 연의 첫 줄에서 시작하면 빈 줄을 앞에 둔다(D-after).
+      const block = layout === 'D-after' ? ['', A, B, C] : [A, B, C];
+      assert.deepEqual(highs[0].op, { type: 'insertLines', afterLine: layout === 'D-after' ? 4 : 5, lines: block }, label);
+      const want = layout === 'D-after' ? ['하늘 높이 날아라', A, B, C, A, B, C, D, '작은 별이 반짝여요'] : ['하늘 높이 날아라', D, A, B, C, A, B, C, '작은 별이 반짝여요'];
+      assert.deepEqual(appliedLines(lyrics, suggestions, highs), want, label);
+      wholeLinesOnly(suggestions, lyrics, label);
+    }
+  }
+});
+
+test('a chorus whose first copy has the typos goes after the block with the times of its second copy', () => {
+  // 오타가 첫 번째 벌에 있으면 가사 블록이 두 번째 벌과 맞아 삽입이 블록 앞(0행 뒤)에 놓이고 시각이 첫 번째 벌을 가리켰다.
+  // 둘째 벌 끝의 군소리 '하'는 다음 줄 첫 글자와 같다.
+  const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라', '함께 노래하자', '', '하늘 아래 꽃이 피네'].join('\n');
+  for (const [a1, b1] of [['바다 머리 가거라', '함께 노래하지'], ['바다 멀리 가거나', '함께 노래하자']]) {
+    const segments = [seg('하늘 높이 날아라', 0, 3), seg(a1, 4, 7), seg(b1, 7, 10), seg('바다 멀리 가거라', 11, 14), seg('함께 노래하자 하', 14, 17.5), seg('하늘 아래 꽃이 피네', 18, 21)];
+    const { suggestions } = draft(lyrics, segments, frames(22, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], a1);
+    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 3, lines: ['', '바다 멀리 가거라', '함께 노래하자'] }, a1);
+    assert.ok(near(suggestions[0].start, 11) && near(suggestions[0].end, 17), a1);
+  }
+});
+
+test('a window shift never turns an ad-lib that only shares a line ending into a high repeat', () => {
+  // '넌 한 번 한 잔 어때요'는 '너랑 나랑 한잔 어때요'와 끝말만 같다: 줄마다 보면 절반은 덮여도 조각 전체로 짝을 이루지 못한다.
+  const lyrics = ['이봐요 이봐요', '너랑 나랑 한잔 어때요', '오늘 밤도 함께해요'].join('\n');
+  const segments = [seg('이봐요 이봐요', 0, 3), seg('너랑 나랑 한잔 어때요', 3, 7), seg('어때요', 9, 10), seg('넌 한 번 한 잔 어때요', 20, 24), seg('오늘 밤도 함께해요', 26, 29)];
+  const { suggestions } = draft(lyrics, segments, frames(30, -5));
+  assert.equal(suggestions.filter((s) => s.confidence === 'high').length, 0);
+  assert.deepEqual(suggestions.filter((s) => s.op?.type === 'insertLines').map((s) => [s.kind, s.op.afterLine]), [['new', 1]]);
+});
+
+test('a fully sung line with a misheard last syllable never enters a high repeat as a fragment', () => {
+  // 셋째 벌 '바다 멀리 가거나'는 구간을 통째로 따로 불렀지만 core가 '가거'에서 끝난다: 조각 '바다 멀리 가거'를 강함에 붙이지 않는다.
+  const lyrics = ['하늘 높이 날아라', '바다 멀리 가거라', '', '함께 노래하자 내일이 오니까', '저 하늘 끝까지 날아가요', '', '작은 별이 반짝여요'].join('\n');
+  const segments = [];
+  let t = 0;
+  for (const text of ['하늘 높이 날아나', '바다 머리 가거라', '함께 노래하지 내일이 오니까', '조 하늘 끝까지 날아가요', '바다 멀리 가거요', '함께 노래하지 내일이 오니까', '조 하늘 끝까지 날아가요', '바다 멀리 가거나', '함께 노래하지 내일이 오니까', '조 하늘 끝까지 날아가요', '작은 별이 반짝여유']) {
+    segments.push(seg(text, t, t + 3)); t += 3.5;
+  }
+  const { suggestions } = draft(lyrics, segments, frames(Math.ceil(t + 1), -5));
+  wholeLinesOnly(suggestions, lyrics, '끝 글자');
+});
+
 test('differences one matching syllable apart are judged as one region', () => {
   // '살/갈'과 '없/있'은 각각 작은 차이지만 사이에 같은 글자 '수' 하나뿐이다: 합치면 '살수없/갈수있'(자모 거리 3).
   const d = draft('그대 없이 살 수 없어', [seg('그대 없이 갈 수 있어', 0, 4)], frames(4, -5));
