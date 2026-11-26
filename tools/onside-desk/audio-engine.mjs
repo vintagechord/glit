@@ -32,6 +32,8 @@ export function enginePaths(dataRoot) {
     python: path.join(venv, 'bin', 'python'),
     engineJson: path.join(root, 'engine.json'),
     worker: path.join(APP_DIR, 'audio-check', 'worker.py'),
+    // ENGINE_PACKAGES의 전체 의존성 고정(uv pip compile 결과). 설치는 이 버전들 밖으로 나가지 않는다.
+    constraints: path.join(APP_DIR, 'audio-check', 'constraints.txt'),
   };
 }
 
@@ -105,7 +107,7 @@ export async function installEngine({
 
   await fs.rm(p.engineJson, { force: true });
   onProgress('패키지를 설치하는 중');
-  await run(uv, ['pip', 'install', '--python', p.python, ...ENGINE_PACKAGES], { signal, env });
+  await run(uv, ['pip', 'install', '--python', p.python, '-c', p.constraints, ...ENGINE_PACKAGES], { signal, env });
 
   onProgress('모델을 내려받는 중');
   const worker = start({ command: [p.python, p.worker], signal, offline: false });

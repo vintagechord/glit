@@ -69,6 +69,9 @@ test('installEngine runs venv, pinned install, warmup in order and writes engine
   assert.equal(calls[0][0], '/bin/uv');
   assert.deepEqual(calls[0][1], ['venv', '--allow-existing', '--python', '3.12', venv]);
   assert.deepEqual(calls[1][1].slice(0, 4), ['pip', 'install', '--python', path.join(venv, 'bin', 'python')]);
+  // 전체 의존성은 함께 배포하는 constraints.txt로 고정한다.
+  const constraints = fileURLToPath(new URL('../audio-check/constraints.txt', import.meta.url));
+  assert.deepEqual(calls[1][1].slice(4, 6), ['-c', constraints]);
   assert.ok(calls[1][1].includes('mlx-whisper==0.4.3'));
   assert.ok(calls[1][1].includes('demucs==4.1.0'));
   assert.equal(warm[0][1], 'warmup');
@@ -80,6 +83,15 @@ test('installEngine runs venv, pinned install, warmup in order and writes engine
   assert.deepEqual(saved.packages, ENGINE_PACKAGES);
   assert.ok(saved.installedAt);
   assert.deepEqual(info, saved);
+});
+
+test('the shipped constraints pin every engine package and every dependency to one version', async () => {
+  const text = await fs.readFile(fileURLToPath(new URL('../audio-check/constraints.txt', import.meta.url)), 'utf8');
+  const pins = text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  assert.ok(pins.length > ENGINE_PACKAGES.length);
+  for (const pin of pins) assert.match(pin, /^[a-z0-9][a-z0-9._-]*==[0-9][^\s=]*$/i, pin);
+  assert.equal(new Set(pins.map((p) => p.split('==')[0].toLowerCase())).size, pins.length);
+  for (const pkg of ENGINE_PACKAGES) assert.ok(pins.includes(pkg), `${pkg} is not pinned in constraints.txt`);
 });
 
 test('installEngine does not write engine.json when a step fails', async () => {
