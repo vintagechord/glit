@@ -669,24 +669,60 @@ function deletion(ctx, p0, p1, li) {
   };
 }
 
-// 양쪽이 다른 구간은 줄마다 나눠 고칠 내용으로 모은다. 삽입 칸은 앞(없으면 뒤) 가사 글자의 줄에 붙인다.
+// 구간 앞(step −1) 또는 뒤(step +1)에서 가장 가까운, 양쪽 글자가 같은 칸
+function exactPair(ctx, p, step) {
+  const { L, T, pairs } = ctx;
+  for (let k = p; k >= 0 && k < pairs.length; k += step) {
+    const [i, j] = pairs[k];
+    if (i !== null && j !== null && L.norm[i] === T.norm[j]) return pairs[k];
+  }
+  return null;
+}
+
+// 양쪽이 다른 구간은 줄마다 나눠 고칠 내용으로 모은다. 받아쓴 글자는 짝지은(없으면 앞, 그것도 없으면 뒤) 가사 글자의 줄에 붙인다.
+// 다만 구간이 두 줄 경계에 걸치고 두 줄이 서로 다른 받아쓰기 구간으로 불렸으면, 받아쓴 글자는 자기 구간의 줄에 붙인다
+// ('…깨우네 | 내 사랑에'를 '…깨내 | 나의 사랑에'로 들었을 때 '나'는 뒷줄이다).
 function attachEdits(ctx, p0, p1, edits) {
-  const { L, pairs } = ctx;
+  const { L, T, pairs } = ctx;
+  const before = exactPair(ctx, p0 - 1, -1);
+  const after = exactPair(ctx, p1 + 1, 1);
+  let split = null;
+  if (before && after) {
+    const a = L.line[before[0]];
+    const b = L.line[after[0]];
+    const touched = new Set();
+    for (let p = p0; p <= p1; p += 1) if (pairs[p][0] !== null) touched.add(L.line[pairs[p][0]]);
+    if (a !== b && T.seg[before[1]] !== T.seg[after[1]] && [...touched].every((x) => x === a || x === b)) {
+      split = { a, b, segA: T.seg[before[1]], segB: T.seg[after[1]] };
+    }
+  }
   let line = L.line[neighbor(pairs, p0, 0, 1)];
   const groups = new Map();
+  const group = (x) => {
+    if (!groups.has(x)) groups.set(x, { lyr: [], tr: [], anchor: null, before: null });
+    return groups.get(x);
+  };
   for (let p = p0; p <= p1; p += 1) {
     const [i, j] = pairs[p];
-    if (i !== null) line = L.line[i];
-    if (!groups.has(line)) groups.set(line, { lyr: [], tr: [], anchor: null });
-    if (i !== null) groups.get(line).lyr.push(i);
-    if (j !== null) groups.get(line).tr.push(j);
+    if (i !== null) {
+      line = L.line[i];
+      group(line).lyr.push(i);
+    }
+    if (j === null) continue;
+    let target = line;
+    if (split && T.seg[j] === split.segB) target = split.b;
+    else if (split && T.seg[j] === split.segA) target = split.a;
+    group(target).tr.push(j);
   }
+  // 가사 글자 없이 받아쓴 글자만 붙은 줄은 앞줄이면 끝에, 뒷줄이면 처음에 넣는다.
+  if (split && groups.has(split.a)) groups.get(split.a).anchor = before[0];
+  if (split && groups.has(split.b)) groups.get(split.b).before = after[0];
   for (const [x, edit] of groups) addEdit(edits, x, edit);
 }
 
 function proposeLine(ctx, line, list) {
   const { L, T } = ctx;
-  const at = (e) => (e.lyr.length ? L.off[e.lyr[0]] : L.off[e.anchor] + 1);
+  const at = (e) => (e.lyr.length ? L.off[e.lyr[0]] : e.anchor !== null && e.anchor !== undefined ? L.off[e.anchor] + 1 : L.off[e.before]);
   const to = (e) => (e.lyr.length ? L.off[e.lyr.at(-1)] + 1 : at(e));
   let text = line.text;
   // 오른쪽부터 고친다. 같은 위치면 범위 바꿈을 먼저 하고 그 앞에 삽입을 넣는다.

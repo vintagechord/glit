@@ -27,3 +27,17 @@ test('every local module the desk server imports is copied into the Mac bundle a
     }
   }
 });
+
+// The audio check's Python worker is not imported by any module; the engine
+// spawns it from <app>/audio-check/worker.py, so the folder must be copied too.
+test('the audio check worker folder is copied into the Mac bundle and checked on install', async () => {
+  const build = await fs.readFile(path.join(root, 'build-mac.mjs'), 'utf8');
+  const install = await fs.readFile(path.join(root, 'install-mac.mjs'), 'utf8');
+  const engine = await fs.readFile(path.join(root, 'audio-engine.mjs'), 'utf8');
+  assert.match(engine, /path\.join\(APP_DIR, 'audio-check', 'worker\.py'\)/);
+  await fs.access(path.join(root, 'audio-check', 'worker.py'));
+  const copyList = build.match(/for \(const name of \[([^\]]*)\]\) await fs\.cp\(path\.join\(here, name\)/);
+  assert.ok(copyList, 'build-mac.mjs copy list not found');
+  assert.match(copyList[1], /'audio-check'/, 'audio-check/ is not copied by build-mac.mjs');
+  assert.match(install, /'Contents\/Resources\/app\/audio-check\/worker\.py'/, 'audio-check/worker.py is not checked by install-mac.mjs');
+});

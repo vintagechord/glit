@@ -253,6 +253,21 @@ test('word difference across a repeated line is grouped and averaged', () => {
   assert.deepEqual(finalizeSuggestions(d, { [r0.id]: [-10, -9], [r1.id]: [-10, -8.8] }), []);
 });
 
+test('a difference spanning a line break keeps each heard word with the line it was sung in', () => {
+  // '걸어가네'→'걸어내'와 '내 사랑'→'나의 사랑'이 2자 안에 붙어 한 차이 구간이 되고, '나'가 앞줄 '네'와 짝지어진다.
+  const lyrics = '작은 길을 함께 걸어가네\n내 사랑 노을 아래 빛나네';
+  const segments = [seg('작은 길을 함께 걸어내', 0, 4), seg('나의 사랑 노을 아래 빛나네', 4, 8)];
+  const d = draft(lyrics, segments, frames(9, -5));
+  assert.deepEqual(d.suggestions.map((s) => s.op), [
+    { type: 'replaceLine', lines: [0], from: '작은 길을 함께 걸어가네', to: '작은 길을 함께 걸어내' },
+    { type: 'replaceLine', lines: [1], from: '내 사랑 노을 아래 빛나네', to: '나의 사랑 노을 아래 빛나네' },
+  ]);
+  assert.deepEqual(d.scoreRequests.map((r) => r.candidates[1]), ['작은 길을 함께 걸어내', '나의 사랑 노을 아래 빛나네']);
+  // 받아쓰기가 두 줄을 한 구간으로 냈으면 경계를 나눌 근거가 없으므로 짝지은 글자의 줄을 따른다.
+  const one = draft(lyrics, [seg('작은 길을 함께 걸어내 나의 사랑 노을 아래 빛나네', 0, 8)], frames(9, -5));
+  assert.equal(one.suggestions[0].op.to, '작은 길을 함께 걸어내 나');
+});
+
 test('lyric-only line with vocal energy is treated as a transcription miss', () => {
   const lyrics = '하늘 높이 날아라\n푸른 들판 지나서\n바다 멀리 가거라';
   const segments = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 6, 9)];
