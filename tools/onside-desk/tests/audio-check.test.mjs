@@ -623,106 +623,128 @@ test('an omitted chorus whose head was misheard is still one high repeat of the 
   assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
 });
 
-test('an omitted chorus whose tail was misheard is still one high repeat of the whole block', () => {
-  const segments = edgeSegs([
-    seg('오 그대여', 20, 22),
-    seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27),
-    seg('함께 노래하자 냬닐니 우닛가', 27, 31),
-  ]);
-  const { suggestions } = draft(EDGE_LYRICS, segments, frames(32, -5));
-  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
-  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
-  assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
-});
+// 맞춘 구간(core) 밖에서 받아쓴 글자는 뭉개진 끝자락이든 다른 노래든 반복 구절에 넣지 않는다(판정 R21).
+// 반복 구절은 덮인 비율 0.5 이상인 줄을 통째로 넣고, 남은 받아쓴 글자는 6자 이상이면 새 구절, 아니면 버린다.
+const N = (text) => normalizeText(text).norm;
+const CHORUS_HEARD = '오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자';
+const chorusHead = () => [seg('오 그대여', 20, 22), seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27)];
+// 강함 제안의 줄은 모두 가사의 온전한 줄(또는 빈 줄)이어야 한다.
+const wholeLinesOnly = (list, lyricsText, label) => {
+  const own = new Set(lyricsText.split('\n'));
+  for (const s of list.filter((x) => x.confidence === 'high')) {
+    for (const line of s.op.lines) assert.ok(own.has(line), `${label}: 강함 제안에 줄 일부 '${line}'`);
+  }
+};
 
-test('a misheard chorus tail with no exact match left stays inside one high repeat', () => {
-  for (const tail of ['함께 노래하자 내일이 우닛가', '함께 노래하자 냬닐리 우닉가', '함께 노래하자 내닐리 우닉가']) {
-    const segments = edgeSegs([
-      seg('오 그대여', 20, 22),
-      seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27),
-      seg(tail, 27, 31),
-    ]);
-    const { suggestions } = draft(EDGE_LYRICS, segments, frames(32, -5));
-    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], tail);
-    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, tail);
-    assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31), tail);
+test('a misheard chorus tail keeps one high repeat of the whole block and never puts the garbled text inside it', () => {
+  // 마지막 줄 '함께 노래하자 내일이 오니까'(12자)는 어느 경우든 절반 이상 맞는다. 반복 구절의 받아쓴 범위는 맞춘 구간
+  // (정확히 맞은 글자로 끝난다)을 낱말 경계에 맞춘 데까지다. 그 뒤 끝자락은 6자 이상이면 새 구절, 아니면 버린다.
+  const tails = [
+    ['냬닐리 우닉가', ''], ['내닐리 우닉가', ''], ['냬닐니 우닛가', ''],
+    ['내일이 우닛가', '내일이'], ['내일이 오닉가요', '내일이'], ['내이리 오니가요', '내이리'], ['나일이 오니가요', '나일이'],
+  ];
+  for (const [tail, inRepeat] of tails) {
+    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorusHead(), seg(`함께 노래하자 ${tail}`, 27, 31)]), frames(32, -5));
+    const [repeat, ...rest] = suggestions;
+    assert.deepEqual([repeat.kind, repeat.confidence], ['repeat', 'high'], tail);
+    assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, tail);
+    assert.ok(near(repeat.start, 20), tail);
+    // 남은 글자만 새 구절에 들어간다(겹치는 글자 없이).
+    const full = N(`${CHORUS_HEARD} ${tail}`);
+    const hint = N(repeat.hint);
+    assert.equal(hint, N(`${CHORUS_HEARD} ${inRepeat}`), tail);
+    const left = full.slice(hint.length);
+    if (left.length >= THRESHOLDS.minGapChars) {
+      assert.deepEqual(rest.map((s) => [s.kind, s.confidence, s.op.afterLine, N(s.op.lines.join(' '))]), [['new', 'check', 6, left]], tail);
+    } else {
+      assert.deepEqual(rest, [], tail);
+    }
   }
 });
 
-test('a misheard first line at the very start of a block stays inside one high repeat', () => {
+test('a misheard first line at the very start of a block never starts the repeat mid-line', () => {
   const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까', '', '작은 별이 반짝여요'].join('\n');
-  const segments = [
-    seg('하늘 높이 날아라', 0, 3),
-    seg('바다 멀리 가거라 저 하늘 끝까지', 4, 9),
-    seg('함께 노래하자 내일이 오니까', 9, 13),
-    seg('작은 별이 반짝여요', 14, 17),
-    seg('파타 뭘니 가거라 저 하늘 끝까지', 18, 23),
-    seg('함께 노래하자 내일이 오니까', 23, 27),
-  ];
-  const { suggestions } = draft(lyrics, segments, frames(28, -5));
-  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
-  assert.deepEqual(suggestions[0].op, {
-    type: 'insertLines', afterLine: 5, lines: ['', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까'],
-  });
-  assert.ok(near(suggestions[0].start, 18) && near(suggestions[0].end, 27));
+  const first = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라 저 하늘 끝까지', 4, 9), seg('함께 노래하자 내일이 오니까', 9, 13), seg('작은 별이 반짝여요', 14, 17)];
+  const second = (head) => [...first, seg(head, 18, 23), seg('함께 노래하자 내일이 오니까', 23, 27)];
+  // 첫 줄이 절반 넘게 맞으면(9/13) 블록 전체가 강함이다. 맞춘 구간 밖의 '파타 뭘니'(4자)는 버린다.
+  const covered = draft(lyrics, second('파타 뭘니 가거라 저 하늘 끝까지'), frames(28, -5)).suggestions;
+  assert.deepEqual(covered.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.deepEqual(covered[0].op, { type: 'insertLines', afterLine: 5, lines: ['', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까'] });
+  assert.equal(N(covered[0].hint), N('가거라 저 하늘 끝까지 함께 노래하자 내일이 오니까'));
+  assert.ok(covered[0].start > 18 && near(covered[0].end, 27));
+  // 첫 줄이 절반도 안 맞으면 그 줄을 뺀 보통이고, 받아쓴 첫 줄은 새 구절로 따로 둔다.
+  const garbled = draft(lyrics, second('파타 뭘니 바거나 처 아늘 끝까지'), frames(28, -5)).suggestions;
+  assert.deepEqual(garbled.map((s) => [s.kind, s.confidence]), [['new', 'check'], ['repeat', 'medium']]);
+  assert.deepEqual(garbled[0].op, { type: 'insertLines', afterLine: 5, lines: ['파타 뭘니 바거나 처 아늘 끝까지'] });
+  assert.deepEqual(garbled[1].op, { type: 'insertLines', afterLine: 5, lines: ['함께 노래하자 내일이 오니까'] });
 });
 
-test("a misheard chorus tail stays in the repeat and only the ad-lib after it becomes new", () => {
-  const segments = edgeSegs([
-    seg('오 그대여', 20, 22),
-    seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27),
-    seg('함께 노래하자 냬닐니 우닛가', 27, 31),
-    seg('우우우 예예예', 32, 34),
+test('a misheard chorus tail followed by a separate ad-lib keeps the repeat high and puts the leftover in new', () => {
+  for (const tail of ['냬닐리 우닉가', '내일이 오닉가요', '냬닐니 우닛가']) {
+    for (const adlib of ['우우 예예예', '우우우 예예예', '우우우 예예예 라라라', '우우우 예예예 라라라 랄랄라']) {
+      const label = `${tail} + ${adlib}`;
+      const segments = edgeSegs([...chorusHead(), seg(`함께 노래하자 ${tail}`, 27, 31), seg(adlib, 32, 36)]);
+      const { suggestions } = draft(EDGE_LYRICS, segments, frames(37, -5));
+      // 후렴이 통째로 새 구절이 되지 않는다: 첫 제안이 블록 전체의 강함 반복이고, 나머지는 확인 필요 새 구절이다.
+      const [repeat, ...rest] = suggestions;
+      assert.deepEqual([repeat.kind, repeat.confidence], ['repeat', 'high'], label);
+      assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, label);
+      assert.ok(near(repeat.start, 20), label);
+      assert.ok(rest.length >= 1 && rest.every((s) => s.kind === 'new' && s.confidence === 'check' && s.op.afterLine === 6), label);
+      assert.ok(near(rest.at(-1).end, 36), label);
+      // 남은 글자(끝자락 + 애드리브)는 모두 6자 이상이므로 버려지는 글자가 없다: 모든 받아쓴 글자가 꼭 한 번씩 나온다.
+      assert.equal(heardNorm(suggestions), N(`${CHORUS_HEARD} ${tail} ${adlib}`), label);
+    }
+  }
+});
+
+test('unrelated sung lines after a chorus heard only partway are never put inside a high repeat', () => {
+  const lines = ['우리가 함께 춤춰요', '어디가 예예예 예', '이제 안녕 내 사랑', '하얀 눈이 내리면', '어디에 있나요', '아이야 이리 오너라', '어디까지 가니', '비가 오는 날에'];
+  for (const stop of ['함께 노래하자', '함께 노래하자 내일이']) {
+    for (const line of lines) {
+      const cases = [
+        [`${stop} ${line} (같은 구간)`, [seg(`${stop} ${line}`, 27, 34)]],
+        [`${stop} | ${line} (다른 구간)`, [seg(stop, 27, 30), seg(line, 31, 34)]],
+      ];
+      for (const [label, tail] of cases) {
+        const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorusHead(), ...tail]), frames(35, -5));
+        assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high'], ['new', 'check']], label);
+        const [repeat, extra] = suggestions;
+        // 마지막 줄은 절반 이상 맞으므로 블록 전체를 넣는다. 받아쓴 힌트에는 다른 줄의 글자가 한 자도 없다.
+        assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, label);
+        assert.equal(N(repeat.hint), N(`오 그대여 바다 멀리 가거라 저 하늘 끝까지 ${stop}`), label);
+        assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [line] }, label);
+        wholeLinesOnly(suggestions, EDGE_LYRICS, label);
+      }
+    }
+  }
+});
+
+test('a block edge line heard below half is left out and its fragment is never merged into a high repeat', () => {
+  // 마지막 줄 '함께 노래하자 내일이 오니까 우리 모두'(16자) 중 6–7자만 들렸다.
+  const lyrics = ['하늘 높이 날아라', '', '오 그대여', '바다 멀리 가거라', '함께 노래하자 내일이 오니까 우리 모두', '', '작은 별이 반짝여요'].join('\n');
+  const first = [seg('하늘 높이 날아라', 0, 3), seg('오 그대여', 4, 6), seg('바다 멀리 가거라', 6, 9), seg('함께 노래하자 내일이 오니까 우리 모두', 9, 14), seg('작은 별이 반짝여요', 15, 18)];
+  for (const last of ['함께 노래하자 내', '함께 노래하자']) {
+    for (const adlib of [[], [seg('우우우 예예예', 29, 31)]]) {
+      const label = `${last}${adlib.length ? ' + 애드리브' : ''}`;
+      const segments = [...first, seg('오 그대여', 20, 22), seg('바다 멀리 가거라', 22, 25), seg(last, 25, 28), ...adlib];
+      const { suggestions } = draft(lyrics, segments, frames(32, -5));
+      wholeLinesOnly(suggestions, lyrics, label);
+      assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'medium'], ['repeat', 'medium'], ...adlib.map(() => ['new', 'check'])], label);
+      const [block, piece] = suggestions;
+      assert.deepEqual(block.op, { type: 'insertLines', afterLine: 6, lines: ['오 그대여', '바다 멀리 가거라'] }, label);
+      assert.deepEqual(piece.op, { type: 'insertLines', afterLine: 6, lines: [last] }, label);
+    }
+  }
+  // 첫 줄 쪽도 같다: '저 멀리 푸른 바다 건너 오 그대여'(14자) 중 '건너 오 그대여'만 들렸다.
+  const lyricsH = ['하늘 높이 날아라', '', '저 멀리 푸른 바다 건너 오 그대여', '바다 멀리 가거라', '함께 노래하자', '', '작은 별이 반짝여요'].join('\n');
+  const firstH = [seg('하늘 높이 날아라', 0, 3), seg('저 멀리 푸른 바다 건너 오 그대여', 4, 8), seg('바다 멀리 가거라', 8, 11), seg('함께 노래하자', 11, 14), seg('작은 별이 반짝여요', 15, 18)];
+  const { suggestions } = draft(lyricsH, [...firstH, seg('건너 오 그대여', 20, 23), seg('바다 멀리 가거라', 23, 26), seg('함께 노래하자', 26, 29)], frames(30, -5));
+  wholeLinesOnly(suggestions, lyricsH, '건너 오 그대여');
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence, s.op.lines]), [
+    ['repeat', 'medium', ['건너 오 그대여']],
+    ['repeat', 'medium', ['바다 멀리 가거라', '함께 노래하자']],
   ]);
-  const { suggestions } = draft(EDGE_LYRICS, segments, frames(35, -5));
-  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high'], ['new', 'check']]);
-  const [chorus, adlib] = suggestions;
-  assert.deepEqual(chorus.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
-  assert.ok(near(chorus.start, 20) && near(chorus.end, 31));
-  assert.match(chorus.hint, /냬닐니 우닛가$/);
-  assert.deepEqual(adlib.op, { type: 'insertLines', afterLine: 6, lines: ['우우우 예예예'] });
-  assert.ok(near(adlib.start, 32) && near(adlib.end, 34));
-  assert.equal(heardNorm(suggestions), normalizeText('오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 냬닐니 우닛가 우우우 예예예').norm);
-});
-
-test('an ad-lib after a tail with no exact match never sinks or joins the chorus repeat', () => {
-  const chorus = [seg('오 그대여', 20, 22), seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27), seg('함께 노래하자 냬닐리 우닉가', 27, 31)];
-  const full = '오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 냬닐리 우닉가';
-  for (const adlib of ['우우우 예예예 라라라', '우우우 예예예 라라라 랄랄라']) {
-    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorus, seg(adlib, 32, 36)]), frames(37, -5));
-    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high'], ['new', 'check']], adlib);
-    const [repeat, extra] = suggestions;
-    assert.deepEqual(repeat.op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK }, adlib);
-    assert.ok(near(repeat.start, 20) && near(repeat.end, 31), adlib);
-    assert.equal(normalizeText(repeat.hint).norm, normalizeText(full).norm, adlib);
-    assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [adlib] }, adlib);
-    assert.ok(near(extra.start, 32) && near(extra.end, 36), adlib);
-  }
-  // 5자 애드리브는 minGapChars(6자)보다 짧아 새 구절이 되지 않고 버린다. 반복 구절에 끼지도 않는다.
-  const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...chorus, seg('우우 예예예', 32, 34)]), frames(35, -5));
-  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
-  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
-  assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
-  assert.equal(normalizeText(suggestions[0].hint).norm, normalizeText(full).norm);
-});
-
-test('unrelated sung text after a chorus whose last syllables were not heard is never folded into the repeat', () => {
-  const head = [seg('오 그대여', 20, 22), seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27)];
-  const cases = [
-    ['우리가 함께 춤춰요', [seg('함께 노래하자 내일이 우리가 함께 춤춰요', 27, 34)]],
-    ['우리가 함께 춤춰요', [seg('함께 노래하자 내일이', 27, 30), seg('우리가 함께 춤춰요', 31, 34)]],
-    ['어디가 예예예 예', [seg('함께 노래하자 내일이', 27, 30), seg('어디가 예예예 예', 31, 34)]],
-  ];
-  for (const [line, tail] of cases) {
-    const { suggestions } = draft(EDGE_LYRICS, edgeSegs([...head, ...tail]), frames(35, -5));
-    const label = tail.map((s) => s.t).join(' | ');
-    assert.deepEqual(suggestions.map((s) => s.kind), ['repeat', 'new'], label);
-    const [repeat, extra] = suggestions;
-    assert.ok(['high', 'medium'].includes(repeat.confidence), label);
-    assert.ok(!normalizeText(repeat.hint).norm.includes(normalizeText(line).norm.slice(0, 3)), label);
-    assert.deepEqual(extra.op, { type: 'insertLines', afterLine: 6, lines: [line] }, label);
-    assert.equal(heardNorm(suggestions), normalizeText(`오 그대여 바다 멀리 가거라 저 하늘 끝까지 함께 노래하자 내일이 ${line}`).norm, label);
-  }
 });
 
 test('differences one matching syllable apart are judged as one region', () => {
