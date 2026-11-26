@@ -332,23 +332,34 @@ test('empty lyrics with vocals yield one whole-transcript new suggestion', () =>
   assert.deepEqual(s.op, { type: 'insertLines', afterLine: -1, lines: ['하늘 높이 날아라', '바다 멀리 가거라'] });
 });
 
-test('instrumental track flags vocals above 15% of frames', () => {
-  const some = frames(25, (t) => (t < 5 ? -5 : -40));
-  const { suggestions } = draft('', [seg('라라 노래해', 1, 4)], some, { instrumental: true });
+// worker의 energy는 보컬 스템 자신의 90퍼센타일 기준이라 프레임의 10% 이상이 늘 0dB 이상이다(조용한 스템은 거의 평평하다).
+// 보컬이 있는지는 믹스 기준 level로 본다.
+const stemEnergy = (sec) => frames(sec, (t) => (Math.round(t / 0.25) % 10 === 0 ? 0.5 : -0.5));
+
+test('instrumental track flags vocals above 15% of frames by the mix-relative level', () => {
+  const some = frames(25, (t) => (t < 5 ? -8 : -40));
+  const { suggestions } = draft('', [seg('라라 노래해', 1, 4)], stemEnergy(25), { instrumental: true, level: some });
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].kind, 'instrumental');
   assert.equal(suggestions[0].confidence, 'check');
   assert.equal(suggestions[0].op, null);
-  const few = frames(25, (t) => (t < 2.5 ? -5 : -40));
-  assert.deepEqual(draft('', [], few, { instrumental: true }).suggestions, []);
+  assert.ok(near(suggestions[0].start, 0) && near(suggestions[0].end, 5));
+  const few = frames(25, (t) => (t < 2.5 ? -8 : -40));
+  assert.deepEqual(draft('', [], stemEnergy(25), { instrumental: true, level: few }).suggestions, []);
 });
 
-test('lyrics track with no vocal frames is flagged', () => {
-  const { suggestions } = draft(CHORUS, [], frames(20, -40));
+test('lyrics track with no vocal frames is flagged by the mix-relative level', () => {
+  const { suggestions } = draft(CHORUS, [], stemEnergy(20), { level: frames(20, -45) });
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].kind, 'no-vocal');
   assert.equal(suggestions[0].confidence, 'check');
   assert.equal(suggestions[0].op, null);
+});
+
+test('without a mix-relative level the stem energy alone never flags no-vocal or MR vocals', () => {
+  // 예전 분석(level 없음): 알 수 없으므로 경고하지 않는다. 스템 기준 energy가 낮아도 마찬가지다.
+  assert.ok(!draft(CHORUS, [], frames(20, -40)).suggestions.some((s) => s.kind === 'no-vocal'));
+  assert.deepEqual(draft('', [seg('라라 노래해', 1, 4)], frames(25, -5), { instrumental: true }).suggestions, []);
 });
 
 test('spacing-only difference yields nothing', () => {

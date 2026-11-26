@@ -263,7 +263,8 @@ export function validateMapping(mapping, tracks, attachments) {
 }
 
 // ── 받아쓰기 정리와 제안 ──────────────────────────────────────────────
-// segments: [{ s, e, t, words: [{ s, e, w }] }], energy[k]: 프레임 [k·hop, (k+1)·hop)의 보컬 dB(곡 90퍼센타일 기준)
+// segments: [{ s, e, t, words: [{ s, e, w }] }], energy[k]: 프레임 [k·hop, (k+1)·hop)의 보컬 dB(보컬 스템 자신의 90퍼센타일 기준),
+// level[k]: 같은 프레임의 보컬 dB(분리 전 믹스의 90퍼센타일 기준, 보컬이 있는지 판단용)
 
 const HALLUCINATION = /(감사합니다|시청해 ?주셔서|다음 영상|한글자막|자막 ?by|구독|아멘)/;
 const HOP = 0.25;
@@ -1178,7 +1179,15 @@ function unclearSuggestions(ctx, segments, out) {
   }
 }
 
-export function draftSuggestions({ trackId, lyrics, segments, energy, duration, instrumental }) {
+// 믹스 기준 보컬 dB(level)에서 보컬 프레임 비율. level이 없으면(예전 분석) 알 수 없음(null).
+export function vocalPresence(level) {
+  if (!Array.isArray(level) || !level.length) return null;
+  return level.filter((v) => v >= THRESHOLDS.vocalDb).length / level.length;
+}
+
+// 보컬이 있는지(보컬 없음·연주곡의 보컬 경고)는 믹스 기준 level로 판단한다. 스템 자신 기준인 energy는 늘 10% 이상이 0dB
+// 이상이라 보컬이 없어도 비율이 낮아지지 않는다. level이 없으면 그런 경고를 내지 않는다.
+export function draftSuggestions({ trackId, lyrics, segments, energy, level, duration, instrumental }) {
   const segs = Array.isArray(segments) ? segments : [];
   const en = Array.isArray(energy) ? energy : [];
   const T = transcriptChars(segs);
@@ -1186,19 +1195,20 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, duration, 
   const lines = lyricLines(lyrics);
   const sung = lines.filter((line) => !line.translation && line.norm);
   const vocal = en.map((v) => v >= THRESHOLDS.vocalDb);
-  const ratio = en.length ? vocal.filter(Boolean).length / en.length : null;
+  const presence = vocalPresence(level);
   const out = [];
   const scoreRequests = [];
   if (instrumental) {
-    if (ratio !== null && ratio > THRESHOLDS.mrVocalRatio) {
+    if (presence !== null && presence > THRESHOLDS.mrVocalRatio) {
+      const heard = level.map((v) => v >= THRESHOLDS.vocalDb);
       out.push(suggestion(trackId, {
-        kind: 'instrumental', confidence: 'check', start: vocal.indexOf(true) * HOP,
-        end: (vocal.lastIndexOf(true) + 1) * HOP, op: null, hint: T.text, lines: [],
+        kind: 'instrumental', confidence: 'check', start: heard.indexOf(true) * HOP,
+        end: (heard.lastIndexOf(true) + 1) * HOP, op: null, hint: T.text, lines: [],
       }));
     }
     return { suggestions: out, scoreRequests };
   }
-  if (sung.length && ratio !== null && ratio < THRESHOLDS.noVocalRatio) {
+  if (sung.length && presence !== null && presence < THRESHOLDS.noVocalRatio) {
     out.push(suggestion(trackId, { kind: 'no-vocal', confidence: 'check', start: 0, end: total, op: null, hint: '', lines: [] }));
     return { suggestions: out, scoreRequests };
   }

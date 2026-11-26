@@ -7,12 +7,14 @@ import { runAudioCheck, progressStageLabel } from '../audio-check-run.mjs';
 
 const LYRICS = '별빛이 내려와요\n우리 함께 걸어요';
 const att = (id, name, sha) => ({ id, name, storedName: `${id}.wav`, bytes: 1, createdAt: 'x', sha256: sha });
-const loud = Array.from({ length: 200 }, () => -10);
-const quiet = Array.from({ length: 200 }, () => -60);
+// worker가 돌려주는 모양: energy는 보컬 스템 자신의 90퍼센타일 기준(10% 이상이 늘 0dB 이상), level은 믹스 90퍼센타일 기준.
+const stemEnergy = Array.from({ length: 200 }, (_, k) => (k % 10 < 3 ? 0 : -6));
+const sung = Array.from({ length: 200 }, (_, k) => (k % 4 ? -8 : -40));
+const silent = Array.from({ length: 200 }, () => -60);
 
 function analysis(over = {}) {
   return {
-    duration: 20, separation: 'demucs', residualDb: -30, vocals: '/v.wav', energy: loud,
+    duration: 20, separation: 'demucs', residualDb: -30, vocals: '/v.wav', energy: stemEnergy, level: sung,
     segments: [
       { s: 1, e: 5, t: '별빛이 내려와요', words: [] },
       { s: 6, e: 10, t: '우리 함께 걸어요', words: [] },
@@ -152,21 +154,41 @@ test('runAudioCheck pairs MR with its vocal track and checks the MR from the sam
   assert.equal(run.tracks[1].status, 'ok');
   assert.deepEqual(run.tracks[1].suggestions, []);
 
-  // subtraction leaves silence -> MR flagged, vocal re-analyzed without mr
+  // subtraction leaves silence (by the mix-relative level; the stem energy stays flat) -> MR flagged, vocal re-analyzed without mr
   const dir2 = await tmp();
-  const w2 = fakeWorker((p) => (p.mr ? analysis({ separation: 'mr', energy: quiet }) : analysis()));
+  const flat = Array.from({ length: 200 }, (_, k) => (k % 10 === 0 ? 0.5 : -0.5));
+  const w2 = fakeWorker((p) => (p.mr ? analysis({ separation: 'mr', energy: flat, level: silent }) : analysis()));
   const run2 = await runAudioCheck({ caseDir: dir2, tracks: [t1, mr], attachments: [a1, am], mapping: { t1: 'a1', m1: 'am' }, worker: w2 });
   assert.equal(w2.count('analyze'), 2);
   assert.equal(run2.tracks[1].suggestions[0].kind, 'instrumental');
   assert.equal(run2.tracks[1].suggestions[0].hint, '원곡과 같은 음원일 수 있음');
   assert.equal(run2.tracks[0].separation, 'demucs');
 
-  // subtraction rejected -> MR analyzed on its own, without transcription
+  // subtraction rejected -> MR analyzed on its own, without transcription; its leaked vocals are flagged by level
   const dir3 = await tmp();
-  const w3 = fakeWorker((p) => analysis({ separation: 'demucs', energy: p.transcribe ? loud : quiet }));
+  const w3 = fakeWorker((p) => analysis({ separation: 'demucs', level: p.transcribe ? sung : silent }));
   const run3 = await runAudioCheck({ caseDir: dir3, tracks: [t1, mr], attachments: [a1, am], mapping: { t1: 'a1', m1: 'am' }, worker: w3 });
   assert.equal(w3.calls.at(-1).payload.transcribe, false);
   assert.equal(run3.tracks[1].status, 'ok');
+  assert.deepEqual(run3.tracks[1].suggestions, []);
+  const dir4 = await tmp();
+  const w4 = fakeWorker(() => analysis({ separation: 'demucs' }));
+  const run4 = await runAudioCheck({ caseDir: dir4, tracks: [t1, mr], attachments: [a1, am], mapping: { t1: 'a1', m1: 'am' }, worker: w4 });
+  assert.equal(run4.tracks[1].suggestions[0].kind, 'instrumental');
+});
+
+test('runAudioCheck never calls an MR the same audio or a track vocal-less when the analysis has no level', async () => {
+  // level이 없는 분석(예전 형식)은 알 수 없음으로 보고 그런 경고를 내지 않는다.
+  const caseDir = await tmp();
+  const mr = { id: 'm1', track_no: 2, track_title: '별빛 (MR)', lyrics: '' };
+  const am = att('am', '02 별빛 (MR).wav', 'sha-am');
+  const old = { ...analysis({ separation: 'mr', energy: silent }) };
+  delete old.level;
+  const worker = fakeWorker(() => old);
+  const run = await runAudioCheck({ caseDir, tracks: [t1, mr], attachments: [a1, am], mapping: { t1: 'a1', m1: 'am' }, worker });
+  assert.equal(worker.count('analyze'), 1);
+  assert.deepEqual(run.tracks[1].suggestions, []);
+  assert.ok(!run.tracks[0].suggestions.some((s) => s.kind === 'no-vocal'));
 });
 
 test('runAudioCheck stops on abort without writing result.json', async () => {

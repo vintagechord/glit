@@ -58,6 +58,31 @@ class WorkerTest(unittest.TestCase):
         self.assertGreaterEqual(max(e), 0)
         self.assertLess(min(e), -30)
 
+    def test_energy_cannot_tell_a_silent_stem_but_level_can(self):
+        # 스템 자신 기준인 energy는 늘 10% 이상이 0dB 이상이다. 믹스 기준 level은 조용한 스템을 모두 낮게 낸다.
+        rng = np.random.default_rng(3)
+        mix = (rng.standard_normal(16000 * 10) * 0.1).astype(np.float32)
+        silent = (rng.standard_normal(16000 * 10) * 1e-5).astype(np.float32)
+        e = worker.energy(silent)
+        self.assertGreaterEqual(sum(v >= -15 for v in e) / len(e), 0.1)
+        lv = worker.level(silent, mix)
+        self.assertEqual(len(lv), 40)
+        self.assertEqual(sum(v >= -15 for v in lv), 0)
+        sung = mix.copy()
+        sung[16000 * 5:] *= 1e-4  # 앞 5초만 보컬
+        lv = worker.level(sung, mix)
+        self.assertAlmostEqual(sum(v >= -15 for v in lv) / len(lv), 0.5, delta=0.03)
+        self.assertEqual(worker.level(np.zeros(100, dtype=np.float32), mix), [])
+
+    def test_same_audio_mr_subtraction_leaves_no_vocal_level(self):
+        full, _, _ = make_signals()
+        vocals, residual_db = worker.mr_subtract(full, full)
+        self.assertLess(residual_db, -12)  # 뺄셈은 받아들여지지만
+        v16 = vocals.mean(axis=1)[::3][: len(full) // 3]  # 대략 16kHz(검사용)
+        m16 = full.mean(axis=1)[::3][: len(full) // 3]
+        lv = worker.level(v16, m16)
+        self.assertLess(sum(v >= -15 for v in lv) / len(lv), 0.05)  # 남은 보컬이 없다
+
     def test_protocol_rejects_unknown_command(self):
         res = worker.handle({'id': 1, 'cmd': 'x'})
         self.assertEqual(res['id'], 1)

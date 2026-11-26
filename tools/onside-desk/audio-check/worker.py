@@ -124,15 +124,32 @@ def separate_demucs(wav44k_stereo):
 
 # ---------- 에너지 ----------
 
-def energy(vocals16k, hop=0.25):
-    """0.25초 프레임별 dB, 모든 프레임의 90퍼센타일 기준 상대값."""
+def _frame_db(x16k, hop):
+    """0.25초 프레임별 평균 제곱의 dB(numpy 배열)."""
     n = int(round(SR_LO * hop))
-    frames = len(vocals16k) // n
+    frames = len(x16k) // n
     if frames == 0:
+        return np.zeros(0)
+    x = np.asarray(x16k[: frames * n], dtype=np.float64).reshape(frames, n)
+    return 10 * np.log10(np.mean(x ** 2, axis=1) + 1e-12)
+
+
+def energy(vocals16k, hop=0.25):
+    """0.25초 프레임별 dB, 보컬 스템 자신의 90퍼센타일 기준 상대값(늘 10% 이상이 0dB 이상이다)."""
+    e = _frame_db(vocals16k, hop)
+    if len(e) == 0:
         return []
-    x = np.asarray(vocals16k[: frames * n], dtype=np.float64).reshape(frames, n)
-    e = 10 * np.log10(np.mean(x ** 2, axis=1) + 1e-12)
     return [float(v) for v in (e - np.percentile(e, 90))]
+
+
+def level(vocals16k, mix16k, hop=0.25):
+    """0.25초 프레임별 보컬 dB, 원음(분리 전 믹스) 프레임 dB의 90퍼센타일 기준. 스템 자신이 아니라 믹스를 기준으로 하므로
+    보컬이 없는 곡이나 같은 음원끼리 뺀 MR처럼 스템이 조용하면 모든 프레임이 낮게 나온다(보컬 없음·MR 판단용)."""
+    v = _frame_db(vocals16k, hop)
+    m = _frame_db(mix16k, hop)
+    if len(v) == 0 or len(m) == 0:
+        return []
+    return [float(x) for x in (v - np.percentile(m, 90))]
 
 
 # ---------- Whisper ----------
@@ -258,7 +275,8 @@ def analyze(msg_id, args):
         segments = transcribe(vocals16, args.get('language'))
     return {'duration': len(full) / SR_HI, 'separation': separation,
             'residualDb': residual_db, 'vocals': vocals_path,
-            'energy': energy(vocals16), 'segments': segments}
+            'energy': energy(vocals16), 'level': level(vocals16, to_16k_mono(full)),
+            'segments': segments}
 
 
 def handle(msg):

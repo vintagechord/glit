@@ -10,10 +10,13 @@ import {
   finalizeSuggestions,
   foreignRatio,
   lyricsHash,
+  vocalPresence,
 } from './audio-check.mjs';
 import { ENGINE_VERSION } from './audio-engine.mjs';
 
 const STAGE_LABELS = { decode: '음원 읽는 중', separate: '보컬 분리 중', transcribe: '받아쓰는 중', score: '점수 비교 중' };
+// 분석 결과 형식. 바뀌면(level 추가) 예전 캐시는 쓰지 않고 다시 분석한다.
+const ANALYSIS_FORMAT = 'level-1';
 const ABORT_MESSAGE = '음원 대조를 중지했습니다.';
 const MR_HINT = '원곡과 같은 음원일 수 있음';
 
@@ -23,11 +26,6 @@ export function progressStageLabel(stage) {
 
 function checkAbort(signal) {
   if (signal?.aborted) throw new Error(ABORT_MESSAGE);
-}
-
-function vocalRatio(energy) {
-  const en = Array.isArray(energy) ? energy : [];
-  return en.length ? en.filter((v) => v >= THRESHOLDS.vocalDb).length / en.length : null;
 }
 
 async function readJson(file) {
@@ -76,7 +74,7 @@ export async function runAudioCheck({
 
   const analyze = async (attachment, mrAttachment, { transcribe, language }) => {
     checkAbort(signal);
-    const parts = [attachment.sha256, ENGINE_VERSION, mrAttachment?.sha256 ?? '', language ?? 'auto'];
+    const parts = [attachment.sha256, ENGINE_VERSION, mrAttachment?.sha256 ?? '', language ?? 'auto', ANALYSIS_FORMAT];
     if (!transcribe) parts.push('no-transcribe');
     const key = createHash('sha256').update(parts.join('')).digest('hex').slice(0, 16);
     const outDir = path.join(caseDir, '음원 대조 캐시', key);
@@ -157,7 +155,8 @@ export async function runAudioCheck({
     onProgress?.(label(n, '보컬 분리 중', track));
     let analysis = await analyze(attachment, mrAttachment, { transcribe: true, language });
     if (mrTrack) {
-      const ratio = vocalRatio(analysis.energy);
+      // 뺄셈 뒤 남은 보컬은 믹스 기준 level로 본다(level이 없으면 알 수 없으므로 같은 음원이라고 하지 않는다).
+      const ratio = vocalPresence(analysis.level);
       const info = { separation: analysis.separation, ratio, duration: analysis.duration, instrumental: false };
       if (analysis.separation === 'mr' && ratio !== null && ratio < THRESHOLDS.noVocalRatio && lyrics.trim()) {
         info.instrumental = true;
@@ -167,7 +166,7 @@ export async function runAudioCheck({
     }
     const segments = cleanTranscript(analysis.segments, analysis.energy);
     const draft = draftSuggestions({
-      trackId: track.id, lyrics, segments, energy: analysis.energy, duration: analysis.duration, instrumental: false,
+      trackId: track.id, lyrics, segments, energy: analysis.energy, level: analysis.level, duration: analysis.duration, instrumental: false,
     });
     const suggestions = await score(analysis, draft, n, track);
     finish(track, attachment, analysis, foreign, suggestions, segments);
@@ -177,7 +176,7 @@ export async function runAudioCheck({
     onProgress?.(label(n, '보컬 분리 중', track));
     const analysis = await analyze(attachment, null, { transcribe: false, language: null });
     const draft = draftSuggestions({
-      trackId: track.id, lyrics: track.lyrics ?? '', segments: [], energy: analysis.energy,
+      trackId: track.id, lyrics: track.lyrics ?? '', segments: [], energy: analysis.energy, level: analysis.level,
       duration: analysis.duration, instrumental: true,
     });
     finish(track, attachment, analysis, false, draft.suggestions, []);
