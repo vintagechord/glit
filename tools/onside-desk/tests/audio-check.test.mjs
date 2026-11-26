@@ -395,6 +395,74 @@ test('a heard line closer to its own line is not remapped to a similar other lin
   assert.deepEqual(d.scoreRequests[0].candidates, ['내 사랑 노을 아래', '나의 사랑 노을 아래']);
 });
 
+// ── 삽입 구간의 남은 앞·뒤 ──
+const heardNorm = (list) => list.map((s) => normalizeText(s.kind === 'new' ? s.op.lines.join(' ') : s.hint).norm).join('');
+
+test('a repeated tail right after an omitted chorus extends the same repeat insert', () => {
+  const lyrics = ['하늘 높이 날아라', '', '바다 멀리 가거라', '함께 노래하자 내일이 오니까', '', '작은 별이 반짝여요'].join('\n');
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3),
+    seg('바다 멀리 가거라', 4, 7),
+    seg('함께 노래하자 내일이 오니까', 7, 11),
+    seg('작은 별이 반짝여요', 12, 15),
+    seg('바다 멀리 가거라', 16, 19),
+    seg('함께 노래하자 내일이 오니까', 19, 23),
+    seg('내일이 오니까', 24, 26),
+  ];
+  const { suggestions } = draft(lyrics, segments, frames(27, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'repeat');
+  assert.equal(s.confidence, 'high');
+  assert.deepEqual(s.op, { type: 'insertLines', afterLine: 5, lines: ['', '바다 멀리 가거라', '함께 노래하자 내일이 오니까', '내일이 오니까'] });
+  assert.ok(near(s.start, 16) && near(s.end, 26));
+  assert.equal(heardNorm(suggestions), normalizeText('바다 멀리 가거라 함께 노래하자 내일이 오니까 내일이 오니까').norm);
+});
+
+test('unknown sung text before a repeated block becomes its own new suggestion', () => {
+  const lyrics = ['하늘 높이 날아라', '바다 멀리 가거라', '', '함께 노래하자', '오늘 밤도 함께해'].join('\n');
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3),
+    seg('바다 멀리 가거라', 3, 6),
+    seg('함께 노래하자', 7, 10),
+    seg('오늘 밤도 함께해', 10, 13),
+    seg('우우우 예예예', 14, 17),
+    seg('하늘 높이 날아라', 18, 21),
+    seg('바다 멀리 가거라', 21, 24),
+  ];
+  const { suggestions } = draft(lyrics, segments, frames(25, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['new', 'check'], ['repeat', 'high']]);
+  const [chorus, verse] = suggestions;
+  assert.deepEqual(chorus.op, { type: 'insertLines', afterLine: 4, lines: ['우우우 예예예'] });
+  assert.ok(near(chorus.start, 14) && near(chorus.end, 17));
+  assert.deepEqual(verse.op, { type: 'insertLines', afterLine: 4, lines: ['하늘 높이 날아라', '바다 멀리 가거라'] });
+  assert.ok(near(verse.start, 18) && near(verse.end, 24));
+  assert.equal(heardNorm(suggestions), normalizeText('우우우 예예예 하늘 높이 날아라 바다 멀리 가거라').norm);
+});
+
+test('a leftover that repeats a different lyric block becomes an additional repeat', () => {
+  const lyrics = ['작은 새야 노래해', '', '하늘 높이 날아라', '바다 멀리 가거라', '함께 노래하자', '', '별빛 속에 춤을 춰봐요'].join('\n');
+  const segments = [
+    seg('작은 새야 노래해', 0, 3),
+    seg('하늘 높이 날아라', 4, 7),
+    seg('바다 멀리 가거라', 7, 10),
+    seg('함께 노래하자', 10, 13),
+    seg('별빛 속에 춤을 춰봐요', 14, 17),
+    seg('하늘 높이 날아라', 18, 21),
+    seg('바다 멀리 가거라', 21, 24),
+    seg('함께 노래하자', 24, 27),
+    seg('작은 새야 노래해', 28, 31),
+  ];
+  const { suggestions } = draft(lyrics, segments, frames(32, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence, s.op.afterLine]), [['repeat', 'high', 6], ['repeat', 'high', 6]]);
+  const [chorus, bird] = suggestions;
+  assert.deepEqual(chorus.op.lines, ['', '하늘 높이 날아라', '바다 멀리 가거라', '함께 노래하자']);
+  assert.ok(near(chorus.start, 18) && near(chorus.end, 27));
+  assert.deepEqual(bird.op.lines, ['작은 새야 노래해']);
+  assert.ok(near(bird.start, 28) && near(bird.end, 31));
+  assert.equal(heardNorm(suggestions), normalizeText('하늘 높이 날아라 바다 멀리 가거라 함께 노래하자 작은 새야 노래해').norm);
+});
+
 const sug = (id, op, kind = 'replace') => ({ id, kind, op });
 const OVERLAP = /같은 줄을 고치는 제안이 겹칩니다/;
 

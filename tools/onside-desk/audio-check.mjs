@@ -498,6 +498,8 @@ function lineAfter(lines, index) {
 }
 
 // G를 가사 안의 가장 비슷한 부분 문자열에 맞춘다(G 전체, 가사 양끝 자유). 같은 점수면 near 바로 앞을 고른다.
+// 정렬 경로에서 점수가 가장 높은 연속 구간(일치 +1, 나머지 −1)만 남겨, G 끝에 붙은 다른 글자가
+// 우연히 맞은 한두 글자로 이웃 줄까지 구간을 늘리지 않게 한다.
 function locate(G, P, near) {
   const g = G.length;
   const n = P.length;
@@ -520,22 +522,34 @@ function locate(G, P, near) {
   }
   let i = g;
   let j = end;
-  let lo = -1;
-  let hi = -1;
+  const path = []; // 끝에서 처음으로: [일치 여부, P 위치(갭이면 −1)]
   while (i > 0) {
     const k = i * w + j;
     const same = j > 0 && G[i - 1] === P[j - 1];
     if (j > 0 && D[k] === D[k - w - 1] + (same ? 1 : -1)) {
-      if (same) { lo = j - 1; if (hi < 0) hi = j - 1; }
+      path.push([same, j - 1]);
       i -= 1;
       j -= 1;
     } else if (j > 0 && D[k] === D[k - 1] - 1) {
+      path.push([false, j - 1]);
       j -= 1;
     } else {
+      path.push([false, -1]);
       i -= 1;
     }
   }
-  return hi < 0 ? null : { start: lo, end: hi + 1 };
+  path.reverse();
+  let best = 0;
+  let from = 0;
+  let to = -1;
+  let run = 0;
+  let runFrom = 0;
+  path.forEach(([same], k) => {
+    if (run <= 0) { run = 0; runFrom = k; }
+    run += same ? 1 : -1;
+    if (run > best) { best = run; from = runFrom; to = k; }
+  });
+  return to < 0 ? null : { start: path[from][1], end: path[to][1] + 1 };
 }
 
 function findRepeat(ctx, G, near) {
@@ -548,10 +562,12 @@ function findRepeat(ctx, G, near) {
   const b1 = L.span.get(lb)[1] + 1;
   const whole = span.end - span.start >= WHOLE_LINE * (b1 - b0)
     && similarity(G, L.norm.slice(b0, b1)) >= THRESHOLDS.repeatSimilarity;
-  if (!whole) return { confidence: 'medium', lines: lyricPieces(ctx, span.start, span.end - 1) };
+  if (!whole) {
+    return { confidence: 'medium', lines: lyricPieces(ctx, span.start, span.end - 1), la, lb, pattern: L.norm.slice(span.start, span.end) };
+  }
   const block = lines.slice(la, lineAfter(lines, lb) + 1).map((line) => line.text);
   if (la > 0 && lines[la - 1].text.trim() === '') block.unshift('');
-  return { confidence: 'high', lines: block };
+  return { confidence: 'high', lines: block, la, lb, pattern: L.norm.slice(b0, b1) };
 }
 
 function addEdit(edits, line, edit) {
@@ -586,8 +602,70 @@ function reanchor(ctx, q, tj) {
   return best;
 }
 
+// 받아쓴 글자 tj[k−1]과 tj[k] 사이가 낱말 경계(공백이나 다른 받아쓰기 구간)인지
+function wordBreak(T, tj, k) {
+  if (k <= 0 || k >= tj.length) return true;
+  const a = tj[k - 1];
+  const b = tj[k];
+  return T.seg[a] !== T.seg[b] || /\s/.test(T.text.slice(T.off[a] + 1, T.off[b]));
+}
+
+// 나누는 자리를 가장 가까운 낱말 경계로 옮긴다(heardLines가 낱말 끝까지 넓혀도 글자가 겹치지 않게).
+function snapBreak(T, tj, k) {
+  for (let d = 0; d <= tj.length; d += 1) {
+    if (k - d >= 0 && wordBreak(T, tj, k - d)) return k - d;
+    if (k + d <= tj.length && wordBreak(T, tj, k + d)) return k + d;
+  }
+  return k;
+}
+
+function gapFinding(ctx, f, afterLine, tj) {
+  const { T } = ctx;
+  return {
+    ...f,
+    start: T.s[tj[0]],
+    end: T.e[tj.at(-1)],
+    op: { type: 'insertLines', afterLine, lines: f.insert },
+    hint: heardLines(T, tj).join(' '),
+    lines: [afterLine],
+    tj,
+  };
+}
+
+// 삽입 구간을 반복 구절·새 구절로 나눈다. 반복 구절이 구간의 일부만 덮으면 남은 앞·뒤(각 minGapChars 이상)를
+// 다시 본다: 맞는 가사가 있으면 반복 구절(덮은 블록에 바로 이어지면 같은 삽입에 붙인다), 없으면 새 구절.
+// 받아쓴 글자는 한 제안에만 들어간다.
+function gapFindings(ctx, afterLine, tj, near, match = findRepeat(ctx, tj.map((j) => ctx.T.norm[j]).join(''), near)) {
+  const { T } = ctx;
+  if (!match) return [gapFinding(ctx, { kind: 'new', confidence: 'check', insert: heardLines(T, tj) }, afterLine, tj)];
+  const hit = locate(match.pattern, tj.map((j) => T.norm[j]).join(''), 0);
+  let g0 = hit ? snapBreak(T, tj, hit.start) : 0;
+  let g1 = hit ? snapBreak(T, tj, hit.end) : tj.length;
+  if (g0 < THRESHOLDS.minGapChars) g0 = 0;
+  if (tj.length - g1 < THRESHOLDS.minGapChars) g1 = tj.length;
+  if (g1 <= g0) { g0 = 0; g1 = tj.length; }
+  const lead = g0 > 0 ? gapFindings(ctx, afterLine, tj.slice(0, g0), near) : [];
+  const trail = g1 < tj.length ? gapFindings(ctx, afterLine, tj.slice(g1), near) : [];
+  let insert = match.lines;
+  let body = tj.slice(g0, g1);
+  const prev = lead.at(-1);
+  if (prev?.kind === 'repeat' && prev.lb >= match.la - 1 && prev.lb <= match.lb) {
+    lead.pop();
+    insert = [...prev.op.lines, ...insert];
+    body = [...prev.tj, ...body];
+  }
+  const next = trail[0];
+  if (next?.kind === 'repeat' && next.la >= match.la && next.la <= match.lb + 1) {
+    trail.shift();
+    insert = [...insert, ...next.op.lines];
+    body = [...body, ...next.tj];
+  }
+  const main = gapFinding(ctx, { kind: 'repeat', confidence: match.confidence, insert, la: match.la, lb: match.lb }, afterLine, body);
+  return [...lead, main, ...trail];
+}
+
 function insertion(ctx, p0, tj, edits) {
-  const { L, T, pairs, lines } = ctx;
+  const { L, pairs, lines } = ctx;
   const n = L.norm.length;
   const q = neighbor(pairs, p0, 0, -1) + 1;
   const edge = q <= 0 || q >= n || L.line[q - 1] !== L.line[q];
@@ -595,15 +673,7 @@ function insertion(ctx, p0, tj, edits) {
   const moved = long ? reanchor(ctx, q, tj) : null;
   if (moved) {
     const afterLine = moved.b === 0 ? -1 : lineAfter(lines, L.line[moved.b - 1]);
-    return {
-      kind: 'repeat',
-      confidence: moved.match.confidence,
-      start: T.s[moved.tj[0]],
-      end: T.e[moved.tj.at(-1)],
-      op: { type: 'insertLines', afterLine, lines: moved.match.lines },
-      hint: heardLines(T, moved.tj).join(' '),
-      lines: [afterLine],
-    };
+    return gapFindings(ctx, afterLine, moved.tj, moved.b, moved.match);
   }
   let afterLine;
   if (edge) {
@@ -620,18 +690,7 @@ function insertion(ctx, p0, tj, edits) {
     }
     afterLine = tail <= head ? lineAfter(lines, line) : first === 0 ? -1 : lineAfter(lines, L.line[first - 1]);
   }
-  const G = tj.map((j) => T.norm[j]).join('');
-  const heard = heardLines(T, tj);
-  const match = findRepeat(ctx, G, q);
-  return {
-    kind: match ? 'repeat' : 'new',
-    confidence: match ? match.confidence : 'check',
-    start: T.s[tj[0]],
-    end: T.e[tj.at(-1)],
-    op: { type: 'insertLines', afterLine, lines: match ? match.lines : heard },
-    hint: heard.join(' '),
-    lines: [afterLine],
-  };
+  return gapFindings(ctx, afterLine, tj, q);
 }
 
 function deletion(ctx, p0, p1, li) {
@@ -875,9 +934,9 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, duration, 
     }
     let found = null;
     if (!li.length) found = insertion(ctx, p0, tj, edits);
-    else if (!tj.length) found = deletion(ctx, p0, p1, li);
+    else if (!tj.length) found = [deletion(ctx, p0, p1, li)];
     else attachEdits(ctx, p0, p1, edits);
-    if (found) out.push(suggestion(trackId, found));
+    for (const f of found ?? []) if (f) out.push(suggestion(trackId, f));
   }
   replaceSuggestions(ctx, edits, out, scoreRequests);
   unclearSuggestions(ctx, segs, out);
