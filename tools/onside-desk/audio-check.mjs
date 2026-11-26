@@ -869,3 +869,55 @@ export function finalizeSuggestions(draft, scores) {
   }
   return out;
 }
+
+const OVERLAP_ERROR = '같은 줄을 고치는 제안이 겹칩니다. 제안을 하나만 선택하세요.';
+
+function editedLines(text) {
+  const lines = String(text).split('\n').map((l) => l.replace(/\r$/, ''));
+  if (lines.length > 1 && lines.at(-1) === '') lines.pop();
+  return lines;
+}
+
+// 선택한 제안을 가사에 반영한다. 줄 번호는 제안을 만든 가사의 split('\n') 기준이다.
+export function applySuggestions(lyrics, suggestions, items) {
+  const text = String(lyrics ?? '');
+  const lines = text === '' ? [] : text.split('\n');
+  const byId = new Map((suggestions ?? []).map((s) => [s.id, s]));
+  const edits = [];
+  const touched = new Set();
+  const touch = (i) => {
+    if (touched.has(i)) throw new Error(OVERLAP_ERROR);
+    touched.add(i);
+  };
+  (items ?? []).forEach((item, order) => {
+    const s = byId.get(item?.suggestionId);
+    if (!s || !s.op) throw new Error('반영할 수 없는 제안이 있습니다.');
+    const op = s.op;
+    if (op.type === 'insertLines') {
+      const at = op.afterLine + 1;
+      if (!Number.isInteger(at) || at < 0 || at > lines.length) throw new Error(OVERLAP_ERROR);
+      const hasText = s.kind === 'new' && typeof item.text === 'string';
+      edits.push({ start: at, end: at, lines: hasText ? editedLines(item.text) : op.lines, order });
+    } else if (op.type === 'replaceLine') {
+      const want = normalizeText(op.from).norm;
+      for (const i of op.lines) {
+        if (!Number.isInteger(i) || i < 0 || i >= lines.length || normalizeText(lines[i]).norm !== want) {
+          throw new Error(OVERLAP_ERROR);
+        }
+        touch(i);
+      }
+      for (const i of op.lines) edits.push({ start: i, end: i + 1, lines: [op.to], order });
+    } else if (op.type === 'deleteLines') {
+      if (!Number.isInteger(op.from) || !Number.isInteger(op.to) || op.from < 0 || op.to < op.from || op.to >= lines.length) {
+        throw new Error(OVERLAP_ERROR);
+      }
+      for (let i = op.from; i <= op.to; i += 1) touch(i);
+      edits.push({ start: op.from, end: op.to + 1, lines: [], order });
+    } else {
+      throw new Error('반영할 수 없는 제안이 있습니다.');
+    }
+  });
+  edits.sort((a, b) => b.start - a.start || b.end - a.end || b.order - a.order);
+  for (const e of edits) lines.splice(e.start, e.end - e.start, ...e.lines);
+  return lines.join('\n');
+}

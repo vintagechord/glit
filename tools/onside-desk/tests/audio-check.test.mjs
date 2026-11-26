@@ -14,6 +14,7 @@ import {
   cleanTranscript,
   draftSuggestions,
   finalizeSuggestions,
+  applySuggestions,
 } from '../audio-check.mjs';
 
 test('normalizeText keeps hangul/latin/digits and maps back to source offsets', () => {
@@ -377,4 +378,48 @@ test('a heard line closer to its own line is not remapped to a similar other lin
   assert.equal(d.suggestions.length, 1);
   assert.equal(d.suggestions[0].op.to, '나의 사랑 노을 아래');
   assert.deepEqual(d.scoreRequests[0].candidates, ['내 사랑 노을 아래', '나의 사랑 노을 아래']);
+});
+
+const sug = (id, op, kind = 'replace') => ({ id, kind, op });
+const OVERLAP = /같은 줄을 고치는 제안이 겹칩니다/;
+
+test('applySuggestions inserts, replaces grouped lines and deletes from the bottom up', () => {
+  const lyrics = ['첫째 줄', '둘째 줄', '후렴 하나', '후렴 하나', '다섯째 줄', '여섯째 줄'].join('\n');
+  const out = applySuggestions(
+    lyrics,
+    [
+      sug('a', { type: 'insertLines', afterLine: 0, lines: ['새 줄 하나', '새 줄 둘'] }, 'new'),
+      sug('b', { type: 'replaceLine', lines: [2, 3], from: '후렴 하나', to: '후렴 바꿈' }),
+      sug('c', { type: 'deleteLines', from: 4, to: 4 }, 'unheard'),
+    ],
+    [{ suggestionId: 'a' }, { suggestionId: 'b' }, { suggestionId: 'c' }],
+  );
+  assert.equal(out, ['첫째 줄', '새 줄 하나', '새 줄 둘', '둘째 줄', '후렴 바꿈', '후렴 바꿈', '여섯째 줄'].join('\n'));
+});
+
+test('applySuggestions uses edited text for new lines', () => {
+  const s = sug('n', { type: 'insertLines', afterLine: 0, lines: ['원래 줄'] }, 'new');
+  const out = applySuggestions('가\n나', [s], [{ suggestionId: 'n', text: '고친 줄 하나\n고친 줄 둘\r\n' }]);
+  assert.equal(out, '가\n고친 줄 하나\n고친 줄 둘\n나');
+});
+
+test('applySuggestions rejects suggestions without an operation', () => {
+  assert.throws(() => applySuggestions('가', [sug('x', null)], [{ suggestionId: 'x' }]), /반영할 수 없는 제안/);
+  assert.throws(() => applySuggestions('가', [], [{ suggestionId: 'nope' }]), /반영할 수 없는 제안/);
+});
+
+test('applySuggestions refuses overlapping or stale targets', () => {
+  const lyrics = '바다 멀리\n하늘 높이\n노을 아래';
+  const rep = { type: 'replaceLine', lines: [1], from: '하늘 높이', to: '하늘 낮게' };
+  const del = { type: 'deleteLines', from: 1, to: 1 };
+  assert.throws(() => applySuggestions(lyrics, [sug('r', rep), sug('d', del)], [{ suggestionId: 'r' }, { suggestionId: 'd' }]), OVERLAP);
+  assert.throws(() => applySuggestions(lyrics, [sug('r', rep), sug('r2', { ...rep, to: '다른 줄' })], [{ suggestionId: 'r' }, { suggestionId: 'r2' }]), OVERLAP);
+  assert.throws(() => applySuggestions(lyrics, [sug('r', { ...rep, from: '엉뚱한 줄' })], [{ suggestionId: 'r' }]), OVERLAP);
+  assert.throws(() => applySuggestions(lyrics, [sug('r', { ...rep, lines: [9] })], [{ suggestionId: 'r' }]), OVERLAP);
+  assert.throws(() => applySuggestions(lyrics, [sug('d', { type: 'deleteLines', from: 2, to: 5 })], [{ suggestionId: 'd' }]), OVERLAP);
+});
+
+test('applySuggestions fills empty lyrics without blank lines', () => {
+  const s = sug('n', { type: 'insertLines', afterLine: -1, lines: ['처음 줄', '다음 줄'] }, 'new');
+  assert.equal(applySuggestions('', [s], [{ suggestionId: 'n' }]), '처음 줄\n다음 줄');
 });
