@@ -5,10 +5,10 @@ import { getPackageStationCodes, stationShortNameByCode } from "@/lib/station-re
 import { sortByTrackNo, type AlbumTrackMeta } from "@/lib/track-results";
 
 /**
- * Which stations of a paid album still have no result, for the 접수 관리
- * list (owner request 2026-11-25): results arrive one broadcaster at a time,
- * and the operator should not have to open every application to find the
- * stations left to enter. A station counts as entered exactly when the detail
+ * Which stations of a paid album have a result and which still have none,
+ * for the 접수 관리 list (owner requests 2026-11-25 and 11-26): results
+ * arrive one broadcaster at a time, and the operator should not have to open
+ * every application to see what is in and what is left to enter. A station counts as entered exactly when the detail
  * page counts it (getStationReviewDisplayStatus().isComplete), so the list and
  * the detail page's "N/M 결과" always agree.
  */
@@ -32,9 +32,20 @@ export type PendingStation = {
   attention: string | null;
 };
 
+export type EnteredStation = {
+  code: string | null;
+  name: string;
+  shortName: string;
+  /** 적격, 부적격, N곡 부적격 … as the detail page reads it. */
+  label: string;
+  /** A song or the whole album was refused. */
+  rejected: boolean;
+};
+
 export type AlbumStationProgress = {
   total: number;
   completed: number;
+  entered: EnteredStation[];
   pending: PendingStation[];
 };
 
@@ -63,23 +74,23 @@ export function summarizeAlbumStationProgress(input: {
   };
   rows.sort((a, b) => rank(a.station?.code) - rank(b.station?.code));
 
+  const entered: EnteredStation[] = [];
   const pending: PendingStation[] = [];
-  let completed = 0;
   for (const row of rows) {
     const display = getStationReviewDisplayStatus({ status: row.status, track_results: row.track_results, station: row.station }, { albumTracks });
-    if (display.isComplete) {
-      completed += 1;
-      continue;
-    }
     const name = row.station?.name || row.station?.code || "방송사";
-    pending.push({
+    const station = {
       code: row.station?.code ?? null,
       name,
       shortName: (row.station?.code && stationShortNameByCode[row.station.code]) || name,
-      attention: display.needsAttention ? display.label : null,
-    });
+    };
+    if (display.isComplete) {
+      entered.push({ ...station, label: display.label, rejected: display.key !== "APPROVED" });
+      continue;
+    }
+    pending.push({ ...station, attention: display.needsAttention ? display.label : null });
   }
-  return { total: rows.length, completed, pending };
+  return { total: rows.length, completed: entered.length, entered, pending };
 }
 
 export type StationProgressRow = {

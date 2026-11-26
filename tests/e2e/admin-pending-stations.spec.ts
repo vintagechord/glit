@@ -79,7 +79,13 @@ test("a row names each station still without a result and links to its form", as
   const six = page.locator("#six");
   await expect(six).toContainText("결과 미입력 4곳");
   await expect(six).toContainText("(6/10 입력)");
-  const chips = six.getByRole("link");
+  // Stations with a result come first (owner request 2026-11-26); a refusal names itself.
+  await expect(six).toContainText("결과 입력 6곳");
+  const entered = six.locator("a[title*=' · ']").filter({ hasNotText: "보완 요청" });
+  await expect(entered).toHaveText(["MBC", "KBS", "SBS· 부적격", "YTN", "CBS", "BBS"]);
+  await expect(six.getByRole("link", { name: "MBC" })).toHaveAttribute("title", "MBC · 적격");
+  await expect(six.getByRole("link", { name: "MBC" })).toHaveAttribute("href", /#station-MBC$/);
+  const chips = six.getByRole("link").filter({ hasNotText: /^(MBC|KBS|SBS· 부적격|YTN|CBS|BBS)$/ });
   await expect(chips).toHaveText(["TBS", "PBC", "WBS· 보완 요청", "Arirang"]);
   // The full name stays one hover away.
   await expect(chips.first()).toHaveAttribute("title", "TBS 교통방송 결과 입력");

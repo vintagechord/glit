@@ -34,6 +34,11 @@ test("a 10-station album with 6 results lists the 4 open stations in package ord
   assert.equal(progress.pending[0].name, "TBS 교통방송");
   assert.equal(progress.pending[0].shortName, "TBS");
   assert.ok(progress.pending.every((station) => station.attention === null));
+  // The stations with a result are listed too, with the result itself (owner request 2026-11-26).
+  assert.deepEqual(progress.entered.map((station) => [station.code, station.label, station.rejected]), [
+    ["MBC", "적격", false], ["KBS", "적격", false], ["SBS", "부적격", true],
+    ["YTN", "적격", false], ["CBS", "적격", false], ["BBS", "적격", false],
+  ]);
 });
 
 test("a station still waiting on some songs, or asked for a fix, is open", () => {
@@ -49,6 +54,8 @@ test("a station still waiting on some songs, or asked for a fix, is open", () =>
   });
   assert.equal(progress.completed, 1);
   assert.deepEqual(progress.pending.map((station) => [station.code, station.attention]), [["KBS", null], ["MBC", "보완 요청"]]);
+  // One of two songs refused reads the way the detail page reads it.
+  assert.deepEqual(progress.entered.map((station) => [station.code, station.label, station.rejected]), [["SBS", "1곡 부적격", true]]);
 });
 
 test("WBS on a 4+ song album without its 3 songs chosen asks for the selection", () => {

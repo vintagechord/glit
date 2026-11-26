@@ -710,7 +710,10 @@ export default async function AdminSubmissionsPage({
                     <p className="truncate text-foreground">
                       {packageInfo?.name ?? "패키지 미지정"}
                     </p>
-                    <p className="mt-1 truncate">
+                    <p className="mt-1 truncate text-foreground">
+                      접수신청: {formatDateTime(submission.created_at)}
+                    </p>
+                    <p className="mt-0.5 truncate">
                       업데이트:{" "}
                       {formatDateTime(submission.updated_at ?? submission.created_at)}
                     </p>

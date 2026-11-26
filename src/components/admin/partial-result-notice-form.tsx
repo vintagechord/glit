@@ -4,13 +4,15 @@ import { formatDateTime } from "@/lib/format";
 
 /**
  * Sends an album on to 결과 통보 완료 while a station still has no result, or
- * puts it back into review (see partialNoticeStage). Shown on an album in
- * review with at least one station result, and on one already sent on.
+ * takes that back (see partialNoticeStage). Shown on an album in review or in
+ * 결과 안내 대기 with at least one station result and one still open, and on
+ * one already sent on.
  */
 export function PartialResultNoticeForm({
   submissionId,
   returnTo,
   movedAt,
+  inResults = false,
   pendingStations,
   action,
 }: {
@@ -18,11 +20,14 @@ export function PartialResultNoticeForm({
   returnTo: string;
   /** When the operator sent the album on; null while it is still in review. */
   movedAt: string | null;
+  /** The album is in 결과 준비/완료, so taking the notice back leaves it in 결과 안내 대기. */
+  inResults?: boolean;
   pendingStations: string[];
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const moved = Boolean(movedAt);
   const pending = pendingStations.join(", ") || "없음";
+  const backTo = inResults ? "결과 안내 대기로" : "심의 진행 중으로";
   return (
     <form
       id="partial-result-notice"
@@ -45,14 +50,14 @@ export function PartialResultNoticeForm({
             ? "rounded-full border-2 border-[#111111] bg-white px-5 py-2.5 text-xs font-black text-[#111111] transition hover:bg-[#111111] hover:text-white"
             : "rounded-full border-2 border-[#111111] bg-[#111111] px-5 py-2.5 text-xs font-black text-white transition hover:bg-[#1556a4] dark:border-[#f2cf27] dark:bg-[#f2cf27] dark:text-[#111111]"}
           message={moved
-            ? "이 음반을 심의 진행 중으로 되돌릴까요?"
+            ? `이 음반을 ${backTo} 되돌릴까요?`
             : `결과가 없는 방송사(${pending})는 대기로 둔 채 결과 통보 완료로 옮길까요? 고객 화면과 메일은 바뀌지 않고, 남은 결과는 나중에 저장할 수 있습니다.`}
         >
-          {moved ? "심의 진행 중으로 되돌리기" : "결과 통보 완료로 이동"}
+          {moved ? `${backTo} 되돌리기` : "결과 통보 완료로 이동"}
         </ConfirmSubmitButton>
       </div>
       <p className="mt-2 text-xs font-semibold leading-5 opacity-80">
-        고객 화면에는 계속 결과 대기로 보입니다. 남은 결과를 저장해 모든 방송사가 채워지면 결과 안내 대기로 올라옵니다.
+        고객 화면에는 남은 방송사가 계속 결과 대기로 보입니다. 운영 단계를 바꾸거나 다른 방송사 결과를 고쳐도 이 처리는 유지되고, 남은 결과까지 저장되면 결과 안내 대기로 올라옵니다.
       </p>
     </form>
   );
