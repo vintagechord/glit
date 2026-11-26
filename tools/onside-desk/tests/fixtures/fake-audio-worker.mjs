@@ -14,6 +14,11 @@ rl.on('line', (line) => {
     send({ id: msg.id, ok: true, result: { HF_HUB_OFFLINE: process.env.HF_HUB_OFFLINE ?? null } });
     return;
   }
+  if (msg.cmd === 'garbage') {
+    // Python의 json.dumps(allow_nan=True)가 쓰던 표준 밖 JSON(NaN) 한 줄
+    process.stdout.write(`{"id": ${msg.id}, "ok": true, "result": {"residualDb": NaN}}\n`);
+    return;
+  }
   if (msg.cmd === 'fail') {
     send({ id: msg.id, ok: false, error: 'ValueError: bad input' });
     return;

@@ -83,6 +83,18 @@ class WorkerTest(unittest.TestCase):
         lv = worker.level(v16, m16)
         self.assertLess(sum(v >= -15 for v in lv) / len(lv), 0.05)  # 남은 보컬이 없다
 
+    def test_protocol_lines_are_strict_json_without_nan(self):
+        import json
+        line = worker.protocol_line({'id': 3, 'ok': True, 'result': {
+            'residualDb': float('nan'), 'level': [1.5, float('-inf'), float('inf')], 'nested': {'x': (float('nan'),)}}})
+        self.assertNotIn('NaN', line)
+        self.assertNotIn('Infinity', line)
+        self.assertEqual(json.loads(line), {'id': 3, 'ok': True, 'result': {
+            'residualDb': None, 'level': [1.5, None, None], 'nested': {'x': [None]}}})
+        bad = json.loads(worker.protocol_line({'id': 4, 'ok': True, 'result': {'x': object()}}))
+        self.assertEqual(bad['id'], 4)
+        self.assertFalse(bad['ok'])
+
     def test_protocol_rejects_unknown_command(self):
         res = worker.handle({'id': 1, 'cmd': 'x'})
         self.assertEqual(res['id'], 1)

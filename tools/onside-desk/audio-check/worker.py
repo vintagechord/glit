@@ -23,10 +23,30 @@ _out = None  # 프로토콜 출력 핸들. main()에서만 설정한다.
 _models = {}
 
 
+def _finite(obj):
+    """JSON에 못 쓰는 NaN·무한대를 None(null)으로 바꾼다(Node의 JSON.parse가 읽을 수 있게)."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_finite(v) for v in obj]
+    return obj
+
+
+def protocol_line(obj):
+    """응답 한 줄. 표준 JSON만 쓴다(allow_nan=False). 그래도 못 쓰면 그 요청의 오류 응답으로 바꾼다."""
+    try:
+        return json.dumps(_finite(obj), ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        msg_id = obj.get('id') if isinstance(obj, dict) else None
+        return json.dumps({'id': msg_id, 'ok': False, 'error': f'응답을 만들지 못했습니다: {exc}'}, ensure_ascii=False)
+
+
 def emit(obj):
     if _out is None:
         return
-    _out.write(json.dumps(obj, ensure_ascii=False) + '\n')
+    _out.write(protocol_line(obj) + '\n')
     _out.flush()
 
 

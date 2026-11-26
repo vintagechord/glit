@@ -19,6 +19,7 @@ export const ENGINE_PACKAGES = [
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEAD_MESSAGE = '분석 도구가 중단되었습니다.';
+const UNREADABLE_MESSAGE = '분석 도구의 응답을 읽지 못했습니다.';
 const STDERR_TAIL = 2048;
 const CLOSE_GRACE_MS = 3000;
 
@@ -161,7 +162,16 @@ export function startWorker({ command, dataRoot, onProgress, signal, offline = t
 
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
     let msg;
-    try { msg = JSON.parse(line); } catch { return; }
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      // 프로토콜 줄을 읽지 못하면 어느 요청의 응답인지 알 수 없으므로, 기다리는 요청을 모두 실패시켜 작업이 멈추지 않게 한다.
+      const error = new Error(`${UNREADABLE_MESSAGE} ${String(line).slice(0, 200)}`);
+      for (const { reject } of pending.values()) reject(error);
+      pending.clear();
+      return;
+    }
+    if (!msg || typeof msg !== 'object') return;
     if (msg.event === 'progress') {
       if (onProgress) {
         try { onProgress({ id: msg.id, stage: msg.stage }); } catch { /* callback errors must not crash the worker client */ }

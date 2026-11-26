@@ -127,6 +127,13 @@ test('startWorker runs analysis offline and only the install warmup online', asy
   await install.close();
 });
 
+test('startWorker fails the pending request on an unreadable line instead of hanging, and keeps working', async () => {
+  const worker = startWorker({ command: fakeCommand });
+  await assert.rejects(worker.request('garbage', {}), /분석 도구의 응답을 읽지 못했습니다\./);
+  assert.deepEqual(await worker.request('ping', {}), { cmd: 'ping' });
+  await worker.close();
+});
+
 test('startWorker kills the process on abort', async () => {
   const ac = new AbortController();
   const worker = startWorker({ command: fakeCommand, signal: ac.signal });
