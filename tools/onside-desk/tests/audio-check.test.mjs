@@ -990,6 +990,24 @@ test('a chorus whose first copy has the typos goes after the block with the time
   }
 });
 
+test('a chorus written twice in the lyrics and sung a third time goes after its second writing with its last singing', () => {
+  // findRepeat가 같은 글의 앞쪽 블록(2–3행)을 고르더라도, 삽입 자리 바로 뒤에 같은 글의 블록(7–8행)이 이어지면 블록 앞에 놓인
+  // 것으로 보고 창을 옮긴다. 두 번째로 부른 벌에 오타가 있으면 2절 뒤(5행 뒤)·둘째 벌 시각이나 두 조각으로 갈렸다.
+  const C1 = '여름밤 별빛 아래 춤을 춰요';
+  const C2 = '우리 함께 노래해요 영원히';
+  const lyrics = ['바람이 불어오는 언덕 위에', '', C1, C2, '', '구름이 흘러가는 강가에서', '', C1, C2].join('\n');
+  for (const [a, b] of [['여름밤 별빛 아래 추물 춰요', '우리 함께 노래해요 영원이'], ['여름 밤 별빛 아래 춤을 춰요', '우리 함께 노래하요 영원히'], [C1, C2]]) {
+    const segments = [
+      seg('바람이 불어오는 언덕 위에', 0, 4), seg(C1, 5, 9), seg(C2, 9, 13), seg('구름이 흘러가는 강가에서', 14, 18),
+      seg(a, 19, 23), seg(b, 23, 27), seg(C1, 28, 32), seg(C2, 32, 36),
+    ];
+    const { suggestions } = draft(lyrics, segments, frames(37, -5));
+    assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']], a);
+    assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 8, lines: ['', C1, C2] }, a);
+    assert.ok(near(suggestions[0].start, 28) && near(suggestions[0].end, 36), a);
+  }
+});
+
 test('a window shift never turns an ad-lib that only shares a line ending into a high repeat', () => {
   // '넌 한 번 한 잔 어때요'는 '너랑 나랑 한잔 어때요'와 끝말만 같다: 줄마다 보면 절반은 덮여도 조각 전체로 짝을 이루지 못한다.
   const lyrics = ['이봐요 이봐요', '너랑 나랑 한잔 어때요', '오늘 밤도 함께해요'].join('\n');

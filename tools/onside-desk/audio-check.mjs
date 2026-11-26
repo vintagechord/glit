@@ -684,14 +684,20 @@ const unexplained = (findings, count) => count - (findings ?? [])
   .filter((f) => f.kind === 'repeat' && f.whole)
   .reduce((sum, f) => sum + f.tj.length, 0);
 
-// 제자리 강함 블록이 가사의 자기 블록 바로 앞에 들어가는지. 오타가 첫 번째 벌에 있으면 가사 블록이 두 번째 벌과 맞아
-// 삽입(첫 번째 벌)이 블록 앞에 놓이고, 후렴 두 벌 사이에서 갭이 줄 경계로 갈리면 '끝 줄 | 첫 줄…'로 돌려 부른 조각들이
-// 된다(첫 조각이 바로 다음 가사 줄). 반영한 가사는 같아도 블록이 갈리거나 시각이 첫 번째 벌을 가리킨다.
+// 제자리 강함 블록이 가사의 자기 블록 바로 앞에 들어가는지(같은 글의 블록이 바로 뒤에 이어지는지). 오타가 첫 번째 벌에 있으면
+// 가사 블록이 두 번째 벌과 맞아 삽입(첫 번째 벌)이 블록 앞에 놓이고, 후렴 두 벌 사이에서 갭이 줄 경계로 갈리면 '끝 줄 | 첫 줄…'로
+// 돌려 부른 조각들이 된다(첫 조각이 바로 다음 가사 줄). 가사에 같은 후렴이 두 번 적혀 있으면 findRepeat가 앞쪽 블록을 고를 수
+// 있으므로 줄 번호가 아니라 글로 본다. 반영한 가사는 같아도 블록이 갈리거나 시각이 첫 번째 벌을 가리킨다.
 const beforeOwnCopy = (ctx, findings, afterLine) => {
   const { lines, L } = ctx;
-  let next = afterLine + 1;
-  while (next < lines.length && !L.span.has(next)) next += 1;
-  return (findings ?? []).some((f) => f.kind === 'repeat' && f.confidence === 'high' && f.la === next);
+  const sungAfter = [];
+  for (let x = afterLine + 1; x < lines.length; x += 1) if (L.span.has(x)) sungAfter.push(lines[x].norm);
+  return (findings ?? []).some((f) => {
+    if (f.kind !== 'repeat' || f.confidence !== 'high') return false;
+    const block = [];
+    for (let x = f.la; x <= f.lb; x += 1) if (L.span.has(x)) block.push(lines[x].norm);
+    return block.every((norm, k) => sungAfter[k] === norm);
+  });
 };
 
 // 창을 옮기면 가사 [lo, hi)는 풀려난 받아쓴 글자 rel(옮긴 만큼, 원래 갭의 반대쪽 끝)과 짝을 이룬다. 그것이 진짜 회전인지를
@@ -728,8 +734,9 @@ function rotates(ctx, lo, hi, rel) {
 // minGapChars자 이상을 설명하지 못하거나 강함 블록이 가사의 자기 블록 바로 앞에 들어갈 때만 부른다(rest: 제자리에서 설명되지
 // 않은 글자 수, pieces: 뒤의 경우 제자리 제안 수, 아니면 0). 옮긴 만큼의 가사 조각이 한 연 안에 있고(두 벌 사이에 한 번만
 // 부른 다른 연을 건너뛰지 않게) 풀려난 받아쓰기가 그 줄들을 줄마다 덮는 회전이어야 하며(rotates), 옮긴 창의 반복 구절은
-// 강함이고 그 제안들이 제자리보다 덜 남기거나, 뒤의 경우에는 더 남기지도 조각이 더 많지도 않아야 한다(보통을 강함으로
-// 올리려고 옮기지 않게). 그런 창이 여럿이면 가장 오른쪽: 받아들인 창은 모두 줄마다 확인한 회전이라 가사에 반영한 결과가 같고,
+// 강함이고 그 제안들이 제자리보다 덜 남기거나(회전에서 짝을 못 찾은 글자 포함), 뒤의 경우에는 더 남기지도 조각이 더 많지도
+// 않아야 한다(보통을 강함으로 올리려고 옮기지 않게). 뒤의 경우 회전은 가사 블록과 짝을 이룰 벌을 바꿀 뿐이라(제자리에서도
+// 다른 벌이 같은 줄들과 짝이었다) 회전에서 짝을 못 찾은 글자는 세지 않는다. 그런 창이 여럿이면 가장 오른쪽: 받아들인 창은 모두 줄마다 확인한 회전이라 가사에 반영한 결과가 같고,
 // 가장 오른쪽 창이 반복을 처음 부른 블록 뒤에(두 번째로 부른 시각으로) 둔다.
 function reanchor(ctx, q, tj, rest, pieces) {
   const { L, pairs, at, stanza, lines } = ctx;
@@ -761,8 +768,8 @@ function reanchor(ctx, q, tj, rest, pieces) {
     if (match?.confidence !== 'high') continue;
     const findings = gapFindings(ctx, b === 0 ? -1 : lineAfter(lines, L.line[b - 1]), moved, b, match);
     // 회전에서 짝을 못 찾은 풀려난 글자도 설명되지 않은 것이다.
-    const left = unexplained(findings, g) + lost;
-    const better = left < rest || (left === rest && findings.length <= pieces);
+    const left = unexplained(findings, g);
+    const better = left + lost < rest || (pieces > 0 && left <= rest && findings.length <= pieces);
     if (better) best = findings;
   }
   return best;
