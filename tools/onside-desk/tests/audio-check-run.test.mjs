@@ -33,7 +33,11 @@ function fakeWorker(handler = () => analysis(), { redecode, scores = [-10, -5] }
       calls.push({ cmd, payload });
       if (cmd === 'score') return { scores };
       if (cmd === 'redecode') return { text: redecode?.(payload) };
-      return handler(payload, calls.filter((c) => c.cmd === 'analyze').length);
+      const result = await handler(payload, calls.filter((c) => c.cmd === 'analyze').length);
+      // 실제 worker처럼 분리한 보컬을 outDir/vocals.wav에 쓴다.
+      await fs.mkdir(payload.outDir, { recursive: true });
+      await fs.writeFile(path.join(payload.outDir, 'vocals.wav'), 'RIFF');
+      return result;
     },
   };
 }
@@ -73,6 +77,27 @@ test('runAudioCheck analyzes each mapped track once, reuses cache on rerun, and 
   await runAudioCheck({ ...args, runId: 'r2' });
   assert.equal(worker.count('analyze'), 2);
   assert.ok(worker.count('score') > before);
+  // 캐시가 가리키는 보컬은 캐시 폴더의 vocals.wav다(분석 결과의 옛 경로가 아니라).
+  const scored = worker.calls.filter((c) => c.cmd === 'score').at(-1);
+  assert.equal(path.basename(scored.payload.vocals), 'vocals.wav');
+  assert.ok(scored.payload.vocals.startsWith(path.join(caseDir, '음원 대조 캐시')));
+});
+
+test('runAudioCheck re-analyzes a cached track whose vocals.wav is gone', async () => {
+  const caseDir = await tmp();
+  const worker = fakeWorker();
+  const args = { caseDir, tracks: [t1], attachments: [a1], mapping: { t1: 'a1' }, worker };
+  await runAudioCheck({ ...args, runId: 'c1' });
+  assert.equal(worker.count('analyze'), 1);
+  const cacheRoot = path.join(caseDir, '음원 대조 캐시');
+  const [key] = await fs.readdir(cacheRoot);
+  await fs.rm(path.join(cacheRoot, key, 'vocals.wav'));
+  const run = await runAudioCheck({ ...args, runId: 'c2' });
+  assert.equal(worker.count('analyze'), 2);
+  assert.equal(run.tracks[0].status, 'ok');
+  await fs.access(path.join(cacheRoot, key, 'vocals.wav'));
+  await runAudioCheck({ ...args, runId: 'c3' });
+  assert.equal(worker.count('analyze'), 2);
 });
 
 test('runAudioCheck re-decodes every score window with the lyric line as prompt and uses it to judge', async () => {

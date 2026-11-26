@@ -28,6 +28,15 @@ function checkAbort(signal) {
   if (signal?.aborted) throw new Error(ABORT_MESSAGE);
 }
 
+async function exists(file) {
+  try {
+    await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readJson(file) {
   try {
     return JSON.parse(await fs.readFile(file, 'utf8'));
@@ -80,7 +89,9 @@ export async function runAudioCheck({
     const outDir = path.join(caseDir, '음원 대조 캐시', key);
     const cacheFile = path.join(outDir, 'analysis.json');
     const cached = await readJson(cacheFile);
-    if (cached) return cached;
+    // 점수·다시 받아쓰기는 분리된 보컬(vocals.wav)이 있어야 하므로, 그 파일이 없는 캐시는 쓰지 않고 다시 분석한다.
+    const vocals = path.join(outDir, 'vocals.wav');
+    if (cached && typeof cached === 'object' && await exists(vocals)) return { ...cached, vocals };
     const payload = { file: filePath(attachment), outDir, transcribe, language };
     if (mrAttachment) payload.mr = filePath(mrAttachment);
     const result = await worker.request('analyze', payload);
