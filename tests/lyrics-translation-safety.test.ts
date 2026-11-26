@@ -95,6 +95,20 @@ test("a per-address 429 surfaces the server's message; provider failures keep th
   }
 });
 
+test("a spent daily budget says so and is not asked again",async(t)=>{
+  // 2026-11-26: the 503 explanation was dropped and the applicant read "retry shortly".
+  const serverMessage="오늘 자동번역 사용량이 한도에 도달했습니다. 내일 다시 시도하거나 번역을 직접 입력해주세요.";
+  let serverCalls=0;
+  t.mock.method(globalThis,"fetch",async(input:RequestInfo|URL)=>{
+    if(input==="/api/translate"){serverCalls++;return Response.json({error:serverMessage},{status:503});}
+    return new Response("unavailable",{status:500});
+  });
+  await assert.rejects(requestLyricsTranslations(["Foreign source"]),error=>{
+    assert.ok(error instanceof LyricsTranslationError);assert.equal(error.userMessage,serverMessage);return true;
+  });
+  assert.equal(serverCalls,1);
+});
+
 test("browser preserves the existing Google path only for server provider failures or network errors",async(t)=>{
   for(const serverStatus of [502,503,'network'] as const){
     const urls:string[]=[];

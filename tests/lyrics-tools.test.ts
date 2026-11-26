@@ -6,12 +6,23 @@ import {
   collectForeignLyricsSegments,
   extractForeignSegments,
   hasNonKoreanLyrics,
+  needsLyricsTranslation,
 } from "../src/lib/lyrics-tools";
 
 test("hasNonKoreanLyrics detects foreign letters only", () => {
   assert.equal(hasNonKoreanLyrics("사랑해"), false);
   assert.equal(hasNonKoreanLyrics("사랑해 I love you"), true);
   assert.equal(hasNonKoreanLyrics("123 !!!"), false);
+});
+
+test("a required translation is exactly what the auto-translate button can produce", () => {
+  // 2026-11-26: "any non-Hangul letter" blocked these, and the button then
+  // reported nothing to translate.
+  assert.equal(needsLyricsTranslation("Oh yeah 사랑해\nla la la"), false);
+  assert.equal(needsLyricsTranslation("I love you (번역: 사랑해)"), false);
+  assert.equal(needsLyricsTranslation("사랑해"), false);
+  assert.equal(needsLyricsTranslation("사랑해 I love you"), true);
+  assert.equal(needsLyricsTranslation("Baby 오늘 밤"), true);
 });
 
 test("extractForeignSegments skips already translated inline lyrics", () => {

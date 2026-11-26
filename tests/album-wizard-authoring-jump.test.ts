@@ -63,15 +63,9 @@ test("final-check 수정 buttons restore the album list before opening steps 1�
   assert.doesNotMatch(navigate, /\[initialArchiveEntry, skipNextStepScroll\]/);
 });
 
-test("the blocking lyrics check and the one-click URL edit restore the album list first", () => {
-  const lyrics = sliceBetween(
-    "const validateLyricsProfanity",
-    "const validateTranslatedLyrics",
-  );
-  assert.match(
-    lyrics,
-    /if \(!restoreAuthoringDrafts\(\)\) return false;\s*setActiveTrackIndex\(issue\.trackIndex\);\s*setStep\(4\);/,
-  );
+test("the one-click URL edit restores the album list first, and lyrics profanity never stops a step", () => {
+  // Owner decision 2026-11-26: the profanity check only informs.
+  assert.doesNotMatch(wizard, /validateLyricsProfanity/);
   assert.match(
     wizard,
     /onClick=\{\(\) => \{\s*if \(restoreAuthoringDrafts\(\)\) setStep\(3\);\s*\}\}[^>]*>\s*URL·접수자 정보 수정/,

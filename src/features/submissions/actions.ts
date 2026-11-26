@@ -1,14 +1,12 @@
 "use server";
 
-import { hasNonKoreanLyrics as hasNonKoreanLyricsText } from "@/lib/lyrics-tools";
+import { needsLyricsTranslation } from "@/lib/lyrics-tools";
 import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { z } from "zod";
 
 import { getAlbumReviewPriceKrw } from "@/lib/album-pricing";
-import { getAlbumLyricsSubmissionError } from "@/lib/album-lyrics-review";
-import { getPublicProfanityTerms } from "@/lib/public-catalog";
 import type { AlbumPriceTier } from "@/lib/album-payment-discount";
 import { B2ConfigError, getB2Config } from "@/lib/b2";
 import {
@@ -552,7 +550,7 @@ const normalizeDigits = (value?: string | null) =>
 
 // Shared with the client final check so both sides agree on what counts as
 // Korean (decomposed jamo and half-width forms included).
-const hasNonKoreanLyrics = (value?: string | null) => hasNonKoreanLyricsText(value ?? "");
+const needsTranslation = (value?: string | null) => needsLyricsTranslation(value ?? "");
 
 const validateBankPaymentDocument = (params: {
   isSubmitted: boolean;
@@ -1303,18 +1301,10 @@ export async function saveAlbumSubmissionAction(
     });
     if (requiredFieldsError) return { error: requiredFieldsError };
 
-    if (!isOneClick && !usesExternalApplicationForm) {
-      if (parsed.data.tracks === undefined) {
-        return { error: "최종 접수 전에 트랙과 가사를 다시 불러와 확인해주세요." };
-      }
-      try {
-        const terms = await getPublicProfanityTerms();
-        const lyricsError = getAlbumLyricsSubmissionError(submittedTracks, terms);
-        if (lyricsError) return { error: lyricsError };
-      } catch (error) {
-        console.error("[AlbumLyricsReview] failed", error instanceof Error ? error.name : "UnknownError");
-        return { error: "가사 검사를 완료하지 못했습니다. 잠시 후 다시 시도해주세요." };
-      }
+    // The lyrics profanity check only informs (owner decision 2026-11-26), so
+    // the server no longer re-runs it; the final save still needs the tracks.
+    if (!isOneClick && !usesExternalApplicationForm && parsed.data.tracks === undefined) {
+      return { error: "최종 접수 전에 트랙과 가사를 다시 불러와 확인해주세요." };
     }
 
     if (
@@ -1322,7 +1312,7 @@ export async function saveAlbumSubmissionAction(
       !isOneClick &&
       trackRows.some(
         (track) =>
-          hasNonKoreanLyrics(track.lyrics) &&
+          needsTranslation(track.lyrics) &&
           !String(track.translated_lyrics ?? "").trim(),
       )
     ) {

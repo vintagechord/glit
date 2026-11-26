@@ -334,3 +334,31 @@ test("members confirm their contact email on the MV application; the phone stays
   expect(result.errors).toEqual([]);
   expect(result.unexpectedMutations).toEqual([]);
 });
+
+test("MV lyrics use the album's profanity check: marked as typed, never a dialog, never blocking", async ({ page }, testInfo) => {
+  // Owner decision 2026-11-26: same engine and panel as the album wizard; the
+  // old MV check missed "fucking" and asked for confirmation in a dialog.
+  const result = await mockMvServices(page);
+  await page.goto("/dashboard/new/mv");
+  await page.getByRole("button", { name: /TV 송출 목적의 심의/ }).click();
+  await page.locator('[data-preflight-field="reviewOptions"]').getByRole("button", { name: /MBC 뮤직비디오 심의/ }).click();
+  await openApplication(page);
+  const lyrics = page.locator('[data-mv-field="lyrics"]');
+  const panel = page.getByRole("region", { name: "가사 욕설 검사 결과", exact: true });
+  await lyrics.fill("오늘 밤 fucking 좋아");
+  await expect(panel).toContainText("욕설 표현 있음");
+  await expect(panel.locator("mark")).toHaveText(["fucking"]);
+  await expect(panel).toContainText("실제 음원에서 무음·삐처리했다면");
+  await lyrics.fill("나의 시 발표회");
+  await expect(panel).toContainText("확인 필요 표현 있음");
+  await expect(panel).not.toContainText("욕설 표현 있음");
+  await lyrics.fill("우리의 길을 함께 걸어요.");
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: /욕설 체크/ }).click();
+  await expect(panel).toContainText("표현이 없습니다");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await lyrics.fill("오늘 밤 시발 좋아");
+  await panel.screenshot({ path: testInfo.outputPath("mv-profanity-panel.png") });
+  expect(result.errors).toEqual([]);
+  expect(result.unexpectedMutations).toEqual([]);
+});

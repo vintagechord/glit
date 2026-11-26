@@ -41,6 +41,16 @@ export const collectForeignLyricsSegments = (lyrics: string) => {
   return { lines, segmentMap, sentencesToTranslate };
 };
 
+/**
+ * Whether lyrics still need a Korean translation: foreign lines that carry no
+ * inline translation, interjections (oh, yeah, la) aside. The same test the
+ * auto-translate button uses, so a required translation can always be made
+ * with it (2026-11-26: "any non-Hangul letter" blocked lyrics that the button
+ * then said had nothing to translate).
+ */
+export const needsLyricsTranslation = (lyrics: string) =>
+  collectForeignLyricsSegments(lyrics).sentencesToTranslate.length > 0;
+
 export const buildInlineTranslatedLyrics = (
   lines: string[],
   segmentMap: ForeignLyricSegment[][],
@@ -143,7 +153,8 @@ export const requestLyricsTranslations = async (
   const context = truncateLyricsContext(options.context ?? lines.join("\n"));
   const batches = lyricsTranslationBatches(unique, LYRICS_TRANSLATION_LIMITS.apiSegments, LYRICS_TRANSLATION_LIMITS.total);
   let nextBatch = 0;
-  // A 429 is the per-address limit: its Korean explanation reaches the user.
+  // A limit's own explanation reaches the user: 429 for this address, 503
+  // when the site's daily budget is spent (then "try again shortly" is wrong).
   let rateLimitedMessage: string | null = null;
   const googleLimited = { value: false };
   await Promise.allSettled(Array.from({length: Math.min(2, batches.length)}, async () => {
@@ -168,10 +179,12 @@ export const requestLyricsTranslations = async (
               if (isUsableLyricsTranslation(value, text, target)) results.set(text, value);
             });
           }
-          retryable = response.ok || response.status >= 500;
+          // A spent daily budget does not come back on a retry.
+          retryable = response.ok || (response.status >= 500 && response.status !== 503);
           browserFallback = [502, 503].includes(response.status);
-          if (response.status === 429) {
-            rateLimitedMessage = typeof payload?.error === "string" && payload.error.trim() ? payload.error.trim() : RATE_LIMITED_MESSAGE;
+          if (response.status === 429 || response.status === 503) {
+            const serverMessage = typeof payload?.error === "string" && payload.error.trim() ? payload.error.trim() : null;
+            rateLimitedMessage = serverMessage ?? (response.status === 429 ? RATE_LIMITED_MESSAGE : rateLimitedMessage);
           }
         } catch { browserFallback = !signal.aborted; }
         pending = pending.filter(text => !results.has(text));

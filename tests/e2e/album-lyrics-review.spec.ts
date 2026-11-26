@@ -54,7 +54,7 @@ const original = (page: Page) => page.locator('[data-preflight-field="lyrics"]')
 const translated = (page: Page) => page.locator('[data-preflight-field="translatedLyrics"]');
 const result = (page: Page) => page.getByRole("region", { name: "가사 욕설 검사 결과", exact: true });
 
-test("raw profanity blocks progress without requiring the check button; clean edits clear stale results", async ({ page }, testInfo) => {
+test("raw profanity is shown without the check button and never blocks progress; clean edits clear stale results", async ({ page }, testInfo) => {
   const harness = await openTracks(page);
   await page.getByLabel("1번 트랙 곡명", { exact: true }).fill("테스트 곡");
   await page.getByLabel("1번 트랙 가수명", { exact: true }).fill("테스트");
@@ -63,17 +63,14 @@ test("raw profanity blocks progress without requiring the check button; clean ed
   await original(page).fill("오늘은 좋은 날");
   await expect(result(page)).toHaveCount(0);
   await page.getByRole("button", { name: "욕설 체크", exact: true }).click();
-  await expect(result(page)).toContainText("감지되지 않았습니다");
-  await expect(result(page)).not.toContainText("마스킹");
+  await expect(result(page)).toContainText("표현이 없습니다");
+  await expect(result(page)).not.toContainText("삐처리");
   await original(page).fill("오늘 시발 어제");
-  await expect(result(page)).toContainText("명확한 욕설 표현 감지");
+  await expect(result(page)).toContainText("욕설 표현 있음");
   await expect(result(page).locator("mark")).toHaveText(["시발"]);
-  await expect(result(page)).toContainText("무음·삐처리 등으로 실제 음원");
-  await expect(result(page)).toContainText("실제 제출 음원과 가사를 동일하게 맞춰주세요");
-  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toContainText("욕설이 들리는 음원은 심의 접수가 불가");
-  await page.getByRole("alertdialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(original(page)).toBeVisible();
+  await expect(result(page)).toContainText("부적격이 될 수 있으니");
+  await expect(result(page)).toContainText("실제 음원에서 무음·삐처리했다면");
+  await expect(result(page)).toContainText("제출할 음원과 가사를 똑같이 맞춰주세요");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await result(page).evaluate((element) => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 120, behavior: "instant" }));
@@ -83,8 +80,12 @@ test("raw profanity blocks progress without requiring the check button; clean ed
   await original(page).fill("오늘 [삐처리] 어제");
   await expect(result(page)).toHaveCount(0);
   await page.getByRole("button", { name: "욕설 체크", exact: true }).click();
-  await expect(result(page)).toContainText("감지되지 않았습니다");
-  await expect(result(page)).not.toContainText("마스킹");
+  await expect(result(page)).toContainText("표현이 없습니다");
+  // Owner decision 2026-11-26: profanity only informs; the step moves on.
+  await original(page).fill("오늘 시발 어제");
+  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
+  await expect(original(page)).toBeHidden();
+  await expect(page.getByText("욕설", { exact: false }).filter({ hasText: "불가" })).toHaveCount(0);
   expect(harness.unexpected).toEqual([]); expect(harness.errors).toEqual([]);
 });
 
@@ -94,12 +95,12 @@ test("original and separate translation are both checked; ambiguous pronunciatio
   await page.getByRole("button", { name: "번역본 가사 탭", exact: true }).click();
   await translated(page).fill("fuck you");
   await expect(result(page)).toContainText("번역본 가사");
-  await expect(result(page)).toContainText("명확한 욕설");
+  await expect(result(page)).toContainText("욕설 표현 있음");
   await translated(page).fill("");
   await original(page).fill("비취");
-  await expect(result(page)).toContainText("확인 필요 표현 감지");
-  await expect(result(page)).not.toContainText("명확한 욕설");
-  await expect(result(page)).not.toContainText("마스킹");
+  await expect(result(page)).toContainText("확인 필요 표현 있음");
+  await expect(result(page)).not.toContainText("욕설 표현 있음");
+  await expect(result(page)).not.toContainText("삐처리");
   expect(harness.unexpected).toEqual([]); expect(harness.errors).toEqual([]);
 });
 
@@ -118,7 +119,7 @@ test("track selection, reorder, removal and addition cannot reuse a different tr
   await expect(result(page)).toHaveCount(0);
   await page.getByRole("button", { name: "상세", exact: true }).nth(1).click();
   await expect(original(page)).toHaveValue("시발");
-  await expect(result(page)).toContainText("명확한 욕설 표현 감지");
+  await expect(result(page)).toContainText("욕설 표현 있음");
   await page.getByRole("button", { name: "2번 트랙 삭제", exact: true }).click();
   await expect(original(page)).toHaveValue("맑은 하늘");
   await expect(result(page)).toHaveCount(0);
@@ -191,7 +192,7 @@ test("successful automatic translations are checked again before they can progre
   });
   await page.getByRole("button", { name: "자동번역", exact: true }).click();
   await expect(translated(page)).toHaveValue(/시발/);
-  await expect(result(page)).toContainText("명확한 욕설 표현 감지");
+  await expect(result(page)).toContainText("욕설 표현 있음");
   await expect(result(page)).toContainText("번역본 가사");
   expect(harness.unexpected).toEqual([]); expect(harness.errors).toEqual([]);
 });
