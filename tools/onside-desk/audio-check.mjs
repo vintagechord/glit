@@ -499,7 +499,7 @@ function lineAfter(lines, index) {
 }
 
 // G 전체를 P 안의 가장 비슷한 부분 문자열에 맞춘 정렬 경로(P 양끝 자유). 같은 점수면 near 바로 앞에서 끝나는 것을 고른다.
-// 칸마다 [종류, P 위치]: 'm' 일치, 'x' 불일치, 'p' P 글자만, 'g' G 글자만(P 위치 −1).
+// 칸마다 [종류, P 위치, G 위치]: 'm' 일치, 'x' 불일치, 'p' P 글자만(G 위치 −1), 'g' G 글자만(P 위치 −1).
 function alignPath(G, P, near) {
   const g = G.length;
   const n = P.length;
@@ -526,27 +526,22 @@ function alignPath(G, P, near) {
     const k = i * w + j;
     const same = j > 0 && G[i - 1] === P[j - 1];
     if (j > 0 && D[k] === D[k - w - 1] + (same ? 1 : -1)) {
-      path.push([same ? 'm' : 'x', j - 1]);
+      path.push([same ? 'm' : 'x', j - 1, i - 1]);
       i -= 1;
       j -= 1;
     } else if (j > 0 && D[k] === D[k - 1] - 1) {
-      path.push(['p', j - 1]);
+      path.push(['p', j - 1, -1]);
       j -= 1;
     } else {
-      path.push(['g', -1]);
+      path.push(['g', -1, i - 1]);
       i -= 1;
     }
   }
   return path.reverse();
 }
 
-// G를 가사 안의 가장 비슷한 부분 문자열에 맞춰 정확히 맞은 첫 글자~끝 글자 구간을 돌려준다.
-// 점수가 가장 높은 연속 구간(core, 일치 +1·나머지 −1)의 가사 줄 밖으로 넘어간 끝자락은 일치 밀도가 0.5를 넘는
-// 데까지만 둔다: G 끝에 붙은 다른 글자가 우연히 맞은 한두 글자로 이웃 줄까지 구간을 늘리지 않게 한다.
-// core 줄 안의 끝자락과 밀도 높은 이웃 줄은 뭉개져 들린 글자가 끼어 있어도 그대로 둔다.
-function locate(G, P, near, lineOf) {
-  if (!G.length || !P.length) return null;
-  const path = alignPath(G, P, near);
+// 정렬 경로에서 점수가 가장 높은 연속 구간(core, 일치 +1·나머지 −1). [첫 칸, 끝 칸](둘 다 일치) 또는 null.
+function bestRun(path) {
   let best = 0;
   let from = 0;
   let to = -1;
@@ -557,7 +552,29 @@ function locate(G, P, near, lineOf) {
     run += kind === 'm' ? 1 : -1;
     if (run > best) { best = run; from = runFrom; to = k; }
   });
-  if (to < 0) return null;
+  return to < 0 ? null : [from, to];
+}
+
+const SOUND_ALIKE = 0.5;
+
+// 뭉개져 들린 글자가 가사 글자와 소리가 비슷한지(자모 유사도 ≥ SOUND_ALIKE). 정렬이 같은 점수의 갭으로 둔
+// 블록 끝자락을 블록 안에 둘지 가린다: '우닛가'/'오니까' 0.62, '파타뭘니'/'바다멀리' 0.56, '우우우예예예'/'내일이오니까' 0.24.
+function soundsAlike(heard, lyric) {
+  return similarity(jamo(heard).join(''), jamo(lyric).join('')) >= SOUND_ALIKE;
+}
+
+// G를 가사 안의 가장 비슷한 부분 문자열에 맞춰 가사 쪽 구간을 돌려준다. core에서 시작해
+// - core 줄 안의 끝자락은 정확히 맞은 마지막 글자까지 두고,
+// - core 줄 밖으로 넘어간 끝자락은 일치 밀도가 0.5를 넘는 데까지만 둔다(G 끝의 다른 글자가 우연히 맞은 한두 글자로
+//   이웃 줄까지 늘리지 않게).
+// core 가장자리 줄의 남은 가사 글자와 그 옆에 받아쓴 글자가 소리가 비슷하면, 정렬이 갭으로 두었어도 그만큼 넣는다
+// (블록 첫머리·끝자락이 정확히 맞은 글자 없이 뭉개져 들린 경우).
+function locate(G, P, near, lineOf) {
+  if (!G.length || !P.length) return null;
+  const path = alignPath(G, P, near);
+  const core = bestRun(path);
+  if (!core) return null;
+  const [from, to] = core;
   const c0 = lineOf(path[from][1]);
   const c1 = lineOf(path[to][1]);
   const reach = (edge, step, inCore) => {
@@ -578,16 +595,38 @@ function locate(G, P, near, lineOf) {
     }
     return last;
   };
-  const lo = reach(from, -1, (x) => x >= c0);
-  const hi = reach(to, 1, (x) => x <= c1);
-  return { start: path[lo][1], end: path[hi][1] + 1 };
+  let start = path[reach(from, -1, (x) => x >= c0)][1];
+  let end = path[reach(to, 1, (x) => x <= c1)][1] + 1;
+  const [, j1, i1] = path[to];
+  let lineEnd = j1 + 1;
+  while (lineEnd < P.length && lineOf(lineEnd) === c1) lineEnd += 1;
+  const tail = Math.min(lineEnd - j1 - 1, G.length - i1 - 1);
+  if (tail > 0 && soundsAlike(G.slice(i1 + 1, i1 + 1 + tail), P.slice(j1 + 1, j1 + 1 + tail))) end = Math.max(end, j1 + 1 + tail);
+  const [, j0, i0] = path[from];
+  let lineStart = j0;
+  while (lineStart > 0 && lineOf(lineStart - 1) === c0) lineStart -= 1;
+  const head = Math.min(j0 - lineStart, i0);
+  if (head > 0 && soundsAlike(G.slice(i0 - head, i0), P.slice(j0 - head, j0))) start = Math.min(start, j0 - head);
+  return { start, end };
 }
 
-// pattern 전체를 받아쓴 글자열에 맞췄을 때 pattern 글자와 짝지어진(불일치 포함) 받아쓴 글자 범위. 같은 점수면 가장 앞.
+// pattern 전체를 받아쓴 글자열에 맞췄을 때 pattern에 해당하는 받아쓴 글자 범위. 같은 점수면 가장 앞.
+// core에서 시작해, 남은 pattern 글자와 그 옆에 받아쓴 글자가 소리가 비슷하면 그만큼 넣는다: 뭉개져 들린 블록 끝자락은
+// 블록에 두고, 블록 뒤의 다른 글자(애드리브 등)는 남긴다.
 function cover(pattern, heard) {
   if (!pattern.length || !heard.length) return null;
-  const paired = alignPath(pattern, heard, 0).filter(([kind]) => kind === 'm' || kind === 'x');
-  return paired.length ? { start: paired[0][1], end: paired.at(-1)[1] + 1 } : null;
+  const path = alignPath(pattern, heard, 0);
+  const core = bestRun(path);
+  if (!core) return null;
+  const [, j0, i0] = path[core[0]];
+  const [, j1, i1] = path[core[1]];
+  let start = j0;
+  let end = j1 + 1;
+  const tail = Math.min(pattern.length - i1 - 1, heard.length - j1 - 1);
+  if (tail > 0 && soundsAlike(heard.slice(j1 + 1, j1 + 1 + tail), pattern.slice(i1 + 1, i1 + 1 + tail))) end += tail;
+  const head = Math.min(i0, j0);
+  if (head > 0 && soundsAlike(heard.slice(j0 - head, j0), pattern.slice(i0 - head, i0))) start -= head;
+  return { start, end };
 }
 
 function findRepeat(ctx, G, near) {
