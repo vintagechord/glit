@@ -1071,14 +1071,17 @@ const mean = (xs) => xs.reduce((sum, x) => sum + x, 0) / xs.length;
 // 바꿈 제안만 판정한다. Δ = 제안 점수 − 가사 점수(묶인 줄은 평균). 점수가 없으면 확인 필요로 남긴다.
 // 강제 점수는 Whisper가 자기 받아쓰기를 편드므로, 다시 받아쓴 글(redecodes[요청 id])이 있으면
 // 지지도(묶인 줄은 평균)가 0 이하인 제안은 버리고, 강함은 다른 가사 줄로 바꾼 제안이거나 두 번 이상 지지받은 것만 준다.
-// 다시 받아쓴 글이 없는 요청은 Δ만으로 판정한다.
+// redecodes에 요청 id가 없으면(다시 받아쓰기를 하지 않은 호출) Δ만으로 판정하고, 문자열이 아닌 값(null: 하려다 실패)이면
+// 확인되지 않은 것으로 보아 지지도 없이 보통까지만 준다.
 export function finalizeSuggestions(draft, scores, redecodes = {}) {
   const byId = new Map();
   for (const req of draft?.scoreRequests ?? []) {
     const v = scores?.[req.id];
     if (!Array.isArray(v) || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) continue;
-    const text = redecodes?.[req.id];
-    const support = typeof text === 'string' ? redecodeSupport(text, req.candidates) : null;
+    const tried = redecodes != null && Object.hasOwn(redecodes, req.id);
+    const text = tried ? redecodes[req.id] : undefined;
+    // 숫자: 지지도, null: 확인 안 됨, undefined: 다시 받아쓰기를 하지 않음
+    const support = typeof text === 'string' ? redecodeSupport(text, req.candidates) : tried ? null : undefined;
     if (!byId.has(req.suggestionId)) byId.set(req.suggestionId, []);
     byId.get(req.suggestionId).push({ delta: v[1] - v[0], support, remap: req.remap === true });
   }
@@ -1088,8 +1091,8 @@ export function finalizeSuggestions(draft, scores, redecodes = {}) {
     const members = byId.get(s.id);
     if (!members?.length) { out.push({ ...s, confidence: 'check', score: null }); continue; }
     const delta = mean(members.map((m) => m.delta));
-    const checked = members.filter((m) => m.support !== null);
-    let strong = true;
+    const checked = members.filter((m) => typeof m.support === 'number');
+    let strong = members.every((m) => m.support === undefined);
     if (checked.length) {
       if (mean(checked.map((m) => m.support)) <= 0) continue;
       strong = members.some((m) => m.remap) || checked.filter((m) => m.support > 0).length >= 2;

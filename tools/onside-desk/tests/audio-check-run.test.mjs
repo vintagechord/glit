@@ -21,15 +21,15 @@ function analysis(over = {}) {
   };
 }
 
-// redecode: 가사 줄 프롬프트로 다시 받아쓴 글을 돌려주는 함수. 없으면 글을 돌려주지 않는다(점수만으로 판정).
-function fakeWorker(handler = () => analysis(), { redecode } = {}) {
+// redecode: 가사 줄 프롬프트로 다시 받아쓴 글을 돌려주는 함수(던지면 worker 오류). 없으면 글을 돌려주지 않는다.
+function fakeWorker(handler = () => analysis(), { redecode, scores = [-10, -5] } = {}) {
   const calls = [];
   return {
     calls,
     count: (cmd) => calls.filter((c) => c.cmd === cmd).length,
     async request(cmd, payload) {
       calls.push({ cmd, payload });
-      if (cmd === 'score') return { scores: [-10, -5] };
+      if (cmd === 'score') return { scores };
       if (cmd === 'redecode') return { text: redecode?.(payload) };
       return handler(payload, calls.filter((c) => c.cmd === 'analyze').length);
     },
@@ -97,6 +97,23 @@ test('runAudioCheck re-decodes every score window with the lyric line as prompt 
   const vetoed = await runAudioCheck({ ...args, caseDir: await tmp(), worker: veto });
   assert.equal(veto.count('redecode'), veto.count('score'));
   assert.deepEqual(vetoed.tracks[0].suggestions.filter((s) => s.kind === 'replace'), []);
+});
+
+test('runAudioCheck keeps the track when a re-decode fails but never leaves that replace score-only high', async () => {
+  const heard = analysis({
+    segments: [{ s: 1, e: 5, t: '별빛이 내려와요', words: [] }, { s: 6, e: 10, t: '우리 함께 춤을 춰요', words: [] }],
+  });
+  const args = { tracks: [t1], attachments: [a1], mapping: { t1: 'a1' } };
+  for (const redecode of [() => { throw new Error('ValueError: 디코딩 실패'); }, () => 42]) {
+    const worker = fakeWorker(() => heard, { redecode, scores: [-40, -10] });
+    const run = await runAudioCheck({ ...args, caseDir: await tmp(), worker });
+    assert.equal(run.tracks[0].status, 'ok');
+    assert.equal(worker.count('redecode'), worker.count('score'));
+    const replace = run.tracks[0].suggestions.filter((s) => s.kind === 'replace');
+    assert.equal(replace.length, 1);
+    assert.equal(replace[0].confidence, 'medium');
+    assert.equal(replace[0].score, 30);
+  }
 });
 
 test('runAudioCheck marks a failing track and continues with the rest', async () => {

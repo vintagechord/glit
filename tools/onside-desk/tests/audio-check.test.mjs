@@ -647,6 +647,25 @@ test('differences one matching syllable apart are judged as one region', () => {
   assert.equal(kept[0].confidence, 'medium');
 });
 
+test('a re-decode that could not be done never leaves a score-only high', () => {
+  const strong = (d) => Object.fromEntries(d.scoreRequests.map((r) => [r.id, [-40, -10]]));
+  const single = draft(ONE_LINE, oneLineSegs(), frames(6, -5));
+  const [sr] = single.scoreRequests;
+  // 다시 받아쓰기를 하지 않은 호출(값 없음)은 지금까지처럼 Δ만으로 판정한다.
+  assert.equal(finalizeSuggestions(single, strong(single), {})[0].confidence, 'high');
+  // 하려다 실패한 요청(null)은 확인되지 않은 것으로 보고 보통까지만 준다.
+  const capped = finalizeSuggestions(single, strong(single), { [sr.id]: null });
+  assert.equal(capped.length, 1);
+  assert.equal(capped[0].confidence, 'medium');
+  const remap = draft(
+    '하늘 높이 날아라\n푸른 들판 지나서\n\n구름 위로 올라라\n푸른 들판 지나서',
+    [seg('하늘 높이 날아라', 0, 3), seg('푸른 들판 지나서', 3, 6), seg('하늘 높이 날아라', 8, 11), seg('푸른 들판 지나서', 11, 14)],
+    frames(14, -5),
+  );
+  const [rr] = remap.scoreRequests;
+  assert.equal(finalizeSuggestions(remap, strong(remap), { [rr.id]: null })[0].confidence, 'medium');
+});
+
 const sug = (id, op, kind = 'replace') => ({ id, kind, op });
 const OVERLAP = /같은 줄을 고치는 제안이 겹칩니다/;
 

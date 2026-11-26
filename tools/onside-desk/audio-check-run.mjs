@@ -92,6 +92,7 @@ export async function runAudioCheck({
   };
 
   // 바꿈 후보마다 강제 점수를 매기고, 같은 창을 가사 줄을 프롬프트로 다시 받아써 받아쓰기 착오를 가려낸다.
+  // 다시 받아쓰기가 실패하거나 글을 돌려주지 않으면 그 요청은 null(확인 안 됨)로 남겨 강함이 되지 않게 한다.
   const score = async (analysis, draft, n, track) => {
     const scores = {};
     const redecodes = {};
@@ -102,8 +103,14 @@ export async function runAudioCheck({
       const r = await worker.request('score', { ...window, candidates: req.candidates });
       scores[req.id] = r?.scores;
       checkAbort(signal);
-      const d = await worker.request('redecode', { ...window, prompt: req.candidates[0] });
-      if (typeof d?.text === 'string') redecodes[req.id] = d.text;
+      let text = null;
+      try {
+        const d = await worker.request('redecode', { ...window, prompt: req.candidates[0] });
+        if (typeof d?.text === 'string') text = d.text;
+      } catch {
+        checkAbort(signal);
+      }
+      redecodes[req.id] = text;
     }
     return finalizeSuggestions(draft, scores, redecodes);
   };
