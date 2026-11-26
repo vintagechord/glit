@@ -498,13 +498,11 @@ function lineAfter(lines, index) {
   return k;
 }
 
-// G를 가사 안의 가장 비슷한 부분 문자열에 맞춘다(G 전체, 가사 양끝 자유). 같은 점수면 near 바로 앞을 고른다.
-// 정렬 경로에서 점수가 가장 높은 연속 구간(일치 +1, 나머지 −1)만 남겨, G 끝에 붙은 다른 글자가
-// 우연히 맞은 한두 글자로 이웃 줄까지 구간을 늘리지 않게 한다.
-function locate(G, P, near) {
+// G 전체를 P 안의 가장 비슷한 부분 문자열에 맞춘 정렬 경로(P 양끝 자유). 같은 점수면 near 바로 앞에서 끝나는 것을 고른다.
+// 칸마다 [종류, P 위치]: 'm' 일치, 'x' 불일치, 'p' P 글자만, 'g' G 글자만(P 위치 −1).
+function alignPath(G, P, near) {
   const g = G.length;
   const n = P.length;
-  if (!g || !n) return null;
   const w = n + 1;
   const D = new Int32Array((g + 1) * w);
   for (let i = 1; i <= g; i += 1) {
@@ -523,39 +521,78 @@ function locate(G, P, near) {
   }
   let i = g;
   let j = end;
-  const path = []; // 끝에서 처음으로: [일치 여부, P 위치(갭이면 −1)]
+  const path = [];
   while (i > 0) {
     const k = i * w + j;
     const same = j > 0 && G[i - 1] === P[j - 1];
     if (j > 0 && D[k] === D[k - w - 1] + (same ? 1 : -1)) {
-      path.push([same, j - 1]);
+      path.push([same ? 'm' : 'x', j - 1]);
       i -= 1;
       j -= 1;
     } else if (j > 0 && D[k] === D[k - 1] - 1) {
-      path.push([false, j - 1]);
+      path.push(['p', j - 1]);
       j -= 1;
     } else {
-      path.push([false, -1]);
+      path.push(['g', -1]);
       i -= 1;
     }
   }
-  path.reverse();
+  return path.reverse();
+}
+
+// G를 가사 안의 가장 비슷한 부분 문자열에 맞춰 정확히 맞은 첫 글자~끝 글자 구간을 돌려준다.
+// 점수가 가장 높은 연속 구간(core, 일치 +1·나머지 −1)의 가사 줄 밖으로 넘어간 끝자락은 일치 밀도가 0.5를 넘는
+// 데까지만 둔다: G 끝에 붙은 다른 글자가 우연히 맞은 한두 글자로 이웃 줄까지 구간을 늘리지 않게 한다.
+// core 줄 안의 끝자락과 밀도 높은 이웃 줄은 뭉개져 들린 글자가 끼어 있어도 그대로 둔다.
+function locate(G, P, near, lineOf) {
+  if (!G.length || !P.length) return null;
+  const path = alignPath(G, P, near);
   let best = 0;
   let from = 0;
   let to = -1;
   let run = 0;
   let runFrom = 0;
-  path.forEach(([same], k) => {
+  path.forEach(([kind], k) => {
     if (run <= 0) { run = 0; runFrom = k; }
-    run += same ? 1 : -1;
+    run += kind === 'm' ? 1 : -1;
     if (run > best) { best = run; from = runFrom; to = k; }
   });
-  return to < 0 ? null : { start: path[from][1], end: path[to][1] + 1 };
+  if (to < 0) return null;
+  const c0 = lineOf(path[from][1]);
+  const c1 = lineOf(path[to][1]);
+  const reach = (edge, step, inCore) => {
+    let last = edge;
+    let k = edge + step;
+    for (; k >= 0 && k < path.length; k += step) {
+      if (path[k][1] >= 0 && !inCore(lineOf(path[k][1]))) break;
+      if (path[k][0] === 'm') last = k;
+    }
+    let hits = 0;
+    let cols = 0;
+    for (; k >= 0 && k < path.length; k += step) {
+      cols += 1;
+      if (path[k][0] === 'm') {
+        hits += 1;
+        if (hits * 2 > cols) last = k;
+      }
+    }
+    return last;
+  };
+  const lo = reach(from, -1, (x) => x >= c0);
+  const hi = reach(to, 1, (x) => x <= c1);
+  return { start: path[lo][1], end: path[hi][1] + 1 };
+}
+
+// pattern 전체를 받아쓴 글자열에 맞췄을 때 pattern 글자와 짝지어진(불일치 포함) 받아쓴 글자 범위. 같은 점수면 가장 앞.
+function cover(pattern, heard) {
+  if (!pattern.length || !heard.length) return null;
+  const paired = alignPath(pattern, heard, 0).filter(([kind]) => kind === 'm' || kind === 'x');
+  return paired.length ? { start: paired[0][1], end: paired.at(-1)[1] + 1 } : null;
 }
 
 function findRepeat(ctx, G, near) {
   const { L, lines } = ctx;
-  const span = locate(G, L.norm, near);
+  const span = locate(G, L.norm, near, (j) => L.line[j]);
   if (!span || similarity(G, L.norm.slice(span.start, span.end)) < THRESHOLDS.repeatSimilarity) return null;
   const la = L.line[span.start];
   const lb = L.line[span.end - 1];
@@ -639,7 +676,7 @@ function gapFinding(ctx, f, afterLine, tj) {
 function gapFindings(ctx, afterLine, tj, near, match = findRepeat(ctx, tj.map((j) => ctx.T.norm[j]).join(''), near)) {
   const { T } = ctx;
   if (!match) return [gapFinding(ctx, { kind: 'new', confidence: 'check', insert: heardLines(T, tj) }, afterLine, tj)];
-  const hit = locate(match.pattern, tj.map((j) => T.norm[j]).join(''), 0);
+  const hit = cover(match.pattern, tj.map((j) => T.norm[j]).join(''));
   let g0 = hit ? snapBreak(T, tj, hit.start) : 0;
   let g1 = hit ? snapBreak(T, tj, hit.end) : tj.length;
   if (g0 < THRESHOLDS.minGapChars) g0 = 0;

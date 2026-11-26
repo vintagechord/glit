@@ -599,6 +599,42 @@ test('a leftover that repeats a different lyric block becomes an additional repe
   assert.equal(heardNorm(suggestions), normalizeText('하늘 높이 날아라 바다 멀리 가거라 함께 노래하자 작은 새야 노래해').norm);
 });
 
+// ── 블록 가장자리가 뭉개져 들린 반복 후렴 ──
+const EDGE_LYRICS = ['하늘 높이 날아라', '', '오 그대여', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까', '', '작은 별이 반짝여요'].join('\n');
+const EDGE_BLOCK = ['', '오 그대여', '바다 멀리 가거라 저 하늘 끝까지', '함께 노래하자 내일이 오니까'];
+const edgeSegs = (second) => [
+  seg('하늘 높이 날아라', 0, 3),
+  seg('오 그대여', 4, 6),
+  seg('바다 멀리 가거라 저 하늘 끝까지', 6, 11),
+  seg('함께 노래하자 내일이 오니까', 11, 15),
+  seg('작은 별이 반짝여요', 16, 19),
+  ...second,
+];
+
+test('an omitted chorus whose head was misheard is still one high repeat of the whole block', () => {
+  const segments = edgeSegs([
+    seg('오 그대여', 20, 22),
+    seg('파타 뭘니 가거라 저 하늘 끝까지', 22, 27),
+    seg('함께 노래하자 내일이 오니까', 27, 31),
+  ]);
+  const { suggestions } = draft(EDGE_LYRICS, segments, frames(32, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
+  assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
+});
+
+test('an omitted chorus whose tail was misheard is still one high repeat of the whole block', () => {
+  const segments = edgeSegs([
+    seg('오 그대여', 20, 22),
+    seg('바다 멀리 가거라 저 하늘 끝까지', 22, 27),
+    seg('함께 노래하자 냬닐니 우닛가', 27, 31),
+  ]);
+  const { suggestions } = draft(EDGE_LYRICS, segments, frames(32, -5));
+  assert.deepEqual(suggestions.map((s) => [s.kind, s.confidence]), [['repeat', 'high']]);
+  assert.deepEqual(suggestions[0].op, { type: 'insertLines', afterLine: 6, lines: EDGE_BLOCK });
+  assert.ok(near(suggestions[0].start, 20) && near(suggestions[0].end, 31));
+});
+
 const sug = (id, op, kind = 'replace') => ({ id, kind, op });
 const OVERLAP = /같은 줄을 고치는 제안이 겹칩니다/;
 
