@@ -11,6 +11,9 @@ import {
   alignChars,
   autoMapping,
   validateMapping,
+  cleanTranscript,
+  draftSuggestions,
+  finalizeSuggestions,
 } from '../audio-check.mjs';
 
 test('normalizeText keeps hangul/latin/digits and maps back to source offsets', () => {
@@ -113,4 +116,225 @@ test('autoMapping matches NFD (macOS) filenames by title', () => {
   );
   assert.equal(r.mapping.t1, 'a');
   assert.deepEqual(r.unmapped, []);
+});
+
+// ── 받아쓰기 정리와 제안 ── 가사는 지어낸 문장이다. 낱말 시각은 글자 수에 비례해 직접 나눈다.
+function seg(t, s, e) {
+  const parts = t.split(' ');
+  const chars = parts.reduce((n, w) => n + w.length, 0);
+  let at = s;
+  const words = parts.map((w) => {
+    const d = ((e - s) * w.length) / chars;
+    const word = { s: at, e: at + d, w: ` ${w}` };
+    at += d;
+    return word;
+  });
+  return { s, e, t, words };
+}
+const frames = (sec, level) =>
+  Array.from({ length: Math.round(sec / 0.25) }, (_, k) => (typeof level === 'function' ? level(k * 0.25) : level));
+const draft = (lyrics, segments, energy, extra = {}) =>
+  draftSuggestions({ trackId: 't1', lyrics, segments, energy, duration: energy.length * 0.25, instrumental: false, ...extra });
+const CHORUS = '하늘 높이 날아라\n\n바다 멀리 가거라\n함께 노래하자';
+const chorusSegs = () => [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 4, 7), seg('함께 노래하자', 7, 10)];
+const near = (a, b) => Math.abs(a - b) < 0.01;
+
+test('cleanTranscript drops hallucinations, quiet and looping segments', () => {
+  const energy = frames(16, (t) => (t >= 5 && t < 7 ? -40 : -5));
+  const first = seg('하늘 높이 날아라', 0, 2);
+  const sixTimes = seg('라 라 라 라 라 라', 10, 12);
+  const last = seg('함께 노래하자', 12, 14);
+  const segments = [
+    first,
+    seg('시청해주셔서 감사합니다', 2, 4),
+    seg('바다', 4, 4.2),
+    seg('바다 멀리 가거라', 5, 7),
+    seg('라 라 라 라 라 라 라', 8, 10),
+    sixTimes,
+    last,
+  ];
+  assert.deepEqual(cleanTranscript(segments, energy), [first, sixTimes, last]);
+});
+
+test('missing repeated chorus becomes a high-confidence repeat insert', () => {
+  const segments = [...chorusSegs(), seg('바다 멀리 가거라', 11, 14), seg('함께 노래하자', 14, 17)];
+  const { suggestions, scoreRequests } = draft(CHORUS, segments, frames(18, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'repeat');
+  assert.equal(s.confidence, 'high');
+  assert.equal(s.op.type, 'insertLines');
+  assert.equal(s.op.afterLine, 3);
+  assert.deepEqual(s.op.lines, ['', '바다 멀리 가거라', '함께 노래하자']);
+  assert.deepEqual(scoreRequests, []);
+  assert.ok(near(s.start, 11) && near(s.end, 17));
+  assert.match(s.id, /^t1:repeat:3:[0-9a-f]{8}$/);
+  assert.equal(draft(CHORUS, segments, frames(18, -5)).suggestions[0].id, s.id);
+});
+
+test('partial-line echo becomes a medium repeat using lyric spelling', () => {
+  // 메아리 '저멀리 가거라'는 정규화 6자(minGapChars)이고, 가사 줄 '바다 저 멀리 가거라'의 일부다.
+  const lyrics = '하늘 높이 날아라\n\n바다 저 멀리 가거라\n함께 노래하자';
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3),
+    seg('바다 저 멀리 가거라', 4, 7),
+    seg('함께 노래하자', 7, 10),
+    seg('저멀리 가거라', 11, 13),
+  ];
+  const { suggestions } = draft(lyrics, segments, frames(14, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'repeat');
+  assert.equal(s.confidence, 'medium');
+  assert.equal(s.op.type, 'insertLines');
+  assert.equal(s.op.afterLine, 3);
+  assert.equal(s.op.lines.at(-1), '저 멀리 가거라');
+});
+
+test('unknown sung text becomes a new check suggestion with transcript text', () => {
+  const segments = [...chorusSegs(), seg('작은 별이 반짝이는 밤', 11, 14)];
+  const { suggestions, scoreRequests } = draft(CHORUS, segments, frames(15, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'new');
+  assert.equal(s.confidence, 'check');
+  assert.deepEqual(s.op, { type: 'insertLines', afterLine: 3, lines: ['작은 별이 반짝이는 밤'] });
+  assert.deepEqual(scoreRequests, []);
+});
+
+test("line sung as another lyric line asks for a score and maps to that line's spelling", () => {
+  const lyrics = '하늘 높이 날아라\n푸른 들판 지나서\n\n구름 위로 올라라\n푸른 들판 지나서';
+  const segments = [
+    seg('하늘 높이 날아라', 0, 3),
+    seg('푸른 들판 지나서', 3, 6),
+    seg('하늘 높이 날아라', 8, 11),
+    seg('푸른 들판 지나서', 11, 14),
+  ];
+  const d = draft(lyrics, segments, frames(14, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.equal(d.scoreRequests.length, 1);
+  const [s] = d.suggestions;
+  const [req] = d.scoreRequests;
+  assert.equal(s.kind, 'replace');
+  assert.deepEqual(s.op, { type: 'replaceLine', lines: [3], from: '구름 위로 올라라', to: '하늘 높이 날아라' });
+  assert.deepEqual(req.candidates, ['구름 위로 올라라', '하늘 높이 날아라']);
+  assert.equal(req.suggestionId, s.id);
+  assert.ok(near(req.start, 7.5) && near(req.end, 11.5));
+  const final = finalizeSuggestions(d, { [req.id]: [-100, -4] });
+  assert.equal(final.length, 1);
+  assert.equal(final[0].confidence, 'high');
+  assert.equal(final[0].score, 96);
+});
+
+test('word difference across a repeated line is grouped and averaged', () => {
+  const lyrics = '내 사랑 노을 아래\n작은 길을 걸어요\n\n내 사랑 노을 아래\n작은 길을 걸어요';
+  const segments = [
+    seg('나의 사랑 노을 아래', 0, 3),
+    seg('작은 길을 걸어요', 3, 6),
+    seg('나의 사랑 노을 아래', 8, 11),
+    seg('작은 길을 걸어요', 11, 14),
+  ];
+  const d = draft(lyrics, segments, frames(14, -5));
+  assert.equal(d.suggestions.length, 1);
+  assert.deepEqual(d.suggestions[0].op, {
+    type: 'replaceLine',
+    lines: [0, 3],
+    from: '내 사랑 노을 아래',
+    to: '나의 사랑 노을 아래',
+  });
+  assert.equal(d.scoreRequests.length, 2);
+  const [r0, r1] = d.scoreRequests;
+  const medium = finalizeSuggestions(d, { [r0.id]: [-10, -8.5], [r1.id]: [-10, -6.3] });
+  assert.equal(medium.length, 1);
+  assert.equal(medium[0].lines.length, 2);
+  assert.equal(medium[0].confidence, 'medium');
+  assert.ok(near(medium[0].score, 2.6));
+  assert.deepEqual(finalizeSuggestions(d, { [r0.id]: [-10, -9], [r1.id]: [-10, -8.8] }), []);
+});
+
+test('lyric-only line with vocal energy is treated as a transcription miss', () => {
+  const lyrics = '하늘 높이 날아라\n푸른 들판 지나서\n바다 멀리 가거라';
+  const segments = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 6, 9)];
+  assert.deepEqual(draft(lyrics, segments, frames(9, -5)).suggestions, []);
+  const { suggestions } = draft(lyrics, segments, frames(9, (t) => (t >= 3 && t < 6 ? -40 : -5)));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'unheard');
+  assert.equal(s.confidence, 'check');
+  assert.deepEqual(s.op, { type: 'deleteLines', from: 1, to: 1 });
+  assert.ok(near(s.start, 3) && near(s.end, 6));
+});
+
+test('uncovered loud vocals become unclear, but held notes right after a segment do not', () => {
+  const lyrics = '하늘 높이 날아라\n바다 멀리 가거라';
+  const segments = [seg('하늘 높이 날아라', 0, 4), seg('바다 멀리 가거라', 4, 8)];
+  const loud = (t) => t < 8 || (t >= 8.5 && t < 11.5) || (t >= 20 && t < 23);
+  const { suggestions } = draft(lyrics, segments, frames(30, (t) => (loud(t) ? -5 : -40)));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'unclear');
+  assert.equal(s.confidence, 'check');
+  assert.equal(s.op, null);
+  assert.equal(s.hint, '');
+  assert.ok(near(s.start, 20) && near(s.end, 23));
+});
+
+test('translation lines are ignored for matching and copied with a repeated block', () => {
+  const lyrics = [
+    '하늘 높이 날아라',
+    '',
+    '바다 멀리 가거라',
+    '(번역: Go far across the sea)',
+    '함께 노래하자',
+    '(번역: Let us sing together)',
+  ].join('\n');
+  const segments = [...chorusSegs(), seg('바다 멀리 가거라', 11, 14), seg('함께 노래하자', 14, 17)];
+  const { suggestions } = draft(lyrics, segments, frames(18, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'repeat');
+  assert.equal(s.confidence, 'high');
+  assert.equal(s.op.afterLine, 5);
+  assert.deepEqual(s.op.lines, [
+    '',
+    '바다 멀리 가거라',
+    '(번역: Go far across the sea)',
+    '함께 노래하자',
+    '(번역: Let us sing together)',
+  ]);
+});
+
+test('empty lyrics with vocals yield one whole-transcript new suggestion', () => {
+  const segments = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 3, 6)];
+  const { suggestions } = draft('', segments, frames(6, -5));
+  assert.equal(suggestions.length, 1);
+  const [s] = suggestions;
+  assert.equal(s.kind, 'new');
+  assert.equal(s.confidence, 'check');
+  assert.deepEqual(s.op, { type: 'insertLines', afterLine: -1, lines: ['하늘 높이 날아라', '바다 멀리 가거라'] });
+});
+
+test('instrumental track flags vocals above 15% of frames', () => {
+  const some = frames(25, (t) => (t < 5 ? -5 : -40));
+  const { suggestions } = draft('', [seg('라라 노래해', 1, 4)], some, { instrumental: true });
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].kind, 'instrumental');
+  assert.equal(suggestions[0].confidence, 'check');
+  assert.equal(suggestions[0].op, null);
+  const few = frames(25, (t) => (t < 2.5 ? -5 : -40));
+  assert.deepEqual(draft('', [], few, { instrumental: true }).suggestions, []);
+});
+
+test('lyrics track with no vocal frames is flagged', () => {
+  const { suggestions } = draft(CHORUS, [], frames(20, -40));
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].kind, 'no-vocal');
+  assert.equal(suggestions[0].confidence, 'check');
+  assert.equal(suggestions[0].op, null);
+});
+
+test('spacing-only difference yields nothing', () => {
+  const d = draft('바람따라 걸어가요', [seg('바람 따라 걸어가요', 0, 3)], frames(3, -5));
+  assert.deepEqual(d.suggestions, []);
+  assert.deepEqual(d.scoreRequests, []);
 });

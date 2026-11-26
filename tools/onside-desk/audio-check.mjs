@@ -16,6 +16,8 @@ export const THRESHOLDS = {
   mrResidualDb: -12,
   mrDurationSec: 0.5,
   foreignRatio: 0.4,
+  noVocalRatio: 0.05,
+  vocalSecPerChar: 0.15,
 };
 
 export const AUDIO_EXTENSIONS = new Set(['wav', 'mp3', 'm4a', 'aac', 'flac', 'aif', 'aiff', 'ogg']);
@@ -257,4 +259,569 @@ export function validateMapping(mapping, tracks, attachments) {
     }
     seen.set(attachmentId, trackId);
   }
+}
+
+// ── 받아쓰기 정리와 제안 ──────────────────────────────────────────────
+// segments: [{ s, e, t, words: [{ s, e, w }] }], energy[k]: 프레임 [k·hop, (k+1)·hop)의 보컬 dB(곡 90퍼센타일 기준)
+
+const HALLUCINATION = /(감사합니다|시청해 ?주셔서|다음 영상|한글자막|자막 ?by|구독|아멘)/;
+const HOP = 0.25;
+const MIN_SEGMENT_SEC = 0.3;
+const SNAP_CHARS = 3;
+const WHOLE_LINE = 0.9;
+const SCORE_PAD_SEC = 0.5;
+const SCORE_MAX_SEC = 30;
+
+const round = (x) => Math.round(x * 100) / 100;
+const collapse = (text) => text.replace(/\s+/g, ' ').trim();
+
+function frameRange(start, end, hop, length) {
+  const k0 = Math.max(0, Math.floor(start / hop));
+  const k1 = Math.min(length, Math.max(k0 + 1, Math.ceil(end / hop)));
+  return [k0, k1];
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function longestWordRun(text) {
+  let best = 0;
+  let run = 0;
+  let prev = null;
+  for (const word of String(text ?? '').split(/\s+/)) {
+    const w = normalizeText(word).norm;
+    if (!w) continue;
+    run = w === prev ? run + 1 : 1;
+    prev = w;
+    best = Math.max(best, run);
+  }
+  return best;
+}
+
+export function cleanTranscript(segments, energy, hop = HOP) {
+  const en = Array.isArray(energy) ? energy : [];
+  return (Array.isArray(segments) ? segments : []).filter((seg) => {
+    const text = String(seg?.t ?? '');
+    if (HALLUCINATION.test(text)) return false;
+    if (!(seg.e - seg.s >= MIN_SEGMENT_SEC)) return false;
+    const [k0, k1] = frameRange(seg.s, seg.e, hop, en.length);
+    const level = median(en.slice(k0, k1));
+    if (level !== null && level < THRESHOLDS.hallucinationDb) return false;
+    return longestWordRun(text) <= THRESHOLDS.repeatWords;
+  });
+}
+
+const spread = (s, e, k, n) => [s + ((e - s) * k) / n, s + ((e - s) * (k + 1)) / n];
+
+// 글자마다 시각: 낱말 시각을 글자 수로 나눈다. 낱말이 없거나 글자가 안 맞으면 구간 시각을 고르게 나눈다.
+function charTimes(seg, count) {
+  const out = [];
+  for (const word of Array.isArray(seg.words) ? seg.words : []) {
+    const n = normalizeText(word.w).norm.length;
+    for (let k = 0; k < n; k += 1) out.push(spread(word.s, word.e, k, n));
+  }
+  if (out.length === count) return out;
+  return Array.from({ length: count }, (_, k) => spread(seg.s, seg.e, k, count));
+}
+
+function transcriptChars(segments) {
+  const T = { text: '', norm: '', s: [], e: [], off: [], seg: [] };
+  segments.forEach((seg, index) => {
+    const t = String(seg.t ?? '').trim();
+    if (T.text) T.text += ' ';
+    const base = T.text.length;
+    T.text += t;
+    const { norm, map } = normalizeText(t);
+    const times = charTimes(seg, norm.length);
+    for (let k = 0; k < norm.length; k += 1) {
+      T.norm += norm[k];
+      T.s.push(times[k][0]);
+      T.e.push(times[k][1]);
+      T.off.push(base + map[k]);
+      T.seg.push(index);
+    }
+  });
+  return T;
+}
+
+// 번역 줄을 뺀 가사 글자열. 글자마다 줄 번호와 줄 안 원문 위치를 둔다.
+function lyricChars(lines) {
+  const L = { norm: '', line: [], off: [], span: new Map() };
+  for (const line of lines) {
+    if (line.translation) continue;
+    const { norm, map } = normalizeText(line.text);
+    if (norm) L.span.set(line.index, [L.norm.length, L.norm.length + norm.length - 1]);
+    for (let k = 0; k < norm.length; k += 1) {
+      L.norm += norm[k];
+      L.line.push(line.index);
+      L.off.push(map[k]);
+    }
+  }
+  return L;
+}
+
+// 같은 점수의 갭 위치 중에서 고른다: 긴 갭은 줄 경계에, 짧은 삽입은 줄 안쪽에 둔다(없으면 가장 오른쪽).
+function slideGaps(pairs, L, T) {
+  const seqs = [L.norm, T.norm];
+  const n = L.norm.length;
+  const exact = (p) => p !== undefined && p[0] !== null && p[1] !== null && seqs[0][p[0]] === seqs[1][p[1]];
+  const edge = (q) => q <= 0 || q >= n || L.line[q - 1] !== L.line[q];
+  let before = 0;
+  let p = 0;
+  while (p < pairs.length) {
+    const has = pairs[p][0] === null ? 1 : pairs[p][1] === null ? 0 : -1;
+    if (has < 0) { before += 1; p += 1; continue; }
+    const other = 1 - has;
+    let p1 = p;
+    while (p1 + 1 < pairs.length && pairs[p1 + 1][other] === null) p1 += 1;
+    const g = p1 - p + 1;
+    const g0 = pairs[p][has];
+    const own = seqs[has];
+    const opp = seqs[other];
+    let right = 0;
+    while (exact(pairs[p1 + 1 + right]) && own[g0 + right] === opp[pairs[p1 + 1 + right][other]]) right += 1;
+    let left = 0;
+    while (exact(pairs[p - 1 - left]) && own[g0 + g - 1 - left] === opp[pairs[p - 1 - left][other]]) left += 1;
+    const aligned = (s) => (has === 1 ? edge(before + s) : edge(g0 + s) && edge(g0 + s + g));
+    const want = g >= THRESHOLDS.minGapChars ? aligned : has === 1 ? (s) => !aligned(s) : null;
+    let shift = right;
+    if (want) {
+      for (let s = right; s >= -left; s -= 1) {
+        if (want(s)) { shift = s; break; }
+      }
+    }
+    if (shift !== 0) moveRun(pairs, p, p1, has, shift);
+    const from = Math.min(p, p + shift);
+    const next = Math.max(p1, p1 + shift) + 1;
+    before = shift < 0 ? before + shift : before;
+    for (let k = from; k < next; k += 1) if (pairs[k][0] !== null) before += 1;
+    p = next;
+  }
+}
+
+function moveRun(pairs, p0, p1, has, shift) {
+  const other = 1 - has;
+  const g = p1 - p0 + 1;
+  const g0 = pairs[p0][has];
+  const mk = (h, o) => (has === 1 ? [o, h] : [h, o]);
+  const out = [];
+  if (shift > 0) {
+    const o0 = pairs[p1 + 1][other];
+    for (let r = 0; r < shift; r += 1) out.push(mk(g0 + r, o0 + r));
+    for (let r = 0; r < g; r += 1) out.push(mk(g0 + shift + r, null));
+    pairs.splice(p0, g + shift, ...out);
+  } else {
+    const k = -shift;
+    const o0 = pairs[p0 - k][other];
+    for (let r = 0; r < g; r += 1) out.push(mk(g0 - k + r, null));
+    for (let r = 0; r < k; r += 1) out.push(mk(g0 - k + g + r, o0 + r));
+    pairs.splice(p0 - k, g + k, ...out);
+  }
+}
+
+// 일치가 아닌 칸을 모으고 일치 mergeGap자 이하로 떨어진 구간은 합친다. minGapChars 이상인 한쪽 갭은 따로 둔다.
+function diffRegions(pairs, a, b) {
+  const kindOf = ([i, j]) => (i === null ? 'ins' : j === null ? 'del' : a[i] === b[j] ? 'm' : 'sub');
+  const runs = [];
+  pairs.forEach((pair, p) => {
+    const kind = kindOf(pair);
+    const last = runs.at(-1);
+    if (last && last.kind === kind) last.p1 = p;
+    else runs.push({ kind, p0: p, p1: p });
+  });
+  const regions = [];
+  let cur = null;
+  for (const run of runs) {
+    if (run.kind === 'm') continue;
+    if (run.kind !== 'sub' && run.p1 - run.p0 + 1 >= THRESHOLDS.minGapChars) {
+      if (cur) regions.push(cur);
+      cur = null;
+      regions.push({ p0: run.p0, p1: run.p1 });
+    } else if (cur && run.p0 - cur.p1 - 1 <= THRESHOLDS.mergeGap) {
+      cur.p1 = run.p1;
+    } else {
+      if (cur) regions.push(cur);
+      cur = { p0: run.p0, p1: run.p1 };
+    }
+  }
+  if (cur) regions.push(cur);
+  return regions;
+}
+
+function neighbor(pairs, p, side, step) {
+  for (let k = p; k >= 0 && k < pairs.length; k += step) if (pairs[k][side] !== null) return pairs[k][side];
+  return -1;
+}
+
+// 받아쓴 글자를 구간별 원문 줄로(낱말 경계까지 넓힌다).
+function heardLines(T, tj) {
+  const bySeg = new Map();
+  for (const j of tj) {
+    if (bySeg.has(T.seg[j])) bySeg.get(T.seg[j])[1] = j;
+    else bySeg.set(T.seg[j], [j, j]);
+  }
+  const out = [];
+  for (const [j0, j1] of bySeg.values()) {
+    let c = T.off[j0];
+    let d = T.off[j1] + 1;
+    while (c > 0 && !/\s/.test(T.text[c - 1])) c -= 1;
+    while (d < T.text.length && !/\s/.test(T.text[d])) d += 1;
+    const piece = T.text.slice(c, d).trim();
+    if (piece) out.push(piece);
+  }
+  return out;
+}
+
+// 가사 글자 [i0, i1]의 원문을 줄마다 잘라 돌려준다.
+function lyricPieces(ctx, i0, i1) {
+  const { L, lines } = ctx;
+  const out = [];
+  for (let x = L.line[i0]; x <= L.line[i1]; x += 1) {
+    if (lines[x].translation) continue;
+    const a = x === L.line[i0] ? L.off[i0] : 0;
+    const b = x === L.line[i1] ? L.off[i1] + 1 : lines[x].text.length;
+    const piece = lines[x].text.slice(a, b).trim();
+    if (piece) out.push(piece);
+  }
+  return out;
+}
+
+// 줄 다음에 딸린 번역 줄까지 포함한 마지막 줄 번호
+function lineAfter(lines, index) {
+  let k = index;
+  while (lines[k + 1]?.translation) k += 1;
+  return k;
+}
+
+// G를 가사 안의 가장 비슷한 부분 문자열에 맞춘다(G 전체, 가사 양끝 자유). 같은 점수면 near 바로 앞을 고른다.
+function locate(G, P, near) {
+  const g = G.length;
+  const n = P.length;
+  if (!g || !n) return null;
+  const w = n + 1;
+  const D = new Int32Array((g + 1) * w);
+  for (let i = 1; i <= g; i += 1) {
+    D[i * w] = -i;
+    for (let j = 1; j <= n; j += 1) {
+      const k = i * w + j;
+      D[k] = Math.max(D[k - w - 1] + (G[i - 1] === P[j - 1] ? 1 : -1), D[k - w] - 1, D[k - 1] - 1);
+    }
+  }
+  const rank = (j) => (j <= near ? near - j : n + j - near);
+  let end = 0;
+  for (let j = 1; j <= n; j += 1) {
+    const v = D[g * w + j];
+    const b = D[g * w + end];
+    if (v > b || (v === b && rank(j) < rank(end))) end = j;
+  }
+  let i = g;
+  let j = end;
+  let lo = -1;
+  let hi = -1;
+  while (i > 0) {
+    const k = i * w + j;
+    const same = j > 0 && G[i - 1] === P[j - 1];
+    if (j > 0 && D[k] === D[k - w - 1] + (same ? 1 : -1)) {
+      if (same) { lo = j - 1; if (hi < 0) hi = j - 1; }
+      i -= 1;
+      j -= 1;
+    } else if (j > 0 && D[k] === D[k - 1] - 1) {
+      j -= 1;
+    } else {
+      i -= 1;
+    }
+  }
+  return hi < 0 ? null : { start: lo, end: hi + 1 };
+}
+
+function findRepeat(ctx, G, near) {
+  const { L, lines } = ctx;
+  const span = locate(G, L.norm, near);
+  if (!span || similarity(G, L.norm.slice(span.start, span.end)) < THRESHOLDS.repeatSimilarity) return null;
+  const la = L.line[span.start];
+  const lb = L.line[span.end - 1];
+  const b0 = L.span.get(la)[0];
+  const b1 = L.span.get(lb)[1] + 1;
+  const whole = span.end - span.start >= WHOLE_LINE * (b1 - b0)
+    && similarity(G, L.norm.slice(b0, b1)) >= THRESHOLDS.repeatSimilarity;
+  if (!whole) return { confidence: 'medium', lines: lyricPieces(ctx, span.start, span.end - 1) };
+  const block = lines.slice(la, lineAfter(lines, lb) + 1).map((line) => line.text);
+  if (la > 0 && lines[la - 1].text.trim() === '') block.unshift('');
+  return { confidence: 'high', lines: block };
+}
+
+function addEdit(edits, line, edit) {
+  if (!edits.has(line)) edits.set(line, []);
+  edits.get(line).push(edit);
+}
+
+function insertion(ctx, p0, tj, edits) {
+  const { L, T, pairs, lines } = ctx;
+  const n = L.norm.length;
+  const q = neighbor(pairs, p0, 0, -1) + 1;
+  const edge = q <= 0 || q >= n || L.line[q - 1] !== L.line[q];
+  const long = tj.length >= THRESHOLDS.minGapChars;
+  let afterLine;
+  if (edge) {
+    if (!long) return null;
+    afterLine = q === 0 ? -1 : lineAfter(lines, L.line[q - 1]);
+  } else {
+    const line = L.line[q];
+    const [first, last] = L.span.get(line);
+    const head = q - first;
+    const tail = last + 1 - q;
+    if (!long || Math.min(head, tail) > SNAP_CHARS) {
+      addEdit(edits, line, { lyr: [], tr: tj, anchor: q - 1 });
+      return null;
+    }
+    afterLine = tail <= head ? lineAfter(lines, line) : first === 0 ? -1 : lineAfter(lines, L.line[first - 1]);
+  }
+  const G = tj.map((j) => T.norm[j]).join('');
+  const heard = heardLines(T, tj);
+  const match = findRepeat(ctx, G, q);
+  return {
+    kind: match ? 'repeat' : 'new',
+    confidence: match ? match.confidence : 'check',
+    start: T.s[tj[0]],
+    end: T.e[tj.at(-1)],
+    op: { type: 'insertLines', afterLine, lines: match ? match.lines : heard },
+    hint: heard.join(' '),
+    lines: [afterLine],
+  };
+}
+
+function deletion(ctx, p0, p1, li) {
+  if (li.length < THRESHOLDS.minGapChars) return null;
+  const { L, T, pairs, lines, vocal, total } = ctx;
+  const prev = neighbor(pairs, p0, 1, -1);
+  const next = neighbor(pairs, p1, 1, 1);
+  const start = prev >= 0 ? T.e[prev] : 0;
+  const end = next >= 0 ? T.s[next] : total;
+  const [k0, k1] = frameRange(start, end, HOP, vocal.length);
+  let voiced = 0;
+  for (let k = k0; k < k1; k += 1) if (vocal[k]) voiced += 1;
+  if (voiced * HOP >= li.length * THRESHOLDS.vocalSecPerChar) return null;
+  const count = new Map();
+  for (const i of li) count.set(L.line[i], (count.get(L.line[i]) ?? 0) + 1);
+  const whole = [...count].filter(([x, c]) => c >= WHOLE_LINE * (L.span.get(x)[1] - L.span.get(x)[0] + 1)).map(([x]) => x);
+  let op = null;
+  let affected = [...count.keys()];
+  if (whole.length) {
+    op = { type: 'deleteLines', from: whole[0], to: lineAfter(lines, whole.at(-1)) };
+    affected = whole;
+  } else if (count.size === 1) {
+    const line = lines[L.line[li[0]]];
+    const to = collapse(line.text.slice(0, L.off[li[0]]) + line.text.slice(L.off[li.at(-1)] + 1));
+    op = { type: 'replaceLine', lines: [line.index], from: line.text, to };
+  }
+  return {
+    kind: 'unheard',
+    confidence: 'check',
+    start,
+    end,
+    op,
+    hint: lyricPieces(ctx, li[0], li.at(-1)).join(' '),
+    lines: affected,
+  };
+}
+
+// 양쪽이 다른 구간은 줄마다 나눠 고칠 내용으로 모은다. 삽입 칸은 앞(없으면 뒤) 가사 글자의 줄에 붙인다.
+function attachEdits(ctx, p0, p1, edits) {
+  const { L, pairs } = ctx;
+  let line = L.line[neighbor(pairs, p0, 0, 1)];
+  const groups = new Map();
+  for (let p = p0; p <= p1; p += 1) {
+    const [i, j] = pairs[p];
+    if (i !== null) line = L.line[i];
+    if (!groups.has(line)) groups.set(line, { lyr: [], tr: [], anchor: null });
+    if (i !== null) groups.get(line).lyr.push(i);
+    if (j !== null) groups.get(line).tr.push(j);
+  }
+  for (const [x, edit] of groups) addEdit(edits, x, edit);
+}
+
+function proposeLine(ctx, line, list) {
+  const { L, T } = ctx;
+  const at = (e) => (e.lyr.length ? L.off[e.lyr[0]] : L.off[e.anchor] + 1);
+  let text = line.text;
+  for (const e of [...list].sort((x, y) => at(y) - at(x))) {
+    const a = at(e);
+    const b = e.lyr.length ? L.off[e.lyr.at(-1)] + 1 : a;
+    let mid = '';
+    if (e.tr.length) {
+      const c = T.off[e.tr[0]];
+      const d = T.off[e.tr.at(-1)] + 1;
+      mid = T.text.slice(c, d);
+      if (c > 0 && /\s/.test(T.text[c - 1])) mid = ` ${mid}`;
+      if (d < T.text.length && /\s/.test(T.text[d])) mid = `${mid} `;
+    }
+    text = text.slice(0, a) + mid + text.slice(b);
+  }
+  return collapse(text);
+}
+
+function suggestion(trackId, f) {
+  const start = round(f.start);
+  const end = round(f.end);
+  const hash = createHash('sha256').update(JSON.stringify([f.kind, f.op, start, end])).digest('hex').slice(0, 8);
+  return {
+    id: `${trackId}:${f.kind}:${f.lines.join(',')}:${hash}`,
+    trackId,
+    kind: f.kind,
+    confidence: f.confidence,
+    start,
+    end,
+    op: f.op,
+    hint: f.hint,
+    score: null,
+    lines: f.lines,
+  };
+}
+
+// 다르게 불린 줄: (원래 줄, 제안 줄)이 같으면 한 제안으로 묶고, 줄마다 점수 요청을 만든다.
+function replaceSuggestions(ctx, edits, out, requests) {
+  const { L, T, pairs, lines, sung, total, trackId } = ctx;
+  const times = new Map();
+  for (const [i, j] of pairs) {
+    if (i === null || j === null) continue;
+    const [s, e] = times.get(L.line[i]) ?? [Infinity, -Infinity];
+    times.set(L.line[i], [Math.min(s, T.s[j]), Math.max(e, T.e[j])]);
+  }
+  const groups = new Map();
+  for (const [index, list] of [...edits].sort((x, y) => x[0] - y[0])) {
+    const line = lines[index];
+    const heard = proposeLine(ctx, line, list);
+    let to = heard;
+    let toNorm = normalizeText(heard).norm;
+    if (!toNorm || toNorm === line.norm) continue; // 줄을 비우는 바꿈은 내지 않는다(짧은 가사만 차이는 무시)
+    let best = null;
+    let bestSim = 0;
+    for (const other of sung) {
+      if (other.norm === line.norm) continue;
+      const sim = similarity(toNorm, other.norm);
+      if (sim > bestSim) { bestSim = sim; best = other; }
+    }
+    if (best && bestSim >= THRESHOLDS.repeatSimilarity) {
+      to = best.text.trim();
+      toNorm = best.norm;
+    }
+    let [start, end] = times.get(index) ?? [Infinity, -Infinity];
+    for (const e of list) {
+      for (const j of e.tr) { start = Math.min(start, T.s[j]); end = Math.max(end, T.e[j]); }
+    }
+    if (!Number.isFinite(start)) continue;
+    const key = `${line.norm}\n${toNorm}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ index, from: line.text, to, start, end, heard });
+  }
+  for (const occ of groups.values()) {
+    const [first] = occ;
+    const grouped = occ.map((o) => o.index);
+    const op = { type: 'replaceLine', lines: grouped, from: first.from, to: first.to };
+    const s = suggestion(trackId, {
+      kind: 'replace', confidence: 'check', start: first.start, end: first.end, op, hint: first.heard, lines: grouped,
+    });
+    out.push(s);
+    occ.forEach((o, k) => {
+      const ws = Math.max(0, o.start - SCORE_PAD_SEC);
+      const we = Math.min(total, o.end + SCORE_PAD_SEC, ws + SCORE_MAX_SEC);
+      requests.push({ id: `${s.id}:${k}`, suggestionId: s.id, start: round(ws), end: round(we), candidates: [o.from, o.to] });
+    });
+  }
+}
+
+// 받아쓰기 구간과 겹치지 않는 보컬이 unclearSec 이상 이어지면 알린다. 직전 구간 끝 holdSec 안에서 시작하면 끄는 음으로 본다.
+function unclearSuggestions(ctx, segments, out) {
+  const { vocal, trackId } = ctx;
+  const covered = new Array(vocal.length).fill(false);
+  for (const seg of segments) {
+    const [k0, k1] = frameRange(seg.s, seg.e, HOP, vocal.length);
+    for (let k = k0; k < k1; k += 1) covered[k] = true;
+  }
+  let k = 0;
+  while (k < vocal.length) {
+    if (!vocal[k] || covered[k]) { k += 1; continue; }
+    let k2 = k;
+    while (k2 < vocal.length && vocal[k2] && !covered[k2]) k2 += 1;
+    const start = k * HOP;
+    const end = k2 * HOP;
+    const prevEnd = Math.max(-Infinity, ...segments.filter((seg) => seg.e <= start).map((seg) => seg.e));
+    if (end - start >= THRESHOLDS.unclearSec && start - prevEnd > THRESHOLDS.holdSec) {
+      out.push(suggestion(trackId, { kind: 'unclear', confidence: 'check', start, end, op: null, hint: '', lines: [] }));
+    }
+    k = k2;
+  }
+}
+
+export function draftSuggestions({ trackId, lyrics, segments, energy, duration, instrumental }) {
+  const segs = Array.isArray(segments) ? segments : [];
+  const en = Array.isArray(energy) ? energy : [];
+  const T = transcriptChars(segs);
+  const total = Number.isFinite(duration) && duration > 0 ? duration : Math.max(en.length * HOP, T.e.at(-1) ?? 0);
+  const lines = lyricLines(lyrics);
+  const sung = lines.filter((line) => !line.translation && line.norm);
+  const vocal = en.map((v) => v >= THRESHOLDS.vocalDb);
+  const ratio = en.length ? vocal.filter(Boolean).length / en.length : null;
+  const out = [];
+  const scoreRequests = [];
+  if (instrumental) {
+    if (ratio !== null && ratio > THRESHOLDS.mrVocalRatio) {
+      out.push(suggestion(trackId, {
+        kind: 'instrumental', confidence: 'check', start: vocal.indexOf(true) * HOP,
+        end: (vocal.lastIndexOf(true) + 1) * HOP, op: null, hint: T.text, lines: [],
+      }));
+    }
+    return { suggestions: out, scoreRequests };
+  }
+  if (sung.length && ratio !== null && ratio < THRESHOLDS.noVocalRatio) {
+    out.push(suggestion(trackId, { kind: 'no-vocal', confidence: 'check', start: 0, end: total, op: null, hint: '', lines: [] }));
+    return { suggestions: out, scoreRequests };
+  }
+  const L = lyricChars(lines);
+  const pairs = alignChars(L.norm, T.norm);
+  slideGaps(pairs, L, T);
+  const ctx = { trackId, lines, sung, L, T, pairs, vocal, total };
+  const edits = new Map();
+  for (const { p0, p1 } of diffRegions(pairs, L.norm, T.norm)) {
+    const li = [];
+    const tj = [];
+    for (let p = p0; p <= p1; p += 1) {
+      if (pairs[p][0] !== null) li.push(pairs[p][0]);
+      if (pairs[p][1] !== null) tj.push(pairs[p][1]);
+    }
+    let found = null;
+    if (!li.length) found = insertion(ctx, p0, tj, edits);
+    else if (!tj.length) found = deletion(ctx, p0, p1, li);
+    else attachEdits(ctx, p0, p1, edits);
+    if (found) out.push(suggestion(trackId, found));
+  }
+  replaceSuggestions(ctx, edits, out, scoreRequests);
+  unclearSuggestions(ctx, segs, out);
+  out.sort((a, b) => a.start - b.start);
+  return { suggestions: out, scoreRequests };
+}
+
+// 바꿈 제안만 점수로 판정한다. Δ = 제안 점수 − 가사 점수(묶인 줄은 평균). 점수가 없으면 확인 필요로 남긴다.
+export function finalizeSuggestions(draft, scores) {
+  const byId = new Map();
+  for (const req of draft?.scoreRequests ?? []) {
+    const v = scores?.[req.id];
+    if (!Array.isArray(v) || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) continue;
+    if (!byId.has(req.suggestionId)) byId.set(req.suggestionId, []);
+    byId.get(req.suggestionId).push(v[1] - v[0]);
+  }
+  const out = [];
+  for (const s of draft?.suggestions ?? []) {
+    if (s.kind !== 'replace') { out.push(s); continue; }
+    const deltas = byId.get(s.id);
+    if (!deltas?.length) { out.push({ ...s, confidence: 'check', score: null }); continue; }
+    const delta = deltas.reduce((sum, d) => sum + d, 0) / deltas.length;
+    if (delta < THRESHOLDS.mediumDelta) continue;
+    out.push({ ...s, confidence: delta >= THRESHOLDS.strongDelta ? 'high' : 'medium', score: round(delta) });
+  }
+  return out;
 }
