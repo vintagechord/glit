@@ -1,10 +1,12 @@
 "use client";
 
 import { ArrowUpRight, CalendarDays } from "lucide-react";
-import { brandStatusTones } from "@/lib/brand-status-tones";
 import type { RadioProgramGuide } from "@/lib/radio-station-guide";
 import { formatRadioSchedule, getRadioProgramPlan } from "@/lib/radio-program-plans";
-import { radioButtonClass, radioCardClass, radioNoteClass } from "./radio-request-ui";
+import { radioButtonClass, radioCardClass, radioLinkClass, radioNoteClass } from "./radio-request-ui";
+
+/** Two links to one page, ignoring a trailing slash. */
+const samePage = (a: string, b: string) => a.trim().replace(/\/+$/, "") === b.trim().replace(/\/+$/, "");
 
 export function RadioProgramSchedule({ programs, isEnglish = false }: { programs: RadioProgramGuide[]; isEnglish?: boolean }) {
   return <div className={radioCardClass} data-testid="radio-program-schedule">
@@ -15,7 +17,7 @@ export function RadioProgramSchedule({ programs, isEnglish = false }: { programs
         const plan = getRadioProgramPlan(program);
         return <li key={program.url} className="flex flex-wrap items-center justify-between gap-x-3 py-2 text-sm">
           <div><p className="font-semibold">{program.name}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatRadioSchedule(plan, isEnglish)}</p>{plan && <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{isEnglish ? "Checked" : "확인일"} {plan.verifiedAt}</p>}</div>
-          <a href={plan?.schedule?.sourceUrl ?? program.url} className={`${radioButtonClass} px-2 text-xs`} target="_blank" rel="noopener noreferrer">{isEnglish ? "Official schedule" : "공식 편성 확인"}<ArrowUpRight size={13} aria-hidden /></a>
+          <a href={plan?.schedule?.sourceUrl ?? program.url} className={radioLinkClass} target="_blank" rel="noopener noreferrer">{isEnglish ? "Official schedule" : "공식 편성 확인"}<ArrowUpRight size={13} aria-hidden /></a>
         </li>;
       })}
     </ul>
@@ -34,9 +36,11 @@ export function RadioProgramStrategy({ program, isEnglish = false }: { program: 
       <div className="flex flex-wrap items-center gap-2"><h5 className="text-sm font-bold">{route.name[locale]}</h5><span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold dark:bg-slate-800">{route.when[locale]}</span><span className="text-xs font-semibold text-blue-700 dark:text-blue-300">{route.kind === "request" ? (isEnglish ? "Song requests accepted" : "곡 신청 가능") : (isEnglish ? "Story submission · producer selects music" : "사연 참여 · 제작진 선곡")}</span></div>
       <p className={`mt-2 ${radioNoteClass}`}>{route.instructions[locale]}</p>
       <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{route.songPolicy[locale]}</p>
-      <div className="mt-2 flex flex-wrap gap-2"><a href={route.url} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Open participation page" : "참여 경로 열기"}<ArrowUpRight size={13} aria-hidden /></a><a href={route.sourceUrl} target="_blank" rel="noopener noreferrer" className={`${radioButtonClass} px-2 text-xs`}>{isEnglish ? "Official instructions" : "공식 안내 근거"}<ArrowUpRight size={13} aria-hidden /></a></div>
+      {/* The participation page usually is the official notice too; then one
+          button is enough (owner request 2026-11-26). */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2"><a href={route.url} target="_blank" rel="noopener noreferrer" className={radioButtonClass}>{route.kind === "request" ? (isEnglish ? "Request my song" : "내 음악 신청하러 가기") : (isEnglish ? "Send my story with my song" : "사연과 함께 내 음악 보내기")}<ArrowUpRight size={15} aria-hidden /></a>{!samePage(route.url, route.sourceUrl) && <a href={route.sourceUrl} target="_blank" rel="noopener noreferrer" className={radioLinkClass}>{isEnglish ? "Official instructions" : "공식 안내 근거"}<ArrowUpRight size={13} aria-hidden /></a>}</div>
     </article>)}
-    <div className={`rounded-xl border-2 p-3 text-sm leading-6 ${brandStatusTones.progress}`}>
+    <div className="rounded-xl border-2 border-[var(--bauhaus-ink)] bg-[var(--background)] p-3 text-sm leading-6 text-[var(--foreground)]">
       <p className="font-semibold">{isEnglish ? "Onside preparation tips" : "온사이드 준비 제안"}</p>
       <ol className="mt-2 list-decimal space-y-1 pl-5">
         {(isEnglish ? ["Listen to a recent show and review three recent playlists. Note a song or segment that connects to your music.", "Write one real experience, why this song fits it, and the exact artist and title. If you are the artist, say so naturally.", "Check the segment’s theme and deadline. Submit ahead of a recorded show; use live messages only when the program invites them.", "After the show, check its dated playlist. If your song is absent, revise the fit or story before another request and follow the board’s posting rules."] : ["최근 방송 한 회와 선곡표 3회를 확인하고 내 곡과 연결되는 분위기·코너를 메모하세요.", "실제 경험 한 가지 → 이 곡과 연결되는 이유 → 정확한 곡명·아티스트 순으로 작성하세요. 본인 곡이라면 그 사실도 자연스럽게 밝히세요.", "코너 주제·접수 기한을 확인하세요. 녹음 코너는 미리 보내고, 실시간 참여는 방송에서 안내하는 채널을 이용하세요.", "방송 뒤 날짜별 선곡표를 확인하세요. 곡이 없다면 분위기나 사연을 다듬고 게시판 규칙에 맞춰 다음 신청을 준비하세요."]).map(item => <li key={item}>{item}</li>)}

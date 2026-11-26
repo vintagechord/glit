@@ -8,13 +8,26 @@ import type { RadioRequestDraft } from "@/lib/radio-request-workspace";
 export const radioControlClass =
   "min-h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-base leading-6 text-slate-950 placeholder:text-slate-500 focus-visible:border-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700/25 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus-visible:border-blue-400 dark:focus-visible:ring-blue-400/30 sm:text-sm";
 
+// Onside's print look, not a field of blue (owner request 2026-11-26: every
+// button was solid blue with white text and the guide felt heavy). The one
+// thing to do next on a screen is a yellow ticket with an ink edge; everything
+// else is a white ink-outlined button, and reference pages are plain links.
 const radioActionClass =
-  "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-center text-sm font-semibold [word-break:keep-all] [overflow-wrap:anywhere] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-blue-300 dark:focus-visible:ring-offset-slate-950 [&>svg]:shrink-0";
+  "inline-flex min-h-11 min-w-0 max-w-full items-center justify-center gap-2 rounded-[10px] border-2 px-3.5 py-2 text-center text-sm font-bold [word-break:keep-all] [overflow-wrap:anywhere] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-950 [&>svg]:shrink-0";
 
 export const radioButtonClass =
-  `${radioActionClass} border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800`;
+  `${radioActionClass} border-[var(--bauhaus-ink)] bg-white text-[#111111] enabled:hover:bg-[#f6f4ee] [&:is(a)]:hover:bg-[#f6f4ee] dark:bg-slate-900 dark:text-slate-100 dark:enabled:hover:bg-slate-800 dark:[&:is(a)]:hover:bg-slate-800`;
 export const radioPrimaryClass =
-  `${radioActionClass} border-[var(--bauhaus-ink)] bg-[#1556a4] text-white hover:bg-[#0f4f99]`;
+  `${radioActionClass} border-[var(--bauhaus-ink)] bg-[var(--bauhaus-yellow)] text-[#111111] shadow-[3px_3px_0_var(--bauhaus-ink)] enabled:hover:-translate-y-px enabled:hover:shadow-[4px_4px_0_var(--bauhaus-ink)] enabled:active:translate-x-[2px] enabled:active:translate-y-[2px] enabled:active:shadow-[1px_1px_0_var(--bauhaus-ink)] [&:is(a)]:hover:-translate-y-px [&:is(a)]:hover:shadow-[4px_4px_0_var(--bauhaus-ink)] disabled:shadow-none`;
+/** A chosen option (program, story prompt): marked, not shouting. */
+export const radioSelectedClass =
+  `${radioActionClass} border-[var(--bauhaus-ink)] bg-white text-[#111111] shadow-[inset_0_-4px_0_var(--bauhaus-yellow)] dark:bg-slate-900 dark:text-slate-100 [&>svg]:rounded-[3px] [&>svg]:bg-[var(--bauhaus-yellow)] [&>svg]:p-px [&>svg]:text-[#111111]`;
+/** A page on the broadcaster's site to read (program info, playlist, schedule). */
+export const radioLinkClass =
+  "inline-flex min-h-9 min-w-0 max-w-full items-center gap-1 rounded-[4px] text-xs font-bold text-[#111111] underline decoration-[var(--bauhaus-yellow)] decoration-[3px] underline-offset-[5px] [word-break:keep-all] [overflow-wrap:anywhere] transition hover:decoration-[var(--bauhaus-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:text-slate-100 dark:hover:decoration-slate-100 [&>svg]:shrink-0";
+/** What the applicant picked, read back on the page. */
+export const radioChoiceNoteClass =
+  "rounded-xl border-2 border-[var(--bauhaus-ink)] bg-white px-4 py-3 text-sm font-semibold text-[#111111] dark:bg-slate-900 dark:text-slate-100";
 export const radioNoteClass = "text-xs leading-5 text-slate-600 dark:text-slate-300";
 export const radioCardClass =
   "min-w-0 rounded-2xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/60 sm:p-4";
