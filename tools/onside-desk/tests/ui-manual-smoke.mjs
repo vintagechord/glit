@@ -116,12 +116,12 @@ try {
   const section=page.locator('#audio-check');
   // 1. engine missing: install notice only (uv missing -> guidance, install disabled)
   d.audioCheck=clone(base);await openReview();await section.waitFor();
-  assert.match(await section.innerText(),/약 3GB, 처음 한 번/);assert.match(await section.innerText(),/brew install uv/);assert.equal(await page.getByRole('button',{name:'음원 대조 시작'}).count(),0);assert.equal(await page.locator('[data-action=audio-install]').isDisabled(),true);assert.equal(await section.locator('select').count(),0);
+  assert.match(await section.innerText(),/약 2\.5–3GB, 처음 한 번/);assert.match(await section.innerText(),/brew install uv/);assert.equal(await page.getByRole('button',{name:'음원 대조 시작'}).count(),0);assert.equal(await page.locator('[data-action=audio-install]').isDisabled(),true);assert.equal(await section.locator('select').count(),0);
   audio.engine={installed:false,version:null,uv:'/opt/homebrew/bin/uv',needsUpdate:false};await page.locator('[data-case]').filter({hasText:'수동 음반 예시'}).click();await page.getByRole('tab',{name:'검토사항',exact:true}).click();
   assert.equal(await page.locator('[data-action=audio-install]').isDisabled(),false);assert.equal(await page.getByRole('button',{name:'음원 대조 시작'}).count(),0);
   await page.locator('[data-action=audio-install]').click();await page.getByRole('button',{name:'음원 대조 시작'}).waitFor();assert.equal(calls.filter(c=>c.kind==='audio-install').length,1);
   // 2. mapping rows, copy, mapping PATCH sends the full mapping (swap)
-  assert.match(await section.innerText(),/약 15분 예상 · 이 Mac에서만 처리/);assert.match(await section.innerText(),/연결된 음원 3개 · 트랙 2곡/);assert.match(await section.innerText(),/01_첫 곡\.mp3 중복·사용 안 함/);assert.match(await section.innerText(),/MR · 1번과 짝/);
+  assert.match(await section.innerText(),/약 15–25분 \(Mac 부하에 따라\) 예상 · 이 Mac에서만 처리/);assert.match(await section.innerText(),/연결된 음원 3개 · 트랙 2곡/);assert.match(await section.innerText(),/01_첫 곡\.mp3 중복·사용 안 함/);assert.match(await section.innerText(),/MR · 1번과 짝/);
   assert.equal(await section.locator(`[data-audio-map="${T1}"] option`).count(),4);
   await section.locator(`[data-audio-map="${T1}"]`).selectOption('a3');await page.waitForFunction(()=>document.querySelector('#audio-check [data-audio-map]'));
   const patch=calls.find(c=>c.kind==='audio-mapping');assert.equal(patch.method,'PATCH');assert.deepEqual(patch.body,{mapping:{[T1]:'a3',[T2]:'a1'}});
