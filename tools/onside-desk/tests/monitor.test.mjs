@@ -93,6 +93,26 @@ test('the daily backup status is shown and goes stale after 26 hours', async t =
   assert.match((await backupItem()).value, /실패 · DATABASE_UNREACHABLE/);
 });
 
+test('one dropped app call is shown with its reason; only repeated failures warn', async () => {
+  const netItem = async net => item(sectionOf(await monitorWith(fakes({ snapshot: { net } })).snapshot(true), 'supabase'), '앱 호출 실패(6시간)');
+  // 2026-11-27 01:20 KST: the storage-cleanup wake-up hit a stale HTTP/2 connection; the 01:30 tick went through.
+  const dropped = await netItem({ failedLast6h: 1, totalLast6h: 4, latestFailed: false, lastSucceededAt: '2026-10-31T23:30:00Z',
+    recentFailures: [{ at: '2026-10-31T23:20:00Z', status: null, timedOut: false, error: 'Error in the HTTP2 framing layer', body: null }] });
+  assert.equal(dropped.status, 'ok', 'a single failure among a handful of calls is noise, not a problem');
+  assert.equal(dropped.value, '1 / 4건 · 이후 정상');
+  assert.match(dropped.hint, /11\. 01\. 08:20 · 연결 끊김\(HTTP\/2\)/);
+  assert.equal((await netItem({ failedLast6h: 1, totalLast6h: 4 })).status, 'ok', 'a database without the detail columns follows the same rule');
+
+  const repeated = await netItem({ failedLast6h: 3, totalLast6h: 5, latestFailed: true,
+    recentFailures: [{ at: '2026-10-31T23:50:00Z', status: 401, timedOut: false, error: null, body: '{"error":"unauthorized"}' },
+      { at: '2026-10-31T23:49:00Z', status: null, timedOut: true, error: 'Timeout of 10000 ms reached', body: null }] });
+  assert.equal(repeated.status, 'warning');
+  assert.equal(repeated.value, '3 / 5건');
+  assert.match(repeated.hint, /앱 응답 401/);
+  assert.equal((await netItem({ failedLast6h: 2, totalLast6h: 40 })).status, 'ok', 'two failures among many calls stay under 20%');
+  assert.equal((await netItem({ failedLast6h: 0, totalLast6h: 4 })).hint, undefined);
+});
+
 test('outages, DNS drift and expiring certificates or domains are errors', async () => {
   const f = fakes({ siteDown: true, aRecords: ['216.24.57.1'], certExpiry: '2026-11-05T00:00:00Z', domainExpiry: '2026-11-20T00:00:00Z', noRpc: true });
   const snapshot = await monitorWith(f).snapshot(true);
