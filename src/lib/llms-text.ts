@@ -61,7 +61,7 @@ export function buildLlmsText({ origin, packages }: { origin: string; packages: 
   push(`- [심의 안내](${url("/guide")}): 음반 심의와 뮤직비디오 심의의 절차·준비물·비용 요약`);
   for (const guide of REVIEW_GUIDES) push(`- [${guide.h1}](${url(`/guide/${guide.slug}`)}): ${guide.description}`);
   push(`- [심의 비용 안내](${url("/guide/pricing")}): 음반 심의 패키지와 뮤직비디오 심의 항목별 비용, 결제와 증빙`);
-  push(`- [심의 용어집](${url("/guide/glossary")}): 적격·부적격·보완 요청, 등급분류·필증 등 용어 설명`);
+  push(`- [심의 용어](${url("/guide/glossary")}): 적격·부적격·보완 요청, 등급분류·필증 등 용어 설명`);
   push(`- [자주 묻는 질문](${url("/faq")})`, `- [왜 온사이드인가 · 회사소개](${url("/about")}): 온사이드를 고르는 이유와 운영사 빈티지하우스의 음악 브랜드`, `- [음반 심의 신청](${url("/dashboard/new/album")})`, `- [뮤직비디오 심의 신청](${url("/dashboard/new/mv")})`, `- [결과 조회](${url("/track")})`);
 
   push("", "## 접수처별 안내 (영등위·방송국)", "", `- [접수처 목록](${url("/guide/stations")})`);

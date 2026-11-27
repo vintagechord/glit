@@ -1,7 +1,8 @@
-import { Clapperboard, Disc3, Tv } from "lucide-react";
+import { ChevronDown, Clapperboard, Disc3, Mail, Phone, Tv } from "lucide-react";
 
 import { ReliableLink } from "@/components/site/reliable-link";
 import { ALBUM_MULTI_DISCOUNT_BADGE } from "@/lib/album-payment-discount";
+import { APP_CONFIG } from "@/lib/config";
 import { reviewServices } from "@/lib/onside-content";
 import { pageMetadata } from "@/lib/seo";
 
@@ -39,6 +40,51 @@ const submissionCards = [
     tone: "border-[#111111] bg-[#d9362c] text-white shadow-[6px_6px_0_#111111] dark:border-[#f2cf27] dark:bg-[#ff6258] dark:text-[#111111] dark:shadow-[6px_6px_0_#f2cf27]",
   },
 ];
+
+// 2026-11-27 (owner): many applicants mix the reviews up, so the help under
+// the cards goes by what they want to do with the song or the video. Each
+// answer names the card above and follows the service definitions
+// (onside-content.ts, review-guides.ts, review-glossary.ts).
+const reviewChoices = [
+  {
+    situation: "새 노래를 라디오·TV에서 방송하고 싶어요",
+    answer: "음원 방송 심의 (음반 심의)",
+    detail: "방송국마다 가사와 음원을 심의합니다. 디지털 싱글 1곡도 같은 절차이고, 발매 전·후 모두 신청할 수 있어요.",
+    href: "/dashboard/new/album",
+    icon: Disc3,
+    tone: "bg-[#f2cf27] text-[#111111]",
+  },
+  {
+    situation: "이미 발매한 곡을 방송국에 내고 싶어요",
+    answer: "음원 방송 심의 · 발매 후 접수",
+    detail: "멜론이나 지니 앨범 링크로 추가금 없이 접수합니다. 심의용 음원 파일은 함께 올려주세요.",
+    href: "/dashboard/new/album",
+    icon: Disc3,
+    tone: "bg-[#f2cf27] text-[#111111]",
+  },
+  {
+    situation: "뮤직비디오를 유튜브·음원 사이트에 올리거나 유통사에 넘겨요",
+    answer: "MV 온라인 유통용 심의",
+    detail: "영상물등급위원회 등급분류를 받습니다. 결과와 함께 필증과 등급 표기 자료를 드려요.",
+    href: "/dashboard/new/mv?type=distribution",
+    icon: Clapperboard,
+    tone: "bg-[#1556a4] text-white",
+  },
+  {
+    situation: "뮤직비디오를 TV에서 방송하고 싶어요",
+    answer: "MV 방송사 심의",
+    detail: "KBS·MBC·SBS 가운데 방송사를 골라 방송사별로 받습니다. 방송사마다 영상 규격이 달라요.",
+    href: "/dashboard/new/mv?type=broadcast",
+    icon: Tv,
+    tone: "bg-[#d9362c] text-white",
+  },
+] as const;
+
+const reviewChoiceNotes = [
+  "음원 심의·앨범 심의·방송국 심의·라디오 심의는 모두 같은 음반 심의예요. 「음원 방송 심의」로 신청하면 됩니다.",
+  "뮤직비디오 심의는 노래의 음반 심의와 따로 받는 절차예요.",
+  "온사이드 음반 심의에서 적격을 받은 곡은 결과 화면의 「라디오 신청 가이드」에서 라디오 신청 방법까지 볼 수 있어요.",
+] as const;
 
 export default function NewSubmissionPage() {
   return (
@@ -88,9 +134,56 @@ export default function NewSubmissionPage() {
             </ReliableLink>
           ))}
         </div>
-        <details className="mt-6 rounded-[8px] border border-border p-4">
-          <summary className="cursor-pointer text-base font-bold">어떤 심의가 필요한지 모르겠어요</summary>
-          <p className="mt-3 text-sm leading-6">공개할 곳, 제출할 방송사·유통사, 요청받은 서류 이름을 확인해주세요. 음원인지 영상인지와 제출처의 요구사항을 기준으로 안내해 드립니다.</p>
+        <details className="group mt-6 rounded-[10px] border-2 border-[#111111] bg-background dark:border-[#f2cf27]/70">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-[8px] px-4 py-3 text-base font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:focus-visible:ring-[#f2cf27] [&::-webkit-details-marker]:hidden">
+            어떤 심의가 필요한지 모르겠어요
+            <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-[7px] border-2 border-[#111111] bg-card transition-transform group-open:rotate-180 dark:border-[#f2cf27]">
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </summary>
+          <div className="px-4 pb-5">
+            <p className="break-keep text-sm font-semibold leading-6 text-muted-foreground">내 음악을 어디에 내보낼지로 고르면 됩니다.</p>
+            <ul className="mt-3 grid gap-3 md:grid-cols-2">
+              {reviewChoices.map((choice) => (
+                <li key={choice.situation} className="flex flex-col rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
+                  <p className="break-keep text-[15px] font-black leading-6 text-foreground">{choice.situation}</p>
+                  <p className="mt-2 flex items-center gap-2">
+                    <span className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] border-2 border-[#111111] ${choice.tone}`}>
+                      <choice.icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="break-keep text-sm font-black text-foreground">{choice.answer}</span>
+                  </p>
+                  <p className="mt-2 break-keep text-sm leading-6 text-foreground/80">{choice.detail}</p>
+                  <ReliableLink href={choice.href} className="mt-3 w-fit text-sm font-black text-foreground underline decoration-[#f2cf27] decoration-[3px] underline-offset-4 transition hover:decoration-[#111111] dark:hover:decoration-[#f2cf27]">
+                    이 심의 신청하기 →
+                  </ReliableLink>
+                </li>
+              ))}
+            </ul>
+            <ul className="mt-4 space-y-2">
+              {reviewChoiceNotes.map((note) => (
+                <li key={note} className="flex gap-2 break-keep text-sm leading-6 text-foreground/85">
+                  <span aria-hidden="true" className="mt-2 size-2 shrink-0 bg-[#f2cf27] ring-1 ring-[#111111]" />
+                  {note}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 rounded-[8px] border-2 border-[#111111] bg-card p-4 dark:border-[#f2cf27]/60">
+              <p className="break-keep text-base font-black text-foreground">그래도 헷갈리면 전화나 메일로 물어보세요</p>
+              <p className="mt-1 break-keep text-sm leading-6 text-foreground/80">공개할 곳과 제출처(방송사·유통사)를 알려주시면 맞는 심의를 골라 드려요.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a href={`tel:${APP_CONFIG.supportPhone}`} className="inline-flex min-h-11 items-center gap-2 rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]">
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  <span data-no-translate>{APP_CONFIG.supportPhone}</span>
+                </a>
+                <a href={`mailto:${APP_CONFIG.supportEmail}`} className="inline-flex min-h-11 items-center gap-2 break-all rounded-[8px] border-2 border-[#111111] bg-background px-3 text-sm font-black text-foreground transition hover:bg-[#f2cf27] hover:text-[#111111] dark:border-[#f2cf27]">
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  <span data-no-translate>{APP_CONFIG.supportEmail}</span>
+                </a>
+              </div>
+              <p className="mt-2 text-xs font-semibold text-muted-foreground">{`상담시간 ${APP_CONFIG.supportHours}`}</p>
+            </div>
+          </div>
         </details>
       </section>
       <div className="mt-4 text-right text-xs font-semibold text-muted-foreground">

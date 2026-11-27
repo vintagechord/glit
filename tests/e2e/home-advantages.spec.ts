@@ -80,20 +80,22 @@ for (const width of [320, 390, 1280]) {
         exact: true,
       });
       const services = benefits.getByRole("button");
+      // Owner 2026-11-27: the radio card says the guide is for songs whose
+      // review is done, spans the box, and opens the guide's real steps.
       const serviceNames = english
-        ? ["Broadcast request instructions", "Review archive", "Artmelon store"]
-        : ["방송 신청 방법 제공", "심의 기록 보관", "아트멜론 입점"];
+        ? ["Radio guide for reviewed songs", "Review archive", "Artmelon store"]
+        : ["심의 완료 곡, 라디오 신청 방법까지", "심의 기록 보관", "아트멜론 입점"];
       // Owner 2026-11-16: one plain sentence each, saying what the service is.
       const serviceDescriptions = english
-        ? ["We find radio programs that fit your song and give you the links to their request boards.", "Keep every review and release in one place, including reviews you got elsewhere.", "Onside review members get an easier start on Artmelon, the store for CDs, LPs and merch."]
-        : ["내 음악에 맞는 라디오 프로그램과 신청 게시판 링크를 알려드립니다.", "다른 곳에서 받은 심의와 발매 정보까지 한곳에 저장하고 관리합니다.", "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다."];
+        ? ["Once your song has passed an Onside review, we walk you through requesting it on the radio, step by step.", "Keep every review and release in one place, including reviews you got elsewhere.", "Onside review members get an easier start on Artmelon, the store for CDs, LPs and merch."]
+        : ["온사이드에서 심의를 마친 곡이라면, 내 음악을 라디오에 신청하는 방법을 단계별로 알려드립니다.", "다른 곳에서 받은 심의와 발매 정보까지 한곳에 저장하고 관리합니다.", "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다."];
       // What each example shows, and the single note under it.
       const serviceExamples = english
-        ? [["Program picks", "Request board links", "How to request"], ["Onside review", "Reviewed elsewhere"], ["Review history check", "Onboarding consultation"]]
-        : [["프로그램 추천", "게시판 링크", "신청 방법"], ["온사이드 심의", "외부 심의"], ["심의 이력 확인", "입점 상담 연결"]];
+        ? [["Review complete", "Pick a program", "Write your request", "Post on the official board"], ["Onside review", "Reviewed elsewhere"], ["Review history check", "Onboarding consultation"]]
+        : [["심의 완료", "프로그램 고르기", "신청글 쓰기", "공식 게시판에 신청"], ["온사이드 심의", "외부 심의"], ["심의 이력 확인", "입점 상담 연결"]];
       const serviceNotes = english
-        ? ["For members with a completed Onside review.", "Find it under My Music in your account.", "Store and selling terms are set in a consultation."]
-        : ["심의를 완료한 회원에게 제공됩니다.", "회원 계정의 내 음악 관리에서 이용합니다.", "입점·판매 조건은 상담으로 안내합니다."];
+        ? ["Only for songs approved in an Onside album review: open Radio request guide on your result page.", "Find it under My Music in your account.", "Store and selling terms are set in a consultation."]
+        : ["온사이드 음반 심의에서 적격을 받은 곡에 한해, 심의 결과 화면의 「라디오 신청 가이드」에서 이용합니다.", "회원 계정의 내 음악 관리에서 이용합니다.", "입점·판매 조건은 상담으로 안내합니다."];
       await expect(services).toHaveCount(3);
       for (const name of serviceNames) {
         await expect(benefits.getByRole("button", { name, exact: true })).toBeVisible();
@@ -102,17 +104,23 @@ for (const width of [320, 390, 1280]) {
       await expect(benefits.getByText(english ? "Preview" : "미리보기", { exact: true })).toHaveCount(0);
       await expect(benefits).not.toContainText(/30%|50%|할인|Discount/);
       const sectionHeight = (await benefits.boundingBox())!.height;
-      expect(sectionHeight).toBeLessThanOrEqual(160);
+      // The radio card's title may take a second line on the narrowest phones.
+      expect(sectionHeight).toBeLessThanOrEqual(width < 390 ? 200 : 160);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       const serviceBounds = [];
       for (const button of await services.all()) {
         const bounds = (await button.boundingBox())!;
         serviceBounds.push(bounds);
-        expect(bounds.height).toBeGreaterThanOrEqual(80);
+        expect(bounds.height).toBeGreaterThanOrEqual(44);
         await expect(button).toHaveAttribute("aria-haspopup", "dialog");
       }
-      expect(Math.max(...serviceBounds.map(bounds => bounds.y)) - Math.min(...serviceBounds.map(bounds => bounds.y))).toBeLessThanOrEqual(1);
-      expect(Math.max(...serviceBounds.map(bounds => bounds.height)) - Math.min(...serviceBounds.map(bounds => bounds.height))).toBeLessThanOrEqual(1);
+      // The radio card spans the box on its own row; the other two share the row under it.
+      const [radioCard, archiveCard, artmelonCard] = serviceBounds;
+      expect(radioCard.y + radioCard.height).toBeLessThanOrEqual(archiveCard.y);
+      expect(radioCard.width).toBeGreaterThanOrEqual(archiveCard.width + artmelonCard.width);
+      expect(Math.abs(archiveCard.y - artmelonCard.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(archiveCard.height - artmelonCard.height)).toBeLessThanOrEqual(1);
+      await expect(services.first()).toHaveAccessibleDescription(english ? "Only for Onside-reviewed songs · Steps" : "온사이드 심의를 마친 곡만 · 단계별 보기");
       const measurementsPath = testInfo.outputPath("compact-layout.json");
       await writeFile(measurementsPath, JSON.stringify({
         width, language: english ? "en" : "ko", sectionHeight,

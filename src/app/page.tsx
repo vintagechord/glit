@@ -184,12 +184,10 @@ export default async function Home() {
           className={`flex flex-col gap-4 md:flex-row md:items-end md:justify-between ${scrollRevealBaseClass}`}
           style={{ transitionDelay: "0ms" }}
         >
-          <div>
-            <p className="bauhaus-kicker">서비스</p>
-            <h2 className="mt-4 text-2xl font-black text-foreground">
-              어떤 심의가 필요한가요?
-            </h2>
-          </div>
+          {/* 2026-11-27 (owner): the 「서비스」 badge above the heading was removed. */}
+          <h2 className="text-2xl font-black text-foreground">
+            어떤 심의가 필요한가요?
+          </h2>
           <ReliableLink
             href="https://onside17.com/"
             target="_blank"

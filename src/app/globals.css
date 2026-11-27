@@ -1081,9 +1081,14 @@ html[lang="en"] {
   min-width: 0;
 }
 
+/* The field's line-height is 1, but Korean glyphs reach above a 1em box
+   (Apple SD Gothic Neo and Malgun Gothic most), and the clipping box below
+   cut their tops off (owner, 2026-11-27). The text gets its own taller line;
+   the field centres it. */
 .onside-hero-url-text {
   min-width: 0;
   overflow: hidden;
+  line-height: 1.5;
   letter-spacing: -0.005em;
   white-space: nowrap;
 }
