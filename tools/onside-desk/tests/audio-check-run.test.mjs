@@ -243,3 +243,21 @@ test('progressStageLabel maps worker stages', () => {
   assert.equal(progressStageLabel('separate'), '보컬 분리 중');
   assert.equal(progressStageLabel('???'), '분석 중');
 });
+
+test('runAudioCheck reads audio from audioDir, honours language auto and drafts a lyric sheet for empty lyrics', async () => {
+  const caseDir = await tmp();
+  const audioDir = path.join(caseDir, '음원');
+  const worker = fakeWorker();
+  const blank = { id: 't1', track_no: 1, track_title: '별빛', lyrics: '', language: 'auto' };
+  const run = await runAudioCheck({ caseDir, audioDir, tracks: [blank], attachments: [a1], mapping: { t1: 'a1' }, worker, runId: 'r-sheet' });
+  const [call] = worker.calls;
+  assert.equal(call.payload.file, path.join(audioDir, 'a1.wav'));
+  assert.equal(call.payload.language, null);
+  assert.equal(worker.count('score'), 0);
+  const [track] = run.tracks;
+  assert.equal(track.status, 'ok');
+  assert.equal(track.foreign, true);
+  const sheet = track.suggestions.find((s) => s.kind === 'generated');
+  assert.deepEqual(sheet.op, { type: 'insertLines', afterLine: -1, lines: ['별빛이 내려와요', '우리 함께 걸어요'] });
+  assert.deepEqual(sheet.times, [[1, 5], [6, 10]]);
+});

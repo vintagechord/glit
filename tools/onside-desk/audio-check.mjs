@@ -1187,6 +1187,53 @@ function unclearSuggestions(ctx, segments, out) {
 }
 
 // 믹스 기준 보컬 dB(level)에서 보컬 프레임 비율. level이 없으면(예전 분석) 알 수 없음(null).
+// ── 가사지 초안 ──
+// 받아쓰기 구간은 대개 가사 한 줄 크기다(11/26 11곡: 중앙값 9–13자, 최대 27자). 그래서 구간 하나를 한 줄로 두고,
+// SHEET_LINE_CHARS자를 넘는 구간만 글자 수가 반에 가장 가까운 낱말 경계에서 나눈다. 줄 끝의 문장부호는 가사지에 쓰지 않으므로 뗀다.
+// 연 나누기: 간주처럼 길게 비거나(4초 초과), 연이 4줄 이상인데 숨 고르기보다 길게 비거나(2.5초 초과), 8줄 이상 이어졌는데
+// 잠깐 비면(1초 초과) 빈 줄을 넣는다. 같은 11곡의 실제 가사(연당 2–6줄이 대부분)에 가장 가깝게 나온 기준이다.
+const SHEET_LINE_CHARS = 20;
+const SHEET_STANZA = [[4, 0], [2.5, 4], [1, 8]]; // [이 초를 넘게 비고, 지금 연이 이 줄 수 이상이면]
+const SHEET_TRAILING = /[\s.。,，!?！？…~]+$/u;
+
+function sheetLines(seg, text) {
+  const tokens = text.split(' ');
+  const count = normalizeText(text).norm.length;
+  if (count <= SHEET_LINE_CHARS || tokens.length < 2) return [{ text, start: round(seg.s), end: round(seg.e) }];
+  let cut = 1;
+  let best = Infinity;
+  let seen = 0;
+  for (let i = 1; i < tokens.length; i += 1) {
+    seen += normalizeText(tokens[i - 1]).norm.length;
+    const off = Math.abs(seen - count / 2);
+    if (off < best) { best = off; cut = i; }
+  }
+  const head = tokens.slice(0, cut).join(' ').replace(SHEET_TRAILING, '');
+  const tail = tokens.slice(cut).join(' ');
+  const times = charTimes(seg, count);
+  const headCount = normalizeText(head).norm.length;
+  const mid = headCount > 0 && headCount < count ? times[headCount - 1][1] : (seg.s + seg.e) / 2;
+  return [...sheetLines({ s: seg.s, e: mid }, head), ...sheetLines({ s: mid, e: seg.e }, tail)];
+}
+
+// segments(정리된 받아쓰기) → [{ text, start, end } | null(연 사이 빈 줄)]
+export function lyricSheetDraft(segments) {
+  const out = [];
+  let prevEnd = null;
+  let stanza = 0;
+  for (const seg of Array.isArray(segments) ? segments : []) {
+    const text = collapse(String(seg?.t ?? '')).replace(SHEET_TRAILING, '');
+    if (!normalizeText(text).norm) continue;
+    const gap = prevEnd === null ? 0 : seg.s - prevEnd;
+    if (stanza && SHEET_STANZA.some(([sec, lines]) => gap > sec && stanza >= lines)) { out.push(null); stanza = 0; }
+    const lines = sheetLines(seg, text);
+    out.push(...lines);
+    stanza += lines.length;
+    prevEnd = seg.e;
+  }
+  return out;
+}
+
 export function vocalPresence(level) {
   if (!Array.isArray(level) || !level.length) return null;
   return level.filter((v) => v >= THRESHOLDS.vocalDb).length / level.length;
@@ -1215,7 +1262,27 @@ export function draftSuggestions({ trackId, lyrics, segments, energy, level, dur
     }
     return { suggestions: out, scoreRequests };
   }
-  if (sung.length && presence !== null && presence < THRESHOLDS.noVocalRatio) {
+  if (!sung.length) {
+    // 가사가 비어 있으면 대조 대신 받아쓴 구간으로 가사지 초안을 만든다(고칠 수 있는 제안 하나 + 알아듣지 못한 구간).
+    const sheet = lyricSheetDraft(segs);
+    const heard = sheet.filter(Boolean);
+    if (heard.length) {
+      out.push({
+        ...suggestion(trackId, {
+          kind: 'generated', confidence: 'check', start: heard[0].start, end: heard.at(-1).end,
+          op: { type: 'insertLines', afterLine: -1, lines: sheet.map((line) => (line ? line.text : '')) }, hint: '', lines: [],
+        }),
+        times: sheet.map((line) => (line ? [line.start, line.end] : null)),
+      });
+    } else if (presence !== null && presence < THRESHOLDS.noVocalRatio) {
+      out.push(suggestion(trackId, { kind: 'no-vocal', confidence: 'check', start: 0, end: total, op: null, hint: '가사로 만들 보컬을 찾지 못했습니다.', lines: [] }));
+      return { suggestions: out, scoreRequests };
+    }
+    unclearSuggestions({ vocal, trackId }, segs, out);
+    out.sort((a, b) => a.start - b.start);
+    return { suggestions: out, scoreRequests };
+  }
+  if (presence !== null && presence < THRESHOLDS.noVocalRatio) {
     out.push(suggestion(trackId, { kind: 'no-vocal', confidence: 'check', start: 0, end: total, op: null, hint: '', lines: [] }));
     return { suggestions: out, scoreRequests };
   }
@@ -1326,7 +1393,7 @@ export function applySuggestions(lyrics, suggestions, items) {
     if (op.type === 'insertLines') {
       const at = op.afterLine + 1;
       if (!Number.isInteger(at) || at < 0 || at > lines.length) throw new Error(OVERLAP_ERROR);
-      const hasText = s.kind === 'new' && typeof item.text === 'string';
+      const hasText = (s.kind === 'new' || s.kind === 'generated') && typeof item.text === 'string';
       edits.push({ start: at, end: at, lines: hasText ? editedLines(item.text) : op.lines, order });
     } else if (op.type === 'replaceLine') {
       const want = normalizeText(op.from).norm;

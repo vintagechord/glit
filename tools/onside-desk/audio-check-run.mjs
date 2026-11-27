@@ -47,6 +47,7 @@ async function readJson(file) {
 
 export async function runAudioCheck({
   caseDir,
+  audioDir = path.join(caseDir, '이메일 파일'),
   tracks,
   attachments,
   mapping,
@@ -77,7 +78,8 @@ export async function runAudioCheck({
   const order = [...mapped.filter((t) => !pairOf.has(t.id)), ...mapped.filter((t) => pairOf.has(t.id))];
   const total = order.length;
 
-  const filePath = (a) => path.join(caseDir, '이메일 파일', a.storedName);
+  // a.path: 음원 가사 대조 작업이 신청 건의 파일을 그 자리에서 쓸 때의 실제 위치.
+  const filePath = (a) => a.path ?? path.join(audioDir, a.storedName);
   const label = (n, stage, track) =>
     `${n}/${total} ${stage} · ${String(track.track_no ?? '').padStart(2, '0')} ${track.track_title ?? ''}`;
 
@@ -159,7 +161,8 @@ export async function runAudioCheck({
 
   const vocalTrack = async (track, attachment, n) => {
     const lyrics = track.lyrics ?? '';
-    const foreign = foreignRatio(lyrics) > THRESHOLDS.foreignRatio;
+    // language: 'auto'면 언어를 고정하지 않는다(외국어 곡). 없으면 가사의 영문 비중으로 정한다.
+    const foreign = track.language === 'auto' || foreignRatio(lyrics) > THRESHOLDS.foreignRatio;
     const language = foreign ? null : 'ko';
     const mrTrack = trackById.get(mrOfVocal.get(track.id));
     const mrAttachment = mrTrack ? attachmentOf(mrTrack) : null;

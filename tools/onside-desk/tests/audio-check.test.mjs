@@ -15,6 +15,7 @@ import {
   draftSuggestions,
   finalizeSuggestions,
   applySuggestions,
+  lyricSheetDraft,
 } from '../audio-check.mjs';
 
 test('normalizeText keeps hangul/latin/digits and maps back to source offsets', () => {
@@ -322,14 +323,66 @@ test('translation lines are ignored for matching and copied with a repeated bloc
   ]);
 });
 
-test('empty lyrics with vocals yield one whole-transcript new suggestion', () => {
+test('empty lyrics with vocals yield one lyric sheet draft with line times', () => {
   const segments = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 3, 6)];
-  const { suggestions } = draft('', segments, frames(6, -5));
+  const { suggestions, scoreRequests } = draft('', segments, frames(6, -5));
+  assert.equal(scoreRequests.length, 0);
   assert.equal(suggestions.length, 1);
   const [s] = suggestions;
-  assert.equal(s.kind, 'new');
+  assert.equal(s.kind, 'generated');
   assert.equal(s.confidence, 'check');
+  assert.equal(s.start, 0);
+  assert.equal(s.end, 6);
   assert.deepEqual(s.op, { type: 'insertLines', afterLine: -1, lines: ['하늘 높이 날아라', '바다 멀리 가거라'] });
+  assert.deepEqual(s.times, [[0, 3], [3, 6]]);
+  assert.equal(applySuggestions('', [s], [{ suggestionId: s.id }]), '하늘 높이 날아라\n바다 멀리 가거라');
+});
+
+test('lyric sheet draft also breaks a long stanza at a breath gap', () => {
+  const lines = (count, start, step = 3, gap = 0.4) => Array.from({ length: count }, (_, i) => seg(`노래 ${i + 1}번째 줄이에요`, start + i * step, start + i * step + step - gap));
+  const texts = (segments) => lyricSheetDraft(segments).map((line) => (line ? 'x' : '|')).join('');
+  // 3초 공백: 4줄 미만이면 그대로, 4줄 이상이면 연을 나눈다.
+  assert.equal(texts([...lines(3, 0), ...lines(2, 12)]), 'xxxxx');
+  assert.equal(texts([...lines(4, 0), ...lines(2, 15)]), 'xxxx|xx');
+  // 숨만 고르는 1.5초 공백은 8줄이 넘게 이어질 때만 나눈다.
+  assert.equal(texts(lines(10, 0, 3, 1.5)), 'xxxxxxxx|xx');
+});
+
+test('lyric sheet draft breaks stanzas at long gaps, splits long lines and drops end punctuation', () => {
+  const sheet = lyricSheetDraft([
+    seg('하늘 높이 날아라.', 0, 3),
+    seg('바다 멀리 가거라', 3.5, 6),
+    seg('작은 별 하나가 내 마음에 내려와 오늘 밤 노래가 되네', 20, 28),
+    seg('함께 노래하자!', 28.5, 31),
+    seg('...', 40, 41),
+  ]);
+  assert.deepEqual(sheet.map((line) => (line ? line.text : null)), [
+    '하늘 높이 날아라', '바다 멀리 가거라', null, '작은 별 하나가 내 마음에', '내려와 오늘 밤 노래가 되네', '함께 노래하자',
+  ]);
+  const [, , , first, second] = sheet;
+  assert.equal(first.start, 20);
+  assert.ok(first.end > 20 && first.end < 28 && near(first.end, second.start));
+  assert.equal(second.end, 28);
+  assert.deepEqual(lyricSheetDraft([]), []);
+});
+
+test('lyric sheet draft keeps a stanza break when an edited draft is applied', () => {
+  const segments = [seg('하늘 높이 날아라', 0, 3), seg('바다 멀리 가거라', 20, 23)];
+  const [s] = draft('', segments, frames(24, -5)).suggestions;
+  assert.deepEqual(s.op.lines, ['하늘 높이 날아라', '', '바다 멀리 가거라']);
+  assert.deepEqual(s.times, [[0, 3], null, [20, 23]]);
+  assert.equal(applySuggestions('', [s], [{ suggestionId: s.id, text: '\n하늘 높이 날아라\n\n바다 멀리 가거라요\n\n' }]), '하늘 높이 날아라\n\n바다 멀리 가거라요');
+  assert.throws(() => applySuggestions('', [s], [{ suggestionId: s.id, text: '  \n ' }]), /비어 있습니다/);
+});
+
+test('empty lyrics report unclear vocals next to the draft and a silent track as no vocals', () => {
+  const segments = [seg('하늘 높이 날아라', 0, 3)];
+  const loud = frames(12, (t) => (t < 3 || t >= 6 ? -5 : -40));
+  const kinds = draft('', segments, loud).suggestions.map((s) => s.kind);
+  assert.deepEqual(kinds, ['generated', 'unclear']);
+  const silent = draft('', [], frames(12, -40), { level: frames(12, -40) }).suggestions;
+  assert.deepEqual(silent.map((s) => [s.kind, s.op]), [['no-vocal', null]]);
+  assert.match(silent[0].hint, /보컬을 찾지 못했습니다/);
 });
 
 // worker의 energy는 보컬 스템 자신의 90퍼센타일 기준이라 프레임의 10% 이상이 늘 0dB 이상이다(조용한 스템은 거의 평평하다).

@@ -18,6 +18,7 @@ import { CUSTOMER_FILE_RETENTION_DAYS, customerFilesExpireAt, removeCustomerFile
 import { AUDIO_EXTENSIONS, applySuggestions, autoMapping, lyricsHash, validateMapping } from './audio-check.mjs';
 import { engineStatus, installEngine, startWorker } from './audio-engine.mjs';
 import { progressStageLabel, runAudioCheck } from './audio-check-run.mjs';
+import { SESSION_LIMITS, isAudioName, lyricSheetText, patchSession, placeAudioFile, tracksFromCase } from './audio-sessions.mjs';
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Onside Review Desk');
@@ -128,6 +129,9 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     return url.href;
   }
   const store = await new Store(dataRoot).init();
+  // 음원 가사 대조 작업 (left menu): kept apart from cases, one folder each under 음원 가사 대조.
+  store.data.audioSessions ||= {};
+  if (typeof store.data.audioSessions !== 'object' || Array.isArray(store.data.audioSessions)) throw new Error('음원 가사 대조 작업 기록을 확인할 수 없습니다. 백업을 확인하세요.');
   const outputRoot = path.join(dataRoot, '신청별 자료');
   const mergeRoot = path.join(dataRoot, '통합신청서 합치기');
   await fs.mkdir(outputRoot, { recursive: true, mode: 0o700 });
@@ -149,11 +153,11 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
   const safeError = error => error?.message && !/(?:eyJ[A-Za-z0-9_-]{20}|https?:|secret|credential|Bearer)/i.test(error.message) ? error.message.slice(0, 500) : '작업에 실패했습니다. 연결 설정과 저장 공간을 확인한 뒤 다시 시도하세요.';
   function summary(item) {
     const s = item.source === 'manual' ? applyOverrides(item.detail, item.local).submission : item.submission;
-    return { id: s.id, source: item.source || 'online', online: !!item.online?.submissionId, deletedAt: item.deletedAt || null, purgePending: !!item.purgeRequestedAt, type: s.type, title: s.title, artist_name: (String(s.type || '').startsWith('MV_') && s.artist_name_kr) || s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged };
+    return { id: s.id, source: item.source || 'online', online: !!item.online?.submissionId, deletedAt: item.deletedAt || null, purgePending: !!item.purgeRequestedAt, type: s.type, title: s.title, artist_name: (String(s.type || '').startsWith('MV_') && s.artist_name_kr) || s.artist_name, applicant_name: s.applicant_name, created_at: s.created_at, updated_at: s.updated_at, release_date: s.release_date, status: s.status, payment_status: s.payment_status, files_submitted_by_email: s.files_submitted_by_email, local: item.local, warnings: item.detail ? caseWarnings({ ...item.detail, localAttachments: item.attachments || [] }, item.local) : [], latestGeneration: item.generations?.at(-1) || null, sourceChanged: !!item.sourceChanged, audioFiles: caseAudioSources(item).length };
   }
   function publicState() {
     const cases = Object.values(store.data.cases).map(summary).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: DESK_VERSION, chat: chatView() };
+    return { monitor: monitorState.snapshot ? { overall: monitorState.snapshot.overall, issues: monitorState.snapshot.issues.length, checkedAt: monitorState.snapshot.checkedAt } : null, connection: { ...source.sourceStatus(), connected, resultsConfigured: remote.configured(), message: connected ? remote.configured() ? '온사이드 관리자 연동' : '신청 조회 연결 · 결과 연동 설정 필요' : store.data.syncError || '연결 대기 중' }, settings: store.data.settings, lastSync: store.data.lastSync, syncError: store.data.syncError, syncing: !!syncPromise, cases: cases.filter(c => !c.deletedAt), trashCases: cases.filter(c => c.deletedAt), jobs: store.data.jobs.filter(j => !store.data.cases[j.caseId]?.deletedAt).slice(0, 60), outputRoot, version: DESK_VERSION, chat: chatView(), audioSessions: Object.values(store.data.audioSessions).map(sessionSummary).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) };
   }
   async function detail(id, refresh = false) {
     const item = getCase(id);
@@ -577,9 +581,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     if (!tracks.some(t => mapping[t.id])) throw httpError(400, '연결된 음원이 없습니다.');
     return enqueueAudio('audio-check', id, (job, signal) => runCaseAudioCheck(id, job, signal));
   }
-  async function runCaseAudioCheck(id, job, signal) {
-    const item = audioCase(id);
-    const tracks = albumTracks(item), mapping = audioCheckView(item, tracks).effective;
+  /** One analysis run on the audio queue: shared by manual albums and 음원 가사 대조 작업. */
+  async function executeAudioRun({ job, signal, dir, audioDir, tracks, attachments, mapping }) {
     // The worker reports finer stages than runAudioCheck; swap the stage words of its latest message.
     let latest = '';
     const progress = message => { latest = String(message); job.message = latest; void store.save(); };
@@ -589,24 +592,35 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     } });
     let run;
     try {
-      run = await audio.runAudioCheck({ caseDir: caseDir(id), tracks, attachments: item.attachments || [], mapping, worker, signal, onProgress: progress });
+      run = await audio.runAudioCheck({ caseDir: dir, ...(audioDir ? { audioDir } : {}), tracks, attachments, mapping, worker, signal, onProgress: progress });
     } finally { await worker.close(); }
     if (signal.aborted) throw new Error(AUDIO_CANCELLED);
     // A dead worker fails every track after it; such a partial run is not kept.
     const died = run.tracks.find(t => t.status === 'failed' && String(t.error || '').startsWith(WORKER_STOPPED));
     if (died) throw new Error(died.error);
-    // Keep the last three runs, but never drop the newest good run for failed ones.
-    const runs = [...(item.audioCheck?.runs || []), run], good = runs.findLast(r => r.status !== 'failed');
-    const kept = runs.slice(-3);
-    item.audioCheck = { mapping: item.audioCheck?.mapping || {}, runs: good && !kept.includes(good) ? [good, ...runs.slice(-2)] : kept };
+    return run;
+  }
+  /** Keep the last three runs, but never drop the newest good run for failed ones. */
+  function keepAudioRuns(runs, run) {
+    const all = [...(runs || []), run], good = all.findLast(r => r.status !== 'failed'), kept = all.slice(-3);
+    return good && !kept.includes(good) ? [good, ...all.slice(-2)] : kept;
+  }
+  function audioRunOutcome(run, onFailed) {
     const count = run.tracks.reduce((sum, t) => sum + (t.suggestions?.length || 0), 0);
     const result = { runId: run.id, suggestions: count };
     if (run.status === 'failed') {
       const message = safeError(new Error(run.tracks.find(t => t.status === 'failed')?.error || '음원 대조에 실패했습니다.'));
-      store.audit(id, 'error', `음원 대조 실패: ${message}`);
+      onFailed?.(message);
       return { status: 'failed', message, result };
     }
     return { status: 'completed', message: `음원 대조 완료 · 제안 ${count}개`, result };
+  }
+  async function runCaseAudioCheck(id, job, signal) {
+    const item = audioCase(id);
+    const tracks = albumTracks(item), mapping = audioCheckView(item, tracks).effective;
+    const run = await executeAudioRun({ job, signal, dir: caseDir(id), tracks, attachments: item.attachments || [], mapping });
+    item.audioCheck = { mapping: item.audioCheck?.mapping || {}, runs: keepAudioRuns(item.audioCheck?.runs, run) };
+    return audioRunOutcome(run, message => store.audit(id, 'error', `음원 대조 실패: ${message}`));
   }
   function cancelAudioCheck(id) {
     const job = activeAudioJob('audio-check', id);
@@ -625,9 +639,8 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     await store.save();
     return { audioCheck: audioCheckView(item, tracks) };
   }
-  /** 선택한 제안 반영: the same save path as a manual lyric edit (PATCH local), all tracks or none. */
-  async function applyAudioSuggestions(id, item, input) {
-    const latest = latestAudioRun(item);
+  /** The lyrics each chosen suggestion leads to, per track, all tracks or none. */
+  function planAudioApply(latest, tracks, input) {
     if (!latest || typeof input?.runId !== 'string' || input.runId !== latest.id) throw httpError(409, '더 최신 대조 결과가 있습니다. 화면을 새로고침하세요.');
     const items = Array.isArray(input.items) ? input.items : [];
     if (!items.length || items.length > 1000 || new Set(items.map(x => x?.suggestionId)).size !== items.length
@@ -640,7 +653,7 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (!runTrack) throw httpError(400, '반영할 수 없는 제안이 있습니다.');
       groups.set(runTrack, [...(groups.get(runTrack) || []), choice]);
     }
-    const tracks = albumTracks(item), updates = [];
+    const updates = [];
     for (const [runTrack, chosen] of groups) {
       const track = tracks.find(t => t.id === runTrack.trackId);
       if (!track || lyricsHash(track.lyrics ?? '') !== runTrack.lyricsHash) throw httpError(409, '가사가 바뀌었습니다. 다시 대조하세요.');
@@ -649,22 +662,30 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       catch (error) { throw httpError(/겹칩니다/.test(error.message) ? 409 : 400, error.message); }
       updates.push({ runTrack, id: track.id, lyrics, applied: chosen.map(x => x.suggestionId) });
     }
+    return { updates, count: items.length };
+  }
+  /** 선택한 제안 반영: the same save path as a manual lyric edit (PATCH local), all tracks or none. */
+  async function applyAudioSuggestions(id, item, input) {
+    const tracks = albumTracks(item), { updates, count } = planAudioApply(latestAudioRun(item), tracks, input);
     item.local = validateLocalPatch({ overrides: { tracks: updates.map(({ id: trackId, lyrics }) => ({ id: trackId, lyrics })) }, reviewAcknowledgedRevision: '' }, item.local, tracks.map(t => t.id));
     item.sourceChanged = !!item.generations?.length; item.submission.updated_at = now(); item.detail.submission.updated_at = item.submission.updated_at;
     for (const { runTrack, applied } of updates) runTrack.applied = [...new Set([...(runTrack.applied || []), ...applied])];
-    store.audit(id, 'audio-check', `음원 대조 제안 ${items.length}개를 가사에 반영했습니다.`); await store.save();
+    store.audit(id, 'audio-check', `음원 대조 제안 ${count}개를 가사에 반영했습니다.`); await store.save();
     const onlineSync = item.online?.submissionId
       ? await syncOnline(id).then(result => ({ ok: true, changed: result.changed }), error => ({ ok: false, error: safeError(error) }))
       : null;
-    return { detail: await detail(id), applied: items.length, onlineSync };
+    return { detail: await detail(id), applied: count, onlineSync };
   }
   /** 음원 재생: the admin's audio element seeks with byte ranges. */
   async function streamAudio(req, res, id, item, attachmentId) {
     const attachment = (item.attachments || []).find(a => a.id === attachmentId);
     if (!attachment) throw httpError(404, '음원 파일을 찾을 수 없습니다.');
+    return sendAudioFile(req, res, attachment, path.join(caseDir(id), '이메일 파일'));
+  }
+  async function sendAudioFile(req, res, attachment, folder) {
     const ext = path.extname(attachment.name || '').slice(1).toLowerCase();
     if (!AUDIO_EXTENSIONS.has(ext)) throw httpError(400, '오디오 파일만 재생할 수 있습니다.');
-    const file = childPath(caseDir(id), '이메일 파일', attachment.storedName);
+    const file = childPath(folder, attachment.storedName);
     const stat = await fs.stat(file).catch(() => null);
     if (!stat?.isFile()) throw httpError(404, '음원 파일을 찾을 수 없습니다.');
     const size = stat.size, headers = { 'Content-Type': AUDIO_TYPES[ext] || 'application/octet-stream', 'Accept-Ranges': 'bytes' };
@@ -675,6 +696,183 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
     if (start >= size || start > end || (!range[1] && Number(range[2]) === 0)) { res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` }); return res.end(); }
     res.writeHead(206, { ...headers, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${size}` });
     return await pipeline(createReadStream(file, { start, end }), res);
+  }
+
+  // ── 음원 가사 대조 작업 (왼쪽 메뉴) ─────────────────────────────────────────
+  // Audio the admin drops in, or a case's lyrics with the audio this Mac already holds for it, checked against the
+  // lyrics (or drafted into a lyric sheet when a track has none). A case's files are referenced, never copied, so the
+  // 7-day customer file deletion still removes them.
+  const sessionRoot = path.join(dataRoot, '음원 가사 대조');
+  const sessionDir = id => childPath(sessionRoot, id);
+  const sessionAudioDir = id => path.join(sessionDir(id), '음원');
+  function getSession(id) {
+    const session = Object.hasOwn(store.data.audioSessions, id) && store.data.audioSessions[id];
+    if (!session) throw httpError(404, '음원 대조 작업을 찾을 수 없습니다.');
+    return session;
+  }
+  function caseAudioSources(item) {
+    return [
+      ...(item.attachments || []).filter(a => isAudioName(a.name)).map(a => ({ name: a.name, storedName: a.storedName, folder: '이메일 파일', bytes: a.bytes, sha256: a.sha256 })),
+      // The desk names downloads "NN_원래 이름"; NN is the upload order, not a track number.
+      ...(item.downloads || []).filter(d => isAudioName(d.name)).map(d => ({ name: d.name.replace(/^\d{2}_/, ''), storedName: d.name, folder: '원본 파일', bytes: d.bytes, sha256: d.sha256 })),
+    ];
+  }
+  const sessionFile = (session, attachment) => attachment.caseRef
+    ? childPath(caseDir(attachment.caseRef.caseId), attachment.caseRef.folder, attachment.storedName)
+    : childPath(sessionAudioDir(session.id), attachment.storedName);
+  const sessionMapping = session => Object.fromEntries(session.tracks.map(t => [t.id, session.audioCheck?.mapping?.[t.id] ?? null]));
+  function sessionView(session) {
+    const mapping = sessionMapping(session), latest = latestAudioRun(session), newest = session.audioCheck?.runs?.at(-1) || null;
+    const hashes = new Map(session.tracks.map(t => [t.id, lyricsHash(t.lyrics ?? '')]));
+    const staleTracks = (latest?.tracks || []).filter(t => t.status !== 'skipped' && hashes.has(t.trackId) && hashes.get(t.trackId) !== t.lyricsHash).map(t => t.trackId);
+    return {
+      id: session.id, title: session.title, artist: session.artist, genre: session.genre, language: session.language, source: session.source || null,
+      createdAt: session.createdAt, updatedAt: session.updatedAt, tracks: session.tracks.map(t => ({ ...t })),
+      attachments: session.attachments.map(({ id, name, bytes, createdAt, caseRef }) => ({ id, name, bytes, createdAt, fromCase: !!caseRef })),
+      audioCheck: { mapping, effective: mapping, auto: { duplicates: [], mrPairs: autoMapping(session.tracks, session.attachments).mrPairs }, latest, failed: newest?.status === 'failed' ? newest : null, staleTracks },
+    };
+  }
+  function sessionSummary(session) {
+    const latest = latestAudioRun(session);
+    return { id: session.id, title: session.title, artist: session.artist, createdAt: session.createdAt, updatedAt: session.updatedAt, tracks: session.tracks.length, files: session.attachments.length,
+      checkedAt: latest?.createdAt || null, suggestions: latest ? latest.tracks.reduce((sum, t) => sum + (t.suggestions?.length || 0), 0) : null };
+  }
+  const defaultSessionTitle = () => {
+    const part = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(now())).map(p => [p.type, p.value]));
+    return `음원 대조 ${part.month}/${part.day} ${part.hour}:${part.minute}`;
+  };
+  function createSession(fields = {}) {
+    if (Object.keys(store.data.audioSessions).length >= 200) throw httpError(400, '음원 대조 작업이 200개입니다. 다 쓴 작업을 삭제한 뒤 만드세요.');
+    const id = randomUUID(), at = now();
+    const session = { id, title: defaultSessionTitle(), artist: '', genre: '', language: 'lyrics', createdAt: at, updatedAt: at, tracks: [], attachments: [], audioCheck: { mapping: {}, runs: [] } };
+    store.data.audioSessions[id] = patchSession(session, fields);
+    return store.data.audioSessions[id];
+  }
+  async function createSessionFromCase(caseId) {
+    if (typeof caseId !== 'string') throw httpError(400, '불러올 신청을 선택하세요.');
+    const item = getCase(caseId), d = await detail(caseId);
+    if (d.submission?.type !== 'ALBUM') throw httpError(400, '음반 신청에서만 불러올 수 있습니다.');
+    const session = createSession({ title: String(d.submission.title || '').slice(0, SESSION_LIMITS.title) || defaultSessionTitle(), artist: String(d.submission.artist_name || '').slice(0, SESSION_LIMITS.artist), genre: String(d.submission.genre || '').slice(0, SESSION_LIMITS.genre) });
+    session.source = { caseId, title: d.submission.title || '', manual: item.source === 'manual' };
+    for (const found of caseAudioSources(item)) {
+      const file = childPath(caseDir(caseId), found.folder, found.storedName);
+      if (!(await fs.stat(file).catch(() => null))?.isFile()) continue;
+      session.attachments.push({ id: randomUUID(), name: found.name, storedName: found.storedName, bytes: found.bytes, createdAt: now(), sha256: found.sha256 || await sha256(file), caseRef: { caseId, folder: found.folder } });
+    }
+    const { tracks, mapping } = tracksFromCase(d.tracks, session.attachments);
+    session.tracks = tracks; session.audioCheck.mapping = mapping;
+    await store.save();
+    return session;
+  }
+  async function addSessionFile(req, session, filename) {
+    const name = safeName(filename);
+    if (!isAudioName(name)) throw httpError(400, '음원 파일(wav, mp3, m4a, aac, flac, aif, aiff, ogg)만 넣을 수 있습니다.');
+    const mapping = sessionMapping(session);
+    if (session.tracks.length >= SESSION_LIMITS.tracks && session.tracks.every(t => mapping[t.id])) throw httpError(400, `한 작업에는 ${SESSION_LIMITS.tracks}곡까지 넣을 수 있습니다.`);
+    const id = randomUUID(), dir = sessionAudioDir(session.id), storedName = `${id.slice(0, 8)}_${name}`, file = path.join(dir, storedName);
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    let bytes = 0;
+    const limit = new Transform({ transform(chunk, encoding, callback) { bytes += chunk.length; callback(bytes > 4 * 1024 ** 3 ? new Error('음원 한 파일은 4GB까지 넣을 수 있습니다.') : null, chunk); } });
+    try { await pipeline(req, limit, createWriteStream(`${file}.part`, { flags: 'wx', mode: 0o600 })); await fs.rename(`${file}.part`, file); }
+    catch (error) { await fs.unlink(`${file}.part`).catch(() => {}); throw error; }
+    if (!Object.hasOwn(store.data.audioSessions, session.id)) { await fs.unlink(file).catch(() => {}); throw httpError(404, '음원 대조 작업을 찾을 수 없습니다.'); }
+    const attachment = { id, name, storedName, bytes, createdAt: now(), sha256: await sha256(file) };
+    let placed;
+    try { placed = placeAudioFile(session.tracks, sessionMapping(session), attachment); }
+    catch (error) { await fs.unlink(file).catch(() => {}); throw httpError(400, error.message); }
+    session.attachments.push(attachment); session.tracks = placed.tracks; session.audioCheck = { runs: [], ...session.audioCheck, mapping: placed.mapping }; session.updatedAt = now();
+    await store.save();
+    return sessionView(session);
+  }
+  async function updateSession(session, input) {
+    let next;
+    try { next = patchSession(session, input); } catch (error) { throw httpError(400, error.message); }
+    if (input && 'mapping' in input) {
+      const mapping = input.mapping;
+      if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping) || Object.values(mapping).some(value => value !== null && typeof value !== 'string')) throw httpError(400, '음원 연결 정보를 확인하세요.');
+      const merged = { ...sessionMapping(session), ...mapping };
+      try { validateMapping(merged, next.tracks, session.attachments); } catch (error) { throw httpError(400, error.message); }
+      next.audioCheck = { runs: [], ...session.audioCheck, mapping: merged };
+    }
+    Object.assign(session, next, { updatedAt: now() });
+    await store.save();
+    return sessionView(session);
+  }
+  async function removeSessionTrack(session, trackId) {
+    const index = session.tracks.findIndex(t => t.id === trackId);
+    if (index < 0) throw httpError(404, '곡을 찾을 수 없습니다.');
+    if (activeAudioJob('audio-session', session.id)) throw httpError(409, '대조하는 중에는 곡을 뺄 수 없습니다. 끝나거나 중지한 뒤 빼세요.');
+    const mapping = sessionMapping(session), attachmentId = mapping[trackId];
+    session.tracks.splice(index, 1);
+    const nextMapping = Object.fromEntries(Object.entries(mapping).filter(([id]) => id !== trackId));
+    const attachment = session.attachments.find(a => a.id === attachmentId);
+    if (attachment && !Object.values(nextMapping).includes(attachment.id)) {
+      session.attachments = session.attachments.filter(a => a.id !== attachment.id);
+      // Only the admin's own upload is deleted; a case's file stays with the case.
+      if (!attachment.caseRef) await fs.unlink(sessionFile(session, attachment)).catch(() => {});
+    }
+    session.audioCheck = { runs: [], ...session.audioCheck, mapping: nextMapping }; session.updatedAt = now();
+    await store.save();
+    return sessionView(session);
+  }
+  async function deleteSession(session) {
+    if (activeAudioJob('audio-session', session.id)) throw httpError(409, '대조하는 중에는 삭제할 수 없습니다. 끝나거나 중지한 뒤 삭제하세요.');
+    await fs.rm(sessionDir(session.id), { recursive: true, force: true });
+    delete store.data.audioSessions[session.id];
+    await store.save();
+    return { deleted: true };
+  }
+  async function startSessionCheck(session) {
+    const existing = activeAudioJob('audio-session', session.id);
+    if (existing) return existing;
+    const engine = await audio.engineStatus({ dataRoot });
+    if (!engine.installed) throw httpError(400, '분석 도구를 먼저 설치하세요.');
+    if (engine.needsUpdate) throw httpError(400, '분석 도구를 다시 설치하세요.');
+    const mapping = sessionMapping(session);
+    if (!session.tracks.some(t => mapping[t.id])) throw httpError(400, '음원이 연결된 곡이 없습니다.');
+    return enqueueAudio('audio-session', session.id, (job, signal) => runSessionCheck(session.id, job, signal));
+  }
+  async function runSessionCheck(id, job, signal) {
+    const session = getSession(id), mapping = sessionMapping(session);
+    // 받아쓰기 언어 'auto': the whole session is foreign-language songs, so Whisper detects the language itself.
+    const tracks = session.tracks.map(t => ({ ...t, ...(session.language === 'auto' ? { language: 'auto' } : {}) }));
+    const attachments = session.attachments.map(a => ({ ...a, path: sessionFile(session, a) }));
+    for (const a of attachments) if (Object.values(mapping).includes(a.id) && !(await fs.stat(a.path).catch(() => null))?.isFile()) throw new Error(`음원 파일이 없습니다: ${a.name}${a.caseRef ? ' (신청 건의 파일이 삭제되었을 수 있습니다)' : ''}`);
+    const run = await executeAudioRun({ job, signal, dir: sessionDir(id), audioDir: sessionAudioDir(id), tracks, attachments, mapping });
+    const current = Object.hasOwn(store.data.audioSessions, id) ? store.data.audioSessions[id] : null;
+    if (!current) return { status: 'cancelled', message: '작업이 삭제되었습니다.' };
+    current.audioCheck = { mapping: current.audioCheck?.mapping || {}, runs: keepAudioRuns(current.audioCheck?.runs, run) }; current.updatedAt = now();
+    return audioRunOutcome(run);
+  }
+  function cancelSessionCheck(session) {
+    const job = activeAudioJob('audio-session', session.id);
+    if (!job) return false;
+    audioControllers.get(job.id)?.abort();
+    if (job.status === 'queued') { Object.assign(job, { status: 'cancelled', message: AUDIO_CANCELLED, finishedAt: now() }); audioControllers.delete(job.id); void store.save(); }
+    return true;
+  }
+  async function applySessionSuggestions(session, input) {
+    const { updates, count } = planAudioApply(latestAudioRun(session), session.tracks, input);
+    const lyrics = new Map(updates.map(u => [u.id, u.lyrics]));
+    session.tracks = session.tracks.map(t => lyrics.has(t.id) ? { ...t, lyrics: lyrics.get(t.id) } : t);
+    for (const { runTrack, applied } of updates) runTrack.applied = [...new Set([...(runTrack.applied || []), ...applied])];
+    session.updatedAt = now();
+    await store.save();
+    return { session: sessionView(session), applied: count };
+  }
+  async function exportSession(res, session, format) {
+    if (!session.tracks.length) throw httpError(400, '가사지에 넣을 곡이 없습니다.');
+    const base = safeName(`가사지_${session.title || '음원 대조'}`);
+    if (format === 'txt') {
+      const body = Buffer.from(windowsText(lyricSheetText(session)), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length, 'Content-Disposition': attachmentDisposition(`${base}.txt`) });
+      return res.end(body);
+    }
+    if (format !== 'docx') throw httpError(400, '내보낼 형식을 확인하세요.');
+    const { renderLyricSheet } = await import('./documents.mjs');
+    const body = await renderLyricSheet({ title: session.title, artist: session.artist, genre: session.genre, tracks: session.tracks, settings: store.data.settings });
+    res.writeHead(200, { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Length': body.length, 'Content-Disposition': attachmentDisposition(`${base}.docx`) });
+    return res.end(body);
   }
   async function backup() {
     await store.save();
@@ -950,6 +1148,31 @@ export async function createDesk({ dataRoot = process.env.ONSIDE_DESK_DATA || DE
       if (url.pathname === '/api/audio-engine' && req.method === 'GET') return sendJSON(res, 200, await audio.engineStatus({ dataRoot }));
       if (url.pathname === '/api/audio-engine/install' && req.method === 'POST') return sendJSON(res, 202, { job: await installAudioEngine() });
       // Matched before the generic case route, which would answer these paths with 404.
+      if (url.pathname === '/api/audio-sessions' && req.method === 'POST') {
+        const body = await readJSON(req), fields = typeof body?.title === 'string' && body.title.trim() ? { title: body.title.trim().slice(0, SESSION_LIMITS.title) } : {};
+        const session = createSession(fields); await store.save(); return sendJSON(res, 201, { session: sessionView(session) });
+      }
+      if (url.pathname === '/api/audio-sessions/from-case' && req.method === 'POST') return sendJSON(res, 201, { session: sessionView(await createSessionFromCase((await readJSON(req)).caseId)) });
+      const sessionRoute = url.pathname.match(/^\/api\/audio-sessions\/([a-f0-9-]{36})(?:\/(files|tracks|check|cancel|apply|export)(?:\/([a-zA-Z0-9-]+)(\/stream)?)?)?$/);
+      if (sessionRoute) {
+        const [, id, step, partId, stream] = sessionRoute;
+        const session = getSession(id);
+        if (!step && req.method === 'GET') return sendJSON(res, 200, { session: sessionView(session) });
+        if (!step && req.method === 'PATCH') return sendJSON(res, 200, { session: await updateSession(session, await readJSON(req)) });
+        if (!step && req.method === 'DELETE') return sendJSON(res, 200, await deleteSession(session));
+        if (step === 'files' && !partId && req.method === 'POST') return sendJSON(res, 200, { session: await addSessionFile(req, session, url.searchParams.get('filename')) });
+        if (step === 'files' && partId && stream && req.method === 'GET') {
+          const attachment = session.attachments.find(a => a.id === partId);
+          if (!attachment) throw httpError(404, '음원 파일을 찾을 수 없습니다.');
+          return await sendAudioFile(req, res, attachment, path.dirname(sessionFile(session, attachment)));
+        }
+        if (step === 'tracks' && partId && !stream && req.method === 'DELETE') return sendJSON(res, 200, { session: await removeSessionTrack(session, partId) });
+        if (step === 'check' && !partId && req.method === 'POST') return sendJSON(res, 202, { job: await startSessionCheck(session) });
+        if (step === 'cancel' && !partId && req.method === 'POST') return sendJSON(res, 200, { cancelled: cancelSessionCheck(session) });
+        if (step === 'apply' && !partId && req.method === 'POST') return sendJSON(res, 200, await applySessionSuggestions(session, await readJSON(req)));
+        if (step === 'export' && !partId && req.method === 'GET') return await exportSession(res, session, url.searchParams.get('format'));
+        return sendJSON(res, 405, { error: '지원하지 않는 요청입니다.' });
+      }
       const audioRoute = url.pathname.match(/^\/api\/cases\/([a-zA-Z0-9-]+)\/(?:audio-check(?:\/(mapping|cancel|apply))?|attachments\/([a-zA-Z0-9-]+)\/stream)$/);
       if (audioRoute) {
         const [, id, step, attachmentId] = audioRoute;
