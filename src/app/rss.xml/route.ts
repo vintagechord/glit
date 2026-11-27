@@ -21,7 +21,7 @@ export function GET() {
     { title: "음반 심의 비용·뮤직비디오 심의 비용 안내", path: "/guide/pricing", description: "음반 심의 방송국 패키지별 비용과 뮤직비디오 심의 항목별 비용, 결제와 증빙, 환불 기준을 안내합니다." },
     { title: "방송국별 심의 안내 · 영등위·KBS·MBC·SBS부터 국악방송까지", path: "/guide/stations", description: "영등위 뮤직비디오 등급분류와 TV·라디오 방송국별 음반 심의·뮤직비디오 심의 안내 목록입니다." },
     ...STATION_GUIDES.map((station) => ({ title: station.title, path: `/guide/stations/${station.slug}`, description: station.description })),
-    { title: "심의 용어집 · 적격·부적격·등급분류·필증 뜻", path: "/guide/glossary", description: "음반 심의와 뮤직비디오 심의에서 쓰는 용어를 정리했습니다." },
+    { title: "심의 용어 · 적격·부적격·등급분류·필증 뜻", path: "/guide/glossary", description: "음반 심의와 뮤직비디오 심의에서 쓰는 용어를 정리했습니다." },
     { title: "자주 묻는 질문(FAQ)", path: "/faq", description: "음반 심의와 뮤직비디오 심의에 대해 자주 묻는 질문과 답변입니다." },
     { title: "온사이드 회사소개", path: "/about", description: "2017년부터 음반 심의와 뮤직비디오 심의 접수를 대행해 온 온사이드를 소개합니다." },
   ];

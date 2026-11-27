@@ -4,16 +4,25 @@ import { useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Archive, Check, Disc3, Package, Plus, Radio, X } from "lucide-react";
 
+// 2026-11-27 (owner): "방송 신청 방법 제공" was easy to miss, and it did not
+// say the guide is for songs whose review is done. The radio card now spans
+// the box with a title that says so; the other two sit in a row under it.
 const services = [
-  { key: "broadcast", icon: Radio, color: "bg-[#1556a4] text-white", ko: "방송 신청 방법 제공", en: "Broadcast request instructions" },
+  { key: "broadcast", icon: Radio, color: "bg-[#1556a4] text-white", ko: "심의 완료 곡, 라디오 신청 방법까지", en: "Radio guide for reviewed songs" },
   { key: "archive", icon: Archive, color: "bg-[#f2cf27] text-[#111111]", ko: "심의 기록 보관", en: "Review archive" },
   { key: "artmelon", icon: Disc3, color: "bg-[#d9362c] text-white", ko: "아트멜론 입점", en: "Artmelon store" },
 ] as const;
 type Service = (typeof services)[number];
 
+const serviceFocusClass =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]";
+
 export function HomeHeroAdBanner() {
   const isEnglish = usePathname().startsWith("/en");
   const [active, setActive] = useState<{ service: Service; trigger: HTMLButtonElement } | null>(null);
+  const radioNoteId = useId();
+  const [radio, ...others] = services;
+  const RadioIcon = radio.icon;
 
   return (
     <>
@@ -22,13 +31,36 @@ export function HomeHeroAdBanner() {
         aria-label={isEnglish ? "Your next steps with Onside" : "온사이드와 함께하는 심의 그 다음"}
         className="w-full max-w-[540px] rounded-[10px] border-[1.5px] border-[#111111] bg-white p-3 dark:border-[#f2cf27] dark:bg-[#171717]"
       >
-        <div className="mb-2.5">
+        <div className="mb-2">
           <p className="text-xs font-black text-foreground sm:text-[13px]">
             {isEnglish ? "Beyond review, with Onside" : "심의 그 다음까지, 온사이드"}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {services.map(service => {
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-label={isEnglish ? radio.en : radio.ko}
+          aria-describedby={radioNoteId}
+          onClick={event => {
+            setActive({ service: radio, trigger: event.currentTarget });
+          }}
+          className={`group relative flex min-h-14 w-full min-w-0 items-center gap-3 rounded-[7px] border-[1.5px] border-[#111111] bg-[#fffaf0] py-2 pl-2.5 pr-7 text-left transition hover:-translate-y-0.5 hover:shadow-[2px_2px_0_#111111] dark:border-[#f2cf27] dark:bg-white/5 dark:hover:shadow-[2px_2px_0_#f2cf27] ${serviceFocusClass}`}
+        >
+          <span className={`flex size-9 shrink-0 items-center justify-center rounded-md border-[1.5px] border-[#111111] ${radio.color}`}>
+            <RadioIcon className="size-[18px]" aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block break-keep text-[13px] font-black leading-5 text-foreground sm:text-sm">
+              {isEnglish ? radio.en : radio.ko}
+            </span>
+            <span id={radioNoteId} className="mt-0.5 block break-keep text-[11px] font-semibold leading-4 text-muted-foreground">
+              {isEnglish ? "Only for Onside-reviewed songs · Steps" : "온사이드 심의를 마친 곡만 · 단계별 보기"}
+            </span>
+          </span>
+          <Plus className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#111111] transition group-hover:rotate-90 dark:text-[#f2cf27]" aria-hidden="true" />
+        </button>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {others.map(service => {
             const Icon = service.icon;
             return (
               <button
@@ -38,15 +70,15 @@ export function HomeHeroAdBanner() {
                 onClick={event => {
                   setActive({ service, trigger: event.currentTarget });
                 }}
-                className="group relative flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] px-1 py-2 text-center transition hover:-translate-y-0.5 hover:border-[#111111] hover:shadow-[2px_2px_0_#111111] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1556a4] focus-visible:ring-offset-2 dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] dark:focus-visible:ring-[#f2cf27] dark:focus-visible:ring-offset-[#171717]"
+                className={`group relative flex min-h-11 min-w-0 items-center gap-2 rounded-[7px] border border-[#111111]/15 bg-[#fffaf0] py-1.5 pl-2 pr-6 text-left transition hover:-translate-y-0.5 hover:border-[#111111] hover:shadow-[2px_2px_0_#111111] dark:border-white/20 dark:bg-white/5 dark:hover:border-[#f2cf27] ${serviceFocusClass}`}
               >
-                <span className={`flex size-7 items-center justify-center rounded-md ${service.color}`}>
+                <span className={`flex size-7 shrink-0 items-center justify-center rounded-md ${service.color}`}>
                   <Icon className="size-4" aria-hidden="true" />
                 </span>
-                <span className="break-keep text-[11px] font-bold leading-4 text-foreground sm:text-xs">
+                <span className="min-w-0 break-keep text-[11px] font-bold leading-4 text-foreground sm:text-xs">
                   {isEnglish ? service.en : service.ko}
                 </span>
-                <Plus className="absolute right-1.5 top-1.5 size-2.5 text-muted-foreground transition group-hover:text-foreground" aria-hidden="true" />
+                <Plus className="absolute right-2 top-1/2 size-2.5 -translate-y-1/2 text-muted-foreground transition group-hover:text-foreground" aria-hidden="true" />
               </button>
             );
           })}
@@ -76,10 +108,13 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
   const Icon = service.icon;
   // Owner 2026-11-16: one plain sentence saying what the service is, then
   // the example, then a single note. Earlier copy read as too much text.
+  // 2026-11-27 (owner): the radio guide is shown as the steps it really takes
+  // (radio-request-wizard.tsx: 내 곡 확인 → 프로그램 → 신청글 작성 → 신청·확인),
+  // and it says the guide is only for songs whose review is done.
   const descriptions = {
     broadcast: isEnglish
-      ? "We find radio programs that fit your song and give you the links to their request boards."
-      : "내 음악에 맞는 라디오 프로그램과 신청 게시판 링크를 알려드립니다.",
+      ? "Once your song has passed an Onside review, we walk you through requesting it on the radio, step by step."
+      : "온사이드에서 심의를 마친 곡이라면, 내 음악을 라디오에 신청하는 방법을 단계별로 알려드립니다.",
     archive: isEnglish
       ? "Keep every review and release in one place, including reviews you got elsewhere."
       : "다른 곳에서 받은 심의와 발매 정보까지 한곳에 저장하고 관리합니다.",
@@ -88,7 +123,9 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
       : "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다.",
   };
   const notes = {
-    broadcast: isEnglish ? "For members with a completed Onside review." : "심의를 완료한 회원에게 제공됩니다.",
+    broadcast: isEnglish
+      ? "Only for songs approved in an Onside album review: open Radio request guide on your result page."
+      : "온사이드 음반 심의에서 적격을 받은 곡에 한해, 심의 결과 화면의 「라디오 신청 가이드」에서 이용합니다.",
     archive: isEnglish ? "Find it under My Music in your account." : "회원 계정의 내 음악 관리에서 이용합니다.",
     artmelon: isEnglish ? "Store and selling terms are set in a consultation." : "입점·판매 조건은 상담으로 안내합니다.",
   };
@@ -141,7 +178,7 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id={`${id}-title`} className="flex items-center gap-2.5 text-lg font-black sm:text-xl">
+            <h2 id={`${id}-title`} className="flex items-center gap-2.5 break-keep text-lg font-black sm:text-xl">
               <span className={`flex size-8 shrink-0 items-center justify-center rounded-md ${service.color}`}>
                 <Icon className="size-4" aria-hidden="true" />
               </span>
@@ -175,31 +212,73 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
   );
 }
 
+/**
+ * The radio guide as the four steps a reviewed song goes through, each with
+ * a small picture of what the visitor sees there. The numbers sit in the
+ * yellow square of the logo, joined by an ink line.
+ */
 function BroadcastExample({ isEnglish }: { isEnglish: boolean }) {
+  const chip = "inline-flex items-center gap-1 rounded-[5px] border border-[#111111]/40 bg-[#fffaf0] px-2 py-1 text-[11px] font-bold dark:border-white/30 dark:bg-white/5";
+  const steps = [
+    {
+      title: isEnglish ? "Review complete" : "심의 완료",
+      body: isEnglish ? "Your song, approved by the broadcaster" : "방송국에서 적격을 받은 내 곡",
+      picture: (
+        <span className="mt-2 flex items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-[5px] bg-[#1556a4] text-white"><Disc3 className="size-4" aria-hidden="true" /></span>
+          <span className="min-w-0 truncate text-xs font-bold">{isEnglish ? "Fragments of Dawn" : "새벽의 조각"}</span>
+          <span className="shrink-0 rounded border-2 border-[#111111] bg-[#1556a4] px-1.5 py-0.5 text-[10px] font-black text-white dark:border-[#f2cf27]">{isEnglish ? "Eligible" : "방송 적격"}</span>
+        </span>
+      ),
+    },
+    {
+      title: isEnglish ? "Pick a program" : "프로그램 고르기",
+      body: isEnglish ? "Program info and recent playlists show where your song fits" : "프로그램 소개와 최근 선곡표로 내 곡에 맞는 곳 찾기",
+      picture: (
+        <span className="mt-2 flex flex-wrap gap-1.5">
+          <span className={`${chip} border-[#111111] underline decoration-[#f2cf27] decoration-2 underline-offset-4 dark:border-[#f2cf27]`}>
+            <span className="flex size-3.5 items-center justify-center rounded-[3px] bg-[#f2cf27] text-[#111111]"><Check className="size-2.5" strokeWidth={3.5} aria-hidden="true" /></span>
+            {isEnglish ? "Morning music show" : "아침 음악 프로그램"}
+          </span>
+          <span className={chip}>{isEnglish ? "Late-night radio" : "심야 음악 프로그램"}</span>
+        </span>
+      ),
+    },
+    {
+      title: isEnglish ? "Write your request" : "신청글 쓰기",
+      body: isEnglish ? "Help writing a request that tells your song's story" : "곡의 이야기를 담은 신청글 작성 도움",
+      picture: (
+        <span className="mt-2 flex flex-wrap gap-1.5">
+          {(isEnglish ? ["Inspiration", "Listening moment", "Song mood"] : ["만든 이야기", "듣기 좋은 순간", "곡의 분위기"]).map(prompt => (
+            <span key={prompt} className={chip}>{prompt}</span>
+          ))}
+        </span>
+      ),
+    },
+    {
+      title: isEnglish ? "Post on the official board" : "공식 게시판에 신청",
+      body: isEnglish ? "A direct link to the broadcaster's own request board" : "방송국 공식 신청 게시판으로 바로 연결",
+      picture: null,
+    },
+  ];
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-3">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-md bg-[#1556a4] text-white"><Disc3 className="size-7" aria-hidden="true" /></div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{isEnglish ? "Your reviewed track" : "방송 신청할 내 곡"}</p>
-          <p className="mt-1 text-sm font-bold">{isEnglish ? "Fragments of Dawn" : "새벽의 조각"}</p>
-        </div>
-        <span className="ml-auto shrink-0 rounded border-2 border-[#111111] bg-[#1556a4] px-2 py-1 text-[10px] font-black text-white dark:border-[#f2cf27]">{isEnglish ? "Eligible" : "방송 적격"}</span>
-      </div>
-      <ol className="grid grid-cols-3 gap-1.5">
-        {(isEnglish ? ["Program picks", "Request board links", "How to request"] : ["프로그램 추천", "게시판 링크", "신청 방법"]).map((step, index) => (
-          <li key={step} className="rounded border border-[#111111]/15 bg-[#fffaf0] px-2 py-2 text-xs dark:border-white/20 dark:bg-white/5">
-            <span className="mb-1 block text-[10px] font-black text-[#1556a4] dark:text-[#f2cf27]">0{index + 1}</span>{step}
-          </li>
-        ))}
-      </ol>
-      <div className="rounded-md border-l-4 border-[#1556a4] bg-[#fffaf0] p-3 dark:bg-white/5">
-        <p className="text-[10px] font-bold text-muted-foreground">{isEnglish ? "Example pick" : "추천 예시"}</p>
-        <p className="mt-1.5 break-keep text-xs leading-5">
-          {isEnglish ? "A morning music show · listener board" : "아침 음악 프로그램 · 청취자 게시판"}
-        </p>
-      </div>
-    </div>
+    <ol className="space-y-3 p-4" aria-label={isEnglish ? "Radio request steps" : "라디오 신청 단계"}>
+      {steps.map((step, index) => (
+        <li key={step.title} className="relative flex gap-3">
+          {index < steps.length - 1 ? (
+            <span aria-hidden="true" className="absolute -bottom-3 left-[13px] top-7 w-0.5 bg-[#111111] dark:bg-[#f2cf27]" />
+          ) : null}
+          <span className="relative z-10 flex size-7 shrink-0 items-center justify-center rounded-[5px] border-2 border-[#111111] bg-[#f2cf27] text-xs font-black text-[#111111]">
+            {index + 1}
+          </span>
+          <span className="min-w-0 flex-1 pt-0.5">
+            <span className="block text-sm font-black">{step.title}</span>
+            <span className="mt-0.5 block break-keep text-xs leading-5 text-muted-foreground">{step.body}</span>
+            {step.picture}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
