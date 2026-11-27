@@ -1,0 +1,52 @@
+# 음원 분석 도구(Python 3.12, macOS 14+ Apple Silicon)의 전체 의존성 고정. installEngine이 `uv pip install -c`로 쓴다.
+# 만든 방법: ENGINE_PACKAGES(audio-engine.mjs)의 고정 버전을 입력으로 아래 명령을 돌리고, 결과를 2026-11-27에 검증한
+# 엔진 venv의 설치 버전(uv pip freeze)으로 제한했다(-c). ENGINE_PACKAGES를 바꾸면 이 파일도 다시 만든다.
+#   MACOSX_DEPLOYMENT_TARGET=14.0 uv pip compile requirements.in -c freeze.txt --python-version 3.12 \
+#     --python-platform aarch64-apple-darwin --no-header --no-annotate
+anyio==4.16.0
+certifi==2026.11.20
+cffi==2.1.1
+charset-normalizer==3.5.3
+click==8.5.1
+demucs==4.1.0
+einops==0.8.2
+filelock==4.3.1
+fsspec==2026.9.0
+h11==0.16.0
+hf-xet==1.8.0
+httpcore2==2.16.2
+httpx2==2.16.2
+huggingface-hub==2.5.0
+idna==3.20
+imageio-ffmpeg==0.8.1
+jinja2==3.1.6
+julius==0.2.8
+lameenc==1.9.0
+llvmlite==0.50.0
+markupsafe==3.0.4
+mlx==0.32.5
+mlx-metal==0.32.5
+mlx-whisper==0.4.3
+more-itertools==11.2.1
+mpmath==1.3.0
+networkx==3.7
+numba==0.68.1
+numpy==2.5.5
+packaging==26.4
+pycparser==3.12
+pyyaml==6.0.4
+regex==2026.11.25
+requests==2.34.2
+safetensors==0.8.0
+scipy==1.18.1
+setuptools==84.2.1
+soundfile==0.14.0
+sphn==0.2.1
+sympy==1.13.1
+tiktoken==0.14.0
+torch==2.5.1
+torchaudio==2.5.1
+tqdm==4.70.1
+truststore==0.10.5
+typing-extensions==4.16.0
+urllib3==2.8.0

@@ -196,3 +196,17 @@ test('title-mark normalization is validated against the title actually printed i
   }
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('renderLyricSheet uses the lyrics-all form with a heading built from the given values only', async () => {
+  const { renderLyricSheet } = await import('../documents.mjs');
+  const textOf = buffer => new PizZip(buffer).file('word/document.xml').asText().replace(/<[^>]+>/g, '');
+  const tracks = [{ track_no: 2, track_title: '둘째 노래', lyrics: '작은 별이 반짝여\n\n밤하늘을 건너가' }, { track_no: 1, track_title: '첫 노래', lyrics: '하늘 위로 걸어가' }];
+  const full = textOf(await renderLyricSheet({ title: '노래 모음', artist: '가수', genre: '발라드', tracks, settings: { managerName: '담당', managerPhone: '010-0000-0000' } }));
+  assert.match(full, /가수 - 노래 모음 {2}\(장르 : 발라드\)/);
+  assert.ok(full.indexOf('첫 노래') < full.indexOf('둘째 노래'));
+  assert.match(full, /작은 별이 반짝여/);
+  const bare = textOf(await renderLyricSheet({ title: '노래 모음', tracks }));
+  assert.doesNotMatch(bare, /장르|^ - | - 노래 모음/);
+  assert.match(bare, /노래 모음/);
+  await assert.rejects(renderLyricSheet({ title: 'x', tracks: [] }), /곡이 없습니다/);
+});

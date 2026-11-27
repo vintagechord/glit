@@ -7,7 +7,7 @@ const TYPE_EN = { ALBUM: 'ALBUM', MV_DISTRIBUTION: 'ONLINE MUSIC VIDEO', MV_BROA
 const STAGES = { RECEIVED: '신규 접수', CHECKING: '자료 확인', PREPARING: '자료 준비', READY: '발송 준비', SUBMITTED: '심의 신청', RESULT_RECEIVED: '결과 수신', COMPLETED: '완료', ON_HOLD: '보류' };
 const REMOTE_STATUS = { DRAFT: '작성 중', SUBMITTED: '신청 완료', RECEIVED: '접수됨', IN_REVIEW: '심의 중', REVIEWING: '심의 중', COMPLETED: '완료', APPROVED: '적격', REJECTED: '부적격', NEEDS_FIX: '보완 요청', PENDING: '대기', PROCESSING: '진행 중', CANCELLED: '취소', PAYMENT_PENDING: '입금 확인 중', WAITING_PAYMENT: '결제 대기', PRE_REVIEW: '접수예정', IN_PROGRESS: '심의 진행 중', RESULT_READY: '결과 준비됨', PAID: '결제 완료', UNPAID: '미결제', REFUNDED: '환불', NOT_SENT: '접수예정', SENT: '접수완료', WAITING: '대기' };
 const BASE_CHECKS = { source_checked: '신청 정보와 원본 파일 확인', lyrics_checked: '가사 · 크레딧 · 번역 확인', documents_checked: '생성 문서의 양식과 내용 검수', sent: '해당 기관에 자료 전달', result_saved: '심의 결과 / 필증 보관' };
-const ui = { data: null, selected: null, detail: null, savedDetail: null, tab: 'overview', docTab: 'materials', resultData: null, resultSequence: 0, resultLoading: false, resultError: '', resultDirtyForm: null, resultNotice: null, resultStationId: null, bulkSelected: [], bulkStatus: 'NOT_SENT', bulkAgeRating: '', resultAttempts: {}, emailPreview: null, previewLoading: false, previewSequence: 0, publishing: false, certificateFile: null, nav: 'cases', manualType: 'ALBUM', manualMvType: 'MV_DISTRIBUTION', importOpen: true, importing: false, referenceFile: null, translating: false, translationNotice: null, filter: 'all', stage: 'all', query: '', dirty: false, loadingDetail: false, pollTimer: null, requestSequence: 0 };
+const ui = { audioEngine: null, audioPicks: {}, audioTexts: {}, audioApplying: false, audioSessionId: null, audioSession: null, audioPending: null, audioUploading: false, data: null, selected: null, detail: null, savedDetail: null, tab: 'overview', docTab: 'materials', resultData: null, resultSequence: 0, resultLoading: false, resultError: '', resultDirtyForm: null, resultNotice: null, resultStationId: null, bulkSelected: [], bulkStatus: 'NOT_SENT', bulkAgeRating: '', resultAttempts: {}, emailPreview: null, previewLoading: false, previewSequence: 0, publishing: false, certificateFile: null, nav: 'cases', manualType: 'ALBUM', manualMvType: 'MV_DISTRIBUTION', importOpen: true, importing: false, referenceFile: null, translating: false, translationNotice: null, filter: 'all', stage: 'all', query: '', dirty: false, loadingDetail: false, pollTimer: null, requestSequence: 0 };
 const e = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const currentText = (...values) => values.find(value => typeof value === 'string') ?? '';
 const value = (v, fallback = '미입력') => v === null || v === undefined || v === '' ? fallback : String(v);
@@ -16,6 +16,7 @@ const formatDate = (v, full = false) => { if (!v) return '—'; const d = new Da
 const fileSize = n => { n = Number(n); if (!Number.isFinite(n) || n <= 0) return ''; const units = ['B','KB','MB','GB']; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return `${n.toFixed(i ? 1 : 0)} ${units[i]}`; };
 const shortId = id => String(id || '').slice(0, 8).toUpperCase();
 const activeJob = j => ['queued','running','QUEUED','RUNNING','pending'].includes(j.status);
+const isAudioJob = j => String(j?.kind || '').startsWith('audio-');
 const stageClass = s => s === 'ON_HOLD' ? 'amber' : s === 'COMPLETED' ? 'neutral' : ['READY','SUBMITTED','RESULT_RECEIVED'].includes(s) ? 'blue' : '';
 const typeClass = t => t === 'MV_DISTRIBUTION' ? 'mv-online' : t === 'MV_BROADCAST' ? 'mv-broadcast' : '';
 const stageOf = c => c.local?.stage || 'RECEIVED';
@@ -251,8 +252,356 @@ function manualReviewMarkup(d) {
     ${ui.translationNotice?.caseId === d.submission.id ? `<div class="notice${ui.translationNotice.error ? '' : ' good'}" role="status">${e(ui.translationNotice.message)}${ui.translationNotice.warnings?.length ? `<ul>${ui.translationNotice.warnings.map(w => `<li>${e(warningText(w))}</li>`).join('')}</ul>` : ''}</div>` : ''}
     <div class="manual-findings">${findings.map(f => `<article class="finding-card ${f.kind === 'profanity' ? 'finding-attention' : ''}"><div class="finding-heading"><strong>${e(names[f.kind] || '확인 필요')}</strong><span>${e([d.submission.type === 'ALBUM' && f.trackNo ? `${f.trackNo}번 트랙` : '', f.trackTitle || (d.submission.type === 'ALBUM' ? '' : '뮤비 가사'), f.line ? `${f.line}행` : ''].filter(Boolean).join(' · '))}</span></div>${f.excerpt ? `<blockquote>${e(f.excerpt)}</blockquote>` : ''}<p>${e(f.message || '원문과 신청 정보를 확인해 주세요.')}</p></article>`).join('')}</div>
     <div class="notice"><strong>원문을 보존합니다</strong><p>표현을 자동 삭제·순화하지 않습니다. 한국어 번역은 위 번역 기능이나 직접 입력으로 보완할 수 있습니다. 확인사항은 상단의 ‘자료 생성 전에 확인해 주세요’에 함께 표시합니다.</p></div>
-    ${screening.sourceHash ? `<label class="check-item review-ack"><input id="manual-review-ack" type="checkbox"${screening.acknowledged ? ' checked' : ''}${ui.translating ? ' disabled' : ''}><span>현재 가사와 확인사항을 검토했습니다<small>정보나 가사가 바뀌면 다시 확인하도록 표시됩니다. 자료 생성은 검토 표시와 별도로 실행할 수 있습니다.</small></span></label>` : ''}`;
+    ${screening.sourceHash ? `<label class="check-item review-ack"><input id="manual-review-ack" type="checkbox"${screening.acknowledged ? ' checked' : ''}${ui.translating ? ' disabled' : ''}><span>현재 가사와 확인사항을 검토했습니다<small>정보나 가사가 바뀌면 다시 확인하도록 표시됩니다. 자료 생성은 검토 표시와 별도로 실행할 수 있습니다.</small></span></label>` : ''}
+    ${audioCheckMarkup(d)}`;
 }
+
+// 음원 가사 대조: 수동 음반의 검토사항 탭. 음원은 이 Mac 안에서만 처리한다.
+const AUDIO_FILE = /\.(wav|mp3|m4a|aac|flac|aif|aiff|ogg)$/i;
+const AUDIO_KIND = { generated: '가사지 초안', repeat: '반복 구절 누락', new: '새 구절', replace: '다르게 불림', unheard: '음원에서 들리지 않음', unclear: '알아듣지 못한 보컬 구간', instrumental: 'MR·연주곡 확인', 'no-vocal': '보컬 없음' };
+const AUDIO_CONFIDENCE = { high: '강함', medium: '보통', check: '확인 필요' };
+const AUDIO_CONFIDENCE_CLASS = { high: '', medium: 'blue', check: 'amber' };
+const clock = seconds => { const total = Math.max(0, Math.floor(Number(seconds) || 0)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`; };
+// 강함과 가사지 초안(가사가 비어 있어 만든 것)은 기본 선택, 나머지는 골라야 반영한다.
+const audioPicked = s => ui.audioPicks[s.id] ?? (s.confidence === 'high' || s.kind === 'generated');
+const isSessionView = d => !!d?.isSession;
+/** ▶ 재생 주소: 수동 음반은 신청의 첨부, 음원 가사 대조 작업은 작업의 음원. */
+const audioSrc = (d, attachmentId) => isSessionView(d) ? `/api/audio-sessions/${encodeURIComponent(d.id)}/files/${encodeURIComponent(attachmentId)}/stream` : apiPath(`/attachments/${encodeURIComponent(attachmentId)}/stream`);
+const editableSuggestion = s => s.kind === 'new' || s.kind === 'generated';
+function audioPendingList(d) {
+  const ac = d.audioCheck, run = ac?.latest, stale = new Set(ac?.staleTracks || []);
+  if (!run || run.status === 'failed') return [];
+  return run.tracks.filter(t => t.status === 'ok' && !stale.has(t.trackId)).flatMap(t => t.suggestions.filter(s => s.op && !(t.applied || []).includes(s.id)));
+}
+// 새 구절 칸을 비우면(공백뿐) 반영하지 않는다: 빈 줄이 들어가지 않게 고른 수에서 빼고 보내지도 않는다.
+const audioText = s => ui.audioTexts[s.id] ?? (s.op?.lines || []).join('\n');
+const audioSelected = d => audioPendingList(d).filter(s => audioPicked(s) && !(editableSuggestion(s) && !audioText(s).trim()));
+function audioApplyState(d) { const count = audioSelected(d).length; return { count, disabled: !count || (!isSessionView(d) && ui.dirty) || ui.audioApplying }; }
+function audioSuggestionBody(d, track, s) {
+  const op = s.op, lines = String(d.tracks.find(t => t.id === track.trackId)?.lyrics ?? '').split('\n');
+  if (!op) return s.hint ? `<p class="audio-hint">들린 내용: ${e(s.hint)}</p>` : '';
+  if (op.type === 'insertLines') {
+    const where = op.afterLine < 0 ? '맨 앞에 추가' : `${op.afterLine + 1}행 뒤에 추가`;
+    const open = !(track.applied || []).includes(s.id) && !new Set(d.audioCheck.staleTracks || []).has(track.trackId);
+    if (s.kind === 'generated') {
+      // 가사지 초안: 고칠 수 있는 칸 + 줄마다 그 자리 듣기. 반영하면 비어 있던 가사에 들어간다.
+      const listen = (op.lines || []).map((line, i) => { const at = s.times?.[i]; return line && at ? `<li><button type="button" class="button secondary small" data-action="audio-play" data-src="${e(audioSrc(d, track.attachmentId))}" data-start="${e(at[0])}" data-end="${e(at[1])}" aria-label="${e(clock(at[0]))} 줄 듣기">▶</button><span class="audio-time">${clock(at[0])}</span><span>${e(line)}</span></li>` : '<li class="audio-sheet-gap" aria-hidden="true"></li>'; }).join('');
+      return `<small>받아쓴 가사 ${(op.lines || []).filter(Boolean).length}줄 · 빈 줄은 연 구분 · 반영 전에 고칠 수 있어요</small>${open ? `<textarea class="audio-text audio-sheet-text" data-audio-text="${e(s.id)}" rows="${Math.min(18, Math.max(4, (op.lines || []).length))}" aria-label="가사지 초안">${e(ui.audioTexts[s.id] ?? (op.lines || []).join('\n'))}</textarea>` : ''}<details class="audio-sheet-listen"${open ? '' : ' open'}><summary>줄마다 들으며 확인</summary><ol>${listen}</ol></details>`;
+    }
+    if (s.kind === 'new' && open) return `<small>${e(where)}</small><textarea class="audio-text" data-audio-text="${e(s.id)}" rows="${Math.max(1, (op.lines || []).length)}" aria-label="새 구절 내용">${e(ui.audioTexts[s.id] ?? (op.lines || []).join('\n'))}</textarea>`;
+    return `<small>${e(where)}</small><div class="audio-diff">${(op.lines || []).map(line => `<ins>+ ${e(line)}</ins>`).join('')}</div>`;
+  }
+  if (op.type === 'replaceLine') return `<small>${e((op.lines || []).map(i => `${i + 1}행`).join(', '))}</small><div class="audio-diff"><del>${e(op.from)}</del> → <ins>${e(op.to)}</ins></div>`;
+  if (op.type === 'deleteLines') return `<small>${e(op.from + 1 === op.to + 1 ? `${op.from + 1}행 삭제` : `${op.from + 1}–${op.to + 1}행 삭제`)}</small><div class="audio-diff">${lines.slice(op.from, op.to + 1).map(line => `<del>${e(line)}</del>`).join('')}</div>`;
+  return '';
+}
+function audioSuggestionMarkup(d, track, s, stale) {
+  const applied = (track.applied || []).includes(s.id), pickable = !!s.op && !applied && !stale;
+  const head = `<strong>${e(AUDIO_KIND[s.kind] || '확인 필요')}</strong><span class="badge ${AUDIO_CONFIDENCE_CLASS[s.confidence] ?? 'neutral'}">${e(AUDIO_CONFIDENCE[s.confidence] || '확인 필요')}</span><span class="audio-time">${clock(s.start)}</span><button type="button" class="button secondary small" data-action="audio-play" data-src="${e(audioSrc(d, track.attachmentId))}" data-start="${e(s.start)}" data-end="${e(s.end)}" aria-label="${e(clock(s.start))}부터 듣기">▶</button>${applied ? '<span class="badge neutral">반영됨</span>' : ''}`;
+  return `<article class="finding-card audio-suggestion${stale && !applied ? ' audio-muted' : ''}"><div class="audio-suggestion-head">${pickable ? `<label class="audio-pick"><input type="checkbox" data-audio-pick="${e(s.id)}"${audioPicked(s) ? ' checked' : ''} aria-label="${e(AUDIO_KIND[s.kind] || '제안')} 선택">${head}</label>` : head}</div>${audioSuggestionBody(d, track, s)}</article>`;
+}
+function audioTrackMarkup(d, runTrack) {
+  const track = d.tracks.find(t => t.id === runTrack.trackId); if (!track) return '';
+  const name = `${String(track.track_no ?? '').padStart(2, '0')} ${track.track_title || ''}`.trim(), stale = new Set(d.audioCheck.staleTracks || []).has(runTrack.trackId);
+  if (runTrack.status === 'skipped') return `<p class="audio-track-line">${e(name)} — 건너뜀${runTrack.error ? ` · ${e(runTrack.error)}` : ''}</p>`;
+  if (runTrack.status === 'failed') return `<div class="notice error"><strong>${e(name)}</strong> — 분석하지 못했습니다. ${e(runTrack.error || '')}</div>`;
+  const list = runTrack.suggestions || [], check = list.filter(s => s.confidence === 'check').length;
+  const foreign = runTrack.foreign ? '<p class="helper">외국어 비중이 높아 정확도가 낮을 수 있음</p>' : '';
+  const staleNotice = stale ? `<div class="notice">가사가 바뀌어 다시 대조가 필요합니다 <button type="button" class="button secondary small" data-action="${isSessionView(d) ? 'audio-session-start' : 'audio-start'}">다시 대조</button></div>` : '';
+  if (!list.length) return `<div class="audio-track"><p class="audio-track-line">${e(name)} — ${String(track.lyrics ?? '').trim() ? '차이 없음' : '받아쓴 가사 없음'}</p>${foreign}${staleNotice}</div>`;
+  return `<div class="audio-track"><h4>${e(name)} — 제안 ${list.length}${check ? ` · 확인 ${check}` : ''}</h4>${foreign}${staleNotice}${list.map(s => audioSuggestionMarkup(d, runTrack, s, stale)).join('')}</div>`;
+}
+function audioCheckMarkup(d) {
+  const ac = d.audioCheck; if (!ac || d.submission.type !== 'ALBUM') return '';
+  const engine = ui.audioEngine, top = status => `<div class="section-top"><h3>음원 가사 대조</h3><span>${status}</span></div>`;
+  const installJob = jobs().find(j => j.kind === 'audio-install' && activeJob(j));
+  if (!engine) return `<hr class="section-divider"><section class="section-block audio-check" id="audio-check">${top('분석 도구 확인 중…')}</section>`;
+  if (!engine.installed || engine.needsUpdate) {
+    return `<hr class="section-divider"><section class="section-block audio-check" id="audio-check">${top('분석 도구: ' + (engine.needsUpdate ? '다시 설치 필요' : '설치 전'))}<div class="notice"><strong>${engine.needsUpdate ? '분석 도구를 다시 설치해 주세요' : '음원 분석 도구를 설치해 주세요'}</strong><p>음원과 가사는 이 Mac에서만 대조합니다. 설치 크기는 약 2.5–3GB, 처음 한 번만 받습니다.</p>${engine.uv ? '' : '<p>Homebrew로 <code>brew install uv</code> 후 다시 시도하세요.</p>'}</div><button class="button secondary" data-action="audio-install"${engine.uv && !installJob ? '' : ' disabled'}>${installJob ? '설치 중…' : '분석 도구 설치'}</button>${installJob ? `<div class="job-inline"><span class="busy-label"><span class="spinner"></span>${e(installJob.message || '설치하는 중입니다.')}</span></div>` : ''}</section>`;
+  }
+  const files = (d.localAttachments || []).filter(f => AUDIO_FILE.test(f.name || '')), run = jobs().find(j => j.kind === 'audio-check' && j.caseId === d.submission.id && activeJob(j));
+  const dup = ac.auto?.duplicates || [], pairs = ac.auto?.mrPairs || [];
+  const noOf = id => { const t = d.tracks.find(x => x.id === id); return t ? Number(t.track_no) || d.tracks.indexOf(t) + 1 : ''; };
+  const rows = d.tracks.map(t => {
+    const chosen = ac.effective?.[t.id] ?? '', notes = [...dup.filter(x => x.trackId === t.id).map(x => `${files.find(f => f.id === x.attachmentId)?.name || '음원'} 중복·사용 안 함`), ...(pairs[t.id] ? [`MR · ${noOf(pairs[t.id])}번과 짝`] : [])];
+    return `<div class="audio-map-row"><span class="audio-map-track">${e(String(t.track_no ?? '').padStart(2, '0'))} ${e(t.track_title || '')}</span><select data-audio-map="${e(t.id)}" aria-label="${e(t.track_title || '')} 음원"${run ? ' disabled' : ''}><option value="">사용 안 함</option>${files.map(f => `<option value="${e(f.id)}"${f.id === chosen ? ' selected' : ''}>${e(f.name)}</option>`).join('')}</select>${notes.map(n => `<small>${e(n)}</small>`).join('')}</div>`;
+  }).join('');
+  // latest is the newest run that did not fail outright; failed is a newer run in which every track failed.
+  const hasMapped = files.length > 0 && Object.values(ac.effective || {}).some(Boolean), latest = ac.latest?.status === 'failed' ? null : ac.latest;
+  const failedRun = ac.failed || (ac.latest?.status === 'failed' ? ac.latest : null);
+  const failure = !failedRun ? '' : `<div class="notice error" role="alert"><strong>음원 대조를 완료하지 못했습니다${latest ? ' · 아래는 이전 결과입니다' : ''}</strong><ul>${(failedRun.tracks || []).filter(t => t.status === 'failed').map(t => `<li>${e(noOf(t.trackId))}번: ${e(t.error || '원인을 알 수 없습니다.')}</li>`).join('')}</ul></div>`;
+  const results = failure + (!latest ? ''
+    : `<h4 class="audio-result-title">결과 · ${e(formatDate(latest.createdAt, true))} · ${(ac.staleTracks || []).length ? '가사가 바뀐 트랙이 있음' : '현재 가사 기준'}</h4>${latest.tracks.map(t => audioTrackMarkup(d, t)).join('')}${(() => { const state = audioApplyState(d); return audioPendingList(d).length ? `<div class="button-row"><button class="button accent" data-action="audio-apply"${state.disabled ? ' disabled' : ''}>선택한 제안 반영 (${state.count}개)</button>${ui.dirty ? '<span class="helper">수정 중인 내용을 먼저 저장해 주세요.</span>' : ''}</div>` : ''; })()}`);
+  return `<hr class="section-divider"><section class="section-block audio-check" id="audio-check">${top(`분석 도구: 설치됨${engine.version ? ` · ${e(engine.version)}` : ''}`)}<p class="helper">연결된 음원 ${files.length}개 · 트랙 ${d.tracks.length}곡 · 이 Mac에서만 처리</p>${rows}
+    <div class="audio-run">${run ? `<span class="busy-label"><span class="spinner"></span>${e(run.message || '음원을 대조하는 중입니다.')}</span><button class="button secondary small" data-action="audio-cancel">중지</button>` : `<button class="button accent" data-action="audio-start"${hasMapped ? '' : ' disabled'}>음원 대조 시작</button><span class="helper">${hasMapped ? '약 15–25분 (Mac 부하에 따라) 예상 · 이 Mac에서만 처리' : '연결된 음원이 없습니다.'}</span>`}</div>${results}</section>`;
+}
+async function loadAudioEngine() { try { ui.audioEngine = await api('/api/audio-engine'); } catch { ui.audioEngine = null; } }
+async function audioAfterRefresh(previousJobs, nextJobs) {
+  if (!['cases', 'manual'].includes(ui.nav) || !ui.detail?.audioCheck || ui.dirty || ui.translating) return;
+  const installDone = previousJobs.some(j => j.kind === 'audio-install' && activeJob(j) && nextJobs?.find(n => n.id === j.id && !activeJob(n)));
+  if (installDone) await loadAudioEngine();
+  const signature = list => JSON.stringify((list || []).filter(j => isAudioJob(j) && (j.caseId === ui.selected || j.caseId == null)).map(j => [j.id, j.status, j.message]));
+  if ((installDone || signature(previousJobs) !== signature(nextJobs)) && ui.tab === 'review') detailRender();
+}
+async function startAudioCheck() {
+  await api(apiPath('/audio-check'), { method: 'POST', body: {} }); toast('음원 대조를 시작했습니다. 완료까지 시간이 걸릴 수 있어요.'); await refresh(); detailRender();
+}
+async function cancelAudioCheck() { await api(apiPath('/audio-check/cancel'), { method: 'POST', body: {} }); await refresh(); detailRender(); }
+async function installAudioEngine() { await api('/api/audio-engine/install', { method: 'POST', body: {} }); toast('분석 도구 설치를 시작했습니다.'); await refresh(); await loadAudioEngine(); if (ui.nav === 'audio') { const slot = document.getElementById('audio-engine-slot'); if (slot) slot.innerHTML = audioEngineBar(); renderAudioRun(); } else detailRender(); }
+async function applyAudioSuggestions() {
+  const run = ui.detail?.audioCheck?.latest; if (!run || ui.audioApplying) return;
+  if (ui.dirty) { toast('수정 중인 내용을 먼저 저장해 주세요.', true); return; }
+  const items = audioSelected(effective()); if (!items.length) return;
+  const caseId = ui.selected; ui.audioApplying = true; detailRender();
+  try {
+    const result = await api(apiPath('/audio-check/apply'), { method: 'POST', body: { runId: run.id, items: items.map(s => editableSuggestion(s) ? { suggestionId: s.id, text: audioText(s) } : { suggestionId: s.id }) } });
+    ui.audioPicks = {}; ui.audioTexts = {};
+    toast(`제안 ${Number(result.applied || items.length)}개를 가사에 반영했습니다. 새 문서를 생성해 적용하세요.`);
+    await loadDetail(caseId, false);
+  } catch (error) { toast(error.message, true); if (error.status === 409) await loadDetail(caseId, false); }
+  finally { ui.audioApplying = false; detailRender(); }
+}
+async function changeAudioMapping(select) {
+  const ac = ui.detail?.audioCheck; if (!ac) return;
+  const trackId = select.dataset.audioMap, next = select.value || null, mapping = { ...ac.effective }, previous = mapping[trackId] ?? null, caseId = ui.selected;
+  // The server rejects one file on two tracks, so picking a file another track uses swaps the two.
+  for (const [other, file] of Object.entries(mapping)) if (other !== trackId && next && file === next) mapping[other] = previous;
+  mapping[trackId] = next;
+  try {
+    const result = await api(apiPath('/audio-check/mapping'), { method: 'PATCH', body: { mapping } });
+    if (ui.selected === caseId && ui.detail) { ui.detail.audioCheck = { ...ui.detail.audioCheck, ...result.audioCheck }; if (ui.savedDetail) ui.savedDetail.audioCheck = structuredClone(ui.detail.audioCheck); }
+  } catch (error) { toast(error.message, true); }
+  detailRender();
+}
+function playAudio(button) {
+  const player = document.getElementById('audio-player'), src = button.dataset.src; if (!player || !src) return;
+  // 구간 ▶는 1초 앞부터 1초 뒤까지, 곡 전체 듣기(끝 없음)는 끝까지 재생한다.
+  const whole = button.dataset.end === undefined || button.dataset.end === '';
+  const start = whole ? 0 : Math.max(0, Number(button.dataset.start) - 1), stop = whole ? 0 : Number(button.dataset.end) + 1;
+  player.dataset.startAt = String(start); if (stop) player.dataset.stopAt = String(stop); else delete player.dataset.stopAt;
+  const begin = () => { player.currentTime = start; player.play().catch(() => toast('음원을 재생하지 못했습니다.', true)); };
+  if (player.getAttribute('src') === src && player.readyState >= 1) begin();
+  else { player.addEventListener('loadedmetadata', begin, { once: true }); player.setAttribute('src', src); player.load(); }
+}
+document.getElementById('audio-player')?.addEventListener('timeupdate', event => { const player = event.target, stop = Number(player.dataset.stopAt); if (stop && player.currentTime >= stop) { player.pause(); delete player.dataset.stopAt; } });
+function refreshAudioApply() {
+  const button = document.querySelector('[data-action="audio-apply"], [data-action="audio-session-apply"]');
+  const d = ui.nav === 'audio' ? ui.audioSession : ui.detail && effective();
+  if (button && d) { const state = audioApplyState(d); button.textContent = `선택한 제안 반영 (${state.count}개)`; button.disabled = state.disabled; }
+}
+document.addEventListener('change', event => {
+  const el = event.target;
+  if (el.dataset?.audioPick) { ui.audioPicks[el.dataset.audioPick] = el.checked; refreshAudioApply(); }
+  else if (el.dataset?.audioMap) changeAudioMapping(el);
+});
+document.addEventListener('input', event => { const el = event.target; if (el.dataset?.audioText) { ui.audioTexts[el.dataset.audioText] = el.value; refreshAudioApply(); } });
+
+// ── 음원 가사 대조 (왼쪽 메뉴) ─────────────────────────────────────────────
+// 신청과 별개로 음원을 넣어 가사와 대조하거나, 가사가 비어 있으면 받아써 가사지 초안을 만든다. 음원은 이 Mac에서만 처리한다.
+const audioSessions = () => ui.data?.audioSessions || [];
+const sessionPath = (id, suffix = '') => `/api/audio-sessions/${encodeURIComponent(id)}${suffix}`;
+const sessionJob = id => jobs().find(j => j.kind === 'audio-session' && j.caseId === id && activeJob(j));
+const AUDIO_ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.aif,.aiff,.ogg';
+const sessionDetail = () => ui.audioSession ? { ...ui.audioSession, isSession: true } : null;
+function audioEngineBar() {
+  const engine = ui.audioEngine, installJob = jobs().find(j => j.kind === 'audio-install' && activeJob(j));
+  if (!engine) return '<div class="audio-engine-bar"><span class="busy-label"><span class="spinner"></span>분석 도구 확인 중…</span></div>';
+  if (engine.installed && !engine.needsUpdate) return `<div class="audio-engine-bar ok"><strong>분석 도구 준비됨</strong><span>처음 분석은 곡당 1–3분 · 가사만 고쳐 다시 대조하면 1분 안팎 · 음원은 밖으로 보내지 않습니다</span></div>`;
+  return `<div class="notice audio-engine-bar"><strong>${engine.needsUpdate ? '분석 도구를 다시 설치해 주세요' : '처음 한 번 분석 도구를 설치해야 합니다'}</strong><p>보컬 분리(demucs)와 받아쓰기(Whisper)를 이 Mac에 설치합니다. 약 2.5–3GB, 처음 한 번만 받습니다.</p>${engine.uv ? '' : '<p>터미널에서 <code>brew install uv</code>를 실행한 뒤 다시 시도하세요.</p>'}<button class="button primary" data-action="audio-install"${engine.uv && !installJob ? '' : ' disabled'}>${installJob ? '설치 중…' : '분석 도구 설치'}</button>${installJob ? `<span class="busy-label"><span class="spinner"></span>${e(installJob.message || '설치하는 중입니다.')}</span>` : ''}</div>`;
+}
+function audioSessionListMarkup() {
+  const list = audioSessions();
+  if (!list.length) return '<div class="empty-list">아직 대조 작업이 없습니다.<br>오른쪽에 음원을 넣어 시작하세요.</div>';
+  return list.map(item => { const job = sessionJob(item.id); return `<div class="case-list-item audio-session-item"><button class="case-card${ui.audioSessionId === item.id ? ' selected' : ''}" data-audio-session="${e(item.id)}" aria-pressed="${ui.audioSessionId === item.id}"><span class="case-top"><span class="type-label">♪ 음원 대조</span><span class="case-date">${e(formatDate(item.updatedAt))}</span></span><span class="case-title">${e(value(item.title, '이름 없는 작업'))}</span><span class="case-artist">${e(item.artist || `${item.tracks}곡`)}</span><span class="case-bottom">${job ? '<span class="badge blue">분석 중</span>' : item.checkedAt ? `<span class="badge">${item.suggestions ? `제안 ${item.suggestions}개` : '차이 없음'}</span>` : '<span class="badge neutral">분석 전</span>'}<span class="case-indicator">${item.tracks}곡 · 음원 ${item.files}개</span></span></button></div>`; }).join('');
+}
+function audioFromCaseMarkup() {
+  const albums = cases().filter(c => c.type === 'ALBUM');
+  if (!albums.length) return '';
+  return `<div class="audio-from-case"><h3>신청 건에서 불러오기</h3><p>신청서의 곡·가사와 이 Mac에 받은 음원을 함께 가져옵니다. 음원은 복사하지 않습니다.</p><select id="audio-from-case" aria-label="불러올 음반 신청"><option value="">음반 신청 선택</option>${albums.map(c => `<option value="${e(c.id)}">${e(`${value(c.title, '제목 미입력')} · ${value(c.artist_name, '아티스트 미입력')} · ${isManual(c) ? '수동' : '온라인'}${c.audioFiles ? ` · 음원 ${c.audioFiles}개` : ' · 음원 없음'}`)}</option>`).join('')}</select><button class="button secondary small" data-action="audio-session-from-case">불러오기</button><small>수동 음반은 그 작업의 검토사항 탭에서 대조하면 결과가 심의 자료에 바로 반영됩니다.</small></div>`;
+}
+function audioDropMarkup(kind) {
+  if (kind === 'add') return `<div class="audio-drop compact" data-audio-drop="add"><span>음원 추가 — 여기에 끌어다 놓거나</span><label class="button secondary small">파일 선택<input type="file" data-audio-files="add" accept="${AUDIO_ACCEPT}" multiple hidden></label></div>`;
+  return `<div class="audio-drop" data-audio-drop="new"><span class="audio-drop-mark" aria-hidden="true">♪</span><strong>음원 파일을 여기에 끌어다 놓으세요</strong><p>여러 곡을 한 번에 넣을 수 있어요 · WAV, MP3, M4A, AAC, FLAC, AIFF, OGG</p><label class="button primary">음원 파일 선택<input type="file" data-audio-files="new" accept="${AUDIO_ACCEPT}" multiple hidden></label><ol class="audio-steps"><li><b>1</b>음원 넣기</li><li><b>2</b>가사 붙여넣기<br><small>없으면 비워 두기</small></li><li><b>3</b>분석 → 제안 골라 반영</li><li><b>4</b>가사지 Word 저장</li></ol></div>`;
+}
+function audioTrackCard(d, t, files) {
+  const chosen = d.audioCheck?.mapping?.[t.id] || '', file = files.find(f => f.id === chosen), running = !!sessionJob(d.id), mode = t.is_instrumental ? '연주곡 확인' : String(t.lyrics || '').trim() ? '가사 대조' : '가사지 생성';
+  return `<article class="audio-track-card" data-session-track="${e(t.id)}"><div class="audio-track-top"><input class="audio-no" type="number" min="1" max="999" data-track-field="track_no" value="${e(t.track_no)}" aria-label="트랙 번호"><input class="audio-track-title" data-track-field="track_title" value="${e(t.track_title)}" maxlength="300" aria-label="곡명" placeholder="곡명"><span class="audio-mode badge ${mode === '가사지 생성' ? 'amber' : mode === '연주곡 확인' ? 'neutral' : 'blue'}" data-mode-for="${e(t.id)}">${mode}</span><button class="inline-link" data-action="audio-track-remove" data-track="${e(t.id)}"${running ? ' disabled' : ''}>빼기</button></div>
+    <div class="audio-track-file"><select data-session-map="${e(t.id)}" aria-label="${e(t.track_title || '곡')} 음원"${running ? ' disabled' : ''}><option value="">음원 없음</option>${files.map(f => `<option value="${e(f.id)}"${f.id === chosen ? ' selected' : ''}>${e(f.name)}${f.fromCase ? ' (신청 건)' : ''}</option>`).join('')}</select>${file ? `<button type="button" class="button secondary small" data-action="audio-play" data-src="${e(audioSrc(d, file.id))}" data-start="0" aria-label="${e(t.track_title || '곡')} 처음부터 듣기">▶ 듣기</button><button type="button" class="button secondary small" data-action="audio-pause" aria-label="멈춤">❚❚</button>` : '<small>음원을 연결해야 분석합니다</small>'}<label class="audio-inst"><input type="checkbox" data-track-field="is_instrumental"${t.is_instrumental ? ' checked' : ''}> 연주곡·MR</label></div>
+    <textarea class="audio-lyrics" data-track-field="lyrics" rows="${Math.min(14, Math.max(4, String(t.lyrics || '').split('\n').length + 1))}" aria-label="${e(t.track_title || '곡')} 가사" placeholder="가사를 붙여 넣으면 음원과 대조합니다.&#10;비워 두면 음원을 받아써 가사지 초안을 만듭니다.">${e(t.lyrics)}</textarea></article>`;
+}
+function audioSessionRunMarkup() {
+  const d = sessionDetail(); if (!d) return '';
+  const ac = d.audioCheck, job = sessionJob(d.id), engineReady = ui.audioEngine?.installed && !ui.audioEngine?.needsUpdate;
+  const mapped = d.tracks.filter(t => ac.mapping?.[t.id]).length;
+  const latest = ac.latest?.status === 'failed' ? null : ac.latest, failedRun = ac.failed || (ac.latest?.status === 'failed' ? ac.latest : null);
+  const name = id => { const t = d.tracks.find(x => x.id === id); return t ? `${String(t.track_no).padStart(2, '0')} ${t.track_title}` : '빠진 곡'; };
+  const failure = !failedRun ? '' : `<div class="notice error" role="alert"><strong>분석을 끝내지 못했습니다${latest ? ' · 아래는 이전 결과입니다' : ''}</strong><ul>${(failedRun.tracks || []).filter(t => t.status === 'failed').map(t => `<li>${e(name(t.trackId))}: ${e(t.error || '원인을 알 수 없습니다.')}</li>`).join('')}</ul></div>`;
+  const pending = audioPendingList(d).length, state = audioApplyState(d);
+  const results = !latest ? '' : `<section class="section-block audio-results"><div class="section-top"><h3>분석 결과</h3><span>${e(formatDate(latest.createdAt, true))} · ${(ac.staleTracks || []).length ? '가사가 바뀐 곡이 있음' : '현재 가사 기준'}</span></div>${latest.tracks.map(t => audioTrackMarkup(d, t)).join('')}${pending ? `<div class="button-row audio-apply-row"><button class="button accent" data-action="audio-session-apply"${state.disabled ? ' disabled' : ''}>선택한 제안 반영 (${state.count}개)</button><span class="helper">반영하면 위의 가사 칸이 바뀝니다. 다시 분석하면 바뀐 가사로 대조합니다.</span></div>` : ''}</section>`;
+  const exportRow = d.tracks.length ? `<section class="section-block audio-export"><div class="section-top"><h3>가사지 저장</h3><span>위 가사 칸의 내용 그대로</span></div><div class="button-row"><button class="button primary" data-action="audio-session-export" data-format="docx">가사지 Word 저장</button><button class="button secondary" data-action="audio-session-export" data-format="txt">텍스트로 저장</button><button class="button secondary" data-action="audio-session-copy">가사 전체 복사</button></div><p class="helper">가사전체파일과 같은 양식(담당자·연락처, 아티스트 - 작업 이름, 곡별 가사)입니다. 제출 전에 열어서 확인하세요.</p></section>` : '';
+  const runRow = job
+    ? `<div class="audio-run"><span class="busy-label"><span class="spinner"></span>${e(job.message || '음원을 분석하는 중입니다.')}</span><button class="button secondary small" data-action="audio-session-cancel">중지</button></div><p class="helper">창을 닫아도 분석은 계속됩니다.</p>`
+    : `<div class="audio-run"><button class="button accent" data-action="audio-session-start"${mapped && engineReady ? '' : ' disabled'}>${latest ? '다시 분석' : '분석 시작'}</button><span class="helper">${!engineReady ? '분석 도구를 먼저 설치하세요.' : mapped ? `음원 ${mapped}곡 · 처음은 곡당 1–3분, 다시 분석은 1분 안팎` : '음원을 연결한 곡이 없습니다.'}</span></div>`;
+  return `${runRow}${failure}${results}${exportRow}`;
+}
+function audioSessionPanelMarkup() {
+  const d = sessionDetail();
+  if (!d) return `<div class="tab-content">${audioDropMarkup('new')}<div id="audio-upload-progress" class="helper" role="status"></div></div>`;
+  const files = d.attachments || [];
+  return `<div class="detail-header"><div class="detail-kicker"><span class="type-label">AUDIO · LYRICS</span><span class="detail-id">#${e(shortId(d.id))}</span><button class="inline-link delete-detail" data-action="audio-session-delete">작업 삭제</button></div><input class="audio-title-input" data-session-field="title" value="${e(d.title)}" maxlength="200" aria-label="작업 이름" placeholder="작업 이름"><p class="detail-artist">${d.tracks.length}곡 · 음원 ${files.length}개${d.source ? ` · ‘${e(d.source.title || '신청')}’에서 불러옴` : ''} <span>·</span> 만든 시각 ${e(formatDate(d.createdAt, true))}</p></div>
+  <div class="tab-content"><section class="section-block"><div class="audio-meta-grid"><label class="field"><span>아티스트</span><input data-session-field="artist" value="${e(d.artist)}" maxlength="200" placeholder="가사지 머리에 들어갑니다"></label><label class="field"><span>장르</span><input data-session-field="genre" value="${e(d.genre)}" maxlength="100" placeholder="비워도 됩니다"></label><label class="field"><span>받아쓰기 언어</span><select data-session-field="language"><option value="lyrics"${d.language !== 'auto' ? ' selected' : ''}>한국어 곡 (기본)</option><option value="auto"${d.language === 'auto' ? ' selected' : ''}>외국어 곡 (언어 자동 감지)</option></select></label></div></section>
+  <section class="section-block"><div class="section-top"><h3>곡과 가사</h3><span id="audio-save-state">가사를 비워 두면 가사지 초안을 만듭니다</span></div>${d.tracks.map(t => audioTrackCard(d, t, files)).join('') || '<div class="notice">아래에 음원을 넣으면 곡이 생깁니다.</div>'}${audioDropMarkup('add')}<div id="audio-upload-progress" class="helper" role="status"></div><p class="helper">넣은 음원은 이 작업 폴더에만 보관하고, 작업을 삭제하면 함께 지웁니다. 다 쓴 작업은 삭제해 주세요.</p></section>
+  <div id="audio-session-run">${audioSessionRunMarkup()}</div></div>`;
+}
+function audioScreen() {
+  screen.innerHTML = `${heading('음원 가사 대조', '음원을 넣으면 가사와 대조해 빠진 반복 구절·다르게 부른 줄을 찾고, 가사가 없으면 음원을 받아써 가사지 초안을 만듭니다. 음원은 이 Mac에서만 처리합니다.', '<button class="button primary" data-action="audio-session-new">＋ 새 대조 작업</button>')}<div id="audio-engine-slot">${audioEngineBar()}</div><div class="workbench audio-workbench"><section class="panel case-browser"><div class="panel-head"><h2>대조 작업 <span class="count" id="audio-session-count">${audioSessions().length}</span></h2><span class="toolbar-note">이 Mac에 보관</span></div><div class="case-list" id="audio-session-list">${audioSessionListMarkup()}</div>${audioFromCaseMarkup()}</section><section class="panel" id="audio-session-panel">${audioSessionPanelMarkup()}</section></div>`;
+  if (!ui.audioEngine) void loadAudioEngine().then(() => { const slot = document.getElementById('audio-engine-slot'); if (ui.nav === 'audio' && slot) { slot.innerHTML = audioEngineBar(); renderAudioRun(); } });
+}
+function renderAudioPanel() { const panel = document.getElementById('audio-session-panel'); if (panel) panel.innerHTML = audioSessionPanelMarkup(); }
+function renderAudioRun() { const run = document.getElementById('audio-session-run'); if (run) run.innerHTML = audioSessionRunMarkup(); }
+function renderAudioList() { const list = document.getElementById('audio-session-list'); if (list) list.innerHTML = audioSessionListMarkup(); const count = document.getElementById('audio-session-count'); if (count) count.textContent = audioSessions().length; }
+function setAudioSession(session) { ui.audioSession = session; ui.audioSessionId = session?.id || null; }
+async function openAudioSession(id) {
+  if (!(await flushSession())) return;
+  if (ui.audioSessionId !== id) { document.getElementById('audio-player')?.pause(); ui.audioPicks = {}; ui.audioTexts = {}; }
+  try { setAudioSession((await api(sessionPath(id))).session); } catch (error) { toast(error.message, true); setAudioSession(null); }
+  renderAudioList(); renderAudioPanel();
+}
+// 입력은 0.7초 뒤(칸을 떠나면 바로) 저장한다. 분석·반영·내보내기·화면 이동 전에는 남은 저장을 먼저 끝낸다.
+let sessionSaveTimer = null, sessionSaving = Promise.resolve(true);
+function queueSessionEdit(el) {
+  const d = ui.audioSession; if (!d) return;
+  ui.audioPending ||= { id: d.id, fields: {}, tracks: {} };
+  const card = el.closest('[data-session-track]');
+  if (el.dataset.sessionField) ui.audioPending.fields[el.dataset.sessionField] = el.value;
+  else if (card) {
+    const field = el.dataset.trackField, track = (ui.audioPending.tracks[card.dataset.sessionTrack] ||= {});
+    track[field] = field === 'is_instrumental' ? el.checked : field === 'track_no' ? Math.max(1, Math.min(999, Number.parseInt(el.value, 10) || 1)) : el.value;
+    const t = d.tracks.find(x => x.id === card.dataset.sessionTrack); if (t) Object.assign(t, track);
+    const badge = card.querySelector('[data-mode-for]'); if (badge && t) { const mode = t.is_instrumental ? '연주곡 확인' : String(t.lyrics || '').trim() ? '가사 대조' : '가사지 생성'; badge.textContent = mode; badge.className = `audio-mode badge ${mode === '가사지 생성' ? 'amber' : mode === '연주곡 확인' ? 'neutral' : 'blue'}`; }
+  }
+  const state = document.getElementById('audio-save-state'); if (state) state.textContent = '저장 대기…';
+  clearTimeout(sessionSaveTimer); sessionSaveTimer = setTimeout(() => { void flushSession(); }, 700);
+}
+async function flushSession() {
+  clearTimeout(sessionSaveTimer);
+  const pending = ui.audioPending; ui.audioPending = null;
+  if (pending) {
+    sessionSaving = sessionSaving.then(async () => {
+      try {
+        const body = { ...pending.fields, ...(Object.keys(pending.tracks).length ? { tracks: Object.entries(pending.tracks).map(([id, fields]) => ({ id, ...fields })) } : {}) };
+        const { session } = await api(sessionPath(pending.id), { method: 'PATCH', body });
+        if (ui.audioSessionId === pending.id && !ui.audioPending) { ui.audioSession = session; renderAudioRun(); }
+        const state = document.getElementById('audio-save-state'); if (state) state.textContent = '저장됨';
+        return true;
+      } catch (error) { toast(`저장하지 못했습니다: ${error.message}`, true); const state = document.getElementById('audio-save-state'); if (state) state.textContent = '저장 실패 — 내용을 확인하세요'; return false; }
+    });
+  }
+  const ok = await sessionSaving; if (pending) void refresh(); return ok;
+}
+async function uploadSessionFiles(fileList, target) {
+  const all = [...(fileList || [])], files = all.filter(f => AUDIO_FILE.test(f.name));
+  if (all.length > files.length) toast(`음원이 아닌 파일 ${all.length - files.length}개는 넣지 않았습니다.`, true);
+  if (!files.length || ui.audioUploading) return;
+  if (!(await flushSession())) return;
+  ui.audioUploading = true;
+  try {
+    let id = target === 'add' ? ui.audioSessionId : null;
+    if (!id) {
+      const title = files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '').replace(/^0?\d{1,2}[ ._\-)]+/, '') : '';
+      setAudioSession((await api('/api/audio-sessions', { method: 'POST', body: title ? { title } : {} })).session); id = ui.audioSessionId; ui.audioPicks = {}; ui.audioTexts = {};
+      renderAudioPanel();
+    }
+    let count = 0;
+    for (const file of files) {
+      const progress = document.getElementById('audio-upload-progress'); if (progress) progress.textContent = `${count + 1} / ${files.length} · ${file.name} 넣는 중…`;
+      const { session } = await api(`${sessionPath(id, '/files')}?filename=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+      count++; if (ui.audioSessionId === id) ui.audioSession = session;
+    }
+    toast(`음원 ${count}개를 넣었습니다. 가사를 붙여 넣거나 비워 둔 채 분석을 시작하세요.`);
+  } catch (error) { toast(error.message, true); }
+  finally { ui.audioUploading = false; await refresh(); if (ui.nav === 'audio') { renderAudioList(); renderAudioPanel(); } }
+}
+async function audioSessionAction(name, button) {
+  if (name === 'audio-session-new') { if (!(await flushSession())) return; setAudioSession(null); ui.audioPicks = {}; ui.audioTexts = {}; renderAudioList(); renderAudioPanel(); document.querySelector('[data-audio-files="new"]')?.click(); return; }
+  if (name === 'audio-session-from-case') {
+    const caseId = document.getElementById('audio-from-case')?.value; if (!caseId) { toast('불러올 음반 신청을 선택하세요.', true); return; }
+    if (!(await flushSession())) return;
+    button.disabled = true;
+    try { setAudioSession((await api('/api/audio-sessions/from-case', { method: 'POST', body: { caseId } })).session); ui.audioPicks = {}; ui.audioTexts = {}; const n = ui.audioSession.attachments.length; toast(n ? `곡·가사와 음원 ${n}개를 불러왔습니다.` : '곡·가사를 불러왔습니다. 이 Mac에 받은 음원이 없어 음원을 넣어야 합니다.'); await refresh(); renderAudioList(); renderAudioPanel(); }
+    finally { button.disabled = false; }
+    return;
+  }
+  const d = ui.audioSession; if (!d) return;
+  if (!(await flushSession())) return;
+  if (name === 'audio-session-start') { await api(sessionPath(d.id, '/check'), { method: 'POST', body: {} }); toast('분석을 시작했습니다. 곡 수에 따라 몇 분 걸립니다.'); await refresh(); renderAudioList(); renderAudioRun(); }
+  else if (name === 'audio-session-cancel') { await api(sessionPath(d.id, '/cancel'), { method: 'POST', body: {} }); await refresh(); renderAudioList(); renderAudioRun(); }
+  else if (name === 'audio-session-apply') {
+    const run = d.audioCheck?.latest, items = audioSelected(sessionDetail()); if (!run || !items.length || ui.audioApplying) return;
+    ui.audioApplying = true; renderAudioRun();
+    try {
+      const result = await api(sessionPath(d.id, '/apply'), { method: 'POST', body: { runId: run.id, items: items.map(s => editableSuggestion(s) ? { suggestionId: s.id, text: audioText(s) } : { suggestionId: s.id }) } });
+      ui.audioPicks = {}; ui.audioTexts = {}; setAudioSession(result.session); toast(`제안 ${Number(result.applied || items.length)}개를 가사에 반영했습니다.`);
+    } catch (error) { toast(error.message, true); if (error.status === 409) setAudioSession((await api(sessionPath(d.id))).session); }
+    finally { ui.audioApplying = false; renderAudioPanel(); void refresh(); }
+  }
+  else if (name === 'audio-session-export') { const a = document.createElement('a'); a.href = `${sessionPath(d.id, '/export')}?format=${encodeURIComponent(button.dataset.format)}`; a.download = ''; document.body.append(a); a.click(); a.remove(); }
+  else if (name === 'audio-session-copy') { const text = d.tracks.slice().sort((a, b) => a.track_no - b.track_no).map(t => `${String(t.track_no).padStart(2, '0')}. ${t.track_title}\n\n${String(t.lyrics || '').trim()}`).join('\n\n\n'); await navigator.clipboard.writeText(text); toast('가사 전체를 복사했습니다.'); }
+  else if (name === 'audio-track-remove') {
+    const t = d.tracks.find(x => x.id === button.dataset.track); if (!t) return;
+    if (!(await confirmAudio('이 곡을 작업에서 뺄까요?', `‘${value(t.track_title, '곡명 없음')}’과 이 곡의 가사를 작업에서 뺍니다. 직접 넣은 음원 파일도 지웁니다(신청 건의 파일은 그대로 둡니다).`, '빼기'))) return;
+    setAudioSession((await api(sessionPath(d.id, `/tracks/${encodeURIComponent(t.id)}`), { method: 'DELETE' })).session); renderAudioPanel(); void refresh();
+  }
+  else if (name === 'audio-session-delete') {
+    if (sessionJob(d.id)) { toast('분석이 끝나거나 중지한 뒤 삭제해 주세요.', true); return; }
+    if (!(await confirmAudio('이 대조 작업을 삭제할까요?', `‘${value(d.title, '이름 없는 작업')}’의 곡·가사·분석 결과와 직접 넣은 음원을 이 Mac에서 지웁니다. 되돌릴 수 없습니다. 신청 건의 파일은 그대로 둡니다.`, '삭제'))) return;
+    await api(sessionPath(d.id), { method: 'DELETE' }); document.getElementById('audio-player')?.pause(); setAudioSession(null); toast('대조 작업을 삭제했습니다.'); await refresh(); renderAudioList(); renderAudioPanel();
+  }
+}
+async function confirmAudio(title, message, confirmLabel) {
+  const dialog = document.getElementById('confirm-dialog');
+  document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-message').textContent = message;
+  dialog.querySelector('[value=cancel]').textContent = '취소'; dialog.querySelector('[value=confirm]').textContent = confirmLabel; dialog.returnValue = ''; dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+}
+async function changeSessionMapping(select) {
+  const d = ui.audioSession; if (!d) return;
+  if (!(await flushSession())) return;
+  const trackId = select.dataset.sessionMap, next = select.value || null, mapping = { ...d.audioCheck.mapping }, previous = mapping[trackId] ?? null;
+  // 한 음원은 한 곡에만: 다른 곡이 쓰던 음원을 고르면 두 곡의 음원을 맞바꾼다.
+  for (const [other, file] of Object.entries(mapping)) if (other !== trackId && next && file === next) mapping[other] = previous;
+  mapping[trackId] = next;
+  try { setAudioSession((await api(sessionPath(d.id), { method: 'PATCH', body: { mapping } })).session); } catch (error) { toast(error.message, true); }
+  renderAudioPanel();
+}
+async function audioSessionAfterRefresh(previousJobs, nextJobs) {
+  if (ui.nav !== 'audio') return;
+  renderAudioList();
+  const installDone = previousJobs.some(j => j.kind === 'audio-install' && activeJob(j) && nextJobs?.find(n => n.id === j.id && !activeJob(n)));
+  if (installDone) { await loadAudioEngine(); const slot = document.getElementById('audio-engine-slot'); if (slot) slot.innerHTML = audioEngineBar(); }
+  else if (jobs().some(j => j.kind === 'audio-install' && activeJob(j))) { const slot = document.getElementById('audio-engine-slot'); if (slot) slot.innerHTML = audioEngineBar(); }
+  const id = ui.audioSessionId; if (!id) return;
+  const signature = list => JSON.stringify((list || []).filter(j => j.kind === 'audio-session' && j.caseId === id).map(j => [j.id, j.status, j.message]));
+  if (signature(previousJobs) === signature(nextJobs) && !installDone) return;
+  const finished = previousJobs.some(j => j.kind === 'audio-session' && j.caseId === id && activeJob(j) && nextJobs?.find(n => n.id === j.id && !activeJob(n)));
+  if (finished && !ui.audioPending) { try { setAudioSession((await api(sessionPath(id))).session); } catch {} }
+  renderAudioRun();
+}
+document.addEventListener('dragover', event => { if (ui.nav === 'audio' && event.dataTransfer?.types?.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; document.querySelectorAll('[data-audio-drop]').forEach(zone => zone.classList.toggle('over', zone.contains(event.target))); } });
+document.addEventListener('dragleave', event => { if (ui.nav === 'audio' && !event.relatedTarget) document.querySelectorAll('[data-audio-drop]').forEach(zone => zone.classList.remove('over')); });
+document.addEventListener('drop', event => {
+  if (ui.nav !== 'audio' || !event.dataTransfer?.files?.length) return;
+  event.preventDefault(); document.querySelectorAll('[data-audio-drop]').forEach(zone => zone.classList.remove('over'));
+  // 작업을 열어 둔 채 놓으면 그 작업에 추가, 아니면 새 작업을 만든다.
+  void uploadSessionFiles(event.dataTransfer.files, ui.audioSessionId ? 'add' : 'new');
+});
+document.addEventListener('input', event => { const el = event.target; if (ui.nav === 'audio' && (el.dataset?.sessionField || el.dataset?.trackField)) queueSessionEdit(el); });
+document.addEventListener('change', event => {
+  const el = event.target; if (ui.nav !== 'audio') return;
+  if (el.dataset?.audioFiles) { const files = [...(el.files || [])]; el.value = ''; void uploadSessionFiles(files, el.dataset.audioFiles); }
+  else if (el.dataset?.sessionMap) void changeSessionMapping(el);
+  else if (el.dataset?.sessionField || el.dataset?.trackField) { if (el.type === 'checkbox' || el.tagName === 'SELECT') queueSessionEdit(el); void flushSession(); }
+});
 
 async function translateManualLyrics() {
   if (ui.translating || !isManual(ui.detail)) return;
@@ -281,7 +630,7 @@ function detailMarkup() {
   const d = effective(); if (!d) return `<div class="detail-empty"><div class="empty-disc">◉</div><h2>${ui.nav === 'manual' ? '기준파일로 작업을 시작하세요' : '신청을 선택해 시작하세요'}</h2><p>${ui.nav === 'manual' ? 'Word·한글 기준파일에서 자료를 만들거나<br>기존 수동 작업을 선택하세요.' : '신청 정보, 심의 자료, 결과 안내를<br>한 화면에서 이어서 처리합니다.'}</p></div>`;
   const serviceSubmission = { ...(d.sourceSubmission || d.submission), ...(ui.tab === 'results' && ui.resultData?.caseId === ui.selected ? ui.resultData.submission : {}) };
   const manual = isManual(d);
-  const s = manual || ui.tab === 'documents' ? d.submission : serviceSubmission, running = jobs().filter(j => j.caseId === ui.selected && activeJob(j));
+  const s = manual || ui.tab === 'documents' ? d.submission : serviceSubmission, running = jobs().filter(j => j.caseId === ui.selected && activeJob(j) && !isAudioJob(j));
   return `<div class="detail-header"><div class="detail-kicker"><span class="type-label ${typeClass(s.type)}">${e(TYPE_EN[s.type] || s.type)}</span><span class="detail-id">#${e(shortId(s.id))}</span><button class="inline-link delete-detail" data-delete-case="${e(s.id)}">목록에서 삭제</button></div><h2 class="detail-title">${e(value(s.title))}</h2><p class="detail-artist">${e(value(s.artist_name))} <span>·</span> ${e(TYPE[s.type] || s.type)}</p><div class="detail-statuses">${manual ? `<span class="label">이 Mac의 수동 작업</span><span class="badge ${stageClass(stageOf(d))}">${e(STAGES[stageOf(d)] || '신규 접수')}</span>` : `<span class="label">온사이드</span><span class="badge neutral">${e(label(s.payment_status === 'PAID' && s.status === 'SUBMITTED' ? 'PRE_REVIEW' : s.status))}</span><span class="badge ${s.payment_status === 'PAID' ? '' : 'amber'}">${e(label(s.payment_status))}</span>`}</div></div>${preparationWarnings(d)}<div class="tabs" role="tablist">${[['overview','신청 정보'],['documents','자료 준비'],...(manual ? [['review','검토사항']] : []),...(canUseResults(d) ? [['results','심의 결과']] : []),['notes','작업 메모']].map(([key,name]) => `<button class="tab${ui.tab === key ? ' active' : ''}" role="tab" aria-selected="${ui.tab === key}" data-tab="${key}">${name}</button>`).join('')}</div>${running.length ? `<div class="job-inline"><span class="busy-label"><span class="spinner"></span>${e(running[0].message || '작업을 진행하고 있습니다.')}</span></div>` : ''}<div class="tab-content">${ui.tab === 'overview' ? overviewMarkup(d) : ui.tab === 'documents' ? documentsMarkup(d) : ui.tab === 'review' && manual ? manualReviewMarkup(d) : ui.tab === 'results' && canUseResults(d) ? resultsMarkup(d) : notesMarkup(d)}</div>`;
 }
 function detailRender() { const panel = document.getElementById('detail-panel'); if (panel) panel.innerHTML = detailMarkup(); }
@@ -315,7 +664,7 @@ function retentionNotice(d) {
   return d.customerFilesExpireAt ? `<div class="notice">고객 제출 파일 자동 삭제 예정 · ${e(formatDate(d.customerFilesExpireAt))} (결과 통보 7일 뒤)</div>` : '';
 }
 function documentsMarkup(d) {
-  const running = jobs().some(j => j.caseId === ui.selected && activeJob(j));
+  const running = jobs().some(j => j.caseId === ui.selected && activeJob(j) && !isAudioJob(j));
   return `<div class="document-toolbar"><button class="button accent" data-action="generate"${running ? ' disabled' : ''}>▱ 심의 자료 생성</button>${isManual(d) ? `<button class="button secondary${d.screening?.requiresReview && !d.screening?.acknowledged ? ' review-needed' : ''}" data-tab="review">가사 검토사항 ${d.screening?.findings?.length || 0}개</button>` : `<button class="button secondary" data-action="download"${running ? ' disabled' : ''}>↓ 원본 다운로드</button>`}<button class="button secondary" data-action="open-case" title="이 신청의 작업 폴더 열기">폴더 ↗</button></div>${retentionNotice(d)}<div class="subtabs" role="tablist" aria-label="자료 준비 작업">${[['materials','원본 · 복사'],['edit','문서 정보 수정'],['history','생성 파일']].map(([key,name]) => `<button class="subtab${ui.docTab === key ? ' active' : ''}" data-doc-tab="${key}" role="tab" aria-selected="${ui.docTab === key}">${name}${key === 'history' && d.generations?.length ? ` <small>${d.generations.length}</small>` : ''}</button>`).join('')}</div>${ui.docTab === 'edit' ? editMarkup(d) : ui.docTab === 'history' ? historyMarkup(d) : materialsMarkup(d)}`;
 }
 function notesMarkup(d) {
@@ -343,7 +692,7 @@ function historyMarkup(d) {
   return generations.length ? `<div class="button-row" style="margin-bottom:20px"><button class="button secondary small" data-action="open-latest">최신 생성 폴더 열기 ↗</button></div>${generations.slice().reverse().map(g => `<div class="generation-item"><div class="generation-heading"><strong>${e(formatDate(g.createdAt || g.created_at, true))}</strong><small>${e(shortId(g.id))}</small></div>${d.submission.type === 'ALBUM' && isManual(d) && g.artifacts?.find(a => /\.zip$/i.test(a.name || a.filename)) ? (() => { const zip = (d.submission.type !== 'ALBUM' && g.artifacts.find(a => /전체작업자료.*\.zip$/i.test(a.name || a.filename))) || g.artifacts.find(a => /\.zip$/i.test(a.name || a.filename)); return `<button class="button accent manual-download" data-artifact="${e(zip.name || zip.filename)}" data-generation="${e(g.id)}">↓ ${d.submission.type === 'ALBUM' ? '전체 심의서류 다운로드 (DOCX ZIP)' : /전체작업자료/.test(zip.name || zip.filename) ? '가사·복사자료 전체 다운로드' : '가사 문서 다운로드 (DOCX ZIP)'}</button>`; })() : ''}${visibleArtifacts(d,g).map(a => `<button class="artifact-button" data-artifact="${e(a.name || a.filename)}" data-generation="${e(g.id)}"><span>▱ ${e(a.name || a.filename)}</span><small>${e(fileSize(a.bytes || a.size))} ↓</small></button>`).join('')}<p class="helper">제출 전 Word 또는 한글에서 문서 내용과 페이지 구성을 확인하세요.</p></div>`).join('')}` : '<div class="empty-list">아직 생성한 자료가 없습니다.<br>위의 ‘심의 자료 생성’을 눌러 시작하세요.</div>';
 }
 function queueScreen() {
-  screen.innerHTML = `${heading('작업 현황','다운로드와 문서 생성 진행 상황을 확인하세요.')}<section class="panel"><div class="panel-head"><h2>작업 기록 <span class="count">${jobs().length}</span></h2><span class="toolbar-note">진행 중인 작업은 자동으로 갱신됩니다</span></div><div class="table-wrap"><table class="jobs-table"><thead><tr><th>작업</th><th>신청</th><th>상태</th><th>내용</th><th>시작 시간</th></tr></thead><tbody>${jobs().slice().map(j => { const c = cases().find(c => c.id === j.caseId); return `<tr><td>${e(({generate:'문서 생성',download:'원본 다운로드',sync:'신청 동기화',backup:'백업'})[j.kind] || j.kind)}</td><td>${c ? `<button class="inline-link" data-case="${e(c.id)}">${e(c.title || '제목 미입력')}</button><small>${e(c.artist_name)}</small>` : '전체'}</td><td><span class="badge ${['failed','FAILED','error'].includes(j.status) ? 'red' : activeJob(j) ? 'blue' : ''}">${e(({queued:'대기',running:'진행 중',completed:'완료',succeeded:'완료',done:'완료',failed:'실패'})[String(j.status).toLowerCase()] || j.status)}</span></td><td class="job-message">${e(j.message || j.error || '')}</td><td>${e(formatDate(j.createdAt, true))}</td></tr>`; }).join('')}</tbody></table>${!jobs().length ? '<div class="empty-list">작업을 시작하면 여기에 진행 상황이 표시됩니다.</div>' : ''}</div></section>`;
+  screen.innerHTML = `${heading('작업 현황','다운로드와 문서 생성 진행 상황을 확인하세요.')}<section class="panel"><div class="panel-head"><h2>작업 기록 <span class="count">${jobs().length}</span></h2><span class="toolbar-note">진행 중인 작업은 자동으로 갱신됩니다</span></div><div class="table-wrap"><table class="jobs-table"><thead><tr><th>작업</th><th>신청</th><th>상태</th><th>내용</th><th>시작 시간</th></tr></thead><tbody>${jobs().slice().map(j => { const c = cases().find(c => c.id === j.caseId); return `<tr><td>${e(({generate:'문서 생성',download:'원본 다운로드',sync:'신청 동기화',backup:'백업','audio-install':'분석 도구 설치','audio-check':'음원 대조','audio-session':'음원 가사 대조'})[j.kind] || j.kind)}</td><td>${c ? `<button class="inline-link" data-case="${e(c.id)}">${e(c.title || '제목 미입력')}</button><small>${e(c.artist_name)}</small>` : j.kind === 'audio-session' ? e(audioSessions().find(item => item.id === j.caseId)?.title || '삭제한 작업') : '전체'}</td><td><span class="badge ${['failed','FAILED','error'].includes(j.status) ? 'red' : activeJob(j) ? 'blue' : ''}">${e(({queued:'대기',running:'진행 중',completed:'완료',succeeded:'완료',done:'완료',failed:'실패',cancelled:'중지'})[String(j.status).toLowerCase()] || j.status)}</span></td><td class="job-message">${e(j.message || j.error || '')}</td><td>${e(formatDate(j.createdAt, true))}</td></tr>`; }).join('')}</tbody></table>${!jobs().length ? '<div class="empty-list">작업을 시작하면 여기에 진행 상황이 표시됩니다.</div>' : ''}</div></section>`;
 }
 function historyScreen() { ui.nav = 'cases'; ui.tab = 'documents'; ui.docTab = 'history'; casesScreen(); }
 function settingsScreen() {
@@ -538,13 +887,13 @@ async function purgeLeftovers() {
 function render() {
   if (ui.nav === 'manual' && ui.detail && !isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
   if (ui.nav === 'cases' && isManual(ui.detail)) { ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.tab = 'overview'; }
-  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', queue: '작업 현황', monitor: '사이트 관리', storage: '저장공간 정리', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
+  document.getElementById('page-label').textContent = { cases: '신청 관리', manual: '관리자 수동 작업', audio: '음원 가사 대조', queue: '작업 현황', monitor: '사이트 관리', storage: '저장공간 정리', settings: '데스크 설정', trash: '목록 휴지통' }[ui.nav];
   document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('active', b.dataset.nav === ui.nav));
   document.querySelectorAll('[data-manual-type]').forEach(b => b.classList.toggle('active', ui.nav === 'manual' && b.dataset.manualType === ui.manualType));
   document.getElementById('manual-subnav').hidden = ui.nav !== 'manual';
-  document.getElementById('refresh-top').hidden = ['manual', 'monitor', 'storage'].includes(ui.nav);
+  document.getElementById('refresh-top').hidden = ['manual', 'audio', 'monitor', 'storage'].includes(ui.nav);
   if (ui.nav !== 'monitor') clearTimeout(ui.monitorTimer);
-  ({cases:casesScreen, manual:manualScreen, queue:queueScreen, monitor:monitorScreen, storage:storageScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
+  ({cases:casesScreen, manual:manualScreen, audio:audioScreen, queue:queueScreen, monitor:monitorScreen, storage:storageScreen, settings:settingsScreen, trash:trashScreen})[ui.nav](); headerRender();
   if (ui.nav === 'monitor' && ui.monitor) void loadMonitor(false);
 }
 /** 채팅 문의: unread customer chats from the service, checked by the desk every 20 seconds. */
@@ -565,18 +914,20 @@ function announceNewChats(previous, next) {
   if (fresh.length) toast(`새 채팅 문의 · ${fresh[0].name}: ${fresh[0].preview || '새 메시지'}${fresh.length > 1 ? ` 외 ${fresh.length - 1}건` : ''}`);
 }
 function headerRender() {
-  const c = ui.data.connection || {}, badge = document.getElementById('connection-badge'); badge.className = `connection-badge ${c.connected ? 'online' : 'offline'}`; badge.innerHTML = `<i></i>${e(ui.nav === 'manual' ? '이 Mac에 저장' : c.connected ? '온사이드 연결됨' : c.configured ? '연결 확인 필요' : '연결 설정 필요')}`;
+  const c = ui.data.connection || {}, badge = document.getElementById('connection-badge'); badge.className = `connection-badge ${c.connected ? 'online' : 'offline'}`; badge.innerHTML = `<i></i>${e(ui.nav === 'manual' ? '이 Mac에 저장' : ui.nav === 'audio' ? '이 Mac에서 처리' : c.connected ? '온사이드 연결됨' : c.configured ? '연결 확인 필요' : '연결 설정 필요')}`;
   const version = document.getElementById('desk-version'); if (version && ui.data.version) version.textContent = `심의 데스크 · v${ui.data.version}`;
   chatAlertRender();
   document.getElementById('nav-count').textContent = serviceCases().length; document.getElementById('manual-count').textContent = manualCases().length; document.getElementById('job-count').textContent = jobs().filter(activeJob).length;
+  const audioCount = document.getElementById('audio-count'), analyzing = jobs().filter(j => j.kind === 'audio-session' && activeJob(j)).length; if (audioCount) { audioCount.hidden = !analyzing; audioCount.textContent = analyzing; }
   const monitorState = ui.data.monitor, monitorCount = document.getElementById('monitor-count'); if (monitorCount) { monitorCount.hidden = !monitorState?.issues; monitorCount.textContent = monitorState?.issues || 0; monitorCount.classList.toggle('alert', monitorState?.overall === 'error'); }
-  globalAlert(ui.nav === 'manual' ? '' : ui.data.syncError ? `신청 동기화 확인: ${typeof ui.data.syncError === 'string' ? ui.data.syncError : ui.data.syncError.message || '서비스 연결을 확인해 주세요.'}` : !c.configured ? '서비스 연결 정보가 설정되지 않았습니다. 데스크 설치 안내의 연결 설정을 확인해 주세요.' : '');
+  globalAlert(['manual', 'audio'].includes(ui.nav) ? '' : ui.data.syncError ? `신청 동기화 확인: ${typeof ui.data.syncError === 'string' ? ui.data.syncError : ui.data.syncError.message || '서비스 연결을 확인해 주세요.'}` : !c.configured ? '서비스 연결 정보가 설정되지 않았습니다. 데스크 설치 안내의 연결 설정을 확인해 주세요.' : '');
 }
 async function refresh(initial = false) {
   try {
     const previousJobs = ui.data?.jobs || [], previousCases = ui.data?.cases || [], previousChat = ui.data?.chat, next = await api('/api/state'); ui.data = next; headerRender(); announceNewChats(previousChat, next.chat);
     if (ui.selected && next.trashCases?.some(c => c.id === ui.selected)) { ++ui.requestSequence; ++ui.resultSequence; clearEmailPreview(); ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.resultData = null; ui.dirty = false; render(); }
     if (initial) render(); else if (['queue','trash'].includes(ui.nav)) render(); else if (['cases','manual'].includes(ui.nav)) { renderList(); const done = previousJobs.some(j => j.caseId === ui.selected && activeJob(j) && next.jobs?.find(n => n.id === j.id && !activeJob(n))); const changedGeneration = ui.selected && (next.cases?.find(c => c.id === ui.selected)?.latestGeneration?.id || null) !== (ui.detail?.generations?.at(-1)?.id || null); const previousCase = previousCases.find(c => c.id === ui.selected), nextCase = next.cases?.find(c => c.id === ui.selected); const sourceUpdated = previousCase && nextCase && (previousCase.updated_at !== nextCase.updated_at || previousCase.status !== nextCase.status); if ((done || changedGeneration || sourceUpdated) && !ui.dirty && !ui.publishing && !ui.translating) await loadDetail(ui.selected, false); if (ui.tab === 'results' && canUseResults(ui.detail) && !ui.dirty && !ui.publishing) await loadResults(false); }
+    if (!initial) { await audioAfterRefresh(previousJobs, next.jobs); await audioSessionAfterRefresh(previousJobs, next.jobs); }
   } catch (error) {
     if (initial) screen.innerHTML = `${heading('데스크에 연결할 수 없습니다','프로그램이 실행 중인지 확인하고 다시 시도해 주세요.')}<div class="notice error">${e(error.message)}</div><button class="button primary" data-action="retry">다시 연결</button>`;
     else globalAlert(`프로그램 연결 확인: ${error.message}. 저장된 화면을 유지하고 있습니다.`);
@@ -585,8 +936,8 @@ async function refresh(initial = false) {
 function schedulePoll() { clearTimeout(ui.pollTimer); ui.pollTimer = setTimeout(() => refresh(), jobs().some(activeJob) ? 3000 : 15000); }
 async function loadDetail(id, showLoading = true) {
   const sequence = ++ui.requestSequence; ui.selected = id; if (showLoading) { ui.loadingDetail = true; detailRender(); renderList(); }
-  if (ui.detail?.submission?.id !== id) { clearEmailPreview(); ui.resultData = null; ui.resultNotice = null; ui.resultError = ''; ui.resultStationId = null; ui.resultDirtyForm = null; ui.bulkSelected = []; ui.bulkStatus = 'NOT_SENT'; ui.bulkAgeRating = ''; ui.certificateFile = null; ui.translationNotice = null; }
-  try { const detail = await api(`/api/cases/${encodeURIComponent(id)}`); if (sequence !== ui.requestSequence) return; ui.detail = detail; ui.savedDetail = structuredClone(detail); ui.loadingDetail = false; detailRender(); if (ui.tab === 'results' && canUseResults(detail)) await loadResults(true); }
+  if (ui.detail?.submission?.id !== id) { document.getElementById('audio-player')?.pause(); ui.audioPicks = {}; ui.audioTexts = {}; clearEmailPreview(); ui.resultData = null; ui.resultNotice = null; ui.resultError = ''; ui.resultStationId = null; ui.resultDirtyForm = null; ui.bulkSelected = []; ui.bulkStatus = 'NOT_SENT'; ui.bulkAgeRating = ''; ui.certificateFile = null; ui.translationNotice = null; }
+  try { const detail = await api(`/api/cases/${encodeURIComponent(id)}`); if (sequence !== ui.requestSequence) return; ui.detail = detail; ui.savedDetail = structuredClone(detail); ui.loadingDetail = false; detailRender(); if (detail.audioCheck) { await loadAudioEngine(); if (sequence === ui.requestSequence && ui.tab === 'review' && !ui.dirty) detailRender(); } if (ui.tab === 'results' && canUseResults(detail)) await loadResults(true); }
   catch (err) { if (sequence !== ui.requestSequence) return; ui.loadingDetail = false; toast(err.message, true); if (!ui.detail || ui.detail.submission?.id !== id) ui.detail = null; detailRender(); }
 }
 async function saveLocal(patch, message = '저장했습니다.', shouldRender = true, preserveDirty = false) {
@@ -846,6 +1197,13 @@ async function action(name, button) {
     else if (name === 'empty-trash') await emptyTrash();
     else if (name === 'edit-manual') { if (!(await discardEdits())) return; ui.tab = 'documents'; ui.docTab = 'edit'; detailRender(); }
     else if (name === 'translate-manual') await translateManualLyrics();
+    else if (name === 'audio-install') await installAudioEngine();
+    else if (name === 'audio-start') await startAudioCheck();
+    else if (name === 'audio-cancel') await cancelAudioCheck();
+    else if (name === 'audio-apply') await applyAudioSuggestions();
+    else if (name === 'audio-play') playAudio(button);
+    else if (name === 'audio-pause') document.getElementById('audio-player')?.pause();
+    else if (name.startsWith('audio-session-') || name === 'audio-track-remove') await audioSessionAction(name, button);
     else if (name === 'reload-results') { if (!(await discardEdits())) return; ui.dirty = false; await loadResults(true); }
     else if (name === 'preview-email') await loadEmailPreview();
     else if (name === 'close-email-preview') clearEmailPreview(true);
@@ -879,9 +1237,10 @@ document.addEventListener('click', async event => {
   if (button.dataset.restoreCase) { event.preventDefault(); await restoreCase(button.dataset.restoreCase); return; }
   if (button.dataset.removeTrack) { event.preventDefault(); try { removeLocalTrack(button.dataset.removeTrack); } catch (error) { toast(error.message, true); } return; }
   if (button.dataset.storageAge) { ui.storageAge = button.dataset.storageAge; storageScreen(); return; }
+  if (button.dataset.audioSession) { event.preventDefault(); await openAudioSession(button.dataset.audioSession); return; }
   if (button.dataset.action) { event.preventDefault(); await action(button.dataset.action, button); return; }
   if (button.dataset.manualType) { if (!(await discardEdits())) return; ui.dirty = false; ui.nav = 'manual'; ui.manualType = button.dataset.manualType; ui.stage = 'all'; ui.query = ''; ui.selected = null; ui.detail = null; ui.savedDetail = null; ui.referenceFile = null; ui.importOpen = true; render(); return; }
-  if (button.dataset.nav) { if (!(await discardEdits())) return; ui.dirty = false; ui.stage = 'all'; ui.query = ''; ui.nav = button.dataset.nav; render(); window.scrollTo(0,0); return; }
+  if (button.dataset.nav) { if (!(await discardEdits())) return; if (ui.nav === 'audio' && !(await flushSession())) return; ui.dirty = false; ui.stage = 'all'; ui.query = ''; ui.nav = button.dataset.nav; render(); window.scrollTo(0,0); return; }
   if (button.dataset.case || button.dataset.historyCase) {
     if (!(await discardEdits())) return; ui.dirty = false; const selectedCase = cases().find(c => c.id === (button.dataset.case || button.dataset.historyCase)); const previousNav = ui.nav; ui.nav = isManual(selectedCase) ? 'manual' : 'cases'; if (isManual(selectedCase)) { ui.manualType = manualCategory(selectedCase); ui.importOpen = false; ui.referenceFile = null; } ui.tab = button.dataset.historyCase ? 'documents' : 'overview'; if (button.dataset.historyCase) ui.docTab = 'history';
     const id = button.dataset.case || button.dataset.historyCase; if (previousNav !== ui.nav || !document.getElementById('detail-panel') || ui.nav === 'manual') render(); await loadDetail(id); return;

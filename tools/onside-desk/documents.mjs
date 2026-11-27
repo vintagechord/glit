@@ -171,6 +171,20 @@ export function renderDocumentTemplate({template,templateName:name,data}) {
   // Schema order, explicit borders and a folder-free package: what Word on Windows and 한글 need to open the file as drawn.
   return normalizeDocxPackage(doc.getZip().generate({type:'nodebuffer',compression:'DEFLATE'})).buffer;
 }
+/** 음원 가사 대조의 가사지: 가사전체파일 양식(담당자·연락처, 아티스트 - 앨범, 트랙별 가사)을 그대로 쓴다. */
+export async function renderLyricSheet({title,artist,genre,tracks=[],settings={}}) {
+  const warnings=[];
+  const list=normalizedTracks((tracks||[]).map(cleanLyricRecord),warnings,true);
+  if(!list.length) throw new Error('가사지에 넣을 곡이 없습니다.');
+  const data=makeData({type:'ALBUM',source:'manual',title:text(title),artist_name:text(artist),genre:text(genre)},list,settings,warnings);
+  // 제목 줄은 입력한 값만 쓴다(비운 장르의 "(장르 : )"나 비운 아티스트의 " - "를 남기지 않는다).
+  const heading=[data.artist_display,data.album_title].filter(Boolean).join(' - ')+(data.genre?`  (장르 : ${data.genre})`:'');
+  const zip=new PizZip(await fs.readFile(path.join(templateDir,'lyrics-all.docx')));
+  const xml=zip.file('word/document.xml').asText(), line='{artist_display} - {album_title}  (장르 : {genre})';
+  if(!xml.includes(line)) throw new Error('lyrics-all.docx: 제목 줄 위치를 찾을 수 없습니다.');
+  zip.file('word/document.xml',xml.replace(line,'{sheet_heading}'));
+  return renderDocumentTemplate({template:zip.generate({type:'nodebuffer'}),templateName:'lyrics-all.docx',data:{...data,sheet_heading:heading}});
+}
 async function renderTemplate(name,data) {
   const input=await fs.readFile(path.join(templateDir,name));
   return {buffer:renderDocumentTemplate({template:input,templateName:name,data}),templateHash:createHash('sha256').update(input).digest('hex')};

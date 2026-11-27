@@ -18,6 +18,7 @@
       <button class="nav-item active" data-nav="cases"><span class="nav-icon">▤</span> 신청 관리 <span class="nav-count" id="nav-count">0</span></button>
       <button class="nav-item" data-nav="manual"><span class="nav-icon">✎</span> 관리자 수동 작업 <span class="nav-count" id="manual-count">0</span></button>
       <div id="manual-subnav" class="manual-subnav" hidden><button data-manual-type="ALBUM">음반</button><button data-manual-type="MV">뮤비</button></div>
+      <button class="nav-item" data-nav="audio"><span class="nav-icon">♪</span> 음원 가사 대조 <span class="nav-count" id="audio-count" hidden>0</span></button>
       <button class="nav-item" data-nav="queue"><span class="nav-icon">◷</span> 작업 현황 <span class="nav-count" id="job-count">0</span></button>
       <button class="nav-item" data-nav="monitor"><span class="nav-icon">◉</span> 사이트 관리 <span class="nav-count monitor-count" id="monitor-count" hidden>0</span></button>
       <button class="nav-item" data-nav="storage"><span class="nav-icon">▥</span> 저장공간 정리</button>
@@ -31,6 +32,7 @@
     <div id="global-alert" role="status" hidden></div>
     <section id="screen" class="screen"><div class="loading-state"><span class="spinner"></span><h1>심의 데스크를 여는 중입니다</h1><p>이 Mac에 저장된 작업 내용을 확인하고 있어요.</p></div></section>
   </main>
+  <audio id="audio-player" preload="none" hidden></audio>
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title">변경 사항</h2><p id="confirm-message"></p><div class="button-row"><button value="cancel" class="button secondary">계속 편집</button><button value="confirm" class="button primary">변경 버리기</button></div></form></dialog>
 </body>
