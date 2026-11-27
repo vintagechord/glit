@@ -155,7 +155,8 @@ test("the home hero makes 심의 신청 the yellow main card and keeps 결과 �
   // Both cards share one size and border; only colour and shadow differ.
   // Owner 2026-11-11: when the turntable moved beside the headline the banner
   // got shorter, and the cards took that height (68→106px, 80→146px).
-  assert.match(home, /className=\{`group flex min-h-\[106px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-\[1\.5px\] border-\[#111111\] px-3 transition hover:-translate-y-0\.5 sm:min-h-\[146px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
+  // 2026-11-27 the owner found them too tall: 76px on phones, 96px from 640px up.
+  assert.match(home, /className=\{`group flex min-h-\[76px\] items-center justify-center gap-2\.5 rounded-\[10px\] border-\[1\.5px\] border-\[#111111\] px-3 transition hover:-translate-y-0\.5 sm:min-h-\[96px\] sm:gap-3 \$\{cta\.cardClass\}`\}/);
 });
 
 test("the home banner keeps a two-line text headline in both languages and lets visitors stop its motion", () => {

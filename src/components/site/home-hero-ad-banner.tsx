@@ -111,6 +111,8 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
   // 2026-11-27 (owner): the radio guide is shown as the steps it really takes
   // (radio-request-wizard.tsx: 내 곡 확인 → 프로그램 → 신청글 작성 → 신청·확인),
   // and it says the guide is only for songs whose review is done.
+  // 2026-11-27 (owner): the radio note repeated the description, so that
+  // dialog keeps only the sentence above the example.
   const descriptions = {
     broadcast: isEnglish
       ? "Once your song has passed an Onside review, we walk you through requesting it on the radio, step by step."
@@ -122,10 +124,8 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
       ? "Onside review members get an easier start on Artmelon, the store for CDs, LPs and merch."
       : "온사이드 심의 회원은 CD·LP·굿즈 판매처 아트멜론에 더 수월하게 입점합니다.",
   };
-  const notes = {
-    broadcast: isEnglish
-      ? "Only for songs approved in an Onside album review: open Radio request guide on your result page."
-      : "온사이드 음반 심의에서 적격을 받은 곡에 한해, 심의 결과 화면의 「라디오 신청 가이드」에서 이용합니다.",
+  const notes: Record<Service["key"], string | null> = {
+    broadcast: null,
     archive: isEnglish ? "Find it under My Music in your account." : "회원 계정의 내 음악 관리에서 이용합니다.",
     artmelon: isEnglish ? "Store and selling terms are set in a consultation." : "입점·판매 조건은 상담으로 안내합니다.",
   };
@@ -206,7 +206,9 @@ function ServicePreview({ service, isEnglish, returnFocusTarget, onClose }: {
           {service.key === "archive" ? <ArchiveExample isEnglish={isEnglish} /> : null}
           {service.key === "artmelon" ? <ArtmelonExample isEnglish={isEnglish} /> : null}
         </div>
-        <p className="mt-4 break-keep text-xs leading-5 text-muted-foreground">{notes[service.key]}</p>
+        {notes[service.key] ? (
+          <p className="mt-4 break-keep text-xs leading-5 text-muted-foreground">{notes[service.key]}</p>
+        ) : null}
       </div>
     </dialog>
   );

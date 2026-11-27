@@ -54,6 +54,7 @@ export const metadata: Metadata = pageMetadata({
 // 2026-11-11 (owner): the banner lost 38px on phones and 66px from 640px up
 // when the turntable moved beside the headline; the cards took that height
 // (68→106px, 80→146px).
+// 2026-11-27 (owner): the two cards felt too tall; 106→76px, 146→96px.
 const heroCtas = [
   {
     title: "심의 신청",
@@ -158,7 +159,7 @@ export default async function Home() {
                     <ReliableLink
                       key={cta.title}
                       href={cta.href}
-                      className={`group flex min-h-[106px] items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-[#111111] px-3 transition hover:-translate-y-0.5 sm:min-h-[146px] sm:gap-3 ${cta.cardClass}`}
+                      className={`group flex min-h-[76px] items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-[#111111] px-3 transition hover:-translate-y-0.5 sm:min-h-[96px] sm:gap-3 ${cta.cardClass}`}
                     >
                       <Icon className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" strokeWidth={2.3} aria-hidden="true" />
                       <span className="break-keep text-base font-black leading-snug sm:text-lg">{cta.title}</span>

@@ -93,9 +93,10 @@ for (const width of [320, 390, 1280]) {
       const serviceExamples = english
         ? [["Review complete", "Pick a program", "Write your request", "Post on the official board"], ["Onside review", "Reviewed elsewhere"], ["Review history check", "Onboarding consultation"]]
         : [["심의 완료", "프로그램 고르기", "신청글 쓰기", "공식 게시판에 신청"], ["온사이드 심의", "외부 심의"], ["심의 이력 확인", "입점 상담 연결"]];
+      // Owner 2026-11-27: the radio dialog has no note; its note repeated the description.
       const serviceNotes = english
-        ? ["Only for songs approved in an Onside album review: open Radio request guide on your result page.", "Find it under My Music in your account.", "Store and selling terms are set in a consultation."]
-        : ["온사이드 음반 심의에서 적격을 받은 곡에 한해, 심의 결과 화면의 「라디오 신청 가이드」에서 이용합니다.", "회원 계정의 내 음악 관리에서 이용합니다.", "입점·판매 조건은 상담으로 안내합니다."];
+        ? [null, "Find it under My Music in your account.", "Store and selling terms are set in a consultation."]
+        : [null, "회원 계정의 내 음악 관리에서 이용합니다.", "입점·판매 조건은 상담으로 안내합니다."];
       await expect(services).toHaveCount(3);
       for (const name of serviceNames) {
         await expect(benefits.getByRole("button", { name, exact: true })).toBeVisible();
@@ -140,7 +141,9 @@ for (const width of [320, 390, 1280]) {
         await expect(dialog.getByText(english ? "Service preview" : "서비스 이용 예시", { exact: true })).toHaveCount(0);
         await expect(dialog.getByText(serviceDescriptions[index], { exact: true })).toBeVisible();
         for (const phrase of serviceExamples[index]) await expect(dialog).toContainText(phrase);
-        await expect(dialog.getByText(serviceNotes[index], { exact: true })).toBeVisible();
+        const note = serviceNotes[index];
+        if (note) await expect(dialog.getByText(note, { exact: true })).toBeVisible();
+        else await expect(dialog).not.toContainText(english ? "Only for songs approved" : "적격을 받은 곡에 한해");
         // Short enough to take in at a glance: the description, the example, one note.
         const sentences = await dialog.evaluate(element => (element.textContent ?? "").split(/[.!?。]\s*/).filter(part => part.trim().length > 12).length);
         expect(sentences).toBeLessThanOrEqual(4);
